@@ -54,6 +54,12 @@ export interface ImageModel {
   blurb: string;
   tags: string[];
   controls: ImageControl[];
+  /**
+   * Upstream generation routinely takes >60s — will time out on Vercel Hobby
+   * (60s function cap) and only completes on Pro (300s). Surfaced as a hint in
+   * the UI so users aren't surprised.
+   */
+  slow?: boolean;
 }
 
 /* ---- reusable control fragments ---- */
@@ -206,18 +212,20 @@ export const IMAGE_MODELS: ImageModel[] = [
     name: "Gemini 3 Pro Image",
     family: "gemini",
     price: "Pro 級距",
-    blurb: "Gemini 生圖旗艦，複雜場景與文字排版最穩。",
+    blurb: "Gemini 生圖旗艦，複雜場景與文字排版最穩。生成較慢。",
     tags: ["REASONING", "VISION", "IMAGE GENERATION"],
     controls: GEMINI_CONTROLS,
+    slow: true,
   },
   {
     id: "gpt-image-2",
     name: "GPT Image 2",
     family: "gpt-image",
     price: "$0.04 / 張",
-    blurb: "OpenAI 生圖，支援品質檔位與透明背景輸出。",
+    blurb: "OpenAI 生圖，支援品質檔位與透明背景輸出。生成較慢（常超過 60 秒）。",
     tags: ["VISION", "IMAGE GENERATION"],
     controls: GPT_IMAGE_CONTROLS,
+    slow: true,
   },
 ];
 

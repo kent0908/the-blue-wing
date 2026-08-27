@@ -48,6 +48,14 @@ function ModelCard({ model }: { model: ImageModel }) {
           <IconImage className="h-3.5 w-3.5" />
           IMAGE
         </span>
+        {model.slow && (
+          <span
+            className="inline-flex items-center rounded-md bg-[#3a2e18] px-2 py-1 text-[11px] font-medium text-[#f0c27f]"
+            title="這個模型生成常超過 60 秒，在 Vercel 免費方案會逾時；需要 Vercel Pro（函式上限 300 秒）"
+          >
+            較慢
+          </span>
+        )}
       </div>
 
       <h2 className="mt-3 text-[16.5px] font-semibold">{model.name}</h2>

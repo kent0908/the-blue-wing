@@ -199,6 +199,12 @@ export default function Composer({
         </button>
       </div>
 
+      {activeImageModel?.slow && (
+        <div className="mx-3 mb-1 rounded-lg border border-[#3a2e18] bg-[#241d10] px-3 py-2 text-[11.5px] leading-relaxed text-[#f0c27f]">
+          {activeImageModel.name} 生成通常超過 60 秒，在 Vercel 免費方案會逾時失敗。建議改用 Seedream 系列或 Gemini Flash；需要跑這個模型請把 Vercel 專案升級為 Pro（函式上限 300 秒）。
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2 px-3 pb-3 pt-3">
         {/* mode */}
         <Popover

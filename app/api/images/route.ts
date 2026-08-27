@@ -4,7 +4,10 @@ import { errorResponse } from "@/lib/errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Vercel Hobby caps this at 60s; Pro honours up to 300s. Slow models
+// (gpt-image-2, gemini-3-pro-image) routinely need >60s and will only
+// complete on Pro — on Hobby they time out and the client shows a hint.
+export const maxDuration = 300;
 
 /** Keys forwarded upstream — anything else in the body is ignored. */
 const ALLOWED: (keyof ImageGenerationRequest)[] = [

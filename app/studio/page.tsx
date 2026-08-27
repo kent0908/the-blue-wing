@@ -8,6 +8,29 @@ import InspirationPanel from "@/components/InspirationPanel";
 import { IconCompass, IconHistory } from "@/components/Icons";
 import type { GenSettings, Mode, ResultItem } from "@/lib/types";
 
+/**
+ * Parse a fetch Response as JSON. When the body isn't JSON (e.g. Vercel's
+ * plain-text function-timeout page), surface a readable message instead of the
+ * browser's "Unexpected token 'A'… is not valid JSON".
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function readJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    const timedOut =
+      res.status === 502 ||
+      res.status === 504 ||
+      /timeout|timed out|FUNCTION_INVOCATION|error occurred/i.test(text);
+    throw new Error(
+      timedOut
+        ? "生成逾時：這個模型在伺服器 60 秒函式上限內跑不完（gpt-image-2、gemini-3-pro-image 等較慢）。請改用較快的模型（Seedream 系列、Gemini Flash），或將 Vercel 專案升級為 Pro（函式上限 300 秒）。"
+        : `伺服器回傳非 JSON 內容（HTTP ${res.status}）：${text.trim().slice(0, 160) || "（空白）"}`
+    );
+  }
+}
+
 function sizeFromRatio(ratio: string, fallback: string) {
   const map: Record<string, string> = {
     "1:1": "1024x1024",
@@ -45,7 +68,7 @@ function StudioInner() {
     async (id: string, prompt: string, model: string) => {
       const tick = async () => {
         const res = await fetch(`/api/videos/${encodeURIComponent(id)}`);
-        const json = await res.json();
+        const json = await readJson(res);
         if (!res.ok) throw new Error(json?.error?.message || "查詢影片狀態失敗");
         if (json.status === "completed" && json.url) {
           pushResult({
@@ -101,7 +124,7 @@ function StudioInner() {
             ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
           }),
         });
-        const json = await res.json();
+        const json = await readJson(res);
         if (!res.ok) throw new Error(json?.error?.message || "影片生成請求失敗");
 
         if (json.status === "completed" && json.url) {
@@ -129,7 +152,7 @@ function StudioInner() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        const json = await res.json();
+        const json = await readJson(res);
         if (!res.ok) throw new Error(json?.error?.message || "圖片生成請求失敗");
         setStage(3);
         (json.images ?? []).forEach((img: { url: string | null }, i: number) => {
@@ -152,7 +175,7 @@ function StudioInner() {
           max_tokens: settings.maxTokens,
         }),
       });
-      const json = await res.json();
+      const json = await readJson(res);
       if (!res.ok) throw new Error(json?.error?.message || "文字生成請求失敗");
       setStage(3);
       const text = json?.choices?.[0]?.message?.content ?? "";
