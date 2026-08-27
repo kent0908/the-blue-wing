@@ -10,7 +10,13 @@ function fail(status: number, message: string, code: string) {
 }
 
 export async function requireUser(req: NextRequest): Promise<Guarded> {
-  const user = await getSessionUser(req);
+  let user;
+  try {
+    user = await getSessionUser(req);
+  } catch (err) {
+    console.error("session lookup failed:", err);
+    return fail(503, "會員系統尚未設定完成（資料庫未連接），請稍後再試或聯絡管理員", "db_unavailable");
+  }
   if (!user) return fail(401, "請先登入", "unauthorized");
   if (!user.email_verified) return fail(403, "請先完成 email 驗證再使用", "email_unverified");
   return { user };
