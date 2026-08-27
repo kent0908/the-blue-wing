@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Composer from "@/components/Composer";
 import GenerationProgress from "@/components/GenerationProgress";
@@ -31,6 +32,14 @@ async function readJson(res: Response): Promise<any> {
   }
 }
 
+/** Map an auth/credit failure to a call-to-action shown under the error. */
+function ctaForStatus(status: number, mode: string): { href: string; label: string } | null {
+  if (status === 401) return { href: `/login?next=${encodeURIComponent(`/studio?mode=${mode}`)}`, label: "前往登入" };
+  if (status === 403) return { href: "/login", label: "完成 email 驗證後再登入" };
+  if (status === 402) return { href: "/account", label: "查看方案 / 請管理員加點" };
+  return null;
+}
+
 function sizeFromRatio(ratio: string, fallback: string) {
   const map: Record<string, string> = {
     "1:1": "1024x1024",
@@ -55,6 +64,7 @@ function StudioInner() {
   const [startedAt, setStartedAt] = useState(0);
   const [activeLabel, setActiveLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorCta, setErrorCta] = useState<{ href: string; label: string } | null>(null);
   const [results, setResults] = useState<ResultItem[]>([]);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -104,6 +114,7 @@ function StudioInner() {
     imagePayload?: Record<string, unknown>;
   }) => {
     setError(null);
+    setErrorCta(null);
     setBusy(true);
     setStage(0);
     setStartedAt(Date.now());
@@ -125,7 +136,10 @@ function StudioInner() {
           }),
         });
         const json = await readJson(res);
-        if (!res.ok) throw new Error(json?.error?.message || "影片生成請求失敗");
+        if (!res.ok) {
+          setErrorCta(ctaForStatus(res.status, mode));
+          throw new Error(json?.error?.message || "影片生成請求失敗");
+        }
 
         if (json.status === "completed" && json.url) {
           pushResult({ id: json.id ?? String(Date.now()), kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
@@ -153,7 +167,10 @@ function StudioInner() {
           body: JSON.stringify(body),
         });
         const json = await readJson(res);
-        if (!res.ok) throw new Error(json?.error?.message || "圖片生成請求失敗");
+        if (!res.ok) {
+          setErrorCta(ctaForStatus(res.status, mode));
+          throw new Error(json?.error?.message || "圖片生成請求失敗");
+        }
         setStage(3);
         (json.images ?? []).forEach((img: { url: string | null }, i: number) => {
           if (img.url) {
@@ -176,7 +193,10 @@ function StudioInner() {
         }),
       });
       const json = await readJson(res);
-      if (!res.ok) throw new Error(json?.error?.message || "文字生成請求失敗");
+      if (!res.ok) {
+        setErrorCta(ctaForStatus(res.status, mode));
+        throw new Error(json?.error?.message || "文字生成請求失敗");
+      }
       setStage(3);
       const text = json?.choices?.[0]?.message?.content ?? "";
       pushResult({ id: String(Date.now()), kind: "text", text, prompt, model, createdAt: Date.now() });
@@ -216,6 +236,14 @@ function StudioInner() {
           ) : error ? (
             <div className="max-w-lg rounded-xl border border-[#4a2020] bg-[#1a1010] px-5 py-4 text-[13.5px] leading-relaxed text-[#ffb4b4]">
               {error}
+              {errorCta && (
+                <Link
+                  href={errorCta.href}
+                  className="mt-2 inline-block rounded-lg bg-[#7ff0cd] px-3 py-1.5 text-[12.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105"
+                >
+                  {errorCta.label}
+                </Link>
+              )}
             </div>
           ) : latest ? (
             <div className="w-full max-w-3xl py-8">
