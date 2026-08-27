@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createImage } from "@/lib/siraya";
+import { createImage, type ImageGenerationRequest } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Keys forwarded upstream — anything else in the body is ignored. */
+const ALLOWED: (keyof ImageGenerationRequest)[] = [
+  "model",
+  "prompt",
+  "n",
+  "size",
+  "quality",
+  "style",
+  "response_format",
+  "negative_prompt",
+  "seed",
+  "background",
+  "output_compression",
+  "moderation",
+];
 
 /**
  * POST /api/images
@@ -22,7 +38,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const json = await createImage(body);
+    const payload = {} as Record<string, unknown>;
+    for (const key of ALLOWED) {
+      if (body[key] !== undefined) payload[key] = body[key];
+    }
+
+    const json = await createImage(payload as unknown as ImageGenerationRequest);
     const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({
       url: d.url ? String(d.url) : d.b64_json ? `data:image/png;base64,${d.b64_json}` : null,
       revisedPrompt: (d.revised_prompt as string) ?? null,

@@ -40,6 +40,13 @@ const RATES: Array<[string, RateCard]> = [
   ["imagen-4", { perImage: 0.04 }],
   ["nano-banana", { perImage: 0.03 }],
   ["seedream", { perImage: 0.03 }],
+  ["bytedance-seedream-4.5", { perImage: 0.04 }],
+  ["dola-seedream-5.0-lite", { perImage: 0.035 }],
+  ["dola-seedream-5.0-pro", { perImage: 0.045 }],
+  ["gemini-2.5-flash-image", { perImage: 0.03 }],
+  ["gemini-3.1-flash-lite-image", { perImage: 0.02 }],
+  ["gemini-3.1-flash-image", { perImage: 0.04 }],
+  ["gemini-3-pro-image", { perImage: 0.06 }],
   // ---- text ----
   ["claude-opus", { inputPerMTok: 15, outputPerMTok: 75 }],
   ["claude-sonnet", { inputPerMTok: 3, outputPerMTok: 15 }],

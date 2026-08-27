@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-Hant">
-      <body className="h-dvh overflow-hidden bg-black text-[var(--bw-text)]">
+      <body className="h-dvh overflow-hidden bg-[var(--bw-bg)] text-[var(--bw-text)]">
         <div className="flex h-full">
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">

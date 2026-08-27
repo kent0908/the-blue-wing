@@ -127,6 +127,11 @@ export interface ImageGenerationRequest {
   response_format?: "b64_json" | "url";
   negative_prompt?: string;
   seed?: number;
+  /** GPT-Image: transparent | opaque | auto */
+  background?: string;
+  /** GPT-Image: 0-100, jpeg/webp only */
+  output_compression?: number;
+  moderation?: string;
 }
 
 /** POST /images/generations */

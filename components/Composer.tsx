@@ -19,6 +19,14 @@ import {
 } from "./Icons";
 import { DEFAULT_SETTINGS, MODE_LABELS, type GenSettings, type Mode, type ModelInfo } from "@/lib/types";
 import { estimateCost, formatUSD } from "@/lib/pricing";
+import ImageParams from "./ImageParams";
+import {
+  IMAGE_MODELS,
+  getImageModel,
+  defaultValues,
+  buildImagePayload,
+  type ImageControlValues,
+} from "@/lib/imageModels";
 
 const MODE_ITEMS: { id: Mode; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
   { id: "image", label: "智慧生圖", icon: IconImage },
@@ -43,14 +51,23 @@ export default function Composer({
   onModeChange,
   onSubmit,
   busy,
+  initialModel,
 }: {
   mode: Mode;
   onModeChange: (m: Mode) => void;
-  onSubmit: (args: { prompt: string; model: string; settings: GenSettings }) => void;
+  onSubmit: (args: {
+    prompt: string;
+    model: string;
+    settings: GenSettings;
+    imagePayload?: Record<string, unknown>;
+  }) => void;
   busy: boolean;
+  /** model id from ?model= — pre-selects the model when it matches the mode */
+  initialModel?: string;
 }) {
   const [prompt, setPrompt] = useState("");
   const [settings, setSettings] = useState<GenSettings>(DEFAULT_SETTINGS);
+  const [imgEdits, setImgEdits] = useState<ImageControlValues>({});
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(true);
@@ -80,16 +97,42 @@ export default function Composer({
   }, []);
 
   const modalityForMode = mode === "video" ? "video" : mode === "image" ? "image" : "text";
-  const available = useMemo(
-    () => models.filter((m) => m.modality === modalityForMode),
-    [models, modalityForMode]
-  );
+  const available = useMemo(() => {
+    const live = models.filter((m) => m.modality === modalityForMode);
+    if (modalityForMode !== "image") return live;
+    // Merge the curated image catalogue so links to a specific model resolve
+    // even before /api/models has loaded (and so it's pickable in the dropdown).
+    const curated: ModelInfo[] = IMAGE_MODELS.map((m) => ({
+      id: m.id,
+      ownedBy: m.family,
+      created: null,
+      modality: "image" as const,
+    }));
+    const curatedIds = new Set(curated.map((m) => m.id.toLowerCase()));
+    return [...curated, ...live.filter((m) => !curatedIds.has(m.id.toLowerCase()))];
+  }, [models, modalityForMode]);
 
   useEffect(() => {
-    if (available.length && !available.some((m) => m.id === model)) {
-      setModel(available[0].id);
-    }
-  }, [available, model]);
+    if (!available.length || available.some((m) => m.id === model)) return;
+    const preferred = initialModel
+      ? available.find(
+          (m) => m.id === initialModel || m.id.toLowerCase() === initialModel.toLowerCase()
+        )
+      : undefined;
+    setModel((preferred ?? available[0]).id);
+  }, [available, model, initialModel]);
+
+  const activeImageModel = modalityForMode === "image" ? getImageModel(model) : undefined;
+
+  // Effective params = the model's defaults with the user's explicit edits on
+  // top. Picking a different model clears imgEdits (see the model dropdown), so
+  // switching models auto-resets the param set to that model's supported knobs.
+  const imgValues = useMemo<ImageControlValues>(
+    () => (activeImageModel ? { ...defaultValues(activeImageModel), ...imgEdits } : {}),
+    [activeImageModel, imgEdits]
+  );
+
+  const imageCount = activeImageModel ? Number(imgValues.n ?? 1) : settings.imageCount;
 
   const cost = useMemo(
     () =>
@@ -98,10 +141,10 @@ export default function Composer({
         modality: modalityForMode,
         prompt,
         maxTokens: settings.maxTokens,
-        imageCount: settings.imageCount,
+        imageCount,
         seconds: settings.seconds,
       }),
-    [model, modalityForMode, prompt, settings]
+    [model, modalityForMode, prompt, settings, imageCount]
   );
 
   const credits = Math.max(1, Math.round(cost * CREDITS_PER_USD));
@@ -109,7 +152,10 @@ export default function Composer({
 
   const submit = () => {
     if (!canSubmit) return;
-    onSubmit({ prompt: prompt.trim(), model, settings });
+    const imagePayload = activeImageModel
+      ? buildImagePayload(activeImageModel, prompt.trim(), imgValues)
+      : undefined;
+    onSubmit({ prompt: prompt.trim(), model, settings, imagePayload });
     setPrompt("");
   };
 
@@ -226,6 +272,7 @@ export default function Composer({
                   className="bw-menu-item"
                   onClick={() => {
                     setModel(m.id);
+                    setImgEdits({});
                     close();
                   }}
                 >
@@ -233,8 +280,10 @@ export default function Composer({
                     <IconModel className="h-[15px] w-[15px]" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px]">{m.id}</span>
-                    <span className="block truncate text-[11.5px] text-[#7d7d7d]">{m.ownedBy}</span>
+                    <span className="block truncate text-[13.5px]">
+                      {getImageModel(m.id)?.name ?? m.id}
+                    </span>
+                    <span className="block truncate text-[11.5px] text-[#7d7d7d]">{m.id}</span>
                   </span>
                   {m.id === model && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
                 </button>
@@ -243,8 +292,12 @@ export default function Composer({
           )}
         </Popover>
 
-        {/* generation settings */}
-        <SettingsPopover mode={mode} settings={settings} onChange={setSettings} />
+        {/* generation settings — model-aware for catalogued image models */}
+        {activeImageModel ? (
+          <ImageParams model={activeImageModel} values={imgValues} onChange={setImgEdits} />
+        ) : (
+          <SettingsPopover mode={mode} settings={settings} onChange={setSettings} />
+        )}
 
         <button type="button" aria-label="進階" className="bw-chip !px-2.5">
           <IconSettings className="h-[15px] w-[15px]" />

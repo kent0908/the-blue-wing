@@ -24,6 +24,7 @@ function StudioInner() {
   const router = useRouter();
   const params = useSearchParams();
   const mode = (params.get("mode") as Mode) || "video";
+  const initialModel = params.get("model") ?? undefined;
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -72,10 +73,12 @@ function StudioInner() {
     prompt,
     model,
     settings,
+    imagePayload,
   }: {
     prompt: string;
     model: string;
     settings: GenSettings;
+    imagePayload?: Record<string, unknown>;
   }) => {
     setError(null);
     setBusy(true);
@@ -114,16 +117,17 @@ function StudioInner() {
       }
 
       if (mode === "image") {
+        const body = imagePayload ?? {
+          model,
+          prompt,
+          n: settings.imageCount,
+          size: sizeFromRatio(settings.aspectRatio, settings.size),
+          response_format: "url",
+        };
         const res = await fetch("/api/images", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model,
-            prompt,
-            n: settings.imageCount,
-            size: sizeFromRatio(settings.aspectRatio, settings.size),
-            response_format: "url",
-          }),
+          body: JSON.stringify(body),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error?.message || "圖片生成請求失敗");
@@ -215,7 +219,13 @@ function StudioInner() {
 
         <div className="px-8 pb-8">
           <div className="mx-auto w-full max-w-[840px]">
-            <Composer mode={mode} onModeChange={setMode} onSubmit={handleSubmit} busy={busy} />
+            <Composer
+              mode={mode}
+              onModeChange={setMode}
+              onSubmit={handleSubmit}
+              busy={busy}
+              initialModel={initialModel}
+            />
           </div>
         </div>
       </div>
