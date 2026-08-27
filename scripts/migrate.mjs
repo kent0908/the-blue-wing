@@ -25,11 +25,17 @@ try {
   /* no .env.local — use the ambient environment */
 }
 
-if (!process.env.POSTGRES_URL && !process.env.POSTGRES_PRISMA_URL) {
+// @vercel/postgres wants POSTGRES_URL; Neon's Vercel integration ships DATABASE_URL.
+if (!process.env.POSTGRES_URL) {
+  const fallback = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
+  if (fallback) process.env.POSTGRES_URL = fallback;
+}
+
+if (!process.env.POSTGRES_URL) {
   console.error(
-    "✗ POSTGRES_URL is not set.\n" +
-      "  Attach a Vercel Postgres store to the project, then:\n" +
-      "    npx vercel env pull .env.local"
+    "✗ No database connection string found (POSTGRES_URL / DATABASE_URL).\n" +
+      "  In the Vercel dashboard: Storage → your Neon store → Connect to Project,\n" +
+      "  then:  npx vercel env pull .env.local"
   );
   process.exit(1);
 }
