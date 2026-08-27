@@ -243,14 +243,10 @@ export const IconInstagram = (p: P) => (
   </svg>
 );
 
-/** The Blue Wing mark — a stylised wing inside a ring. */
+/** The Blue Wing brand mark — transparent PNG cut from the logo artwork,
+ *  tuned to sit on the dark shell. Pass a height class (e.g. `h-8`); width
+ *  stays auto so the wing keeps its aspect ratio. */
 export const IconWing = (p: P) => (
-  <svg viewBox="0 0 32 32" fill="none" className={p.className ?? "w-8 h-8"}>
-    <circle cx="16" cy="16" r="15" stroke="currentColor" strokeWidth="1.4" opacity="0.9" />
-    <path
-      d="M8 20.5c4.6-.8 7.6-3.1 9.5-6.9 1-2 2.4-3.4 4.4-4.5 1.4-.7 2.5-.2 2.3 1.3-.5 3.7-2.2 6.8-4.9 9.1-2.6 2.2-6 3.3-10 3.2-1.1 0-1.5-.9-1.3-2.2z"
-      fill="currentColor"
-    />
-    <path d="M11 24c2.8-.5 5-1.5 6.8-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-  </svg>
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/wing-mark.png" alt="The Blue Wing" className={p.className ?? "h-8 w-auto"} />
 );

@@ -101,7 +101,7 @@ function SidebarInner() {
   return (
     <aside className={`${w} flex h-full shrink-0 flex-col bg-black transition-[width] duration-200`}>
       <div className={`flex h-14 items-center ${collapsed ? "justify-center" : "gap-2.5 pl-4"}`}>
-        <IconWing className="h-8 w-8 text-white" />
+        <IconWing className="h-9 w-auto shrink-0" />
         {!collapsed && (
           <span className="whitespace-nowrap text-[17px] font-semibold tracking-tight">The Blue Wing</span>
         )}
