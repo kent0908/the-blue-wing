@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/apiauth";
-import { sql, type UserRow } from "@/lib/db";
+import { sql, toPublicUser, type UserRow } from "@/lib/db";
 import { addCredits, getBalance } from "@/lib/credits";
 import { getPlan } from "@/lib/plans";
 
@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
     const { rows: after } = await sql<UserRow>`select * from users where id = ${userId} limit 1`;
     const balance = await getBalance(userId);
-    return NextResponse.json({ ok: true, user: { ...after[0], balance } });
+    return NextResponse.json({ ok: true, user: { ...toPublicUser(after[0]), balance } });
   } catch (err) {
     console.error("admin patch error:", err);
     return NextResponse.json({ error: { message: "操作失敗", code: "internal_error" } }, { status: 500 });
