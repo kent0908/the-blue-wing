@@ -76,6 +76,23 @@ const SIZE: ImageControl = {
   ],
 };
 
+/**
+ * Seedream 4.5 and the Dola Seedream 5.0 models reject anything below
+ * 3,686,400 px (≈ 1920²). These are the smallest valid sizes per aspect ratio.
+ */
+const SIZE_HIRES: ImageControl = {
+  key: "size",
+  label: "尺寸",
+  kind: "select",
+  default: "2048x2048",
+  options: [
+    { value: "2048x2048", label: "1:1 · 2048×2048" },
+    { value: "2560x1440", label: "16:9 · 2560×1440" },
+    { value: "1440x2560", label: "9:16 · 1440×2560" },
+    { value: "2304x1728", label: "4:3 · 2304×1728" },
+  ],
+};
+
 const COUNT: ImageControl = {
   key: "n",
   label: "生成張數",
@@ -138,6 +155,8 @@ const SEED: ImageControl = {
 };
 
 const SEEDREAM_CONTROLS: ImageControl[] = [SIZE, COUNT, NEGATIVE, SEED];
+// Seedream 4.5 / Dola 5.0 require ≥ 3,686,400 px
+const SEEDREAM_HIRES_CONTROLS: ImageControl[] = [SIZE_HIRES, COUNT, NEGATIVE, SEED];
 const GEMINI_CONTROLS: ImageControl[] = [SIZE, COUNT];
 const GPT_IMAGE_CONTROLS: ImageControl[] = [SIZE, QUALITY, BACKGROUND, COMPRESSION, COUNT];
 
@@ -158,27 +177,27 @@ export const IMAGE_MODELS: ImageModel[] = [
     name: "ByteDance Seedream 4.5",
     family: "seedream",
     price: "$0.04 / 張",
-    blurb: "4.0 的升級版，細節與構圖更完整。",
+    blurb: "4.0 的升級版，細節與構圖更完整。僅支援 2K 以上尺寸。",
     tags: ["VISION", "IMAGE GENERATION"],
-    controls: SEEDREAM_CONTROLS,
+    controls: SEEDREAM_HIRES_CONTROLS,
   },
   {
     id: "Dola-Seedream-5.0-lite",
     name: "Dola Seedream 5.0 lite",
     family: "seedream",
     price: "$0.035 / 張",
-    blurb: "第五代輕量版，速度快、成本低。",
+    blurb: "第五代輕量版，速度快、成本低。僅支援 2K 以上尺寸。",
     tags: ["VISION", "IMAGE GENERATION"],
-    controls: SEEDREAM_CONTROLS,
+    controls: SEEDREAM_HIRES_CONTROLS,
   },
   {
     id: "Dola-Seedream-5.0-pro",
     name: "Dola Seedream 5.0 pro",
     family: "seedream",
     price: "$0.045 / 張",
-    blurb: "生產級視覺創作，質感與提示詞跟隨度最佳。",
+    blurb: "生產級視覺創作，質感與提示詞跟隨度最佳。僅支援 2K 以上尺寸。",
     tags: ["VISION", "IMAGE GENERATION"],
-    controls: SEEDREAM_CONTROLS,
+    controls: SEEDREAM_HIRES_CONTROLS,
   },
   {
     id: "gemini-2.5-flash-image",
