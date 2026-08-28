@@ -35,6 +35,87 @@ const REASON_LABEL: Record<string, string> = {
   text: "文字生成",
 };
 
+function ChangePassword() {
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMsg(null);
+    if (next !== confirm) {
+      setMsg({ ok: false, text: "兩次輸入的新密碼不一致" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: cur, newPassword: next }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg({ ok: false, text: j?.error?.message || "更改失敗" });
+        return;
+      }
+      setMsg({ ok: true, text: "密碼已更新，其他裝置已登出" });
+      setCur("");
+      setNext("");
+      setConfirm("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const field =
+    "h-9 w-full rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-3 text-[13px] text-white focus:border-[#4a4a4a] focus:outline-none";
+
+  return (
+    <form onSubmit={submit} className="mt-3 max-w-[420px] space-y-2.5">
+      <input
+        type="password"
+        autoComplete="current-password"
+        placeholder="目前密碼"
+        value={cur}
+        onChange={(e) => setCur(e.target.value)}
+        className={field}
+        required
+      />
+      <input
+        type="password"
+        autoComplete="new-password"
+        placeholder="新密碼（至少 8 個字元）"
+        value={next}
+        onChange={(e) => setNext(e.target.value)}
+        className={field}
+        required
+      />
+      <input
+        type="password"
+        autoComplete="new-password"
+        placeholder="再次輸入新密碼"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        className={field}
+        required
+      />
+      {msg && (
+        <div className={`text-[12px] ${msg.ok ? "text-[#7ff0cd]" : "text-[#ff9b9b]"}`}>{msg.text}</div>
+      )}
+      <button
+        type="submit"
+        disabled={busy || !cur || !next || !confirm}
+        className="h-9 rounded-lg bg-[#2e2e2e] px-4 text-[12.5px] font-medium text-white hover:bg-[#383838] disabled:opacity-40"
+      >
+        {busy ? "更新中…" : "更新密碼"}
+      </button>
+    </form>
+  );
+}
+
 export default function AccountPage() {
   const router = useRouter();
   const [data, setData] = useState<AccountData | null>(null);
@@ -156,6 +237,10 @@ export default function AccountPage() {
             </tbody>
           </table>
         </div>
+
+        <h2 className="mt-8 text-[15px] font-semibold">帳號安全</h2>
+        <p className="mt-1 text-[12px] text-[#8a8a8a]">更改密碼後，這台裝置維持登入，其他裝置會被登出。</p>
+        <ChangePassword />
       </div>
     </div>
   );
