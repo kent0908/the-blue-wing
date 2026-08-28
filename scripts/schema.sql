@@ -14,6 +14,10 @@ create table if not exists users (
   created_at     timestamptz not null default now()
 );
 
+-- password reset (added after the initial users table; ALTER is idempotent)
+alter table users add column if not exists reset_token   text;
+alter table users add column if not exists reset_expires timestamptz;
+
 create table if not exists sessions (
   token      text primary key,
   user_id    bigint not null references users(id) on delete cascade,

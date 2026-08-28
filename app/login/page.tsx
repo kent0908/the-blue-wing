@@ -51,6 +51,9 @@ function LoginInner() {
       <form onSubmit={submit} className="space-y-3">
         <Field label="Email" type="email" value={email} onChange={setEmail} autoFocus />
         <Field label="密碼" type="password" value={password} onChange={setPassword} />
+        <div className="text-right">
+          <Link href="/forgot-password" className="text-[12px] text-[#8a8a8a] hover:text-white">忘記密碼？</Link>
+        </div>
         {error && <p className="text-[12.5px] leading-relaxed text-[#ff9b9b]">{error}</p>}
         <SubmitButton busy={busy} disabled={!email || !password}>登入</SubmitButton>
       </form>

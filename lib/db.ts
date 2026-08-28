@@ -32,6 +32,8 @@ export interface UserRow {
   email_verified: boolean;
   verify_token: string | null;
   verify_expires: string | null;
+  reset_token: string | null;
+  reset_expires: string | null;
   plan_code: string;
   plan_renews_at: string | null;
   created_at: string;
