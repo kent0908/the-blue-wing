@@ -26,6 +26,17 @@ create table if not exists sessions (
 );
 create index if not exists sessions_user_idx on sessions(user_id);
 
+create table if not exists assets (
+  id           bigint generated always as identity primary key,
+  user_id      bigint not null references users(id) on delete cascade,
+  url          text not null,
+  pathname     text not null,
+  content_type text not null,
+  size         integer not null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists assets_user_idx on assets(user_id, created_at desc);
+
 create table if not exists credit_ledger (
   id         bigint generated always as identity primary key,
   user_id    bigint not null references users(id) on delete cascade,
