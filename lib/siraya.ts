@@ -120,6 +120,8 @@ export async function listModels() {
 export interface ImageGenerationRequest {
   model: string;
   prompt: string;
+  /** reference images for image-to-image (URLs or base64 data URLs) */
+  image_urls?: string[];
   n?: number;
   size?: string;
   quality?: string;

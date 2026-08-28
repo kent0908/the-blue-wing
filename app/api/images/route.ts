@@ -3,6 +3,7 @@ import { createImage, type ImageGenerationRequest } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
+import { assetsToDataUrls } from "@/lib/assetData";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,13 @@ export async function POST(req: NextRequest) {
     const payload = {} as Record<string, unknown>;
     for (const key of ALLOWED) {
       if (body[key] !== undefined) payload[key] = body[key];
+    }
+
+    // reference images: the client sends its own asset ids; we resolve them to
+    // base64 data URLs here (the blob store is private) and forward as image_urls.
+    if (Array.isArray(body.assetIds) && body.assetIds.length) {
+      const imageUrls = await assetsToDataUrls(user.id, body.assetIds.map(Number));
+      if (imageUrls.length) payload.image_urls = imageUrls;
     }
 
     const json = await createImage(payload as unknown as ImageGenerationRequest);

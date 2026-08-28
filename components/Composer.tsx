@@ -25,8 +25,15 @@ import {
   getImageModel,
   defaultValues,
   buildImagePayload,
+  supportsRefImages,
+  MAX_REF_IMAGES,
   type ImageControlValues,
 } from "@/lib/imageModels";
+
+interface RefAsset {
+  id: number;
+  src: string;
+}
 
 const MODE_ITEMS: { id: Mode; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
   { id: "image", label: "智慧生圖", icon: IconImage },
@@ -74,6 +81,57 @@ export default function Composer({
   const [model, setModel] = useState<string>("");
   const [expanded, setExpanded] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  /* ---- reference images (image-to-image) ---- */
+  const [refs, setRefs] = useState<RefAsset[]>([]);
+  const [refPicker, setRefPicker] = useState(false);
+  const [library, setLibrary] = useState<RefAsset[] | null>(null);
+  const [refBusy, setRefBusy] = useState(false);
+  const [refError, setRefError] = useState<string | null>(null);
+  const refInputRef = useRef<HTMLInputElement>(null);
+
+  const addRef = (a: RefAsset) =>
+    setRefs((cur) => (cur.some((r) => r.id === a.id) || cur.length >= MAX_REF_IMAGES ? cur : [...cur, a]));
+  const toggleRef = (a: RefAsset) =>
+    setRefs((cur) =>
+      cur.some((r) => r.id === a.id)
+        ? cur.filter((r) => r.id !== a.id)
+        : cur.length >= MAX_REF_IMAGES
+          ? cur
+          : [...cur, a]
+    );
+
+  const openPicker = () => {
+    setRefPicker(true);
+    setRefError(null);
+    if (library === null) {
+      fetch("/api/assets")
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+        .then((j: { assets: RefAsset[] }) => setLibrary(j.assets))
+        .catch(() => setLibrary([]));
+    }
+  };
+
+  const uploadRef = async (files: FileList) => {
+    setRefBusy(true);
+    setRefError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/assets", { method: "POST", body: fd });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setRefError(j?.error?.message || "上傳失敗");
+          continue;
+        }
+        setLibrary((cur) => (cur ? [j.asset, ...cur] : [j.asset]));
+        addRef(j.asset);
+      }
+    } finally {
+      setRefBusy(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -150,13 +208,20 @@ export default function Composer({
   const credits = Math.max(1, Math.round(cost * CREDITS_PER_USD));
   const canSubmit = !!prompt.trim() && !!model && !busy;
 
+  // Only image mode with a seedream/gemini model can attach reference images.
+  // When it can't, stale refs are simply ignored (submit + render both gate on this).
+  const canUseRefs = mode === "image" && supportsRefImages(activeImageModel);
+
   const submit = () => {
     if (!canSubmit) return;
+    const assetIds = canUseRefs ? refs.map((r) => r.id) : [];
     const imagePayload = activeImageModel
-      ? buildImagePayload(activeImageModel, prompt.trim(), imgValues)
+      ? buildImagePayload(activeImageModel, prompt.trim(), imgValues, assetIds)
       : undefined;
     onSubmit({ prompt: prompt.trim(), model, settings, imagePayload });
     setPrompt("");
+    setRefs([]);
+    setRefPicker(false);
   };
 
   return (
@@ -167,14 +232,86 @@ export default function Composer({
       ].join(" ")}
     >
       <div className="relative flex gap-3 px-4 pt-4">
-        {(mode === "video" || mode === "image") && (
-          <button
-            type="button"
-            className="group grid h-[74px] w-[74px] shrink-0 -rotate-3 place-items-center rounded-xl border border-dashed border-[#3a3a3a] bg-[#1f1f1f] text-[#9a9a9a] transition-colors hover:border-[#555] hover:text-white"
-          >
-            <IconPlus className="h-4 w-4" />
-            <span className="mt-0.5 text-[11px]">素材</span>
-          </button>
+        {canUseRefs && (
+          <div className="relative flex shrink-0 items-start gap-2">
+            {refs.map((r) => (
+              <div key={r.id} className="relative h-[74px] w-[74px] overflow-hidden rounded-xl border border-[#2f2f2f]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
+                <img src={r.src} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setRefs((cur) => cur.filter((x) => x.id !== r.id))}
+                  className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black"
+                  aria-label="移除素材"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+
+            {refs.length < MAX_REF_IMAGES && (
+              <button
+                type="button"
+                onClick={() => (refPicker ? setRefPicker(false) : openPicker())}
+                className="group grid h-[74px] w-[74px] shrink-0 place-items-center rounded-xl border border-dashed border-[#3a3a3a] bg-[#1f1f1f] text-[#9a9a9a] transition-colors hover:border-[#555] hover:text-white"
+              >
+                <IconPlus className="h-4 w-4" />
+                <span className="mt-0.5 text-[11px]">素材</span>
+              </button>
+            )}
+
+            {refPicker && (
+              <div className="bw-menu absolute bottom-[calc(100%+8px)] left-0 z-40 w-[320px] p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-medium text-white">參考圖（最多 {MAX_REF_IMAGES} 張）</span>
+                  <button type="button" onClick={() => setRefPicker(false)} className="text-[11px] text-[#8a8a8a] hover:text-white">關閉</button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => refInputRef.current?.click()}
+                  disabled={refBusy}
+                  className="mt-2 w-full rounded-lg border border-dashed border-[#3a3a3a] bg-[#1c1c1c] py-2 text-[12px] text-[#c9c9c9] hover:border-[#555] disabled:opacity-50"
+                >
+                  {refBusy ? "上傳中…" : "上傳圖片"}
+                </button>
+                <input
+                  ref={refInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) uploadRef(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+
+                {refError && <p className="mt-2 text-[11px] text-[#ff9b9b]">{refError}</p>}
+
+                <div className="mt-2 text-[11px] text-[#8a8a8a]">從資產庫選</div>
+                <div className="mt-1 grid max-h-[180px] grid-cols-4 gap-1.5 overflow-y-auto">
+                  {library === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</span>}
+                  {library?.length === 0 && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">資產庫還沒有圖片</span>}
+                  {library?.map((a) => {
+                    const on = refs.some((r) => r.id === a.id);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => toggleRef(a)}
+                        className={`relative aspect-square overflow-hidden rounded-md border ${on ? "border-[#7ff0cd]" : "border-[#2a2a2a] hover:border-[#4a4a4a]"}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
+                        <img src={a.src} alt="" className="h-full w-full object-cover" />
+                        {on && <span className="absolute inset-0 grid place-items-center bg-black/40 text-[11px] text-[#7ff0cd]">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         <textarea
@@ -279,6 +416,10 @@ export default function Composer({
                   onClick={() => {
                     setModel(m.id);
                     setImgEdits({});
+                    if (!supportsRefImages(getImageModel(m.id))) {
+                      setRefs([]);
+                      setRefPicker(false);
+                    }
                     close();
                   }}
                 >

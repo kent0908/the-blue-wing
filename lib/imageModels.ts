@@ -257,6 +257,15 @@ export function getImageModel(id: string | null | undefined): ImageModel | undef
   );
 }
 
+/** Families that accept reference images (image-to-image) via `image_urls`. */
+const REF_IMAGE_FAMILIES: ImageFamily[] = ["seedream", "gemini"];
+export function supportsRefImages(model: ImageModel | undefined): boolean {
+  return !!model && REF_IMAGE_FAMILIES.includes(model.family);
+}
+
+/** Max reference images accepted per generation. */
+export const MAX_REF_IMAGES = 4;
+
 export type ImageControlValues = Record<string, string | number>;
 
 /** Initial values for a model's controls (only keys with an explicit default). */
@@ -275,13 +284,18 @@ export function defaultValues(model: ImageModel): ImageControlValues {
 export function buildImagePayload(
   model: ImageModel,
   prompt: string,
-  values: ImageControlValues
+  values: ImageControlValues,
+  assetIds: number[] = []
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     model: model.id,
     prompt,
     response_format: "url",
   };
+
+  if (assetIds.length && supportsRefImages(model)) {
+    body.assetIds = assetIds.slice(0, MAX_REF_IMAGES);
+  }
 
   for (const c of model.controls) {
     const raw = values[c.key];
