@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
+import SupportChat from "@/components/SupportChat";
 
 export const metadata: Metadata = {
   title: "The Blue Wing — AI 影片、圖片與創作平台",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main className="min-h-0 flex-1">{children}</main>
           </div>
         </div>
+        <SupportChat />
       </body>
     </html>
   );
