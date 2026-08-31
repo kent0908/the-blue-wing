@@ -9,9 +9,29 @@ type Slide = {
   subtitle: string;
   href: string;
   gradient: string;
+  image?: string;
   overlayLeft?: string;
   overlayRight?: string;
 };
+
+interface HeroBlock {
+  id: number;
+  title: string;
+  subtitle: string;
+  imageUrl: string | null;
+  targetMode: string | null;
+  modelId: string | null;
+  prompt: string | null;
+}
+
+function heroHref(b: HeroBlock): string {
+  const p = new URLSearchParams();
+  if (b.targetMode) p.set("mode", b.targetMode);
+  if (b.modelId) p.set("model", b.modelId);
+  if (b.prompt) p.set("q", b.prompt);
+  p.set("preset", String(b.id));
+  return `/studio?${p.toString()}`;
+}
 
 const SLIDES: Slide[] = [
   {
@@ -49,17 +69,41 @@ const SLIDES: Slide[] = [
 ];
 
 export default function HeroCarousel() {
-  const [i, setI] = useState(2);
-  const [paused, setPaused] = useState(false);
-  const n = SLIDES.length;
+  const [dynamicSlides, setDynamicSlides] = useState<Slide[] | null>(null);
 
-  const go = useCallback((d: number) => setI((p) => (p + d + n) % n), [n]);
+  useEffect(() => {
+    fetch("/api/home-blocks")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const hero: HeroBlock[] = j?.hero ?? [];
+        if (hero.length) {
+          setDynamicSlides(
+            hero.map((b, idx) => ({
+              title: b.title,
+              subtitle: b.subtitle,
+              href: heroHref(b),
+              gradient: SLIDES[idx % SLIDES.length].gradient,
+              image: b.imageUrl ?? undefined,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const slides = dynamicSlides ?? SLIDES;
+  const [rawI, setI] = useState(2);
+  const [paused, setPaused] = useState(false);
+  const n = slides.length;
+  const i = ((rawI % n) + n) % n; // stays valid when the slide count changes
+
+  const go = useCallback((d: number) => setI((p) => p + d), []);
 
   useEffect(() => {
     if (paused) return;
-    const t = setInterval(() => setI((p) => (p + 1) % n), 6000);
+    const t = setInterval(() => setI((p) => p + 1), 6000);
     return () => clearInterval(t);
-  }, [paused, n]);
+  }, [paused]);
 
   return (
     <div
@@ -68,7 +112,7 @@ export default function HeroCarousel() {
       onMouseLeave={() => setPaused(false)}
     >
       <div className="relative flex h-[300px] items-center justify-center gap-4 overflow-hidden">
-        {SLIDES.map((s, idx) => {
+        {slides.map((s, idx) => {
           let offset = idx - i;
           if (offset > n / 2) offset -= n;
           if (offset < -n / 2) offset += n;
@@ -77,7 +121,7 @@ export default function HeroCarousel() {
           const isCenter = offset === 0;
           return (
             <Link
-              key={s.title}
+              key={`${idx}-${s.title}`}
               href={s.href}
               className="absolute overflow-hidden rounded-2xl transition-all duration-500 ease-out"
               style={{
@@ -89,6 +133,10 @@ export default function HeroCarousel() {
                 zIndex: isCenter ? 10 : 5,
               }}
             >
+              {s.image && (
+                // eslint-disable-next-line @next/next/no-img-element -- public content proxy
+                <img src={s.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              )}
               <div className="relative flex h-full flex-col justify-end p-7">
                 {isCenter && s.overlayLeft && (
                   <div className="absolute inset-x-7 top-1/3 flex justify-between text-[15px] text-white/85">
@@ -122,7 +170,7 @@ export default function HeroCarousel() {
       </div>
 
       <div className="mt-4 flex items-center justify-center gap-1.5">
-        {SLIDES.map((_, idx) => (
+        {slides.map((_, idx) => (
           <button
             key={idx}
             onClick={() => setI(idx)}

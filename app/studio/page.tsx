@@ -56,7 +56,49 @@ function StudioInner() {
   const router = useRouter();
   const params = useSearchParams();
   const mode = (params.get("mode") as Mode) || "video";
-  const initialModel = params.get("model") ?? undefined;
+  const urlModel = params.get("model") ?? undefined;
+  const urlPrompt = params.get("q") ?? undefined;
+  const preset = params.get("preset");
+
+  // Template presets carry prompt / model / params / a reference image. Resolve
+  // them before mounting the Composer so its initial state is already populated.
+  const [presetReady, setPresetReady] = useState(!preset);
+  const [presetModel, setPresetModel] = useState<string | undefined>(urlModel);
+  const [presetPrompt, setPresetPrompt] = useState<string | undefined>(urlPrompt);
+  const [presetImgValues, setPresetImgValues] = useState<Record<string, string | number> | undefined>();
+  const [presetRefs, setPresetRefs] = useState<{ id: number; src: string }[] | undefined>();
+
+  useEffect(() => {
+    if (!preset) return;
+    let alive = true;
+    (async () => {
+      try {
+        const j = await fetch("/api/home-blocks").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const all = j ? [...(j.hero ?? []), ...(j.showcase ?? []), ...(j.template ?? [])] : [];
+        const b = all.find((x: { id: number }) => String(x.id) === preset);
+        if (b && alive) {
+          if (b.prompt && !urlPrompt) setPresetPrompt(b.prompt);
+          if (b.modelId && !urlModel) setPresetModel(b.modelId);
+          if (b.params && typeof b.params === "object") setPresetImgValues(b.params);
+        }
+        if (b?.hasImage) {
+          const t = await fetch("/api/templates/use", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ blockId: Number(preset) }),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+          if (alive && t?.ref) setPresetRefs([{ id: t.ref.id, src: t.ref.src }]);
+        }
+      } finally {
+        if (alive) setPresetReady(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [preset, urlModel, urlPrompt]);
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -270,13 +312,20 @@ function StudioInner() {
 
         <div className="px-8 pb-8">
           <div className="mx-auto w-full max-w-[840px]">
-            <Composer
-              mode={mode}
-              onModeChange={setMode}
-              onSubmit={handleSubmit}
-              busy={busy}
-              initialModel={initialModel}
-            />
+            {presetReady ? (
+              <Composer
+                mode={mode}
+                onModeChange={setMode}
+                onSubmit={handleSubmit}
+                busy={busy}
+                initialModel={presetModel}
+                initialPrompt={presetPrompt}
+                initialImgValues={presetImgValues}
+                initialRefs={presetRefs}
+              />
+            ) : (
+              <div className="h-[168px] rounded-2xl border border-[#2a2a2a] bg-[#161616] bw-shimmer" />
+            )}
           </div>
         </div>
       </div>

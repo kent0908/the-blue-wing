@@ -59,6 +59,9 @@ export default function Composer({
   onSubmit,
   busy,
   initialModel,
+  initialPrompt,
+  initialImgValues,
+  initialRefs,
 }: {
   mode: Mode;
   onModeChange: (m: Mode) => void;
@@ -71,10 +74,16 @@ export default function Composer({
   busy: boolean;
   /** model id from ?model= — pre-selects the model when it matches the mode */
   initialModel?: string;
+  /** prompt from ?q= or a template preset */
+  initialPrompt?: string;
+  /** image param overrides from a template preset */
+  initialImgValues?: ImageControlValues;
+  /** reference images from a template preset (already cloned to the user) */
+  initialRefs?: { id: number; src: string }[];
 }) {
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [settings, setSettings] = useState<GenSettings>(DEFAULT_SETTINGS);
-  const [imgEdits, setImgEdits] = useState<ImageControlValues>({});
+  const [imgEdits, setImgEdits] = useState<ImageControlValues>(initialImgValues ?? {});
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(true);
@@ -84,7 +93,7 @@ export default function Composer({
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   /* ---- reference images (image-to-image) ---- */
-  const [refs, setRefs] = useState<RefAsset[]>([]);
+  const [refs, setRefs] = useState<RefAsset[]>(initialRefs ?? []);
   const [refPicker, setRefPicker] = useState(false);
   const [library, setLibrary] = useState<RefAsset[] | null>(null);
   const [refBusy, setRefBusy] = useState(false);
