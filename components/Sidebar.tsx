@@ -13,7 +13,6 @@ import {
   IconAvatar,
   IconApps,
   IconCanvas,
-  IconModel,
   IconAssets,
   IconAffiliate,
   IconCollapse,
@@ -42,7 +41,6 @@ const GROUP_A: Item[] = [
 ];
 
 const GROUP_B: Item[] = [
-  { href: "/models", label: "模型庫", icon: IconModel },
   { href: "/apps", label: "AI 應用", icon: IconApps },
   { href: "/canvas", label: "智慧畫布", icon: IconCanvas, badge: { text: "NEW", tone: "new" } },
 ];

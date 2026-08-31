@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cost = creditCost({ kind: "text", model: String(body.model), maxTokens: Number(body.max_tokens) || 1024 });
+    const cost = await creditCost({ kind: "text", model: String(body.model), maxTokens: Number(body.max_tokens) || 1024 });
     const balance = await getBalance(user.id);
     if (balance < cost) {
       return NextResponse.json(

@@ -1,0 +1,20 @@
+import { NextResponse } from "next/server";
+import { listRates } from "@/lib/rateCard";
+
+export const runtime = "nodejs";
+export const revalidate = 60;
+
+/** GET /api/rates — public credit rate card, used for the pre-flight quote. */
+export async function GET() {
+  try {
+    const rates = (await listRates())
+      .filter((r) => r.active)
+      .map((r) => ({ modelId: r.modelId, modality: r.modality, credits: r.credits }));
+    return NextResponse.json(
+      { rates },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } }
+    );
+  } catch {
+    return NextResponse.json({ rates: [] });
+  }
+}

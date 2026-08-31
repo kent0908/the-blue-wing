@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cost = creditCost({
+    const cost = await creditCost({
       kind: "image",
       model: String(body.model),
       imageCount: Number(body.n) || 1,

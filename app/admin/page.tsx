@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminCharts from "./Charts";
+import AdminTabs from "./AdminTabs";
 
 interface AdminUser {
   id: number;
@@ -196,10 +197,11 @@ export default function AdminPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[1100px] px-6 py-8">
-        <div className="flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <h1 className="text-[22px] font-semibold tracking-tight">帳號後台</h1>
           <Link href="/account" className="text-[12.5px] text-[#8a8a8a] hover:text-white">回帳號</Link>
         </div>
+        <AdminTabs active="users" />
         <p className="mt-1 text-[13px] text-[#8a8a8a]">共 {total} 位使用者</p>
 
         {stats && (

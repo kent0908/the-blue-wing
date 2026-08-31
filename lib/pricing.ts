@@ -121,6 +121,31 @@ export function formatUSD(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/* ---- editable credit rate card (mirrors lib/rateCard.ts on the client) ---- */
+
+export interface RateCardEntry {
+  modelId: string;
+  modality: Modality;
+  credits: number;
+}
+
+/**
+ * Credits a generation will cost per the /api/rates card. Returns null when the
+ * model has no entry, so the caller can fall back to its USD-derived estimate.
+ */
+export function creditsFromRateCard(
+  rates: RateCardEntry[],
+  modelId: string,
+  opts: { imageCount?: number; seconds?: number; maxTokens?: number }
+): number | null {
+  const hit = rates.find((r) => r.modelId === modelId);
+  if (!hit) return null;
+  const per = Math.max(0, Math.trunc(hit.credits));
+  if (hit.modality === "image") return Math.max(1, per * Math.max(1, Math.trunc(opts.imageCount ?? 1)));
+  if (hit.modality === "video") return Math.max(1, per * Math.max(1, Math.ceil(opts.seconds ?? 5)));
+  return Math.max(1, per + Math.ceil((opts.maxTokens ?? 1024) / 2000));
+}
+
 /** Classify a model id into a modality using its id and SIRAYA's model families. */
 export function modalityOf(modelId: string): Modality {
   const id = modelId.toLowerCase();

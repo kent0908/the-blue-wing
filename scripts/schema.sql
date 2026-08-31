@@ -46,3 +46,33 @@ create table if not exists credit_ledger (
   created_at timestamptz not null default now()
 );
 create index if not exists ledger_user_idx on credit_ledger(user_id, created_at desc);
+
+-- per-model credit rate card (single source of truth for pricing). Seeded by
+-- scripts/seed-rates.mjs; edited from /admin. credits = per image / per second
+-- of video / per 1k output tokens depending on modality.
+create table if not exists model_rates (
+  id         bigint generated always as identity primary key,
+  model_id   text not null unique,
+  modality   text not null check (modality in ('image','video','text')),
+  credits    integer not null,
+  active     boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+-- editable home-page content: hero slides, model showcase cards, canvas templates
+create table if not exists home_blocks (
+  id          bigint generated always as identity primary key,
+  section     text not null check (section in ('hero','showcase','template')),
+  sort        integer not null default 0,
+  title       text not null default '',
+  subtitle    text not null default '',
+  badge       text,
+  asset_id    bigint references assets(id) on delete set null,
+  target_mode text,
+  model_id    text,
+  prompt      text,
+  params      jsonb not null default '{}',
+  active      boolean not null default true,
+  updated_at  timestamptz not null default now()
+);
+create index if not exists home_blocks_section_idx on home_blocks(section, sort);

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cost = creditCost({
+    const cost = await creditCost({
       kind: "video",
       model: String(body.model),
       seconds: Number(body.seconds) || 5,

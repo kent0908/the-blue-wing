@@ -43,6 +43,7 @@ export async function recentLedger(userId: number, limit = 50): Promise<LedgerRo
 }
 
 /* ---- what a generation costs, in credits ---- */
+import { getRate, creditCostFromRate } from "./rateCard";
 
 export interface CostInput {
   kind: "image" | "video" | "text";
@@ -52,8 +53,8 @@ export interface CostInput {
   maxTokens?: number;
 }
 
-/** Priced above SIRAYA's per-unit cost so credits stay profitable. */
-export function creditCost(input: CostInput): number {
+/** Hard-coded fallback used only when a model has no active `model_rates` row. */
+function legacyCost(input: CostInput): number {
   const id = input.model.toLowerCase();
   if (input.kind === "image") {
     const per = /gpt-image|gemini-3-pro-image|seedream-4\.5|seedream-5/.test(id) ? 14 : 10;
@@ -64,6 +65,23 @@ export function creditCost(input: CostInput): number {
     const perSec = /veo|sora/.test(id) ? 70 : 50;
     return secs * perSec;
   }
-  // text
   return 2 + Math.ceil((input.maxTokens ?? 1024) / 2000);
+}
+
+/**
+ * Credits a generation will cost. Reads the editable `model_rates` card first;
+ * falls back to legacyCost() when the model isn't in the table.
+ */
+export async function creditCost(input: CostInput): Promise<number> {
+  const rate = await getRate(input.model);
+  if (rate) {
+    return creditCostFromRate({
+      modality: rate.modality,
+      credits: rate.credits,
+      imageCount: input.imageCount,
+      seconds: input.seconds,
+      maxTokens: input.maxTokens,
+    });
+  }
+  return legacyCost(input);
 }

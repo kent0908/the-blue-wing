@@ -18,7 +18,7 @@ import {
   IconSettings,
 } from "./Icons";
 import { DEFAULT_SETTINGS, MODE_LABELS, type GenSettings, type Mode, type ModelInfo } from "@/lib/types";
-import { estimateCost, formatUSD } from "@/lib/pricing";
+import { estimateCost, formatUSD, creditsFromRateCard, type RateCardEntry } from "@/lib/pricing";
 import ImageParams from "./ImageParams";
 import {
   IMAGE_MODELS,
@@ -78,6 +78,7 @@ export default function Composer({
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(true);
+  const [rates, setRates] = useState<RateCardEntry[]>([]);
   const [model, setModel] = useState<string>("");
   const [expanded, setExpanded] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -149,6 +150,10 @@ export default function Composer({
       })
       .catch((e) => alive && setModelsError(e.message))
       .finally(() => alive && setLoadingModels(false));
+    fetch("/api/rates")
+      .then((r) => (r.ok ? r.json() : { rates: [] }))
+      .then((j) => alive && setRates(j.rates ?? []))
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -205,7 +210,9 @@ export default function Composer({
     [model, modalityForMode, prompt, settings, imageCount]
   );
 
-  const credits = Math.max(1, Math.round(cost * CREDITS_PER_USD));
+  const credits =
+    creditsFromRateCard(rates, model, { imageCount, seconds: settings.seconds, maxTokens: settings.maxTokens }) ??
+    Math.max(1, Math.round(cost * CREDITS_PER_USD));
   const canSubmit = !!prompt.trim() && !!model && !busy;
 
   // Only image mode with a seedream/gemini model can attach reference images.
