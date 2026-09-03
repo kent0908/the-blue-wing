@@ -120,7 +120,7 @@ function StudioInner() {
   // instead of only holding whatever happened in this browser tab's session.
   // 401 (logged out) just leaves history empty — not an error worth surfacing here.
   useEffect(() => {
-    fetch("/api/generations")
+    fetch("/api/generations", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { generations?: ResultItem[] } | null) => {
         if (j?.generations?.length) setResults(j.generations);
