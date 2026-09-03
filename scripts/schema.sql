@@ -37,6 +37,10 @@ create table if not exists assets (
 );
 create index if not exists assets_user_idx on assets(user_id, created_at desc);
 
+-- original upload filename, shown in the asset library and used as the @mention
+-- label in the Composer. Nullable — older rows fall back to "素材 <id>".
+alter table assets add column if not exists filename text;
+
 create table if not exists credit_ledger (
   id         bigint generated always as identity primary key,
   user_id    bigint not null references users(id) on delete cascade,

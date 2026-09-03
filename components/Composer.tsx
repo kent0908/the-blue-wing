@@ -29,10 +29,22 @@ import {
   MAX_REF_IMAGES,
   type ImageControlValues,
 } from "@/lib/imageModels";
+import { maxRefsForVideoModel } from "@/lib/videoModels";
 
 interface RefAsset {
   id: number;
   src: string;
+  name: string;
+}
+
+/** @mention token for an asset name — no spaces/@'s so it has an unambiguous
+ *  end boundary when typed inline in the prompt. */
+function mentionTagFor(name: string): string {
+  return name.replace(/\s+/g, "_").replace(/@/g, "") || "asset";
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 const MODE_ITEMS: { id: Mode; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
@@ -70,6 +82,8 @@ export default function Composer({
     model: string;
     settings: GenSettings;
     imagePayload?: Record<string, unknown>;
+    /** selected 素材 asset ids — video mode only (image mode folds these into imagePayload) */
+    assetIds?: number[];
   }) => void;
   busy: boolean;
   /** model id from ?model= — pre-selects the model when it matches the mode */
@@ -79,7 +93,7 @@ export default function Composer({
   /** image param overrides from a template preset */
   initialImgValues?: ImageControlValues;
   /** reference images from a template preset (already cloned to the user) */
-  initialRefs?: { id: number; src: string }[];
+  initialRefs?: RefAsset[];
 }) {
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [settings, setSettings] = useState<GenSettings>(DEFAULT_SETTINGS);
@@ -92,7 +106,7 @@ export default function Composer({
   const [expanded, setExpanded] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  /* ---- reference images (image-to-image) ---- */
+  /* ---- reference materials (image-to-image / Seedance multi-reference video) ---- */
   const [refs, setRefs] = useState<RefAsset[]>(initialRefs ?? []);
   const [refPicker, setRefPicker] = useState(false);
   const [library, setLibrary] = useState<RefAsset[] | null>(null);
@@ -100,26 +114,38 @@ export default function Composer({
   const [refError, setRefError] = useState<string | null>(null);
   const refInputRef = useRef<HTMLInputElement>(null);
 
+  /* ---- @mention: type "@" in the prompt to pick a reference asset inline ---- */
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  // Image mode: fixed MAX_REF_IMAGES cap, gated by the model's family.
+  // Video mode: only Seedance models support this on SIRAYA, and the cap
+  // varies per model (Seedance 2.5 → 50; see lib/videoModels.ts).
+  const refCap = mode === "video" ? maxRefsForVideoModel(model) : MAX_REF_IMAGES;
+
   const addRef = (a: RefAsset) =>
-    setRefs((cur) => (cur.some((r) => r.id === a.id) || cur.length >= MAX_REF_IMAGES ? cur : [...cur, a]));
+    setRefs((cur) => (cur.some((r) => r.id === a.id) || cur.length >= refCap ? cur : [...cur, a]));
   const toggleRef = (a: RefAsset) =>
     setRefs((cur) =>
       cur.some((r) => r.id === a.id)
         ? cur.filter((r) => r.id !== a.id)
-        : cur.length >= MAX_REF_IMAGES
+        : cur.length >= refCap
           ? cur
           : [...cur, a]
     );
 
+  const ensureLibrary = () => {
+    if (library !== null) return;
+    fetch("/api/assets")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((j: { assets: RefAsset[] }) => setLibrary(j.assets))
+      .catch(() => setLibrary([]));
+  };
+
   const openPicker = () => {
     setRefPicker(true);
     setRefError(null);
-    if (library === null) {
-      fetch("/api/assets")
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
-        .then((j: { assets: RefAsset[] }) => setLibrary(j.assets))
-        .catch(() => setLibrary([]));
-    }
+    ensureLibrary();
   };
 
   const uploadRef = async (files: FileList) => {
@@ -224,20 +250,83 @@ export default function Composer({
     Math.max(1, Math.round(cost * CREDITS_PER_USD));
   const canSubmit = !!prompt.trim() && !!model && !busy;
 
-  // Only image mode with a seedream/gemini model can attach reference images.
-  // When it can't, stale refs are simply ignored (submit + render both gate on this).
-  const canUseRefs = mode === "image" && supportsRefImages(activeImageModel);
+  // Image mode: seedream/gemini models. Video mode: Seedance models only.
+  // When neither applies, stale refs are simply ignored (submit + render both gate on this).
+  const canUseRefs =
+    (mode === "image" && supportsRefImages(activeImageModel)) || (mode === "video" && refCap > 0);
+
+  const mentionMatches = useMemo(() => {
+    if (!mention || !library) return [];
+    const q = mention.query.toLowerCase();
+    return library
+      .filter((a) => a.name.toLowerCase().includes(q) && !refs.some((r) => r.id === a.id))
+      .slice(0, 8);
+  }, [mention, library, refs]);
+
+  /** Inserts "@AssetName " at the mention's position and adds it to the active
+   *  reference set (up to MAX_REF_IMAGES) — same effect as picking it from 素材. */
+  const pickMention = (a: RefAsset) => {
+    if (!mention) return;
+    const tag = mentionTagFor(a.name);
+    const before = prompt.slice(0, mention.start);
+    const after = prompt.slice(mention.start + 1 + mention.query.length);
+    const next = `${before}@${tag} ${after}`;
+    setPrompt(next);
+    setMention(null);
+    setMentionIndex(0);
+    addRef(a);
+    const cursor = before.length + tag.length + 2;
+    requestAnimationFrame(() => {
+      taRef.current?.focus();
+      taRef.current?.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const pos = e.target.selectionStart ?? val.length;
+    setPrompt(val);
+    if (!canUseRefs) {
+      if (mention) setMention(null);
+      return;
+    }
+    const before = val.slice(0, pos);
+    const m = before.match(/(?:^|\s)@([^\s@]{0,40})$/);
+    if (m) {
+      setMention({ query: m[1], start: pos - m[1].length - 1 });
+      setMentionIndex(0);
+      ensureLibrary();
+    } else if (mention) {
+      setMention(null);
+    }
+  };
 
   const submit = () => {
     if (!canSubmit) return;
     const assetIds = canUseRefs ? refs.map((r) => r.id) : [];
+    // The image itself already carries the reference — strip the "@Name" tag
+    // out of the text so the model isn't fed a literal filename token.
+    let finalPrompt = prompt.trim();
+    if (canUseRefs) {
+      for (const r of refs) {
+        const tag = escapeRegExp(mentionTagFor(r.name));
+        finalPrompt = finalPrompt.replace(new RegExp(`@${tag}(?=\\s|$)\\s*`, "g"), "").trim();
+      }
+    }
     const imagePayload = activeImageModel
-      ? buildImagePayload(activeImageModel, prompt.trim(), imgValues, assetIds)
+      ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds)
       : undefined;
-    onSubmit({ prompt: prompt.trim(), model, settings, imagePayload });
+    onSubmit({
+      prompt: finalPrompt,
+      model,
+      settings,
+      imagePayload,
+      assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
+    });
     setPrompt("");
     setRefs([]);
     setRefPicker(false);
+    setMention(null);
   };
 
   return (
@@ -265,7 +354,7 @@ export default function Composer({
               </div>
             ))}
 
-            {refs.length < MAX_REF_IMAGES && (
+            {refs.length < refCap && (
               <button
                 type="button"
                 onClick={() => (refPicker ? setRefPicker(false) : openPicker())}
@@ -279,7 +368,7 @@ export default function Composer({
             {refPicker && (
               <div className="bw-menu absolute bottom-[calc(100%+8px)] left-0 z-40 w-[320px] p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-medium text-white">參考圖（最多 {MAX_REF_IMAGES} 張）</span>
+                  <span className="text-[12px] font-medium text-white">參考素材（最多 {refCap} 個）</span>
                   <button type="button" onClick={() => setRefPicker(false)} className="text-[11px] text-[#8a8a8a] hover:text-white">關閉</button>
                 </div>
 
@@ -305,6 +394,10 @@ export default function Composer({
 
                 {refError && <p className="mt-2 text-[11px] text-[#ff9b9b]">{refError}</p>}
 
+                <p className="mt-2 text-[10.5px] text-[#6d6d6d]">
+                  小技巧：在下面輸入框打 <span className="text-[#9a9a9a]">@</span> 也可以直接搜尋、指定素材
+                </p>
+
                 <div className="mt-2 text-[11px] text-[#8a8a8a]">從資產庫選</div>
                 <div className="mt-1 grid max-h-[180px] grid-cols-4 gap-1.5 overflow-y-auto">
                   {library === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</span>}
@@ -315,11 +408,12 @@ export default function Composer({
                       <button
                         key={a.id}
                         type="button"
+                        title={a.name}
                         onClick={() => toggleRef(a)}
                         className={`relative aspect-square overflow-hidden rounded-md border ${on ? "border-[#7ff0cd]" : "border-[#2a2a2a] hover:border-[#4a4a4a]"}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
-                        <img src={a.src} alt="" className="h-full w-full object-cover" />
+                        <img src={a.src} alt={a.name} className="h-full w-full object-cover" />
                         {on && <span className="absolute inset-0 grid place-items-center bg-black/40 text-[11px] text-[#7ff0cd]">✓</span>}
                       </button>
                     );
@@ -330,17 +424,72 @@ export default function Composer({
           </div>
         )}
 
-        <textarea
-          ref={taRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
-          }}
-          placeholder={PLACEHOLDER[mode]}
-          rows={expanded ? 8 : 3}
-          className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
-        />
+        <div className="relative min-w-0 flex-1">
+          <textarea
+            ref={taRef}
+            value={prompt}
+            onChange={handlePromptChange}
+            onKeyDown={(e) => {
+              if (mention && mentionMatches.length) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setMentionIndex((i) => (i + 1) % mentionMatches.length);
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length);
+                  return;
+                }
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  pickMention(mentionMatches[mentionIndex]);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setMention(null);
+                  return;
+                }
+              }
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+            }}
+            onBlur={() => {
+              // let a mousedown on the dropdown register before it disappears
+              setTimeout(() => setMention(null), 120);
+            }}
+            placeholder={canUseRefs ? `${PLACEHOLDER[mode]}（可打 @ 指定素材）` : PLACEHOLDER[mode]}
+            rows={expanded ? 8 : 3}
+            className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
+          />
+
+          {mention && (
+            <div className="bw-menu absolute left-0 top-full z-40 mt-1 w-[260px] max-h-[220px] overflow-y-auto p-1.5">
+              {library === null && <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">載入素材中…</div>}
+              {library !== null && mentionMatches.length === 0 && (
+                <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">
+                  {library.length === 0 ? "資產庫還沒有素材，先上傳一張" : "找不到符合的素材"}
+                </div>
+              )}
+              {mentionMatches.map((a, i) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  // avoid the textarea's onBlur firing before the click registers
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickMention(a)}
+                  className={`bw-menu-item ${i === mentionIndex ? "bg-[#242424]" : ""}`}
+                >
+                  <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-md bg-[#242424]">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
+                    <img src={a.src} alt="" className="h-full w-full object-cover" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px]">{a.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <button
           type="button"

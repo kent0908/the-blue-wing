@@ -121,11 +121,12 @@ export interface ImageGenerationRequest {
   model: string;
   prompt: string;
   /**
-   * Reference image for image-to-image (URL or base64 data URL). SIRAYA's
-   * text-to-image endpoint takes a single `image` field — confirmed against
-   * the docs' parameter table (it is NOT an array, and not `image_urls`).
+   * Reference image(s) for image-to-image. The field is `image` (not
+   * `image_urls`) and DOES accept an array — verified empirically: sending
+   * two distinct reference images produced an output combining both. Each
+   * entry is a URL or a base64 data URL.
    */
-  image?: string;
+  image?: string | string[];
   n?: number;
   size?: string;
   quality?: string;
@@ -149,6 +150,11 @@ export async function createImage(body: ImageGenerationRequest) {
   return res.json();
 }
 
+export interface VideoInputReference {
+  type: "image" | "video" | "audio";
+  url: string;
+}
+
 export interface VideoGenerationRequest {
   model: string;
   prompt: string;
@@ -159,6 +165,14 @@ export interface VideoGenerationRequest {
   negative_prompt?: string;
   seed?: number;
   async?: boolean;
+  /**
+   * Multi-reference materials (image/video/audio) for models that support
+   * subject/style/scene references — Seedance family. Verified empirically:
+   * SIRAYA validates each entry's `url` (rejects images under ~300px) before
+   * accepting the job, and accepts both plain URLs and base64 data URLs.
+   * A `role` field is documented but its valid values aren't — omit it.
+   */
+  input_references?: VideoInputReference[];
 }
 
 /** POST /videos/generations */

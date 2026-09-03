@@ -7,10 +7,13 @@
 import { get } from "@vercel/blob";
 import { sql } from "./db";
 import type { AssetRow } from "./assets";
-import { MAX_REF_IMAGES } from "./imageModels";
 
-export async function assetsToDataUrls(userId: number, ids: number[]): Promise<string[]> {
-  const wanted = [...new Set(ids.filter((n) => Number.isInteger(n)))].slice(0, MAX_REF_IMAGES);
+/**
+ * @param limit caller-supplied cap (image generation passes MAX_REF_IMAGES,
+ *   video passes the per-model Seedance limit — see lib/videoModels.ts).
+ */
+export async function assetsToDataUrls(userId: number, ids: number[], limit = 50): Promise<string[]> {
+  const wanted = [...new Set(ids.filter((n) => Number.isInteger(n)))].slice(0, limit);
   if (!wanted.length) return [];
 
   const { rows } = await sql.query<AssetRow>(

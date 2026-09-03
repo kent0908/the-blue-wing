@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if ("error" in r) return r.error;
 
   const { rows } = await sql<AssetRow>`
-    select id, user_id, url, pathname, content_type, size, created_at
+    select id, user_id, url, pathname, content_type, size, filename, created_at
     from assets where user_id = ${r.user.id}
     order by created_at desc
     limit 300
@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const safe = (file.name || "asset").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
+  const originalName = (file.name || "asset").slice(0, 120);
+  const safe = originalName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
   const pathname = `assets/${r.user.id}/${Date.now()}-${safe}`;
 
   let uploaded;
@@ -81,9 +82,9 @@ export async function POST(req: NextRequest) {
   }
 
   const { rows } = await sql<AssetRow>`
-    insert into assets (user_id, url, pathname, content_type, size)
-    values (${r.user.id}, ${uploaded.url}, ${uploaded.pathname}, ${file.type}, ${file.size})
-    returning id, user_id, url, pathname, content_type, size, created_at
+    insert into assets (user_id, url, pathname, content_type, size, filename)
+    values (${r.user.id}, ${uploaded.url}, ${uploaded.pathname}, ${file.type}, ${file.size}, ${originalName})
+    returning id, user_id, url, pathname, content_type, size, filename, created_at
   `;
   return NextResponse.json({ asset: toPublicAsset(rows[0]) }, { status: 201 });
 }

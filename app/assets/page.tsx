@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 interface Asset {
   id: number;
   src: string;
+  name: string;
   contentType: string;
   size: number;
   createdAt: string;
@@ -191,9 +192,12 @@ export default function AssetsPage() {
               <div key={a.id} className="group relative overflow-hidden rounded-xl border border-[#262626] bg-[#111]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream, not a static asset */}
                 <img src={a.src} alt="" className="aspect-square w-full object-cover" loading="lazy" />
-                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 text-[10.5px] text-[#c9c9c9]">
-                  <span>{fmtSize(a.size)}</span>
-                  <span className="text-[#8a8a8a]">{new Date(a.createdAt).toLocaleDateString("zh-TW")}</span>
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-2 py-1.5">
+                  <div className="truncate text-[10.5px] text-white" title={a.name}>{a.name}</div>
+                  <div className="flex items-center justify-between gap-1 text-[10.5px] text-[#c9c9c9]">
+                    <span>{fmtSize(a.size)}</span>
+                    <span className="text-[#8a8a8a]">{new Date(a.createdAt).toLocaleDateString("zh-TW")}</span>
+                  </div>
                 </div>
                 <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button

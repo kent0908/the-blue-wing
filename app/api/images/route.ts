@@ -4,6 +4,7 @@ import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
 import { assetsToDataUrls } from "@/lib/assetData";
+import { MAX_REF_IMAGES } from "@/lib/imageModels";
 import { recordGeneration } from "@/lib/generations";
 
 export const runtime = "nodejs";
@@ -75,14 +76,14 @@ export async function POST(req: NextRequest) {
       if (body[key] !== undefined) payload[key] = body[key];
     }
 
-    // reference image: the client sends its own asset id(s); we resolve them to
-    // base64 data URLs here (the blob store is private). SIRAYA's endpoint takes
-    // a single `image` field (verified against the docs' param table), so only
-    // the first selected reference is forwarded — extras are silently dropped
-    // before this point anyway (see MAX_REF_IMAGES in lib/imageModels.ts).
+    // reference image(s): the client sends its own asset id(s); resolve them to
+    // base64 data URLs here (the blob store is private) and forward as `image`.
+    // SIRAYA accepts an array — verified empirically with two distinct
+    // reference images producing a result that combined both.
     if (Array.isArray(body.assetIds) && body.assetIds.length) {
-      const imageUrls = await assetsToDataUrls(user.id, body.assetIds.map(Number));
-      if (imageUrls[0]) payload.image = imageUrls[0];
+      const imageUrls = await assetsToDataUrls(user.id, body.assetIds.map(Number), MAX_REF_IMAGES);
+      if (imageUrls.length === 1) payload.image = imageUrls[0];
+      else if (imageUrls.length > 1) payload.image = imageUrls;
     }
 
     const json = await createImage(payload as unknown as ImageGenerationRequest);

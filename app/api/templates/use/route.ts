@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
       contentType: src.content_type,
     });
     const { rows: ins } = await sql<AssetRow>`
-      insert into assets (user_id, url, pathname, content_type, size)
-      values (${user.id}, ${uploaded.url}, ${uploaded.pathname}, ${src.content_type}, ${buf.length})
-      returning id, user_id, url, pathname, content_type, size, created_at`;
+      insert into assets (user_id, url, pathname, content_type, size, filename)
+      values (${user.id}, ${uploaded.url}, ${uploaded.pathname}, ${src.content_type}, ${buf.length}, ${src.filename ?? block.title ?? null})
+      returning id, user_id, url, pathname, content_type, size, filename, created_at`;
     return NextResponse.json({ ref: toPublicAsset(ins[0]) });
   } catch (err) {
     console.error("template image clone failed:", err);

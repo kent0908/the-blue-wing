@@ -66,7 +66,7 @@ function StudioInner() {
   const [presetModel, setPresetModel] = useState<string | undefined>(urlModel);
   const [presetPrompt, setPresetPrompt] = useState<string | undefined>(urlPrompt);
   const [presetImgValues, setPresetImgValues] = useState<Record<string, string | number> | undefined>();
-  const [presetRefs, setPresetRefs] = useState<{ id: number; src: string }[] | undefined>();
+  const [presetRefs, setPresetRefs] = useState<{ id: number; src: string; name: string }[] | undefined>();
 
   useEffect(() => {
     if (!preset) return;
@@ -89,7 +89,7 @@ function StudioInner() {
           })
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null);
-          if (alive && t?.ref) setPresetRefs([{ id: t.ref.id, src: t.ref.src }]);
+          if (alive && t?.ref) setPresetRefs([{ id: t.ref.id, src: t.ref.src, name: t.ref.name ?? "範本圖片" }]);
         }
       } finally {
         if (alive) setPresetReady(true);
@@ -162,11 +162,13 @@ function StudioInner() {
     model,
     settings,
     imagePayload,
+    assetIds,
   }: {
     prompt: string;
     model: string;
     settings: GenSettings;
     imagePayload?: Record<string, unknown>;
+    assetIds?: number[];
   }) => {
     setError(null);
     setErrorCta(null);
@@ -188,6 +190,7 @@ function StudioInner() {
             seconds: settings.seconds,
             resolution: settings.resolution,
             ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
+            ...(assetIds?.length ? { assetIds } : {}),
           }),
         });
         const json = await readJson(res);

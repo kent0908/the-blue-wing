@@ -17,6 +17,7 @@ export interface AssetRow {
   pathname: string;
   content_type: string;
   size: number;
+  filename: string | null;
   created_at: string;
 }
 
@@ -24,6 +25,8 @@ export interface PublicAsset {
   id: number;
   /** authenticated proxy URL — the blob store is private, so raw URLs need auth */
   src: string;
+  /** original upload filename — shown in the picker and used as the @mention label */
+  name: string;
   contentType: string;
   size: number;
   createdAt: string;
@@ -33,10 +36,17 @@ export function toPublicAsset(a: AssetRow): PublicAsset {
   return {
     id: a.id,
     src: `/api/assets/${a.id}/raw`,
+    name: a.filename || `素材${a.id}`,
     contentType: a.content_type,
     size: a.size,
     createdAt: a.created_at,
   };
+}
+
+/** Turn an asset name into a safe @mention token — no spaces/@'s so the tag
+ *  has an unambiguous end boundary in plain prompt text. */
+export function mentionTag(name: string): string {
+  return name.replace(/\s+/g, "_").replace(/@/g, "");
 }
 
 /**

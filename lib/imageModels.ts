@@ -264,11 +264,13 @@ export function supportsRefImages(model: ImageModel | undefined): boolean {
 }
 
 /**
- * Max reference images accepted per generation. SIRAYA's text-to-image API
- * takes a single `image` field (not an array) — see the docs' parameter
- * table at https://docs.siraya.ai/docs/api-reference/generative-model-api/text-to-image/
+ * Max reference images accepted per generation. SIRAYA's `image` field takes
+ * either a single URL/data-URL or an array — verified empirically (two
+ * distinct reference images produced a result combining both). BytePlus's own
+ * Seedream docs cite up to 10–14 depending on model; kept conservative here
+ * since that ceiling isn't independently confirmed per-model through SIRAYA.
  */
-export const MAX_REF_IMAGES = 1;
+export const MAX_REF_IMAGES = 4;
 
 export type ImageControlValues = Record<string, string | number>;
 

@@ -4,6 +4,8 @@ import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
 import { recordGeneration } from "@/lib/generations";
+import { assetsToDataUrls } from "@/lib/assetData";
+import { maxRefsForVideoModel } from "@/lib/videoModels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,7 +54,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const json = await createVideo({ ...body, async: true });
+    // reference materials: client sends its own asset id(s); resolve to base64
+    // data URLs (the blob store is private) and forward as input_references.
+    // Only Seedance models are known to support this on SIRAYA — cap at that
+    // model's documented limit regardless of what the client asked for.
+    const { assetIds, ...videoBody } = body;
+    const refCap = maxRefsForVideoModel(String(body.model));
+    if (refCap > 0 && Array.isArray(assetIds) && assetIds.length) {
+      const urls = await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
+      if (urls.length) {
+        videoBody.input_references = urls.map((url) => ({ type: "image" as const, url }));
+      }
+    }
+
+    const json = await createVideo({ ...videoBody, async: true });
 
     // Async submissions return { id, status: "processing" }; a provider that
     // completes synchronously returns { data: [{ url }] } instead.
