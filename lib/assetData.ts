@@ -17,7 +17,11 @@ export async function assetsToDataUrls(userId: number, ids: number[]): Promise<s
     "select * from assets where user_id = $1 and id = any($2::int[])",
     [userId, wanted]
   );
-  const byId = new Map(rows.map((a) => [a.id, a]));
+  // Postgres bigint ids come back as strings (to avoid precision loss) — coerce
+  // to number so lookups below actually match `wanted`'s numeric ids. Without
+  // this, byId.get(id) always misses ("13" !== 13) and every asset is silently
+  // skipped: no error, the request just quietly falls back to text-only.
+  const byId = new Map(rows.map((a) => [Number(a.id), a]));
 
   const out: string[] = [];
   for (const id of wanted) {
