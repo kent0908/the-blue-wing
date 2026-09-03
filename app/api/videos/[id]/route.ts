@@ -4,6 +4,7 @@ import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
 import { addCredits } from "@/lib/credits";
+import { recordGeneration } from "@/lib/generations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     const json = await getVideoStatus(id);
     const url = json?.output_url ?? json?.data?.[0]?.url ?? null;
     const status = json?.status ?? (url ? "completed" : "processing");
+
+    if (status === "completed" && url) {
+      // The submit route only knows the url for synchronous providers; async
+      // jobs are recorded here instead, the first time a poll sees "completed"
+      // (recordGeneration dedupes on ref, so repeat polls are harmless).
+      const model = req.nextUrl.searchParams.get("model");
+      const prompt = req.nextUrl.searchParams.get("prompt");
+      if (model && prompt) {
+        await recordGeneration(user.id, { kind: "video", model, prompt, url, ref: id });
+      }
+    }
 
     if (status === "failed") {
       const { rows } = await sql<{ delta: number; refunded: number }>`

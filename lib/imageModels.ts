@@ -257,14 +257,18 @@ export function getImageModel(id: string | null | undefined): ImageModel | undef
   );
 }
 
-/** Families that accept reference images (image-to-image) via `image_urls`. */
+/** Families that accept a reference image (image-to-image) via the `image` field. */
 const REF_IMAGE_FAMILIES: ImageFamily[] = ["seedream", "gemini"];
 export function supportsRefImages(model: ImageModel | undefined): boolean {
   return !!model && REF_IMAGE_FAMILIES.includes(model.family);
 }
 
-/** Max reference images accepted per generation. */
-export const MAX_REF_IMAGES = 4;
+/**
+ * Max reference images accepted per generation. SIRAYA's text-to-image API
+ * takes a single `image` field (not an array) — see the docs' parameter
+ * table at https://docs.siraya.ai/docs/api-reference/generative-model-api/text-to-image/
+ */
+export const MAX_REF_IMAGES = 1;
 
 export type ImageControlValues = Record<string, string | number>;
 

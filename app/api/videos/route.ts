@@ -3,6 +3,7 @@ import { createVideo } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
+import { recordGeneration } from "@/lib/generations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,18 @@ export async function POST(req: NextRequest) {
     // Charge on submission, tagged with the job id so /api/videos/[id] can
     // refund if the render ends up failing.
     await addCredits(user.id, -cost, "video", jobId ? String(jobId) : String(body.model));
+
+    // Providers that finish synchronously give us the url right away; async
+    // jobs get recorded later by /api/videos/[id] once polling sees "completed".
+    if (immediateUrl) {
+      await recordGeneration(user.id, {
+        kind: "video",
+        model: String(body.model),
+        prompt: String(body.prompt),
+        url: immediateUrl,
+        ref: jobId ? String(jobId) : null,
+      });
+    }
 
     return NextResponse.json({
       id: jobId,

@@ -120,8 +120,12 @@ export async function listModels() {
 export interface ImageGenerationRequest {
   model: string;
   prompt: string;
-  /** reference images for image-to-image (URLs or base64 data URLs) */
-  image_urls?: string[];
+  /**
+   * Reference image for image-to-image (URL or base64 data URL). SIRAYA's
+   * text-to-image endpoint takes a single `image` field — confirmed against
+   * the docs' parameter table (it is NOT an array, and not `image_urls`).
+   */
+  image?: string;
   n?: number;
   size?: string;
   quality?: string;

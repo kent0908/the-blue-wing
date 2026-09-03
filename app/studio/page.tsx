@@ -116,10 +116,23 @@ function StudioInner() {
 
   const pushResult = (r: ResultItem) => setResults((prev) => [r, ...prev]);
 
+  // Seed 生成紀錄 from the DB so it survives reloads / different devices,
+  // instead of only holding whatever happened in this browser tab's session.
+  // 401 (logged out) just leaves history empty — not an error worth surfacing here.
+  useEffect(() => {
+    fetch("/api/generations")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { generations?: ResultItem[] } | null) => {
+        if (j?.generations?.length) setResults(j.generations);
+      })
+      .catch(() => {});
+  }, []);
+
   const pollVideo = useCallback(
     async (id: string, prompt: string, model: string) => {
       const tick = async () => {
-        const res = await fetch(`/api/videos/${encodeURIComponent(id)}`);
+        const qs = new URLSearchParams({ model, prompt });
+        const res = await fetch(`/api/videos/${encodeURIComponent(id)}?${qs.toString()}`);
         const json = await readJson(res);
         if (!res.ok) throw new Error(json?.error?.message || "查詢影片狀態失敗");
         if (json.status === "completed" && json.url) {

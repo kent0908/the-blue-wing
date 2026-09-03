@@ -3,6 +3,7 @@ import { createChatCompletion, createChatCompletionStream } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
+import { recordGeneration } from "@/lib/generations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,18 @@ export async function POST(req: NextRequest) {
 
     const json = await createChatCompletion(body);
     await addCredits(user.id, -cost, "text", String(body.model));
+
+    const replyText = json?.choices?.[0]?.message?.content;
+    const lastUserPrompt = [...body.messages].reverse().find((m: { role: string }) => m.role === "user")?.content;
+    if (replyText && lastUserPrompt) {
+      await recordGeneration(user.id, {
+        kind: "text",
+        model: String(body.model),
+        prompt: String(lastUserPrompt),
+        text: String(replyText),
+      });
+    }
+
     return NextResponse.json({ ...json, creditsSpent: cost, creditsBalance: balance - cost });
   } catch (err) {
     return errorResponse(err);

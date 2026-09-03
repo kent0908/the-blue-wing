@@ -76,3 +76,21 @@ create table if not exists home_blocks (
   updated_at  timestamptz not null default now()
 );
 create index if not exists home_blocks_section_idx on home_blocks(section, sort);
+
+-- generated results (images / videos / text). Previously the "生成紀錄" panel
+-- only held in-memory React state and lost everything on reload — this makes
+-- it durable per-user. `ref` (video job id) is deduped so re-polling an async
+-- video doesn't insert it twice.
+create table if not exists generations (
+  id           bigint generated always as identity primary key,
+  user_id      bigint not null references users(id) on delete cascade,
+  kind         text not null check (kind in ('image','video','text')),
+  model        text not null,
+  prompt       text not null,
+  url          text,
+  text_content text,
+  ref          text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists generations_user_idx on generations(user_id, created_at desc);
+create unique index if not exists generations_ref_uidx on generations(user_id, ref) where ref is not null;
