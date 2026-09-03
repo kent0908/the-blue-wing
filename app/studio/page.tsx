@@ -108,13 +108,20 @@ function StudioInner() {
   const [error, setError] = useState<string | null>(null);
   const [errorCta, setErrorCta] = useState<{ href: string; label: string } | null>(null);
   const [results, setResults] = useState<ResultItem[]>([]);
+  // Which history item the main viewer shows. null = "the newest one" (the
+  // BUG this fixes: clicking a 生成紀錄 thumbnail previously did nothing —
+  // there was no way to bring an older result back into the main viewer).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
 
   const setMode = (m: Mode) => router.push(`/studio?mode=${m}`);
 
-  const pushResult = (r: ResultItem) => setResults((prev) => [r, ...prev]);
+  const pushResult = (r: ResultItem) => {
+    setResults((prev) => [r, ...prev]);
+    setSelectedId(null); // jump the main viewer back to "newest" for the new result
+  };
 
   // Seed 生成紀錄 from the DB so it survives reloads / different devices,
   // instead of only holding whatever happened in this browser tab's session.
@@ -266,7 +273,7 @@ function StudioInner() {
     }
   };
 
-  const latest = results[0];
+  const latest = (selectedId ? results.find((r) => r.id === selectedId) : null) ?? results[0];
 
   return (
     <div className="flex h-full min-h-0">
@@ -346,7 +353,14 @@ function StudioInner() {
         </div>
       </div>
 
-      {panelOpen && <InspirationPanel history={results} onClose={() => setPanelOpen(false)} />}
+      {panelOpen && (
+        <InspirationPanel
+          history={results}
+          selectedId={latest?.id ?? null}
+          onSelect={(item) => setSelectedId(item.id)}
+          onClose={() => setPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }

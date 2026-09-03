@@ -76,6 +76,11 @@ export async function POST(req: NextRequest) {
       if (body[key] !== undefined) payload[key] = body[key];
     }
 
+    // Seedream defaults to a visible "AI generated" watermark unless told
+    // otherwise (docs claim default false, but real output disagrees —
+    // verified empirically). Other families ignore the field harmlessly.
+    payload.watermark = false;
+
     // reference image(s): the client sends its own asset id(s); resolve them to
     // base64 data URLs here (the blob store is private) and forward as `image`.
     // SIRAYA accepts an array — verified empirically with two distinct

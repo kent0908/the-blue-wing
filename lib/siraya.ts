@@ -139,6 +139,12 @@ export interface ImageGenerationRequest {
   /** GPT-Image: 0-100, jpeg/webp only */
   output_compression?: number;
   moderation?: string;
+  /**
+   * Seedream: adds a visible "AI generated" watermark when true. Docs claim
+   * default false, but real output shows one unless this is explicitly sent
+   * — verified empirically. We always send `false`.
+   */
+  watermark?: boolean;
 }
 
 /** POST /images/generations */

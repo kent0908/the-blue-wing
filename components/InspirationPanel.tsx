@@ -78,9 +78,15 @@ function FilterDropdown<T extends string>({
 
 export default function InspirationPanel({
   history,
+  selectedId,
+  onSelect,
   onClose,
 }: {
   history: ResultItem[];
+  /** id of the item currently shown in the main viewer, for highlighting */
+  selectedId?: string | null;
+  /** bring a past result back into the main viewer */
+  onSelect?: (item: ResultItem) => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"inspiration" | "history">("history");
@@ -194,19 +200,29 @@ export default function InspirationPanel({
         {tab === "history" && filtered.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {filtered.map((h) => (
-              <div key={h.id} className="overflow-hidden rounded-lg bg-[#141414]">
+              <button
+                key={h.id}
+                type="button"
+                onClick={() => onSelect?.(h)}
+                title="在左邊主畫面顯示這個結果"
+                className={[
+                  "overflow-hidden rounded-lg bg-[#141414] text-left transition-[outline] focus:outline-none",
+                  selectedId === h.id ? "outline outline-2 outline-[#7ff0cd]" : "outline outline-2 outline-transparent hover:outline-[#3a3a3a]",
+                ].join(" ")}
+              >
                 {h.kind === "image" && h.url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={h.url} alt={h.prompt} className="w-full object-cover" />
                 )}
                 {h.kind === "video" && h.url && (
-                  <video src={h.url} className="w-full" controls preload="metadata" />
+                  // not interactive here — click selects it into the main viewer instead
+                  <video src={h.url} className="pointer-events-none w-full" preload="metadata" muted />
                 )}
                 {h.kind === "text" && (
                   <div className="line-clamp-6 p-3 text-[12px] leading-relaxed text-[#c9c9c9]">{h.text}</div>
                 )}
                 <div className="truncate px-2.5 py-2 text-[11px] text-[#7d7d7d]">{h.prompt}</div>
-              </div>
+              </button>
             ))}
           </div>
         )}
