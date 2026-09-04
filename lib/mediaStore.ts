@@ -23,9 +23,12 @@ const DATA_URL_RE = /^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([\s\S]+)$/;
 
 export async function persistGeneratedMedia(
   sourceUrl: string,
-  opts: { userId: number; kind: "image" | "video" }
+  opts: { userId: number; kind: "image" | "video"; debugRethrow?: boolean }
 ): Promise<string> {
-  if (!blobConfigured()) return sourceUrl;
+  if (!blobConfigured()) {
+    if (opts.debugRethrow) throw new Error("blobConfigured() returned false");
+    return sourceUrl;
+  }
 
   try {
     let buf: Buffer;
@@ -51,6 +54,7 @@ export async function persistGeneratedMedia(
     return blob.url;
   } catch (err) {
     console.error("persistGeneratedMedia failed, keeping original URL:", err);
+    if (opts.debugRethrow) throw err;
     return sourceUrl;
   }
 }
