@@ -41,6 +41,16 @@ function ctaForStatus(status: number, mode: string): { href: string; label: stri
   return null;
 }
 
+/**
+ * Which 生成紀錄 kind belongs on-screen for a given composer mode. The main
+ * viewer must never show a video while you're on the 圖片生成 tab (or vice
+ * versa) just because it happens to be the most recent thing you generated
+ * in some other mode — see modeForKind() for the reverse direction, used
+ * when clicking a history thumbnail of the "wrong" kind.
+ */
+const KIND_FOR_MODE: Record<Mode, ResultItem["kind"]> = { image: "image", video: "video", text: "text", audio: "text" };
+const MODE_FOR_KIND: Record<ResultItem["kind"], Mode> = { image: "image", video: "video", text: "text" };
+
 function sizeFromRatio(ratio: string, fallback: string) {
   const map: Record<string, string> = {
     "1:1": "1024x1024",
@@ -277,7 +287,11 @@ function StudioInner() {
     }
   };
 
-  const latest = (selectedId ? results.find((r) => r.id === selectedId) : null) ?? results[0];
+  // Main viewer is scoped to the current mode's kind — 圖片生成 only ever
+  // shows images, 影片生成 only ever shows videos, even though 生成紀錄 itself
+  // (the panel on the right) still lists everything mixed together.
+  const resultsForMode = results.filter((r) => r.kind === KIND_FOR_MODE[mode]);
+  const latest = (selectedId ? resultsForMode.find((r) => r.id === selectedId) : null) ?? resultsForMode[0];
 
   return (
     <div className="flex h-full min-h-0">
@@ -374,7 +388,14 @@ function StudioInner() {
         <InspirationPanel
           history={results}
           selectedId={latest?.id ?? null}
-          onSelect={(item) => setSelectedId(item.id)}
+          onSelect={(item) => {
+            // clicking a video while on 圖片生成 (etc.) switches the tab too —
+            // otherwise the click would silently do nothing, since the main
+            // viewer never shows a result whose kind doesn't match the mode.
+            const wantMode = MODE_FOR_KIND[item.kind];
+            if (wantMode !== mode) router.push(`/studio?mode=${wantMode}`);
+            setSelectedId(item.id);
+          }}
           onClose={() => setPanelOpen(false)}
         />
       )}
