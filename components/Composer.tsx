@@ -270,58 +270,49 @@ export default function Composer({
   // switch itself so users on unsupported models never hit that error.
   const watermarkSupported = mode === "image" ? supportsWatermarkControl(activeImageModel) : mode === "video" && refCap > 0;
 
+  // @ is for TAGGING an already-added reference inline in the prompt — not
+  // for browsing/adding from the asset library (that's what the 素材 button
+  // is for). Real-world test: asked Seedream for "the shape from reference 1,
+  // the colour from reference 2" with two very different images — it just
+  // overlaid both images wholesale instead of following the per-image
+  // instruction. So a specific image can't actually be bound to a specific
+  // instruction through this API; the tag is a plain-text label for your own
+  // writing, stripped before the request goes out (see submit()) — it does
+  // NOT make the model treat that instruction as applying to that one image.
   const mentionMatches = useMemo(() => {
-    if (!mention || !library) return [];
+    if (!mention) return [];
     const q = mention.query.toLowerCase();
-    const room = Math.max(0, refCap - refs.length);
-    // Never LIST more than can actually still be added — otherwise "全部加入"
-    // (and picking through the list one by one) silently drops whatever
-    // doesn't fit once the cap is hit, which just looks like it "sometimes
-    // doesn't select everything" with no explanation why.
-    return library
-      .filter((a) => a.name.toLowerCase().includes(q) && !refs.some((r) => r.id === a.id))
-      .slice(0, Math.min(12, room));
-  }, [mention, library, refs, refCap]);
+    return refs.filter((r) => r.name.toLowerCase().includes(q));
+  }, [mention, refs]);
 
-  /** Inserts "@AssetName" at the mention's position and adds it to the active
-   *  reference set (up to refCap) — same effect as picking it from 素材. When
-   *  there's still room for more, chains a fresh "@" right after so the
-   *  dropdown re-opens on the remaining candidates instead of closing —
-   *  lets you pick several in a row without retyping "@" each time. */
+  /** Inserts "@AssetName" — tagging one of the already-added references —
+   *  at the mention's position in the prompt. */
   const pickMention = (a: RefAsset) => {
     if (!mention) return;
     const tag = mentionTagFor(a.name);
     const before = prompt.slice(0, mention.start);
     const after = prompt.slice(mention.start + 1 + mention.query.length);
-    const moreRoom = refs.length + 1 < refCap;
-    const insertion = moreRoom ? `@${tag} @` : `@${tag} `;
-    const next = `${before}${insertion}${after}`;
+    const next = `${before}@${tag} ${after}`;
     setPrompt(next);
+    setMention(null);
     setMentionIndex(0);
-    addRef(a);
-    const cursor = before.length + insertion.length;
-    setMention(moreRoom ? { query: "", start: cursor - 1 } : null);
+    const cursor = before.length + tag.length + 2;
     requestAnimationFrame(() => {
       taRef.current?.focus();
       taRef.current?.setSelectionRange(cursor, cursor);
     });
   };
 
-  /** "全部加入" — add every currently-listed candidate in one go (still capped
-   *  at refCap by addRef itself), instead of clicking through them one by one. */
+  /** "全部標註" — insert a tag for every added reference at once. */
   const pickAllMentionMatches = () => {
     if (!mention || !mentionMatches.length) return;
-    const room = Math.max(0, refCap - refs.length);
-    const toAdd = mentionMatches.slice(0, room);
-    if (!toAdd.length) return;
-    const tags = toAdd.map((a) => `@${mentionTagFor(a.name)}`).join(" ");
+    const tags = mentionMatches.map((a) => `@${mentionTagFor(a.name)}`).join(" ");
     const before = prompt.slice(0, mention.start);
     const after = prompt.slice(mention.start + 1 + mention.query.length);
     const next = `${before}${tags} ${after}`;
     setPrompt(next);
-    setMentionIndex(0);
-    toAdd.forEach(addRef);
     setMention(null);
+    setMentionIndex(0);
     const cursor = before.length + tags.length + 1;
     requestAnimationFrame(() => {
       taRef.current?.focus();
@@ -342,7 +333,6 @@ export default function Composer({
     if (m) {
       setMention({ query: m[1], start: pos - m[1].length - 1 });
       setMentionIndex(0);
-      ensureLibrary();
     } else if (mention) {
       setMention(null);
     }
@@ -448,7 +438,7 @@ export default function Composer({
                 {refError && <p className="mt-2 text-[11px] text-[#ff9b9b]">{refError}</p>}
 
                 <p className="mt-2 text-[10.5px] text-[#6d6d6d]">
-                  小技巧：在下面輸入框打 <span className="text-[#9a9a9a]">@</span> 也可以直接搜尋、指定素材
+                  小技巧：素材加進來之後，在下面輸入框打 <span className="text-[#9a9a9a]">@</span> 可以標記你這句話說的是哪一張
                 </p>
 
                 <div className="mt-2 text-[11px] text-[#8a8a8a]">從資產庫選</div>
@@ -483,6 +473,11 @@ export default function Composer({
             value={prompt}
             onChange={handlePromptChange}
             onKeyDown={(e) => {
+              if (mention && e.key === "Escape") {
+                e.preventDefault();
+                setMention(null);
+                return;
+              }
               if (mention && mentionMatches.length) {
                 if (e.key === "ArrowDown") {
                   e.preventDefault();
@@ -504,11 +499,6 @@ export default function Composer({
                   pickAllMentionMatches();
                   return;
                 }
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  setMention(null);
-                  return;
-                }
               }
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
             }}
@@ -516,7 +506,7 @@ export default function Composer({
               // let a mousedown on the dropdown register before it disappears
               setTimeout(() => setMention(null), 120);
             }}
-            placeholder={canUseRefs ? `${PLACEHOLDER[mode]}（可打 @ 指定素材）` : PLACEHOLDER[mode]}
+            placeholder={canUseRefs && refs.length > 0 ? `${PLACEHOLDER[mode]}（可打 @ 標記素材）` : PLACEHOLDER[mode]}
             rows={expanded ? 8 : 3}
             className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
           />
@@ -528,13 +518,11 @@ export default function Composer({
             // edge, which made items near the edge hard to actually click.
             <div className="bw-menu absolute bottom-full left-0 z-40 mb-1.5 w-[290px] max-h-[280px] overflow-y-auto p-1.5">
               <div className="sticky top-0 z-10 -m-1.5 mb-1 flex items-center justify-between bg-[#1a1a1a] px-2.5 py-1.5">
-                <span className="text-[11px] text-[#8a8a8a]">
-                  已選 {refs.length}/{refCap}
-                </span>
+                <span className="text-[11px] text-[#8a8a8a]">標記已加入的素材</span>
                 <div className="flex items-center gap-2">
-                  {mentionMatches.length > 0 && refs.length < refCap && (
+                  {mentionMatches.length > 1 && (
                     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={pickAllMentionMatches} className="text-[11px] text-[#7ff0cd] hover:underline">
-                      全部加入
+                      全部標註
                     </button>
                   )}
                   <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setMention(null)} className="text-[11px] text-[#8a8a8a] hover:text-white">
@@ -542,11 +530,13 @@ export default function Composer({
                   </button>
                 </div>
               </div>
-              {library === null && <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">載入素材中…</div>}
-              {library !== null && mentionMatches.length === 0 && (
-                <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">
-                  {library.length === 0 ? "資產庫還沒有素材，先上傳一張" : refs.length >= refCap ? `已達上限（${refCap} 張）` : "找不到符合的素材"}
+              {refs.length === 0 && (
+                <div className="px-3 py-3 text-[12px] leading-relaxed text-[#6d6d6d]">
+                  還沒有加入素材 — 先點左邊的「素材」按鈕選取，再用 @ 標記你要在這句話裡指的是哪一張
                 </div>
+              )}
+              {refs.length > 0 && mentionMatches.length === 0 && (
+                <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">找不到符合的素材</div>
               )}
               {mentionMatches.map((a, i) => (
                 <button
@@ -564,6 +554,11 @@ export default function Composer({
                   <span className="min-w-0 flex-1 truncate text-[12.5px]">{a.name}</span>
                 </button>
               ))}
+              {refs.length > 0 && (
+                <p className="mt-1 px-2.5 pb-0.5 text-[10px] leading-relaxed text-[#6d6d6d]">
+                  標記只是方便你自己書寫辨識，模型還是會把所有參考圖一起看，無法保證只套用在標記的那一張
+                </p>
+              )}
             </div>
           )}
         </div>
