@@ -1,0 +1,12 @@
+拿掉固定鏡頭開關：實測發現 camera_fixed 跟多素材參考模式不相容
+
+繼續測試後發現 camera_fixed 在 r2v（也就是 input_references 這個多素材
+機制）底下，不管 Seedance 2.0-mini 還是 2.5 都直接被 SIRAYA 拒絕
+（回應：not supported for model ... in r2v, must be empty）。看起來
+這個參數只能配合另一種單張首幀圖片的機制，跟我們做的「多素材參考」是不同
+路線，不屬於這次的範圍。與其留一個實際上一定會出錯的開關，直接拿掉。
+
+「進階」面板保留：圖片模式的內容審核強度、影片模式的 Seedance prompt
+小技巧（這兩個都已驗證是真的能用/真的有依據）。
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

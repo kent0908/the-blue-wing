@@ -1,7 +1,7 @@
 "use client";
 
 import Popover from "./Popover";
-import { IconSettings, IconCheck } from "./Icons";
+import { IconSettings } from "./Icons";
 import type { Mode } from "@/lib/types";
 
 /**
@@ -18,19 +18,12 @@ export default function AdvancedParams({
   mode,
   moderation,
   onModerationChange,
-  cameraFixed,
-  onCameraFixedChange,
-  cameraFixedAvailable,
 }: {
   mode: Mode;
   moderation: string;
   onModerationChange: (v: string) => void;
-  cameraFixed: boolean;
-  onCameraFixedChange: (v: boolean) => void;
-  /** camera_fixed only validates in image-to-video — needs a 素材 attached */
-  cameraFixedAvailable: boolean;
 }) {
-  const active = (mode === "video" && cameraFixed) || (mode === "image" && moderation === "low");
+  const active = mode === "image" && moderation === "low";
 
   return (
     <Popover
@@ -74,33 +67,6 @@ export default function AdvancedParams({
 
           {mode === "video" && (
             <div className="space-y-4 border-t border-[#262626] pt-3">
-              <div>
-                <button
-                  type="button"
-                  disabled={!cameraFixedAvailable}
-                  onClick={() => onCameraFixedChange(!cameraFixed)}
-                  className={[
-                    "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-[13px] transition-colors",
-                    cameraFixedAvailable ? "bg-[#232323] hover:bg-[#2b2b2b]" : "cursor-not-allowed bg-[#1c1c1c] text-[#6d6d6d]",
-                  ].join(" ")}
-                >
-                  <span>固定鏡頭（不移動、不縮放）</span>
-                  <span
-                    className={[
-                      "grid h-4 w-4 shrink-0 place-items-center rounded border",
-                      cameraFixed && cameraFixedAvailable ? "border-[#7ff0cd] bg-[#7ff0cd] text-[#0a1a16]" : "border-[#4a4a4a]",
-                    ].join(" ")}
-                  >
-                    {cameraFixed && cameraFixedAvailable && <IconCheck className="h-3 w-3" />}
-                  </span>
-                </button>
-                {!cameraFixedAvailable && (
-                  <p className="mt-1.5 text-[11px] text-[#6d6d6d]">
-                    這個參數只在有加參考素材（打 @ 或按素材）時才能用（實測驗證）
-                  </p>
-                )}
-              </div>
-
               <div>
                 <div className="pb-1.5 text-[12.5px] text-[#a8a8a8]">Prompt 小技巧（Seedance 官方寫法）</div>
                 <ul className="space-y-1 text-[11.5px] leading-relaxed text-[#8a8a8a]">

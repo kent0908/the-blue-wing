@@ -122,7 +122,6 @@ export default function Composer({
 
   /* ---- advanced settings (verified real params only — see AdvancedParams.tsx) ---- */
   const [moderation, setModeration] = useState("auto");
-  const [cameraFixed, setCameraFixed] = useState(false);
 
   // Image mode: fixed MAX_REF_IMAGES cap, gated by the model's family.
   // Video mode: only Seedance models support this on SIRAYA, and the cap
@@ -261,10 +260,6 @@ export default function Composer({
   const canUseRefs =
     (mode === "image" && supportsRefImages(activeImageModel)) || (mode === "video" && refCap > 0);
 
-  // camera_fixed only validates in image-to-video — verified empirically (a
-  // pure text-to-video request rejects it outright).
-  const cameraFixedAvailable = mode === "video" && canUseRefs && refs.length > 0;
-
   const mentionMatches = useMemo(() => {
     if (!mention || !library) return [];
     const q = mention.query.toLowerCase();
@@ -328,15 +323,12 @@ export default function Composer({
       : undefined;
     if (imagePayload && moderation !== "auto") imagePayload.moderation = moderation;
 
-    const extraBody = cameraFixedAvailable && cameraFixed ? { camera_fixed: true } : undefined;
-
     onSubmit({
       prompt: finalPrompt,
       model,
       settings,
       imagePayload,
       assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
-      extraBody: mode === "video" ? extraBody : undefined,
     });
     setPrompt("");
     setRefs([]);
@@ -626,14 +618,7 @@ export default function Composer({
           <SettingsPopover mode={mode} settings={settings} onChange={setSettings} />
         )}
 
-        <AdvancedParams
-          mode={mode}
-          moderation={moderation}
-          onModerationChange={setModeration}
-          cameraFixed={cameraFixed}
-          onCameraFixedChange={setCameraFixed}
-          cameraFixedAvailable={cameraFixedAvailable}
-        />
+        <AdvancedParams mode={mode} moderation={moderation} onModerationChange={setModeration} />
 
         <div className="ml-auto flex items-center gap-3">
           <span className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="依模型費率預估，實際費用以回應中的 usage 為準">
