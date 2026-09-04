@@ -273,10 +273,15 @@ export default function Composer({
   const mentionMatches = useMemo(() => {
     if (!mention || !library) return [];
     const q = mention.query.toLowerCase();
+    const room = Math.max(0, refCap - refs.length);
+    // Never LIST more than can actually still be added — otherwise "全部加入"
+    // (and picking through the list one by one) silently drops whatever
+    // doesn't fit once the cap is hit, which just looks like it "sometimes
+    // doesn't select everything" with no explanation why.
     return library
       .filter((a) => a.name.toLowerCase().includes(q) && !refs.some((r) => r.id === a.id))
-      .slice(0, 12);
-  }, [mention, library, refs]);
+      .slice(0, Math.min(12, room));
+  }, [mention, library, refs, refCap]);
 
   /** Inserts "@AssetName" at the mention's position and adds it to the active
    *  reference set (up to refCap) — same effect as picking it from 素材. When
