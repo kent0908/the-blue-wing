@@ -54,22 +54,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // reference materials: client sends its own asset id(s); resolve to base64
-    // data URLs (the blob store is private) and forward as input_references.
-    // Only Seedance models are known to support this on SIRAYA — cap at that
-    // model's documented limit regardless of what the client asked for.
-    const { assetIds, imageUrl, ...videoBody } = body;
+    // reference materials: can come from the user's own asset library
+    // (assetIds — resolved to base64 data URLs, since the blob store is
+    // private) and/or plain URLs (智慧畫布 node-chaining: a prior node's own
+    // generated-image output isn't in the asset library, so it can't go
+    // through assetIds — forward it straight through as a reference
+    // instead). Both can be present at once — combine them, capped at this
+    // model's reference limit. Only Seedance models are known to support
+    // this on SIRAYA.
+    const { assetIds, imageUrls, ...videoBody } = body;
     const refCap = maxRefsForVideoModel(String(body.model));
-    if (refCap > 0 && Array.isArray(assetIds) && assetIds.length) {
-      const urls = await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
-      if (urls.length) {
-        videoBody.input_references = urls.map((url) => ({ type: "image" as const, url }));
+    if (refCap > 0) {
+      const refs: { type: "image"; url: string }[] = [];
+      if (Array.isArray(assetIds) && assetIds.length) {
+        const urls = await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
+        refs.push(...urls.map((url) => ({ type: "image" as const, url })));
       }
-    } else if (refCap > 0 && typeof imageUrl === "string" && imageUrl.trim()) {
-      // 智慧畫布 (canvas) node-chaining: a prior node's own generated-image URL
-      // isn't in the user's asset library, so it can't go through assetIds —
-      // forward it straight through as a reference instead.
-      videoBody.input_references = [{ type: "image" as const, url: imageUrl.trim() }];
+      if (Array.isArray(imageUrls)) {
+        for (const u of imageUrls) {
+          if (typeof u === "string" && u.trim()) refs.push({ type: "image" as const, url: u.trim() });
+        }
+      }
+      if (refs.length) videoBody.input_references = refs.slice(0, refCap);
     }
 
     // Seedance also puts a visible "AI generated" badge on the output unless

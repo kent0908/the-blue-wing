@@ -13,9 +13,18 @@ export type CanvasNodeType = "text" | "loadImage" | "image" | "video";
 
 export type RunStatus = "idle" | "running" | "done" | "error";
 
+export interface ImageRef {
+  url: string;
+  /** present when this image came from the user's own asset library (Load
+   *  Image node) — lets the server resolve it via the private blob store
+   *  instead of needing a public URL. Absent for a chained node's own
+   *  generated-image output. */
+  assetId?: number;
+}
+
 export type NodeOutput =
   | { kind: "text"; text: string }
-  | { kind: "image"; url: string; assetId?: number }
+  | { kind: "image"; items: ImageRef[] }
   | { kind: "video"; url: string };
 
 export interface CanvasNode {
@@ -101,12 +110,18 @@ export const NODE_WIDTH = 240;
 export const NODE_HEADER_H = 40;
 export const NODE_PORT_ROW_H = 26;
 
+export interface LoadImageItem {
+  assetId: number;
+  src: string;
+  name: string;
+}
+
 export function defaultNodeData(type: CanvasNodeType): Record<string, unknown> {
   switch (type) {
     case "text":
       return { text: "" };
     case "loadImage":
-      return { assetId: null, src: null, name: null };
+      return { items: [] as LoadImageItem[] };
     case "image":
       return { model: "ByteDance-Seedream-4.0", prompt: "", size: "1024x1024" };
     case "video":

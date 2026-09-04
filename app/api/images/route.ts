@@ -92,23 +92,28 @@ export async function POST(req: NextRequest) {
       delete payload.watermark;
     }
 
-    // reference image(s): the client sends its own asset id(s); resolve them to
-    // base64 data URLs here (the blob store is private) and forward as `image`.
-    // SIRAYA accepts an array — verified empirically with two distinct
-    // reference images producing a result that combined both.
+    // reference image(s): can come from the user's own asset library
+    // (assetIds — resolved to base64 data URLs here, since the blob store is
+    // private) and/or plain URLs (智慧畫布 node-chaining: a prior node's own
+    // generated-image output isn't in the asset library, so it can't go
+    // through assetIds — SIRAYA's `image` field accepts a plain URL directly,
+    // fetched upstream on SIRAYA's side, not ours). Both can be present at
+    // once (e.g. one Load Image node plus a chained Image-generation node
+    // fanned into the same input) — combine them into one array. SIRAYA
+    // accepts an array — verified empirically with two distinct reference
+    // images producing a result that combined both.
+    const refs: string[] = [];
     if (Array.isArray(body.assetIds) && body.assetIds.length) {
-      const imageUrls = await assetsToDataUrls(user.id, body.assetIds.map(Number), MAX_REF_IMAGES);
-      if (imageUrls.length === 1) payload.image = imageUrls[0];
-      else if (imageUrls.length > 1) payload.image = imageUrls;
-    } else if (typeof body.image === "string" && body.image.trim()) {
-      // 智慧畫布 (canvas) node-chaining: a prior node's own generated-image URL
-      // isn't in the user's asset library, so it can't go through assetIds —
-      // forward it straight through instead. SIRAYA's `image` field already
-      // accepts a plain URL (fetched upstream on SIRAYA's side, not ours).
-      payload.image = body.image.trim();
-    } else if (Array.isArray(body.image) && body.image.every((u: unknown) => typeof u === "string" && u.trim())) {
-      payload.image = body.image;
+      refs.push(...(await assetsToDataUrls(user.id, body.assetIds.map(Number), MAX_REF_IMAGES)));
     }
+    if (typeof body.image === "string" && body.image.trim()) {
+      refs.push(body.image.trim());
+    } else if (Array.isArray(body.image)) {
+      refs.push(...body.image.filter((u: unknown): u is string => typeof u === "string" && u.trim().length > 0).map((u: string) => u.trim()));
+    }
+    const cappedRefs = refs.slice(0, MAX_REF_IMAGES);
+    if (cappedRefs.length === 1) payload.image = cappedRefs[0];
+    else if (cappedRefs.length > 1) payload.image = cappedRefs;
 
     const json = await createImage(payload as unknown as ImageGenerationRequest);
     const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({

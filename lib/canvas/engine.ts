@@ -3,7 +3,7 @@
  * client-side by calling the same /api/images, /api/videos routes the
  * Composer uses, so credits/limits/model catalogues stay in one place.
  */
-import type { CanvasGraph, CanvasNode, NodeOutput } from "./types";
+import type { CanvasGraph, CanvasNode, LoadImageItem, NodeOutput } from "./types";
 
 /** Kahn's algorithm. Returns null if the graph has a cycle. */
 export function topoOrder(graph: CanvasGraph): string[] | null {
@@ -74,16 +74,22 @@ export async function runNode(
   }
 
   if (node.type === "loadImage") {
-    const assetId = node.data.assetId;
-    const src = node.data.src;
-    if (!assetId || !src) throw new Error("請先選擇素材");
-    return { kind: "image", url: String(src), assetId: Number(assetId) };
+    const items = (node.data.items as LoadImageItem[] | undefined) ?? [];
+    if (!items.length) throw new Error("請先選擇素材");
+    return { kind: "image", items: items.map((it) => ({ url: it.src, assetId: it.assetId })) };
   }
 
   const promptSrc = inputs.prompt?.output;
   const prompt = (promptSrc?.kind === "text" ? promptSrc.text : "") || String(node.data.prompt ?? "");
   if (!prompt.trim()) throw new Error("缺少 prompt（可以連接文字節點，或直接在節點裡打字）");
   const imageSrc = inputs.image?.output;
+  // A connected "image" input can carry several references at once (a Load
+  // Image node with multiple items selected, or several Load Image nodes
+  // fanned into the same port). Split into asset-library ids (resolved
+  // server-side from the private blob store) vs. plain URLs (a prior node's
+  // own generated-image output) — the server accepts both together.
+  const refAssetIds = imageSrc?.kind === "image" ? imageSrc.items.filter((it) => it.assetId).map((it) => it.assetId!) : [];
+  const refUrls = imageSrc?.kind === "image" ? imageSrc.items.filter((it) => !it.assetId).map((it) => it.url) : [];
 
   if (node.type === "image") {
     const body: Record<string, unknown> = {
@@ -93,10 +99,8 @@ export async function runNode(
       size: node.data.size || "1024x1024",
       response_format: "url",
     };
-    if (imageSrc?.kind === "image") {
-      if (imageSrc.assetId) body.assetIds = [imageSrc.assetId];
-      else body.image = imageSrc.url;
-    }
+    if (refAssetIds.length) body.assetIds = refAssetIds;
+    if (refUrls.length) body.image = refUrls;
     const res = await fetch("/api/images", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -106,7 +110,7 @@ export async function runNode(
     if (!res.ok) throw new Error(json?.error?.message || "圖片生成失敗");
     const url = json.images?.[0]?.url;
     if (!url) throw new Error("沒有取得圖片結果");
-    return { kind: "image", url };
+    return { kind: "image", items: [{ url }] };
   }
 
   if (node.type === "video") {
@@ -116,10 +120,8 @@ export async function runNode(
       seconds: Number(node.data.seconds) || 5,
       resolution: node.data.resolution || "480p",
     };
-    if (imageSrc?.kind === "image") {
-      if (imageSrc.assetId) body.assetIds = [imageSrc.assetId];
-      else body.imageUrl = imageSrc.url;
-    }
+    if (refAssetIds.length) body.assetIds = refAssetIds;
+    if (refUrls.length) body.imageUrls = refUrls;
     const res = await fetch("/api/videos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

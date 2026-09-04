@@ -583,65 +583,81 @@ function NodeCard({
           />
         )}
 
-        {node.type === "loadImage" && (
-          <div className="relative">
-            {node.data.src ? (
-              <button
-                type="button"
-                onClick={() => {
-                  onEnsureAssets();
-                  setAssetPickerOpen((v) => !v);
-                }}
-                className="block w-full overflow-hidden rounded-lg border border-[#2c2c2c]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={String(node.data.src)} alt="" className="h-24 w-full object-cover" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  onEnsureAssets();
-                  setAssetPickerOpen((v) => !v);
-                }}
-                className="flex h-16 w-full items-center justify-center rounded-lg border border-dashed border-[#3a3a3a] text-[11.5px] text-[#8a8a8a] hover:border-[#555]"
-              >
-                選擇素材
-              </button>
-            )}
-            {node.data.name ? <div className="mt-1 truncate text-[10.5px] text-[#7d7d7d]">{String(node.data.name)}</div> : null}
-
-            {assetPickerOpen && (
-              <div className="bw-menu absolute left-0 top-[calc(100%+4px)] z-50 w-[260px] p-2">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[11px] text-white">選擇素材</span>
-                  <button type="button" onClick={() => setAssetPickerOpen(false)} className="text-[10.5px] text-[#8a8a8a] hover:text-white">
-                    關閉
-                  </button>
-                </div>
-                <div className="grid max-h-[200px] grid-cols-4 gap-1.5 overflow-y-auto">
-                  {assetLibrary === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</span>}
-                  {assetLibrary?.length === 0 && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">資產庫還沒有圖片</span>}
-                  {assetLibrary?.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      title={a.name}
-                      onClick={() => {
-                        onDataChange({ assetId: a.id, src: a.src, name: a.name });
-                        setAssetPickerOpen(false);
-                      }}
-                      className="aspect-square overflow-hidden rounded-md border border-[#2a2a2a] hover:border-[#4a4a4a]"
-                    >
+        {node.type === "loadImage" && (() => {
+          const items = (node.data.items as { assetId: number; src: string; name: string }[] | undefined) ?? [];
+          const selectedIds = new Set(items.map((it) => it.assetId));
+          const toggle = (a: AssetLite) => {
+            const on = selectedIds.has(a.id);
+            const next = on ? items.filter((it) => it.assetId !== a.id) : [...items, { assetId: a.id, src: a.src, name: a.name }];
+            onDataChange({ items: next });
+          };
+          return (
+            <div className="relative">
+              {items.length > 0 && (
+                <div className="grid grid-cols-4 gap-1">
+                  {items.map((it) => (
+                    <div key={it.assetId} className="group/thumb relative aspect-square overflow-hidden rounded-md border border-[#2c2c2c]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={a.src} alt={a.name} className="h-full w-full object-cover" />
-                    </button>
+                      <img src={it.src} alt={it.name} title={it.name} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => onDataChange({ items: items.filter((x) => x.assetId !== it.assetId) })}
+                        aria-label="移除"
+                        className="absolute right-0.5 top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 group-hover/thumb:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  onEnsureAssets();
+                  setAssetPickerOpen((v) => !v);
+                }}
+                className={[
+                  "flex w-full items-center justify-center rounded-lg border border-dashed border-[#3a3a3a] text-[11.5px] text-[#8a8a8a] hover:border-[#555]",
+                  items.length > 0 ? "mt-1.5 h-8" : "h-16",
+                ].join(" ")}
+              >
+                {items.length > 0 ? `再選一張（已選 ${items.length} 張）` : "選擇素材（可選多張）"}
+              </button>
+
+              {assetPickerOpen && (
+                <div className="bw-menu absolute left-0 top-[calc(100%+4px)] z-50 w-[260px] p-2">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-white">選擇素材（可複選）</span>
+                    <button type="button" onClick={() => setAssetPickerOpen(false)} className="text-[10.5px] text-[#8a8a8a] hover:text-white">
+                      完成
+                    </button>
+                  </div>
+                  <div className="grid max-h-[200px] grid-cols-4 gap-1.5 overflow-y-auto">
+                    {assetLibrary === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</span>}
+                    {assetLibrary?.length === 0 && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">資產庫還沒有圖片</span>}
+                    {assetLibrary?.map((a) => {
+                      const on = selectedIds.has(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          title={a.name}
+                          onClick={() => toggle(a)}
+                          className={`relative aspect-square overflow-hidden rounded-md border ${on ? "border-[#7ff0cd]" : "border-[#2a2a2a] hover:border-[#4a4a4a]"}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={a.src} alt={a.name} className="h-full w-full object-cover" />
+                          {on && <span className="absolute inset-0 grid place-items-center bg-black/40 text-[11px] text-[#7ff0cd]">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {node.type === "image" && (
           <>
@@ -706,10 +722,14 @@ function NodeCard({
           </>
         )}
 
-        {/* output preview */}
-        {node.output?.kind === "image" && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={node.output.url} alt="" className="w-full rounded-lg border border-[#2c2c2c]" />
+        {/* output preview — loadImage renders its own thumbnails above instead */}
+        {node.output?.kind === "image" && node.type !== "loadImage" && (
+          <div className={node.output.items.length > 1 ? "grid grid-cols-2 gap-1" : undefined}>
+            {node.output.items.map((it, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={it.url} alt="" className="w-full rounded-lg border border-[#2c2c2c]" />
+            ))}
+          </div>
         )}
         {node.output?.kind === "video" && (
           <video src={node.output.url} controls className="w-full rounded-lg border border-[#2c2c2c]" />
