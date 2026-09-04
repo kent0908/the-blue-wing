@@ -122,6 +122,9 @@ export default function Composer({
 
   /* ---- advanced settings (verified real params only — see AdvancedParams.tsx) ---- */
   const [moderation, setModeration] = useState("auto");
+  // Default off (no "AI generated" badge) — matches the behaviour before this
+  // was made user-controllable. true = keep the provider's watermark.
+  const [watermark, setWatermark] = useState(false);
 
   // Image mode: fixed MAX_REF_IMAGES cap, gated by the model's family.
   // Video mode: only Seedance models support this on SIRAYA, and the cap
@@ -321,7 +324,10 @@ export default function Composer({
     const imagePayload = activeImageModel
       ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds)
       : undefined;
-    if (imagePayload && moderation !== "auto") imagePayload.moderation = moderation;
+    if (imagePayload) {
+      if (moderation !== "auto") imagePayload.moderation = moderation;
+      imagePayload.watermark = watermark;
+    }
 
     onSubmit({
       prompt: finalPrompt,
@@ -329,6 +335,7 @@ export default function Composer({
       settings,
       imagePayload,
       assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
+      extraBody: mode === "video" ? { watermark } : undefined,
     });
     setPrompt("");
     setRefs([]);
@@ -618,7 +625,13 @@ export default function Composer({
           <SettingsPopover mode={mode} settings={settings} onChange={setSettings} />
         )}
 
-        <AdvancedParams mode={mode} moderation={moderation} onModerationChange={setModeration} />
+        <AdvancedParams
+          mode={mode}
+          moderation={moderation}
+          onModerationChange={setModeration}
+          watermark={watermark}
+          onWatermarkChange={setWatermark}
+        />
 
         <div className="ml-auto flex items-center gap-3">
           <span className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="依模型費率預估，實際費用以回應中的 usage 為準">

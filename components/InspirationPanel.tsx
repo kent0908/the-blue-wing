@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { IconSearch, IconChevronDown, IconCollapse, IconCheck } from "./Icons";
+import { IconSearch, IconChevronDown, IconCollapse, IconCheck, IconDownload } from "./Icons";
+import { downloadResult } from "@/lib/download";
 import type { ResultItem } from "@/lib/types";
 
 type KindFilter = "all" | "image" | "video" | "text";
@@ -206,7 +207,7 @@ export default function InspirationPanel({
                 onClick={() => onSelect?.(h)}
                 title="在左邊主畫面顯示這個結果"
                 className={[
-                  "overflow-hidden rounded-lg bg-[#141414] text-left transition-[outline] focus:outline-none",
+                  "group relative overflow-hidden rounded-lg bg-[#141414] text-left transition-[outline] focus:outline-none",
                   selectedId === h.id ? "outline outline-2 outline-[#7ff0cd]" : "outline outline-2 outline-transparent hover:outline-[#3a3a3a]",
                 ].join(" ")}
               >
@@ -220,6 +221,28 @@ export default function InspirationPanel({
                 )}
                 {h.kind === "text" && (
                   <div className="line-clamp-6 p-3 text-[12px] leading-relaxed text-[#c9c9c9]">{h.text}</div>
+                )}
+                {h.url && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label="下載"
+                    title="下載"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadResult(h);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        downloadResult(h);
+                      }
+                    }}
+                    className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                  >
+                    <IconDownload className="h-3.5 w-3.5" />
+                  </span>
                 )}
                 <div className="truncate px-2.5 py-2 text-[11px] text-[#7d7d7d]">{h.prompt}</div>
               </button>

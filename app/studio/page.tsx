@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Composer from "@/components/Composer";
 import GenerationProgress from "@/components/GenerationProgress";
 import InspirationPanel from "@/components/InspirationPanel";
-import { IconCompass, IconHistory } from "@/components/Icons";
+import { IconCompass, IconHistory, IconDownload } from "@/components/Icons";
+import { downloadResult } from "@/lib/download";
 import type { GenSettings, Mode, ResultItem } from "@/lib/types";
 
 /**
@@ -315,18 +316,31 @@ function StudioInner() {
             </div>
           ) : latest ? (
             <div className="w-full max-w-3xl py-8">
-              {latest.kind === "image" && latest.url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={latest.url} alt={latest.prompt} className="mx-auto max-h-[60vh] rounded-xl" />
-              )}
-              {latest.kind === "video" && latest.url && (
-                <video src={latest.url} controls className="mx-auto max-h-[60vh] rounded-xl" />
-              )}
-              {latest.kind === "text" && (
-                <div className="whitespace-pre-wrap rounded-xl bg-[#141414] p-6 text-[14px] leading-relaxed">
-                  {latest.text}
-                </div>
-              )}
+              <div className="relative">
+                {latest.kind === "image" && latest.url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={latest.url} alt={latest.prompt} className="mx-auto max-h-[60vh] rounded-xl" />
+                )}
+                {latest.kind === "video" && latest.url && (
+                  <video src={latest.url} controls className="mx-auto max-h-[60vh] rounded-xl" />
+                )}
+                {latest.kind === "text" && (
+                  <div className="whitespace-pre-wrap rounded-xl bg-[#141414] p-6 text-[14px] leading-relaxed">
+                    {latest.text}
+                  </div>
+                )}
+                {latest.url && (
+                  <button
+                    type="button"
+                    onClick={() => downloadResult(latest)}
+                    title="下載"
+                    className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-[12.5px] text-white backdrop-blur transition-colors hover:bg-black/80"
+                  >
+                    <IconDownload className="h-4 w-4" />
+                    下載
+                  </button>
+                )}
+              </div>
               <p className="mt-4 text-center text-[12.5px] text-[#6d6d6d]">
                 {latest.model} · {latest.prompt}
               </p>

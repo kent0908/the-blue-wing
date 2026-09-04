@@ -37,10 +37,13 @@ export default function TopBar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-end gap-1 bg-black pr-6">
-      <button className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white">
+      <Link
+        href="/help"
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white"
+      >
         <IconHelp className="h-[17px] w-[17px]" />
         說明
-      </button>
+      </Link>
 
       <span className="mx-1 h-4 w-px bg-[#2a2a2a]" />
 

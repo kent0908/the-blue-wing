@@ -28,6 +28,7 @@ const ALLOWED: (keyof ImageGenerationRequest)[] = [
   "background",
   "output_compression",
   "moderation",
+  "watermark",
 ];
 
 /**
@@ -79,7 +80,9 @@ export async function POST(req: NextRequest) {
     // Seedream defaults to a visible "AI generated" watermark unless told
     // otherwise (docs claim default false, but real output disagrees —
     // verified empirically). Other families ignore the field harmlessly.
-    payload.watermark = false;
+    // The client sends its own choice (see AdvancedParams.tsx); fall back to
+    // "no watermark" when it didn't.
+    if (payload.watermark === undefined) payload.watermark = false;
 
     // reference image(s): the client sends its own asset id(s); resolve them to
     // base64 data URLs here (the blob store is private) and forward as `image`.

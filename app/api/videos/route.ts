@@ -67,6 +67,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Seedance also puts a visible "AI generated" badge on the output unless
+    // told otherwise — verified empirically (extra_body.watermark:false vs
+    // true, compared frame-by-frame). Same client-controlled switch as
+    // images (see AdvancedParams.tsx); default to "no watermark".
+    const clientExtra = (videoBody.extra_body as Record<string, unknown> | undefined) || {};
+    videoBody.extra_body = { ...clientExtra, watermark: clientExtra.watermark ?? false };
+
     const json = await createVideo({ ...videoBody, async: true });
 
     // Async submissions return { id, status: "processing" }; a provider that

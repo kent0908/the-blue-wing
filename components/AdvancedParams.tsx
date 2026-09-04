@@ -13,17 +13,54 @@ import type { Mode } from "@/lib/types";
  * driven by natural-language prompt direction on these models, not a
  * separate API field — so those show up here as a prompt cheat-sheet
  * instead of fake sliders.
+ *
+ * `watermark` is real for both families — verified empirically for images
+ * (Seedream `watermark` field) and for video (Seedance `extra_body.watermark`,
+ * confirmed by generating the same clip both ways and comparing frames: the
+ * "AI generated" badge only appears when watermark is true).
  */
+function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className="flex w-full items-center justify-between gap-3 py-1"
+    >
+      <span className="text-left text-[12.5px] text-[#c9c9c9]">{label}</span>
+      <span
+        className={[
+          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+          on ? "bg-[#4a4a4a]" : "bg-[#2fae8c]",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
+            on ? "translate-x-[18px]" : "translate-x-0.5",
+          ].join(" ")}
+        />
+      </span>
+    </button>
+  );
+}
+
 export default function AdvancedParams({
   mode,
   moderation,
   onModerationChange,
+  watermark,
+  onWatermarkChange,
 }: {
   mode: Mode;
   moderation: string;
   onModerationChange: (v: string) => void;
+  /** true = keep the provider's "AI generated" watermark; false = strip it. */
+  watermark: boolean;
+  onWatermarkChange: (v: boolean) => void;
 }) {
-  const active = mode === "image" && moderation === "low";
+  const active = (mode === "image" && moderation === "low") || watermark;
 
   return (
     <Popover
@@ -39,8 +76,17 @@ export default function AdvancedParams({
         <div className="max-h-[70vh] overflow-y-auto p-3">
           <div className="pb-3 text-[13px] font-medium text-white">進階設定</div>
 
-          {mode === "image" && (
+          {(mode === "image" || mode === "video") && (
             <div className="border-t border-[#262626] pt-3">
+              <Switch label="保留浮水印（AI generated 標記）" on={watermark} onChange={onWatermarkChange} />
+              <p className="mt-1 text-[10.5px] leading-relaxed text-[#6d6d6d]">
+                預設關閉，生成結果不帶浮水印；打開後畫面右下角會出現「AI generated」標記。
+              </p>
+            </div>
+          )}
+
+          {mode === "image" && (
+            <div className="border-t border-[#262626] pt-3 mt-3">
               <div className="pb-2 text-[12.5px] text-[#a8a8a8]">內容審核強度</div>
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -66,7 +112,7 @@ export default function AdvancedParams({
           )}
 
           {mode === "video" && (
-            <div className="space-y-4 border-t border-[#262626] pt-3">
+            <div className="space-y-4 border-t border-[#262626] pt-3 mt-3">
               <div>
                 <div className="pb-1.5 text-[12.5px] text-[#a8a8a8]">Prompt 小技巧（Seedance 官方寫法）</div>
                 <ul className="space-y-1 text-[11.5px] leading-relaxed text-[#8a8a8a]">

@@ -235,6 +235,13 @@ export const IconX = (p: P) => (
   </svg>
 );
 
+export const IconDownload = (p: P) => (
+  <svg viewBox="0 0 24 24" {...stroke} className={s(p)}>
+    <path d="M12 3.5v11.4M7.5 10.6 12 15.1l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4.5 16.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-2.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export const IconInstagram = (p: P) => (
   <svg viewBox="0 0 24 24" {...stroke} className={s(p)}>
     <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
