@@ -235,6 +235,18 @@ export const IconX = (p: P) => (
   </svg>
 );
 
+export const IconPlay = (p: P) => (
+  <svg viewBox="0 0 24 24" className={s(p)} fill="currentColor">
+    <path d="M6.5 4.8v14.4a1 1 0 0 0 1.53.85l11.3-7.2a1 1 0 0 0 0-1.7l-11.3-7.2a1 1 0 0 0-1.53.85z" />
+  </svg>
+);
+
+export const IconTrash = (p: P) => (
+  <svg viewBox="0 0 24 24" {...stroke} className={s(p)}>
+    <path d="M4.5 7h15M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2M6.5 7l1 12.5A2 2 0 0 0 9.5 21.3h5a2 2 0 0 0 2-1.8L17.5 7" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export const IconDownload = (p: P) => (
   <svg viewBox="0 0 24 24" {...stroke} className={s(p)}>
     <path d="M12 3.5v11.4M7.5 10.6 12 15.1l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />

@@ -98,3 +98,17 @@ create table if not exists generations (
 );
 create index if not exists generations_user_idx on generations(user_id, created_at desc);
 create unique index if not exists generations_ref_uidx on generations(user_id, ref) where ref is not null;
+
+-- 智慧畫布 (Canvas): user-built node graphs (text/image/video/load-image nodes
+-- wired together). `graph` holds the whole { nodes, edges } document — small
+-- enough that jsonb-as-a-blob is simpler than normalizing nodes/edges into
+-- their own tables, and matches how the client already models it.
+create table if not exists canvas_workflows (
+  id         bigint generated always as identity primary key,
+  user_id    bigint not null references users(id) on delete cascade,
+  name       text not null default 'Untitled',
+  graph      jsonb not null default '{"nodes":[],"edges":[]}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists canvas_workflows_user_idx on canvas_workflows(user_id, updated_at desc);

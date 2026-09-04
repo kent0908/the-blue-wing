@@ -92,6 +92,14 @@ export async function POST(req: NextRequest) {
       const imageUrls = await assetsToDataUrls(user.id, body.assetIds.map(Number), MAX_REF_IMAGES);
       if (imageUrls.length === 1) payload.image = imageUrls[0];
       else if (imageUrls.length > 1) payload.image = imageUrls;
+    } else if (typeof body.image === "string" && body.image.trim()) {
+      // 智慧畫布 (canvas) node-chaining: a prior node's own generated-image URL
+      // isn't in the user's asset library, so it can't go through assetIds —
+      // forward it straight through instead. SIRAYA's `image` field already
+      // accepts a plain URL (fetched upstream on SIRAYA's side, not ours).
+      payload.image = body.image.trim();
+    } else if (Array.isArray(body.image) && body.image.every((u: unknown) => typeof u === "string" && u.trim())) {
+      payload.image = body.image;
     }
 
     const json = await createImage(payload as unknown as ImageGenerationRequest);

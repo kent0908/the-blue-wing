@@ -58,13 +58,18 @@ export async function POST(req: NextRequest) {
     // data URLs (the blob store is private) and forward as input_references.
     // Only Seedance models are known to support this on SIRAYA — cap at that
     // model's documented limit regardless of what the client asked for.
-    const { assetIds, ...videoBody } = body;
+    const { assetIds, imageUrl, ...videoBody } = body;
     const refCap = maxRefsForVideoModel(String(body.model));
     if (refCap > 0 && Array.isArray(assetIds) && assetIds.length) {
       const urls = await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
       if (urls.length) {
         videoBody.input_references = urls.map((url) => ({ type: "image" as const, url }));
       }
+    } else if (refCap > 0 && typeof imageUrl === "string" && imageUrl.trim()) {
+      // 智慧畫布 (canvas) node-chaining: a prior node's own generated-image URL
+      // isn't in the user's asset library, so it can't go through assetIds —
+      // forward it straight through as a reference instead.
+      videoBody.input_references = [{ type: "image" as const, url: imageUrl.trim() }];
     }
 
     // Seedance also puts a visible "AI generated" badge on the output unless
