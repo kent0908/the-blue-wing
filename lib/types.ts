@@ -45,3 +45,22 @@ export interface ResultItem {
   model: string;
   createdAt: number;
 }
+
+/**
+ * An in-flight generation. SIRAYA has no batch endpoint (checked the docs) —
+ * "generate several at once" just means not blocking new submissions on the
+ * one currently running, since each submission (video: async job id +
+ * independent polling; image: a plain synchronous call) is already
+ * independent of any other. See app/studio/page.tsx.
+ */
+export interface PendingJob {
+  id: string;
+  mode: Mode;
+  kind: "image" | "video" | "text";
+  model: string;
+  prompt: string;
+  startedAt: number;
+  stage: number;
+  error?: string | null;
+  errorCta?: { href: string; label: string } | null;
+}

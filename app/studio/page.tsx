@@ -1,14 +1,13 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Composer from "@/components/Composer";
-import GenerationProgress from "@/components/GenerationProgress";
+import JobQueue from "@/components/JobQueue";
 import InspirationPanel from "@/components/InspirationPanel";
 import { IconCompass, IconHistory, IconDownload } from "@/components/Icons";
 import { downloadResult } from "@/lib/download";
-import type { GenSettings, Mode, ResultItem } from "@/lib/types";
+import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
 
 /**
  * Parse a fetch Response as JSON. When the body isn't JSON (e.g. Vercel's
@@ -51,6 +50,18 @@ function ctaForStatus(status: number, mode: string): { href: string; label: stri
 const KIND_FOR_MODE: Record<Mode, ResultItem["kind"]> = { image: "image", video: "video", text: "text", audio: "text" };
 const MODE_FOR_KIND: Record<ResultItem["kind"], Mode> = { image: "image", video: "video", text: "text" };
 
+/**
+ * How many generations can be running at once. SIRAYA has no batch endpoint
+ * (checked the docs — n only makes variations of the SAME prompt; there's no
+ * "submit several different prompts in one call") — each submission is
+ * already independent (video: async job id + its own poll loop; image: a
+ * plain synchronous call), so "generate several at once" just means not
+ * blocking new submissions on whichever one happens to be running. This cap
+ * is a UI sanity limit, not a server-enforced one — it exists to stop a burst
+ * of clicks from firing off more jobs than makes sense to track on screen.
+ */
+const MAX_CONCURRENT_JOBS = 4;
+
 function sizeFromRatio(ratio: string, fallback: string) {
   const map: Record<string, string> = {
     "1:1": "1024x1024",
@@ -61,6 +72,12 @@ function sizeFromRatio(ratio: string, fallback: string) {
     "21:9": "1792x768",
   };
   return map[ratio] ?? fallback;
+}
+
+let jobSeq = 0;
+function newJobId() {
+  jobSeq += 1;
+  return `job_${Date.now().toString(36)}_${jobSeq}`;
 }
 
 function StudioInner() {
@@ -112,27 +129,37 @@ function StudioInner() {
   }, [preset, urlModel, urlPrompt]);
 
   const [panelOpen, setPanelOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState(0);
-  const [startedAt, setStartedAt] = useState(0);
-  const [activeLabel, setActiveLabel] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [errorCta, setErrorCta] = useState<{ href: string; label: string } | null>(null);
+  const [jobs, setJobs] = useState<PendingJob[]>([]);
   const [results, setResults] = useState<ResultItem[]>([]);
   // Which history item the main viewer shows. null = "the newest one" (the
   // BUG this fixes: clicking a 生成紀錄 thumbnail previously did nothing —
   // there was no way to bring an older result back into the main viewer).
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
+  // Guards state updates from a poll loop that outlives the component (route
+  // change, tab close mid-generation) — several loops can be in flight at
+  // once now, so this is a single shared flag rather than per-job timers.
+  const unmountedRef = useRef(false);
+  useEffect(() => () => {
+    unmountedRef.current = true;
+  }, []);
 
   const setMode = (m: Mode) => router.push(`/studio?mode=${m}`);
 
-  const pushResult = (r: ResultItem) => {
+  const pushResult = useCallback((r: ResultItem) => {
+    if (unmountedRef.current) return;
     setResults((prev) => [r, ...prev]);
     setSelectedId(null); // jump the main viewer back to "newest" for the new result
-  };
+  }, []);
+
+  const updateJob = useCallback((id: string, patch: Partial<PendingJob>) => {
+    if (unmountedRef.current) return;
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
+  }, []);
+
+  const removeJob = useCallback((id: string) => {
+    if (unmountedRef.current) return;
+    setJobs((prev) => prev.filter((j) => j.id !== id));
+  }, []);
 
   // Seed 生成紀錄 from the DB so it survives reloads / different devices,
   // instead of only holding whatever happened in this browser tab's session.
@@ -146,43 +173,145 @@ function StudioInner() {
       .catch(() => {});
   }, []);
 
-  const pollVideo = useCallback(
-    async (id: string, prompt: string, model: string) => {
-      const tick = async () => {
+  const pollVideoJob = useCallback(
+    async (jobId: string, videoId: string, prompt: string, model: string) => {
+      for (let i = 0; i < 200; i++) {
+        if (unmountedRef.current) return;
+        await new Promise((r) => setTimeout(r, 4000));
+        if (unmountedRef.current) return;
         const qs = new URLSearchParams({ model, prompt });
-        const res = await fetch(`/api/videos/${encodeURIComponent(id)}?${qs.toString()}`);
+        const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}?${qs.toString()}`);
         const json = await readJson(res);
         if (!res.ok) throw new Error(json?.error?.message || "查詢影片狀態失敗");
         if (json.status === "completed" && json.url) {
-          pushResult({
-            id: `${id}`,
-            kind: "video",
-            url: json.url,
-            prompt,
-            model,
-            createdAt: Date.now(),
-          });
-          setBusy(false);
+          pushResult({ id: `${videoId}`, kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
+          removeJob(jobId);
           setPanelOpen(true);
           return;
         }
         if (json.status === "failed") throw new Error("影片生成失敗");
-        setStage(2);
-        pollRef.current = setTimeout(tick, 4000);
-      };
-      await tick();
+        updateJob(jobId, { stage: 2 });
+      }
+      throw new Error("影片生成逾時，請稍後到生成紀錄查看");
     },
-    []
+    [pushResult, removeJob, updateJob]
   );
 
-  const handleSubmit = async ({
-    prompt,
-    model,
-    settings,
-    imagePayload,
-    assetIds,
-    extraBody,
-  }: {
+  /** Runs one generation job to completion. Fire-and-forget from handleSubmit
+   *  — several of these run concurrently, each tracked by its own job id. */
+  const runJob = useCallback(
+    async (
+      jobId: string,
+      jobMode: Mode,
+      {
+        prompt,
+        model,
+        settings,
+        imagePayload,
+        assetIds,
+        extraBody,
+      }: {
+        prompt: string;
+        model: string;
+        settings: GenSettings;
+        imagePayload?: Record<string, unknown>;
+        assetIds?: number[];
+        extraBody?: Record<string, unknown>;
+      }
+    ) => {
+      try {
+        updateJob(jobId, { stage: 1 });
+
+        if (jobMode === "video") {
+          const res = await fetch("/api/videos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model,
+              prompt,
+              seconds: settings.seconds,
+              resolution: settings.resolution,
+              ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
+              ...(assetIds?.length ? { assetIds } : {}),
+              ...(extraBody ? { extra_body: extraBody } : {}),
+            }),
+          });
+          const json = await readJson(res);
+          if (!res.ok) {
+            updateJob(jobId, { error: json?.error?.message || "影片生成請求失敗", errorCta: ctaForStatus(res.status, jobMode) });
+            return;
+          }
+          if (json.status === "completed" && json.url) {
+            pushResult({ id: json.id ?? String(Date.now()), kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
+            removeJob(jobId);
+            setPanelOpen(true);
+          } else if (json.id) {
+            await pollVideoJob(jobId, json.id, prompt, model);
+          } else {
+            updateJob(jobId, { error: "API 沒有回傳影片 id 或網址" });
+          }
+          return;
+        }
+
+        if (jobMode === "image") {
+          const body = imagePayload ?? {
+            model,
+            prompt,
+            n: settings.imageCount,
+            size: sizeFromRatio(settings.aspectRatio, settings.size),
+            response_format: "url",
+          };
+          const res = await fetch("/api/images", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const json = await readJson(res);
+          if (!res.ok) {
+            updateJob(jobId, { error: json?.error?.message || "圖片生成請求失敗", errorCta: ctaForStatus(res.status, jobMode) });
+            return;
+          }
+          updateJob(jobId, { stage: 3 });
+          let any = false;
+          (json.images ?? []).forEach((img: { url: string | null }, i: number) => {
+            if (img.url) {
+              pushResult({ id: `${Date.now()}-${i}`, kind: "image", url: img.url, prompt, model, createdAt: Date.now() });
+              any = true;
+            }
+          });
+          removeJob(jobId);
+          if (any) setPanelOpen(true);
+          return;
+        }
+
+        // text / audio fall back to chat completions
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: settings.maxTokens,
+          }),
+        });
+        const json = await readJson(res);
+        if (!res.ok) {
+          updateJob(jobId, { error: json?.error?.message || "文字生成請求失敗", errorCta: ctaForStatus(res.status, jobMode) });
+          return;
+        }
+        updateJob(jobId, { stage: 3 });
+        const text = json?.choices?.[0]?.message?.content ?? "";
+        pushResult({ id: String(Date.now()), kind: "text", text, prompt, model, createdAt: Date.now() });
+        removeJob(jobId);
+        setPanelOpen(true);
+      } catch (e) {
+        updateJob(jobId, { error: e instanceof Error ? e.message : "發生未預期的錯誤" });
+      }
+    },
+    [pollVideoJob, pushResult, removeJob, updateJob]
+  );
+
+  const handleSubmit = (args: {
     prompt: string;
     model: string;
     settings: GenSettings;
@@ -190,101 +319,11 @@ function StudioInner() {
     assetIds?: number[];
     extraBody?: Record<string, unknown>;
   }) => {
-    setError(null);
-    setErrorCta(null);
-    setBusy(true);
-    setStage(0);
-    setStartedAt(Date.now());
-    setActiveLabel(prompt);
-
-    try {
-      setStage(1);
-
-      if (mode === "video") {
-        const res = await fetch("/api/videos", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model,
-            prompt,
-            seconds: settings.seconds,
-            resolution: settings.resolution,
-            ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
-            ...(assetIds?.length ? { assetIds } : {}),
-            ...(extraBody ? { extra_body: extraBody } : {}),
-          }),
-        });
-        const json = await readJson(res);
-        if (!res.ok) {
-          setErrorCta(ctaForStatus(res.status, mode));
-          throw new Error(json?.error?.message || "影片生成請求失敗");
-        }
-
-        if (json.status === "completed" && json.url) {
-          pushResult({ id: json.id ?? String(Date.now()), kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
-          setBusy(false);
-          setPanelOpen(true);
-        } else if (json.id) {
-          await pollVideo(json.id, prompt, model);
-        } else {
-          throw new Error("API 沒有回傳影片 id 或網址");
-        }
-        return;
-      }
-
-      if (mode === "image") {
-        const body = imagePayload ?? {
-          model,
-          prompt,
-          n: settings.imageCount,
-          size: sizeFromRatio(settings.aspectRatio, settings.size),
-          response_format: "url",
-        };
-        const res = await fetch("/api/images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const json = await readJson(res);
-        if (!res.ok) {
-          setErrorCta(ctaForStatus(res.status, mode));
-          throw new Error(json?.error?.message || "圖片生成請求失敗");
-        }
-        setStage(3);
-        (json.images ?? []).forEach((img: { url: string | null }, i: number) => {
-          if (img.url) {
-            pushResult({ id: `${Date.now()}-${i}`, kind: "image", url: img.url, prompt, model, createdAt: Date.now() });
-          }
-        });
-        setBusy(false);
-        setPanelOpen(true);
-        return;
-      }
-
-      // text / audio fall back to chat completions
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: settings.maxTokens,
-        }),
-      });
-      const json = await readJson(res);
-      if (!res.ok) {
-        setErrorCta(ctaForStatus(res.status, mode));
-        throw new Error(json?.error?.message || "文字生成請求失敗");
-      }
-      setStage(3);
-      const text = json?.choices?.[0]?.message?.content ?? "";
-      pushResult({ id: String(Date.now()), kind: "text", text, prompt, model, createdAt: Date.now() });
-      setBusy(false);
-      setPanelOpen(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "發生未預期的錯誤");
-      setBusy(false);
-    }
+    if (jobs.length >= MAX_CONCURRENT_JOBS) return; // submit button is disabled at this point too
+    const jobId = newJobId();
+    const kind = mode === "video" ? "video" : mode === "image" ? "image" : "text";
+    setJobs((prev) => [...prev, { id: jobId, mode, kind, model: args.model, prompt: args.prompt, startedAt: Date.now(), stage: 0 }]);
+    void runJob(jobId, mode, args);
   };
 
   // Main viewer is scoped to the current mode's kind — 圖片生成 only ever
@@ -292,6 +331,7 @@ function StudioInner() {
   // (the panel on the right) still lists everything mixed together.
   const resultsForMode = results.filter((r) => r.kind === KIND_FOR_MODE[mode]);
   const latest = (selectedId ? resultsForMode.find((r) => r.id === selectedId) : null) ?? resultsForMode[0];
+  const atCapacity = jobs.length >= MAX_CONCURRENT_JOBS;
 
   return (
     <div className="flex h-full min-h-0">
@@ -314,21 +354,7 @@ function StudioInner() {
         </div>
 
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 pt-16">
-          {busy ? (
-            <GenerationProgress label={activeLabel} startedAt={startedAt} stageIndex={stage} />
-          ) : error ? (
-            <div className="max-w-lg rounded-xl border border-[#4a2020] bg-[#1a1010] px-5 py-4 text-[13.5px] leading-relaxed text-[#ffb4b4]">
-              {error}
-              {errorCta && (
-                <Link
-                  href={errorCta.href}
-                  className="mt-2 inline-block rounded-lg bg-[#7ff0cd] px-3 py-1.5 text-[12.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105"
-                >
-                  {errorCta.label}
-                </Link>
-              )}
-            </div>
-          ) : latest ? (
+          {latest ? (
             <div className="w-full max-w-3xl py-8">
               <div className="relative">
                 {latest.kind === "image" && latest.url && (
@@ -359,19 +385,25 @@ function StudioInner() {
                 {latest.model} · {latest.prompt}
               </p>
             </div>
-          ) : (
+          ) : jobs.length === 0 ? (
             <h2 className="text-[34px] font-normal text-[#5c5c5c]">用 The Blue Wing 點亮你的創作</h2>
-          )}
+          ) : null}
         </div>
 
         <div className="px-8 pb-8">
           <div className="mx-auto w-full max-w-[840px]">
+            <JobQueue jobs={jobs} onDismiss={removeJob} />
+            {atCapacity && (
+              <p className="mb-2 text-center text-[11.5px] text-[#f0c27f]">
+                同時最多 {MAX_CONCURRENT_JOBS} 個生成在跑，等其中一個完成才能再送出
+              </p>
+            )}
             {presetReady ? (
               <Composer
                 mode={mode}
                 onModeChange={setMode}
                 onSubmit={handleSubmit}
-                busy={busy}
+                busy={atCapacity}
                 initialModel={presetModel}
                 initialPrompt={presetPrompt}
                 initialImgValues={presetImgValues}

@@ -63,7 +63,7 @@ components/
   TopBar.tsx          說明／語言／優惠／定價／登入
   Composer.tsx        模式下拉、模型下拉（讀真實 /v1/models）、設定、成本、送出
   SettingsPopover.tsx 畫面比例／解析度／時長／張數
-  GenerationProgress.tsx  生成進度動畫
+  JobQueue.tsx        多個生成同時進行時的進度清單
   InspirationPanel.tsx    靈感廣場／生成紀錄
 lib/
   siraya.ts           SIRAYA client（server-only）
