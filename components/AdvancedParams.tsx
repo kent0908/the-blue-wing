@@ -123,6 +123,21 @@ export default function AdvancedParams({
             </div>
           )}
 
+          {mode === "image" && (
+            <div className="border-t border-[#262626] pt-3 mt-3">
+              <div className="pb-1.5 text-[12.5px] text-[#a8a8a8]">多張參考圖怎麼下指令（實測有效寫法）</div>
+              <p className="text-[11.5px] leading-relaxed text-[#8a8a8a]">
+                模型收到的是一組沒有標籤的圖，@名稱 只是給你自己看的標記。實測發現直接說「用第一張的形狀」很容易失敗——模型會把兩張圖整個疊在一起，而不是照指令合成。
+              </p>
+              <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8a8a8a]">
+                有效寫法：<span className="text-[#c9c9c9]">先逐張描述內容，再下指令</span>，例如：
+              </p>
+              <p className="mt-1 rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2.5 py-2 text-[11px] leading-relaxed text-[#9a9a9a]">
+                圖1是一隻紅色蘋果，圖2是藍色。請畫出圖1的形狀，整個塗成圖2的藍色。
+              </p>
+            </div>
+          )}
+
           {mode === "video" && (
             <div className="space-y-4 border-t border-[#262626] pt-3 mt-3">
               <div>
