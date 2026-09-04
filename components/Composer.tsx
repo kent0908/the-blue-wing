@@ -275,22 +275,49 @@ export default function Composer({
     const q = mention.query.toLowerCase();
     return library
       .filter((a) => a.name.toLowerCase().includes(q) && !refs.some((r) => r.id === a.id))
-      .slice(0, 8);
+      .slice(0, 12);
   }, [mention, library, refs]);
 
-  /** Inserts "@AssetName " at the mention's position and adds it to the active
-   *  reference set (up to MAX_REF_IMAGES) — same effect as picking it from 素材. */
+  /** Inserts "@AssetName" at the mention's position and adds it to the active
+   *  reference set (up to refCap) — same effect as picking it from 素材. When
+   *  there's still room for more, chains a fresh "@" right after so the
+   *  dropdown re-opens on the remaining candidates instead of closing —
+   *  lets you pick several in a row without retyping "@" each time. */
   const pickMention = (a: RefAsset) => {
     if (!mention) return;
     const tag = mentionTagFor(a.name);
     const before = prompt.slice(0, mention.start);
     const after = prompt.slice(mention.start + 1 + mention.query.length);
-    const next = `${before}@${tag} ${after}`;
+    const moreRoom = refs.length + 1 < refCap;
+    const insertion = moreRoom ? `@${tag} @` : `@${tag} `;
+    const next = `${before}${insertion}${after}`;
     setPrompt(next);
-    setMention(null);
     setMentionIndex(0);
     addRef(a);
-    const cursor = before.length + tag.length + 2;
+    const cursor = before.length + insertion.length;
+    setMention(moreRoom ? { query: "", start: cursor - 1 } : null);
+    requestAnimationFrame(() => {
+      taRef.current?.focus();
+      taRef.current?.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  /** "全部加入" — add every currently-listed candidate in one go (still capped
+   *  at refCap by addRef itself), instead of clicking through them one by one. */
+  const pickAllMentionMatches = () => {
+    if (!mention || !mentionMatches.length) return;
+    const room = Math.max(0, refCap - refs.length);
+    const toAdd = mentionMatches.slice(0, room);
+    if (!toAdd.length) return;
+    const tags = toAdd.map((a) => `@${mentionTagFor(a.name)}`).join(" ");
+    const before = prompt.slice(0, mention.start);
+    const after = prompt.slice(mention.start + 1 + mention.query.length);
+    const next = `${before}${tags} ${after}`;
+    setPrompt(next);
+    setMentionIndex(0);
+    toAdd.forEach(addRef);
+    setMention(null);
+    const cursor = before.length + tags.length + 1;
     requestAnimationFrame(() => {
       taRef.current?.focus();
       taRef.current?.setSelectionRange(cursor, cursor);
@@ -467,6 +494,11 @@ export default function Composer({
                   pickMention(mentionMatches[mentionIndex]);
                   return;
                 }
+                if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  pickAllMentionMatches();
+                  return;
+                }
                 if (e.key === "Escape") {
                   e.preventDefault();
                   setMention(null);
@@ -485,11 +517,30 @@ export default function Composer({
           />
 
           {mention && (
-            <div className="bw-menu absolute left-0 top-full z-40 mt-1 w-[260px] max-h-[220px] overflow-y-auto p-1.5">
+            // Opens upward (bottom-full), same as every other popover anchored to
+            // this bottom-docked composer (see 素材 picker / Popover.tsx below) —
+            // opening downward here used to get clipped by the viewport's bottom
+            // edge, which made items near the edge hard to actually click.
+            <div className="bw-menu absolute bottom-full left-0 z-40 mb-1.5 w-[290px] max-h-[280px] overflow-y-auto p-1.5">
+              <div className="sticky top-0 z-10 -m-1.5 mb-1 flex items-center justify-between bg-[#1a1a1a] px-2.5 py-1.5">
+                <span className="text-[11px] text-[#8a8a8a]">
+                  已選 {refs.length}/{refCap}
+                </span>
+                <div className="flex items-center gap-2">
+                  {mentionMatches.length > 0 && refs.length < refCap && (
+                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={pickAllMentionMatches} className="text-[11px] text-[#7ff0cd] hover:underline">
+                      全部加入
+                    </button>
+                  )}
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setMention(null)} className="text-[11px] text-[#8a8a8a] hover:text-white">
+                    關閉
+                  </button>
+                </div>
+              </div>
               {library === null && <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">載入素材中…</div>}
               {library !== null && mentionMatches.length === 0 && (
                 <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">
-                  {library.length === 0 ? "資產庫還沒有素材，先上傳一張" : "找不到符合的素材"}
+                  {library.length === 0 ? "資產庫還沒有素材，先上傳一張" : refs.length >= refCap ? `已達上限（${refCap} 張）` : "找不到符合的素材"}
                 </div>
               )}
               {mentionMatches.map((a, i) => (
