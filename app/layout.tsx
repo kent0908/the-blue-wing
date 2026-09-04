@@ -3,6 +3,8 @@ import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import SupportChat from "@/components/SupportChat";
+import JobToasts from "@/components/JobToasts";
+import { GenerationJobsProvider } from "@/lib/jobsStore";
 
 export const metadata: Metadata = {
   title: "The Blue Wing — AI 影片、圖片與創作平台",
@@ -14,14 +16,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-Hant">
       <body className="h-dvh overflow-hidden bg-black text-[var(--bw-text)]">
-        <div className="flex h-full">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <TopBar />
-            <main className="min-h-0 flex-1">{children}</main>
+        <GenerationJobsProvider>
+          <div className="flex h-full">
+            <Sidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <TopBar />
+              <main className="min-h-0 flex-1">{children}</main>
+            </div>
           </div>
-        </div>
-        <SupportChat />
+          <SupportChat />
+          <JobToasts />
+        </GenerationJobsProvider>
       </body>
     </html>
   );
