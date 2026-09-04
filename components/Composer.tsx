@@ -26,6 +26,7 @@ import {
   defaultValues,
   buildImagePayload,
   supportsRefImages,
+  supportsWatermarkControl,
   MAX_REF_IMAGES,
   type ImageControlValues,
 } from "@/lib/imageModels";
@@ -263,6 +264,12 @@ export default function Composer({
   const canUseRefs =
     (mode === "image" && supportsRefImages(activeImageModel)) || (mode === "video" && refCap > 0);
 
+  // Only Seedream (image) / Seedance (video) are verified to accept the
+  // `watermark` field — GPT Image 2 rejects it outright ("Unknown parameter:
+  // 'watermark'") since it proxies straight to OpenAI's own API. Gate the
+  // switch itself so users on unsupported models never hit that error.
+  const watermarkSupported = mode === "image" ? supportsWatermarkControl(activeImageModel) : mode === "video" && refCap > 0;
+
   const mentionMatches = useMemo(() => {
     if (!mention || !library) return [];
     const q = mention.query.toLowerCase();
@@ -326,7 +333,7 @@ export default function Composer({
       : undefined;
     if (imagePayload) {
       if (moderation !== "auto") imagePayload.moderation = moderation;
-      imagePayload.watermark = watermark;
+      if (watermarkSupported) imagePayload.watermark = watermark;
     }
 
     onSubmit({
@@ -335,7 +342,7 @@ export default function Composer({
       settings,
       imagePayload,
       assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
-      extraBody: mode === "video" ? { watermark } : undefined,
+      extraBody: mode === "video" && watermarkSupported ? { watermark } : undefined,
     });
     setPrompt("");
     setRefs([]);
@@ -631,6 +638,7 @@ export default function Composer({
           onModerationChange={setModeration}
           watermark={watermark}
           onWatermarkChange={setWatermark}
+          watermarkSupported={watermarkSupported}
         />
 
         <div className="ml-auto flex items-center gap-3">

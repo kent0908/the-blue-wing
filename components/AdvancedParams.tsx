@@ -14,10 +14,13 @@ import type { Mode } from "@/lib/types";
  * separate API field — so those show up here as a prompt cheat-sheet
  * instead of fake sliders.
  *
- * `watermark` is real for both families — verified empirically for images
- * (Seedream `watermark` field) and for video (Seedance `extra_body.watermark`,
- * confirmed by generating the same clip both ways and comparing frames: the
- * "AI generated" badge only appears when watermark is true).
+ * `watermark` is real for Seedream (image) and Seedance (video) — verified
+ * empirically, including for video (confirmed by generating the same clip
+ * both ways and comparing frames: the "AI generated" badge only appears
+ * when watermark is true). It's gated to those families specifically —
+ * GPT Image 2 was found to actively REJECT the field ("Unknown parameter:
+ * 'watermark'"), since it proxies straight to OpenAI's own API. The switch
+ * only renders when `watermarkSupported` says the current model accepts it.
  */
 function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
@@ -52,6 +55,7 @@ export default function AdvancedParams({
   onModerationChange,
   watermark,
   onWatermarkChange,
+  watermarkSupported,
 }: {
   mode: Mode;
   moderation: string;
@@ -59,8 +63,10 @@ export default function AdvancedParams({
   /** true = keep the provider's "AI generated" watermark; false = strip it. */
   watermark: boolean;
   onWatermarkChange: (v: boolean) => void;
+  /** false when the current model doesn't accept the field at all (see lib/imageModels.ts). */
+  watermarkSupported: boolean;
 }) {
-  const active = (mode === "image" && moderation === "low") || watermark;
+  const active = (mode === "image" && moderation === "low") || (watermarkSupported && watermark);
 
   return (
     <Popover
@@ -78,10 +84,16 @@ export default function AdvancedParams({
 
           {(mode === "image" || mode === "video") && (
             <div className="border-t border-[#262626] pt-3">
-              <Switch label="保留浮水印（AI generated 標記）" on={watermark} onChange={onWatermarkChange} />
-              <p className="mt-1 text-[10.5px] leading-relaxed text-[#6d6d6d]">
-                預設關閉，生成結果不帶浮水印；打開後畫面右下角會出現「AI generated」標記。
-              </p>
+              {watermarkSupported ? (
+                <>
+                  <Switch label="保留浮水印（AI generated 標記）" on={watermark} onChange={onWatermarkChange} />
+                  <p className="mt-1 text-[10.5px] leading-relaxed text-[#6d6d6d]">
+                    預設關閉，生成結果不帶浮水印；打開後畫面右下角會出現「AI generated」標記。
+                  </p>
+                </>
+              ) : (
+                <p className="text-[11.5px] leading-relaxed text-[#6d6d6d]">這個模型沒有浮水印開關（由服務商決定）</p>
+              )}
             </div>
           )}
 

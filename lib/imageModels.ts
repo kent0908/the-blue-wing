@@ -264,6 +264,20 @@ export function supportsRefImages(model: ImageModel | undefined): boolean {
 }
 
 /**
+ * Families that accept the `watermark` field. Seedream is verified to accept
+ * it (real output has a visible "AI generated" badge unless set false).
+ * GPT Image 2 is verified to REJECT it outright — "Unknown parameter:
+ * 'watermark'" — since it proxies straight to OpenAI's own images API, which
+ * validates against a fixed parameter list. Gemini isn't independently
+ * confirmed either way, so it's kept out of this list too rather than
+ * assumed safe.
+ */
+const WATERMARK_FAMILIES: ImageFamily[] = ["seedream"];
+export function supportsWatermarkControl(model: ImageModel | undefined): boolean {
+  return !!model && WATERMARK_FAMILIES.includes(model.family);
+}
+
+/**
  * Max reference images accepted per generation. SIRAYA's `image` field takes
  * either a single URL/data-URL or an array — verified empirically (two
  * distinct reference images produced a result combining both). BytePlus's own

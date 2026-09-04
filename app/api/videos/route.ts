@@ -74,10 +74,20 @@ export async function POST(req: NextRequest) {
 
     // Seedance also puts a visible "AI generated" badge on the output unless
     // told otherwise — verified empirically (extra_body.watermark:false vs
-    // true, compared frame-by-frame). Same client-controlled switch as
-    // images (see AdvancedParams.tsx); default to "no watermark".
-    const clientExtra = (videoBody.extra_body as Record<string, unknown> | undefined) || {};
-    videoBody.extra_body = { ...clientExtra, watermark: clientExtra.watermark ?? false };
+    // true, compared frame-by-frame). That's only confirmed for the Seedance
+    // family, though — other video providers routed through SIRAYA (Veo,
+    // Sora, ...) aren't, and the same lesson from /api/images applies: some
+    // providers reject an unrecognised param outright rather than ignoring
+    // it. `refCap > 0` doubles as "is this a Seedance model" (see
+    // lib/videoModels.ts) since only that family has any RULES entry at all.
+    if (refCap > 0) {
+      const clientExtra = (videoBody.extra_body as Record<string, unknown> | undefined) || {};
+      videoBody.extra_body = { ...clientExtra, watermark: clientExtra.watermark ?? false };
+    } else if (videoBody.extra_body && typeof videoBody.extra_body === "object") {
+      const rest = { ...(videoBody.extra_body as Record<string, unknown>) };
+      delete rest.watermark;
+      videoBody.extra_body = rest;
+    }
 
     const json = await createVideo({ ...videoBody, async: true });
 

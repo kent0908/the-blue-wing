@@ -4,7 +4,7 @@ import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
 import { assetsToDataUrls } from "@/lib/assetData";
-import { MAX_REF_IMAGES } from "@/lib/imageModels";
+import { MAX_REF_IMAGES, getImageModel, supportsWatermarkControl } from "@/lib/imageModels";
 import { recordGeneration } from "@/lib/generations";
 
 export const runtime = "nodejs";
@@ -79,10 +79,18 @@ export async function POST(req: NextRequest) {
 
     // Seedream defaults to a visible "AI generated" watermark unless told
     // otherwise (docs claim default false, but real output disagrees —
-    // verified empirically). Other families ignore the field harmlessly.
-    // The client sends its own choice (see AdvancedParams.tsx); fall back to
-    // "no watermark" when it didn't.
-    if (payload.watermark === undefined) payload.watermark = false;
+    // verified empirically). Other families do NOT "ignore it harmlessly" —
+    // GPT Image 2 proxies straight to OpenAI's own API, which rejects unknown
+    // parameters outright ("Unknown parameter: 'watermark'"). Only forward
+    // the field for families verified to accept it; strip it otherwise, even
+    // if the client sent one (defense in depth — see AdvancedParams.tsx for
+    // the client-side gating).
+    const imgModel = getImageModel(String(body.model));
+    if (supportsWatermarkControl(imgModel)) {
+      if (payload.watermark === undefined) payload.watermark = false;
+    } else {
+      delete payload.watermark;
+    }
 
     // reference image(s): the client sends its own asset id(s); resolve them to
     // base64 data URLs here (the blob store is private) and forward as `image`.
