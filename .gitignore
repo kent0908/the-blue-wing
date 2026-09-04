@@ -46,3 +46,8 @@ next-env.d.ts
 .vercel
 .env*
 .git-commit-msg.txt
+
+# scratch E2E/verification scripts against the live deployment — always
+# meant to be deleted right after running, never committed
+/_e2e_*.mjs
+/_check_*.mjs

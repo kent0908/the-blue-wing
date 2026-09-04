@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconSearch, IconChevronDown, IconCollapse, IconCheck, IconDownload } from "./Icons";
 import { downloadResult } from "@/lib/download";
+import ExpiringMedia from "./ExpiringMedia";
 import type { ResultItem } from "@/lib/types";
 
 type KindFilter = "all" | "image" | "video" | "text";
@@ -211,13 +212,8 @@ export default function InspirationPanel({
                   selectedId === h.id ? "outline outline-2 outline-[#7ff0cd]" : "outline outline-2 outline-transparent hover:outline-[#3a3a3a]",
                 ].join(" ")}
               >
-                {h.kind === "image" && h.url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={h.url} alt={h.prompt} className="w-full object-cover" />
-                )}
-                {h.kind === "video" && h.url && (
-                  // not interactive here — click selects it into the main viewer instead
-                  <video src={h.url} className="pointer-events-none w-full" preload="metadata" muted />
+                {(h.kind === "image" || h.kind === "video") && h.url && (
+                  <ExpiringMedia kind={h.kind} url={h.url} alt={h.prompt} className={h.kind === "video" ? "pointer-events-none w-full" : "w-full object-cover"} />
                 )}
                 {h.kind === "text" && (
                   <div className="line-clamp-6 p-3 text-[12px] leading-relaxed text-[#c9c9c9]">{h.text}</div>

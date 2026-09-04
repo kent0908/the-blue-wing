@@ -6,6 +6,7 @@ import { getBalance, addCredits, creditCost } from "@/lib/credits";
 import { recordGeneration } from "@/lib/generations";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { maxRefsForVideoModel } from "@/lib/videoModels";
+import { persistGeneratedMedia } from "@/lib/mediaStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,12 +109,17 @@ export async function POST(req: NextRequest) {
 
     // Providers that finish synchronously give us the url right away; async
     // jobs get recorded later by /api/videos/[id] once polling sees "completed".
+    // Either way, re-host to our own storage first — the upstream url is
+    // signed and expires (~24h), which would otherwise turn this generation
+    // into a permanently broken video in 生成紀錄 once that window passes.
+    let persistedUrl = immediateUrl;
     if (immediateUrl) {
+      persistedUrl = await persistGeneratedMedia(immediateUrl, { userId: user.id, kind: "video" });
       await recordGeneration(user.id, {
         kind: "video",
         model: String(body.model),
         prompt: String(body.prompt),
-        url: immediateUrl,
+        url: persistedUrl,
         ref: jobId ? String(jobId) : null,
       });
     }
@@ -121,7 +127,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       id: jobId,
       status: json?.status ?? (immediateUrl ? "completed" : "processing"),
-      url: immediateUrl,
+      url: persistedUrl,
       raw: json,
       creditsSpent: cost,
       creditsBalance: balance - cost,

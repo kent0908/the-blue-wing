@@ -4,6 +4,7 @@ import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
 import { assetsToDataUrls } from "@/lib/assetData";
+import { persistGeneratedMedia } from "@/lib/mediaStore";
 import { MAX_REF_IMAGES, getImageModel, supportsWatermarkControl } from "@/lib/imageModels";
 import { recordGeneration } from "@/lib/generations";
 
@@ -132,6 +133,11 @@ export async function POST(req: NextRequest) {
 
     for (const im of images) {
       if (im.url) {
+        // Re-host to our own storage: upstream `url` responses are signed
+        // and expire (~24h), and b64_json responses are huge inline data
+        // URLs — either way, persist once here so 生成紀錄 doesn't quietly
+        // turn into a broken image later (or bloat every history payload).
+        im.url = await persistGeneratedMedia(im.url, { userId: user.id, kind: "image" });
         await recordGeneration(user.id, { kind: "image", model: String(body.model), prompt: String(body.prompt), url: im.url });
       }
     }

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Composer from "@/components/Composer";
 import JobQueue from "@/components/JobQueue";
 import InspirationPanel from "@/components/InspirationPanel";
+import ExpiringMedia from "@/components/ExpiringMedia";
 import { IconCompass, IconHistory, IconDownload } from "@/components/Icons";
 import { downloadResult } from "@/lib/download";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
@@ -355,36 +356,10 @@ function StudioInner() {
 
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 pt-16">
           {latest ? (
-            <div className="w-full max-w-3xl py-8">
-              <div className="relative">
-                {latest.kind === "image" && latest.url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={latest.url} alt={latest.prompt} className="mx-auto max-h-[60vh] rounded-xl" />
-                )}
-                {latest.kind === "video" && latest.url && (
-                  <video src={latest.url} controls className="mx-auto max-h-[60vh] rounded-xl" />
-                )}
-                {latest.kind === "text" && (
-                  <div className="whitespace-pre-wrap rounded-xl bg-[#141414] p-6 text-[14px] leading-relaxed">
-                    {latest.text}
-                  </div>
-                )}
-                {latest.url && (
-                  <button
-                    type="button"
-                    onClick={() => downloadResult(latest)}
-                    title="下載"
-                    className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-[12.5px] text-white backdrop-blur transition-colors hover:bg-black/80"
-                  >
-                    <IconDownload className="h-4 w-4" />
-                    下載
-                  </button>
-                )}
-              </div>
-              <p className="mt-4 text-center text-[12.5px] text-[#6d6d6d]">
-                {latest.model} · {latest.prompt}
-              </p>
-            </div>
+            // Keyed by id so switching to a different result remounts fresh —
+            // resets this item's own "did its media fail to load" state
+            // without needing a parent effect to sync it back to false.
+            <MainViewerItem key={latest.id} item={latest} />
           ) : jobs.length === 0 ? (
             <h2 className="text-[34px] font-normal text-[#5c5c5c]">用 The Blue Wing 點亮你的創作</h2>
           ) : null}
@@ -431,6 +406,44 @@ function StudioInner() {
           onClose={() => setPanelOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+function MainViewerItem({ item }: { item: ResultItem }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <div className="w-full max-w-3xl py-8">
+      <div className="relative">
+        {(item.kind === "image" || item.kind === "video") && item.url && (
+          <ExpiringMedia
+            kind={item.kind}
+            url={item.url}
+            alt={item.prompt}
+            controls={item.kind === "video"}
+            className="mx-auto max-h-[60vh] rounded-xl"
+            fallbackClassName="mx-auto flex h-[300px] w-full max-w-md flex-col items-center justify-center gap-2 rounded-xl bg-[#141414] text-[#6d6d6d]"
+            onBroken={() => setBroken(true)}
+          />
+        )}
+        {item.kind === "text" && (
+          <div className="whitespace-pre-wrap rounded-xl bg-[#141414] p-6 text-[14px] leading-relaxed">{item.text}</div>
+        )}
+        {item.url && !broken && (
+          <button
+            type="button"
+            onClick={() => downloadResult(item)}
+            title="下載"
+            className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-[12.5px] text-white backdrop-blur transition-colors hover:bg-black/80"
+          >
+            <IconDownload className="h-4 w-4" />
+            下載
+          </button>
+        )}
+      </div>
+      <p className="mt-4 text-center text-[12.5px] text-[#6d6d6d]">
+        {item.model} · {item.prompt}
+      </p>
     </div>
   );
 }

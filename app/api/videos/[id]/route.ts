@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
 import { addCredits } from "@/lib/credits";
 import { recordGeneration } from "@/lib/generations";
+import { persistGeneratedMedia } from "@/lib/mediaStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,10 +24,25 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   try {
     const { id } = await ctx.params;
     const json = await getVideoStatus(id);
-    const url = json?.output_url ?? json?.data?.[0]?.url ?? null;
-    const status = json?.status ?? (url ? "completed" : "processing");
+    const rawUrl = json?.output_url ?? json?.data?.[0]?.url ?? null;
+    const status = json?.status ?? (rawUrl ? "completed" : "processing");
+    let url = rawUrl;
 
-    if (status === "completed" && url) {
+    if (status === "completed" && rawUrl) {
+      // Re-host to our own storage first — this is a signed upstream URL
+      // that expires (~24h); recording it as-is would leave the video
+      // playable for a day and then permanently broken in 生成紀錄. Only
+      // persist once (recordGeneration's own dedupe-on-ref means a second
+      // poll after this would otherwise just re-upload the same video again).
+      const { rows: already } = await sql<{ url: string | null }>`
+        select url from generations where user_id = ${user.id} and ref = ${id} limit 1
+      `;
+      if (already[0]?.url) {
+        url = already[0].url;
+      } else {
+        url = await persistGeneratedMedia(rawUrl, { userId: user.id, kind: "video" });
+      }
+
       // The submit route only knows the url for synchronous providers; async
       // jobs are recorded here instead, the first time a poll sees "completed"
       // (recordGeneration dedupes on ref, so repeat polls are harmless).
