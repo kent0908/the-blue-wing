@@ -145,6 +145,8 @@ export interface ImageGenerationRequest {
    * — verified empirically. We always send `false`.
    */
   watermark?: boolean;
+  /** model-specific passthrough */
+  extra_body?: Record<string, unknown>;
 }
 
 /** POST /images/generations */
@@ -179,6 +181,12 @@ export interface VideoGenerationRequest {
    * A `role` field is documented but its valid values aren't — omit it.
    */
   input_references?: VideoInputReference[];
+  /**
+   * Model-specific passthrough. `camera_fixed` (boolean) is real — verified
+   * empirically — but only valid in image-to-video (i.e. with a reference
+   * attached); sending it in pure text-to-video is rejected.
+   */
+  extra_body?: Record<string, unknown>;
 }
 
 /** POST /videos/generations */

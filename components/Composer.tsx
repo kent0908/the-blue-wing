@@ -15,11 +15,11 @@ import {
   IconCheck,
   IconPlus,
   IconSparkle,
-  IconSettings,
 } from "./Icons";
 import { DEFAULT_SETTINGS, MODE_LABELS, type GenSettings, type Mode, type ModelInfo } from "@/lib/types";
 import { estimateCost, formatUSD, creditsFromRateCard, type RateCardEntry } from "@/lib/pricing";
 import ImageParams from "./ImageParams";
+import AdvancedParams from "./AdvancedParams";
 import {
   IMAGE_MODELS,
   getImageModel,
@@ -84,6 +84,8 @@ export default function Composer({
     imagePayload?: Record<string, unknown>;
     /** selected 素材 asset ids — video mode only (image mode folds these into imagePayload) */
     assetIds?: number[];
+    /** model-specific passthrough — video mode only (e.g. { camera_fixed: true }) */
+    extraBody?: Record<string, unknown>;
   }) => void;
   busy: boolean;
   /** model id from ?model= — pre-selects the model when it matches the mode */
@@ -117,6 +119,10 @@ export default function Composer({
   /* ---- @mention: type "@" in the prompt to pick a reference asset inline ---- */
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+
+  /* ---- advanced settings (verified real params only — see AdvancedParams.tsx) ---- */
+  const [moderation, setModeration] = useState("auto");
+  const [cameraFixed, setCameraFixed] = useState(false);
 
   // Image mode: fixed MAX_REF_IMAGES cap, gated by the model's family.
   // Video mode: only Seedance models support this on SIRAYA, and the cap
@@ -255,6 +261,10 @@ export default function Composer({
   const canUseRefs =
     (mode === "image" && supportsRefImages(activeImageModel)) || (mode === "video" && refCap > 0);
 
+  // camera_fixed only validates in image-to-video — verified empirically (a
+  // pure text-to-video request rejects it outright).
+  const cameraFixedAvailable = mode === "video" && canUseRefs && refs.length > 0;
+
   const mentionMatches = useMemo(() => {
     if (!mention || !library) return [];
     const q = mention.query.toLowerCase();
@@ -316,12 +326,17 @@ export default function Composer({
     const imagePayload = activeImageModel
       ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds)
       : undefined;
+    if (imagePayload && moderation !== "auto") imagePayload.moderation = moderation;
+
+    const extraBody = cameraFixedAvailable && cameraFixed ? { camera_fixed: true } : undefined;
+
     onSubmit({
       prompt: finalPrompt,
       model,
       settings,
       imagePayload,
       assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
+      extraBody: mode === "video" ? extraBody : undefined,
     });
     setPrompt("");
     setRefs([]);
@@ -611,9 +626,14 @@ export default function Composer({
           <SettingsPopover mode={mode} settings={settings} onChange={setSettings} />
         )}
 
-        <button type="button" aria-label="進階" className="bw-chip !px-2.5">
-          <IconSettings className="h-[15px] w-[15px]" />
-        </button>
+        <AdvancedParams
+          mode={mode}
+          moderation={moderation}
+          onModerationChange={setModeration}
+          cameraFixed={cameraFixed}
+          onCameraFixedChange={setCameraFixed}
+          cameraFixedAvailable={cameraFixedAvailable}
+        />
 
         <div className="ml-auto flex items-center gap-3">
           <span className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="依模型費率預估，實際費用以回應中的 usage 為準">

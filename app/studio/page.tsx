@@ -170,12 +170,14 @@ function StudioInner() {
     settings,
     imagePayload,
     assetIds,
+    extraBody,
   }: {
     prompt: string;
     model: string;
     settings: GenSettings;
     imagePayload?: Record<string, unknown>;
     assetIds?: number[];
+    extraBody?: Record<string, unknown>;
   }) => {
     setError(null);
     setErrorCta(null);
@@ -198,6 +200,7 @@ function StudioInner() {
             resolution: settings.resolution,
             ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
             ...(assetIds?.length ? { assetIds } : {}),
+            ...(extraBody ? { extra_body: extraBody } : {}),
           }),
         });
         const json = await readJson(res);
