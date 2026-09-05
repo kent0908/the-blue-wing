@@ -254,6 +254,21 @@ export const IconDownload = (p: P) => (
   </svg>
 );
 
+export const IconLock = (p: P) => (
+  <svg viewBox="0 0 24 24" {...stroke} className={s(p)}>
+    <rect x="5" y="10.5" width="14" height="9" rx="2.2" />
+    <path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7" strokeLinecap="round" />
+  </svg>
+);
+
+export const IconMic = (p: P) => (
+  <svg viewBox="0 0 24 24" {...stroke} className={s(p)}>
+    <rect x="9" y="3.5" width="6" height="11" rx="3" />
+    <path d="M5.5 12a6.5 6.5 0 0 0 13 0" strokeLinecap="round" />
+    <path d="M12 18.5V21M9 21h6" strokeLinecap="round" />
+  </svg>
+);
+
 export const IconInstagram = (p: P) => (
   <svg viewBox="0 0 24 24" {...stroke} className={s(p)}>
     <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
