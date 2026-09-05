@@ -45,7 +45,10 @@ const GROUP_B: Item[] = [
   { href: "/canvas", label: "智慧畫布", icon: IconCanvas, badge: { text: "NEW", tone: "new" } },
 ];
 
-const GROUP_C: Item[] = [{ href: "/assets", label: "資產庫", icon: IconAssets }];
+const GROUP_C: Item[] = [
+  { href: "/assets", label: "資產庫", icon: IconAssets },
+  { href: "/companions", label: "陪聊角色", icon: IconChat, badge: { text: "NEW", tone: "new" } },
+];
 
 function BadgeTag({ badge }: { badge: Badge }) {
   return (

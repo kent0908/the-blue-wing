@@ -41,6 +41,17 @@ export async function recordGeneration(userId: number, g: NewGeneration): Promis
   }
 }
 
+/** Whether this exact url was already recorded as one of the user's own
+ *  generations — used to confirm a "record this as a character scene"
+ *  request actually points at something the user paid for via /api/images
+ *  or /api/videos, rather than an arbitrary client-supplied url. */
+export async function generationExistsForUrl(userId: number, url: string): Promise<boolean> {
+  const { rows } = await sql<{ found: boolean }>`
+    select exists(select 1 from generations where user_id = ${userId} and url = ${url}) as found
+  `;
+  return !!rows[0]?.found;
+}
+
 export async function listGenerations(userId: number, limit = 60): Promise<GenerationRow[]> {
   const { rows } = await sql<GenerationRow>`
     select id, kind, model, prompt, url, text_content, created_at
