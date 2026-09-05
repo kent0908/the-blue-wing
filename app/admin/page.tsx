@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import AdminCharts from "./Charts";
 import AdminTabs from "./AdminTabs";
 import { PLANS } from "@/lib/plans";
+import { CREDIT_PACKS } from "@/lib/creditPacks";
 
 interface AdminUser {
   id: number;
@@ -47,6 +48,8 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
 const REASON_LABEL: Record<string, string> = {
   admin_grant: "管理員加點",
   plan_grant: "方案發點",
+  credit_pack: "加購點數包",
+  daily_free: "免費方案每日發點",
   image: "圖片生成",
   video: "影片生成",
   video_refund: "影片失敗退點",
@@ -186,6 +189,18 @@ export default function AdminPage() {
     act(u.id, { action: "grant_credits", amount, note });
   };
 
+  const grantPack = (u: AdminUser) => {
+    const options = CREDIT_PACKS.map((p) => `${p.code} — ${p.credits.toLocaleString()} 點 / $${p.priceUSD}`).join("\n");
+    const raw = prompt(`要給 ${u.email} 加購哪個點數包？（輸入代碼，兩年內有效）\n${options}`, CREDIT_PACKS[0].code);
+    if (!raw) return;
+    const pack = CREDIT_PACKS.find((p) => p.code === raw.trim());
+    if (!pack) {
+      alert("找不到這個點數包代碼");
+      return;
+    }
+    act(u.id, { action: "grant_pack", pack_code: pack.code });
+  };
+
   const resetFilters = () => {
     setPage(1);
     setQ("");
@@ -287,6 +302,7 @@ export default function AdminPage() {
                     ledgerLoading={ledgerLoading && expandedId === u.id}
                     onToggle={() => toggleExpand(u.id)}
                     onGrant={() => grant(u)}
+                    onGrantPack={() => grantPack(u)}
                     onAct={(body) => act(u.id, body)}
                   />
                 ))}
@@ -330,6 +346,7 @@ function FragmentRow({
   ledgerLoading,
   onToggle,
   onGrant,
+  onGrantPack,
   onAct,
 }: {
   u: AdminUser;
@@ -339,6 +356,7 @@ function FragmentRow({
   ledgerLoading: boolean;
   onToggle: () => void;
   onGrant: () => void;
+  onGrantPack: () => void;
   onAct: (body: Record<string, unknown>) => void;
 }) {
   return (
@@ -382,6 +400,7 @@ function FragmentRow({
         <td className="px-3 py-2">
           <div className="flex flex-wrap gap-1.5">
             <button onClick={onGrant} disabled={busy} className="rounded bg-[#242424] px-2 py-1 text-[11.5px] hover:bg-[#2e2e2e]">加/扣點</button>
+            <button onClick={onGrantPack} disabled={busy} className="rounded bg-[#242424] px-2 py-1 text-[11.5px] hover:bg-[#2e2e2e]">加購點數包</button>
             <button
               onClick={() => onAct({ action: "set_status", status: u.status === "banned" ? "active" : "banned" })}
               disabled={busy}

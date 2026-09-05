@@ -51,6 +51,20 @@ create table if not exists credit_ledger (
 );
 create index if not exists ledger_user_idx on credit_ledger(user_id, created_at desc);
 
+-- Expiring credits: monthly plan grants stop counting once the next renewal
+-- date passes (so "unused monthly credits don't carry over" falls out of a
+-- plain balance query, no separate reset job needed), and purchased credit
+-- packs get a real 2-year expiry instead of being permanent. NULL = never
+-- expires (admin goodwill grants, spends, refunds).
+alter table credit_ledger add column if not exists expires_at timestamptz;
+create index if not exists ledger_expiry_idx on credit_ledger(user_id, expires_at);
+
+-- Dedupes the once-a-day free-tier grant the same way generations dedupes a
+-- video job's ref — `ref` holds that day's date (YYYY-MM-DD) for
+-- reason='daily_free' rows only, so a retried/concurrent grant is a no-op.
+create unique index if not exists credit_ledger_daily_free_uidx
+  on credit_ledger(user_id, ref) where reason = 'daily_free';
+
 -- per-model credit rate card (single source of truth for pricing). Seeded by
 -- scripts/seed-rates.mjs; edited from /admin. credits = per image / per second
 -- of video / per 1k output tokens depending on modality.

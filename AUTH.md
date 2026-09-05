@@ -57,10 +57,17 @@ MAIL_FROM      = The Blue Wing <noreply@你的網域>
 
 ## 點數
 
-- 圖片：約 10–14 點／張（Seedream 4.5 / 5.0、gpt-image、Gemini 3 Pro 較貴）
-- 影片：約 50–70 點／秒，送出時先扣，若 render 失敗會自動退點
+- 每個點數對外定價 $0.01，所有費率都以「BytePlus 實際成本 × 至少 3–4 倍」回推，細節見
+  `lib/rateCard.ts` 開頭的註解
+- 圖片：約 10–60 點／張，依模型而定（Seedream 系列 10–36，GPT Image 2 / Gemini 較貴）
+- 影片：480p 基準約 4–42 點／秒，`VIDEO_RESOLUTION_MULTIPLIER`（`lib/rateCard.ts`）依解析度往上乘
+  （720p ×2.25、1080p ×5.5、4K ×11）— BytePlus 的真實成本在高解析度會跳很多，單一固定費率撐不住每個解析度都有
+  3 倍利潤，所以拆成「基準費率 × 解析度倍率」
 - 文字：約 2–4 點／次
-- 費率定義在 `lib/credits.ts` 的 `creditCost()`，方案點數在 `lib/plans.ts`
+- 免費方案：每天 10 點，當天沒用完不會累積（`ensureDailyFreeCredits()`，`lib/credits.ts`）
+- 訂閱方案的點數在續訂時重新發放、到下次續訂日就到期（不會累積到下個月）；加購的點數包從加購當天起兩年內有效
+  （`credit_ledger.expires_at`，`getBalance()` 只算未過期的）
+- 費率定義在 `lib/credits.ts`／`lib/rateCard.ts`，方案點數在 `lib/plans.ts`，點數包在 `lib/creditPacks.ts`
 
 生成 API（`/api/images`、`/api/videos`、`/api/chat`）現在都需要登入 + 點數足夠，
 否則回 401 / 402，前端會顯示「前往登入 / 查看方案」按鈕。

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CREDIT_PACKS } from "@/lib/creditPacks";
 
 interface Plan {
   code: string;
@@ -29,6 +30,8 @@ interface AccountData {
 const REASON_LABEL: Record<string, string> = {
   admin_grant: "管理員加點",
   plan_grant: "方案發點",
+  credit_pack: "加購點數包",
+  daily_free: "免費方案每日發點",
   image: "圖片生成",
   video: "影片生成",
   video_refund: "影片失敗退點",
@@ -167,7 +170,9 @@ export default function AccountPage() {
           <div className="rounded-2xl border border-[#262626] bg-[#141414] p-5">
             <div className="text-[12px] text-[#8a8a8a]">目前點數</div>
             <div className="mt-1 text-[30px] font-semibold text-[#7ff0cd]">{data.credits.toLocaleString()}</div>
-            <div className="mt-1 text-[11.5px] text-[#6d6d6d]">圖片約 10–14 點／張，影片約 50–70 點／秒</div>
+            <div className="mt-1 text-[11.5px] text-[#6d6d6d]">
+              圖片約 10–60 點／張；影片約 4–42 點／秒（480p，依模型而定），解析度越高倍率越高（720p ×2.25、1080p ×5.5）
+            </div>
           </div>
           <div className="rounded-2xl border border-[#262626] bg-[#141414] p-5">
             <div className="text-[12px] text-[#8a8a8a]">目前方案</div>
@@ -196,12 +201,27 @@ export default function AccountPage() {
               <div className="text-[14px] font-medium">{p.name}</div>
               <div className="mt-1 text-[18px] font-semibold">
                 {p.priceUSD === 0 ? "免費" : `$${p.priceUSD}`}
-                <span className="text-[11px] text-[#6d6d6d]"> / 月</span>
+                {p.priceUSD > 0 && <span className="text-[11px] text-[#6d6d6d]"> / 月</span>}
               </div>
               <div className="mt-1 text-[11.5px] text-[#8a8a8a]">{p.blurb}</div>
               {p.code === data.plan.code && (
                 <div className="mt-2 text-[11px] text-[#4fd1c5]">目前方案</div>
               )}
+            </div>
+          ))}
+        </div>
+
+        <h2 className="mt-8 text-[15px] font-semibold">加購點數包</h2>
+        <p className="mt-1 text-[12px] text-[#8a8a8a]">
+          一次性加購，跟訂閱方案的點數分開算——訂閱點數每月重新發放、沒用完不會累積，加購的點數包則從加購當天起
+          兩年內都能用。金流開放前一樣請聯絡管理員開通。
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {CREDIT_PACKS.map((pack) => (
+            <div key={pack.code} className="rounded-xl border border-[#262626] bg-[#141414] p-4">
+              <div className="text-[18px] font-semibold">{pack.credits.toLocaleString()} <span className="text-[11px] font-normal text-[#6d6d6d]">點</span></div>
+              <div className="mt-1 text-[14px] font-medium text-[#7ff0cd]">${pack.priceUSD}</div>
+              <div className="mt-1 text-[11px] text-[#6d6d6d]">兩年內有效</div>
             </div>
           ))}
         </div>

@@ -149,7 +149,7 @@ export function creditsFromRateCard(
 /** Classify a model id into a modality using its id and SIRAYA's model families. */
 export function modalityOf(modelId: string): Modality {
   const id = modelId.toLowerCase();
-  if (/veo|sora|seedance|video|wan|kling|hailuo/.test(id)) return "video";
+  if (/veo|sora|seedance|video|wan|kling|hailuo|happyhorse/.test(id)) return "video";
   if (/image|imagen|seedream|nano-banana|flux|dall/.test(id)) return "image";
   return "text";
 }

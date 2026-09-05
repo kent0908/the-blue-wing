@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       kind: "video",
       model: String(body.model),
       seconds: Number(body.seconds) || 5,
+      resolution: String(body.resolution || "480p"),
     });
     const balance = await getBalance(user.id);
     if (balance < cost) {

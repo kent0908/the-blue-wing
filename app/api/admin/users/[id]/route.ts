@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/apiauth";
 import { sql, toPublicUser, type UserRow } from "@/lib/db";
 import { addCredits, getBalance } from "@/lib/credits";
 import { getPlan } from "@/lib/plans";
+import { getCreditPack, CREDIT_PACK_EXPIRY_DAYS } from "@/lib/creditPacks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
  *   { action: "set_role",   role: "user" | "admin" }
  *   { action: "set_status", status: "active" | "banned" }
  *   { action: "set_plan",   plan_code: string }   // grants that plan's monthly credits now
+ *   { action: "grant_pack", pack_code: string }   // grants a credit pack (lib/creditPacks.ts), 2-year expiry
  */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const r = await requireAdmin(req);
@@ -63,9 +65,20 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         const renews = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
         await sql`update users set plan_code = ${plan.code}, plan_renews_at = ${renews} where id = ${userId}`;
         if (plan.monthlyCredits > 0) {
-          await addCredits(userId, plan.monthlyCredits, "plan_grant", `${plan.code} by:${admin.email}`);
+          // Expires at the same moment the next renewal is due — that's what
+          // makes "unused monthly credits don't carry over" real rather than
+          // a description: once this date passes, getBalance()'s expiry
+          // filter just stops counting whatever's left of this grant.
+          await addCredits(userId, plan.monthlyCredits, "plan_grant", `${plan.code} by:${admin.email}`, renews);
         }
       }
+    } else if (action === "grant_pack") {
+      const pack = getCreditPack(String(body.pack_code));
+      if (!pack) {
+        return NextResponse.json({ error: { message: "找不到這個點數包代碼", code: "bad_pack" } }, { status: 400 });
+      }
+      const expiresAt = new Date(Date.now() + CREDIT_PACK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      await addCredits(userId, pack.credits, "credit_pack", `${pack.code} by:${admin.email}`, expiresAt);
     } else {
       return NextResponse.json({ error: { message: "未知的操作", code: "bad_action" } }, { status: 400 });
     }

@@ -3,7 +3,7 @@
  * generation costs. Rows live in `model_rates` (seeded by scripts/seed-rates.mjs,
  * edited from /admin). `credits` means:
  *   image  → credits per generated image
- *   video  → credits per second of video
+ *   video  → credits per second of video AT 480p (see VIDEO_RESOLUTION_MULTIPLIER)
  *   text   → flat credits per message (a token component is added on top)
  *
  * Server-only: every export here touches the DB or is called from route handlers.
@@ -11,6 +11,29 @@
 import { sql } from "./db";
 
 export type Modality = "image" | "video" | "text";
+
+/**
+ * Real BytePlus per-second cost does NOT scale linearly with resolution — it
+ * roughly doubles+ at each step (verified against BytePlus's own published
+ * per-model pricing tables for the Seedance family, both the 2.0 and 2.5
+ * lines land on close to the same ratios: 480p→720p→1080p→4K costs scale by
+ * roughly ×1, ×2.25, ×5.5, ×11). A single flat credits-per-second rate can't
+ * hold the same margin at every resolution — at 1080p specifically, a rate
+ * sized for 480p would charge LESS than BytePlus actually bills for it. This
+ * multiplier is applied on top of the model's base (480p) rate so the
+ * margin built into that base rate holds at every resolution, not just the
+ * default one.
+ */
+export const VIDEO_RESOLUTION_MULTIPLIER: Record<string, number> = {
+  "480p": 1,
+  "720p": 2.25,
+  "1080p": 5.5,
+  "4k": 11,
+};
+
+export function resolutionMultiplier(resolution?: string): number {
+  return VIDEO_RESOLUTION_MULTIPLIER[(resolution || "480p").toLowerCase()] ?? 1;
+}
 
 export interface ModelRate {
   modelId: string;
@@ -40,10 +63,15 @@ export function creditCostFromRate(input: {
   imageCount?: number;
   seconds?: number;
   maxTokens?: number;
+  /** video only — "480p" | "720p" | "1080p" | "4k" */
+  resolution?: string;
 }): number {
   const per = Math.max(0, Math.trunc(input.credits));
   if (input.modality === "image") return Math.max(1, per * Math.max(1, Math.trunc(input.imageCount ?? 1)));
-  if (input.modality === "video") return Math.max(1, per * Math.max(1, Math.ceil(input.seconds ?? 5)));
+  if (input.modality === "video") {
+    const perSecondAtRes = Math.ceil(per * resolutionMultiplier(input.resolution));
+    return Math.max(1, perSecondAtRes * Math.max(1, Math.ceil(input.seconds ?? 5)));
+  }
   // text: flat per-message credits + a token component
   return Math.max(1, per + Math.ceil((input.maxTokens ?? 1024) / 2000));
 }

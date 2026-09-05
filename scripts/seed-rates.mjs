@@ -40,8 +40,13 @@ const BASE = process.env.SIRAYA_BASE_URL || "https://llm.siraya.ai/v1";
 
 function classify(id) {
   const s = id.toLowerCase();
-  const isVideo = /veo|sora|seedance|kling|hailuo|wan|happyhorse|video/.test(s);
-  const isImage = /image|imagen|seedream|nano-banana|flux|dall|dola-seed/.test(s);
+  const isVideo = /veo|sora|seedance|kling|hailuo|wan|happyhorse|video/.test(s); // already includes happyhorse
+  // NOTE: was `dola-seed` (too broad) — that also matched the "Dola-Seed-2.x"
+  // *chat* models (not image), which seeded them into model_rates as image
+  // rows. Fixed to require "seedream" specifically, matching modalityOf() in
+  // lib/pricing.ts (the function actually used for live classification —
+  // this script's own copy had drifted).
+  const isImage = /image|imagen|seedream|nano-banana|flux|dall/.test(s);
   if (isVideo) {
     if (s.includes("veo")) return { modality: "video", credits: 70 };
     if (s.includes("seedance-2.5")) return { modality: "video", credits: 55 };
