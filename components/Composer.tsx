@@ -23,6 +23,7 @@ import AdvancedParams from "./AdvancedParams";
 import {
   IMAGE_MODELS,
   getImageModel,
+  displayModelName,
   defaultValues,
   buildImagePayload,
   supportsRefImages,
@@ -628,7 +629,7 @@ export default function Composer({
           trigger={(open) => (
             <>
               <IconModel className="h-[15px] w-[15px]" />
-              {loadingModels ? "載入模型…" : model || "無可用模型"}
+              {loadingModels ? "載入模型…" : model ? getImageModel(model)?.name ?? displayModelName(model) : "無可用模型"}
               <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
             </>
           )}
@@ -663,12 +664,7 @@ export default function Composer({
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#242424]">
                     <IconModel className="h-[15px] w-[15px]" />
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13.5px]">
-                      {getImageModel(m.id)?.name ?? m.id}
-                    </span>
-                    <span className="block truncate text-[11.5px] text-[#7d7d7d]">{m.id}</span>
-                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13.5px]">{getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
                   {m.id === model && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
                 </button>
               ))}

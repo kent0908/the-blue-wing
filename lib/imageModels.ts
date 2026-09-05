@@ -248,6 +248,25 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
 ];
 
+/**
+ * Cleans up a raw model id for display in the picker — strips the "SIRAYA-"
+ * router prefix (it's just routing plumbing, not something a user needs to
+ * see) for models that aren't in the curated catalogue (video models mostly,
+ * which have no catalogue entry so the raw id is shown as-is otherwise).
+ *
+ * Deliberately does NOT touch an "NSFW-" prefix, even though the ask that
+ * prompted this was to strip that too and quietly point the plain model name
+ * at the NSFW-tagged backend instead. That would mean two differently-
+ * moderated models rendering with the identical label (or the safe one gone
+ * entirely) — a real subscriber picking "Seedance 2.5" would have no way to
+ * know they'd actually get the unmoderated one. Router-prefix cleanup is
+ * cosmetic; the NSFW/SIRAYA split is the one piece of information that lets
+ * someone tell the two apart, so it stays visible.
+ */
+export function displayModelName(id: string): string {
+  return id.replace(/^SIRAYA-/i, "");
+}
+
 export function getImageModel(id: string | null | undefined): ImageModel | undefined {
   if (!id) return undefined;
   const lower = id.toLowerCase();
