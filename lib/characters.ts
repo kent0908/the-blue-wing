@@ -201,6 +201,71 @@ export async function updateMemorySummary(id: number, summary: string): Promise<
   await sql`update characters set memory_summary = ${summary} where id = ${id}`;
 }
 
+/* ---- 解鎖場景（高階方案專屬）---- */
+
+export interface CharacterSceneRow {
+  id: number;
+  character_id: number;
+  kind: "image" | "video";
+  level_index: number;
+  url: string;
+  prompt: string;
+  model: string;
+  created_at: string;
+}
+
+export interface PublicScene {
+  id: number;
+  kind: "image" | "video";
+  levelIndex: number;
+  url: string;
+  createdAt: string;
+}
+
+export function toPublicScene(s: CharacterSceneRow): PublicScene {
+  return { id: s.id, kind: s.kind, levelIndex: s.level_index, url: s.url, createdAt: s.created_at };
+}
+
+export async function listScenes(characterId: number): Promise<CharacterSceneRow[]> {
+  const { rows } = await sql<CharacterSceneRow>`
+    select id, character_id, kind, level_index, url, prompt, model, created_at
+    from character_scenes
+    where character_id = ${characterId}
+    order by created_at desc
+  `;
+  return rows;
+}
+
+export async function addScene(
+  characterId: number,
+  userId: number,
+  input: { kind: "image" | "video"; levelIndex: number; url: string; prompt: string; model: string }
+): Promise<CharacterSceneRow> {
+  const { rows } = await sql<CharacterSceneRow>`
+    insert into character_scenes (character_id, user_id, kind, level_index, url, prompt, model)
+    values (${characterId}, ${userId}, ${input.kind}, ${input.levelIndex}, ${input.url}, ${input.prompt}, ${input.model})
+    returning id, character_id, kind, level_index, url, prompt, model, created_at
+  `;
+  return rows[0];
+}
+
+/** Prompt for a milestone scene — built from the character's own persona and
+ *  its current relationship stage, not the raw chat log, so it reads as a
+ *  portrait/moment of the character rather than a screenshot of a message. */
+export function buildScenePrompt(character: CharacterRow, kind: "image" | "video"): string {
+  const level = levelInfo(character.affection);
+  const parts = [
+    character.personality.trim() || `一個名叫${character.name}的角色`,
+    `此刻的氛圍：${level.unlock}`,
+  ];
+  if (kind === "video") {
+    parts.push("短短幾秒的自然動作與表情變化，畫面電影感，燈光柔和");
+  } else {
+    parts.push("精緻插畫風格，構圖以角色為主體，光影柔和有情感張力");
+  }
+  return parts.join("，");
+}
+
 /* ---- chat history ---- */
 
 export interface CharacterMessageRow {

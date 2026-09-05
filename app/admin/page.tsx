@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminCharts from "./Charts";
 import AdminTabs from "./AdminTabs";
+import { PLANS } from "@/lib/plans";
 
 interface AdminUser {
   id: number;
@@ -31,7 +32,9 @@ interface Stats {
   credits: { granted: number; spent: number; outstanding: number };
 }
 
-const PLAN_CODES = ["free", "starter", "pro", "studio"];
+// Derived from lib/plans.ts (single source of truth) so this never drifts
+// out of sync with the actual plan codes admins can set.
+const PLAN_CODES = PLANS.map((p) => p.code);
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
   { value: "created_desc", label: "最新註冊" },

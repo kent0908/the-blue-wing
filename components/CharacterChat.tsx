@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconChevronLeft, IconChat, IconTrash, IconClose, IconArrowRight } from "./Icons";
+import { IconChevronLeft, IconChat, IconTrash, IconClose, IconArrowRight, IconImage } from "./Icons";
 import PersonaEditor from "./PersonaEditor";
+import CharacterScenes from "./CharacterScenes";
 
 export interface CharacterLevel {
   name: string;
@@ -51,6 +52,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [personaOpen, setPersonaOpen] = useState(false);
+  const [scenesOpen, setScenesOpen] = useState(false);
   const [toast, setToast] = useState<AffectionToast | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -129,68 +131,82 @@ export default function CharacterChat({ character: initial }: { character: Chara
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b border-[#1c1c1c] px-5 py-3">
-        <Link href="/companions" className="text-[#8a8a8a] transition-colors hover:text-white">
-          <IconChevronLeft className="h-5 w-5" />
-        </Link>
-        {character.avatarSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
-          <img src={character.avatarSrc} alt="" className="h-9 w-9 rounded-full object-cover" />
-        ) : (
-          <div className="grid h-9 w-9 place-items-center rounded-full bg-[#1c1c1c] text-[#5c5c5c]">
-            <IconChat className="h-4 w-4" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-[14.5px] font-medium">{character.name}</span>
-            {character.level && (
-              <span className="shrink-0 rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10.5px] text-[#7ff0cd]" title={character.level.unlock}>
-                {character.level.name}
-              </span>
-            )}
-          </div>
-          {character.level && (
-            <div className="mt-1 flex items-center gap-1.5">
-              <div className="h-1 w-24 overflow-hidden rounded-full bg-[#232323]">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5]"
-                  style={{ width: `${character.level.progressPct}%` }}
-                />
-              </div>
-              <span className="text-[10px] text-[#6d6d6d]">
-                {character.level.nextMin === null ? "已達最高階段" : `好感度 ${character.affection ?? 0}`}
-              </span>
+    <div className="flex h-full min-h-0">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-center gap-3 border-b border-[#1c1c1c] px-5 py-3">
+          <Link href="/companions" className="text-[#8a8a8a] transition-colors hover:text-white">
+            <IconChevronLeft className="h-5 w-5" />
+          </Link>
+          {character.avatarSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
+            <img src={character.avatarSrc} alt="" className="h-9 w-9 rounded-full object-cover" />
+          ) : (
+            <div className="grid h-9 w-9 place-items-center rounded-full bg-[#1c1c1c] text-[#5c5c5c]">
+              <IconChat className="h-4 w-4" />
             </div>
           )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setPersonaOpen(true)}
-          className="whitespace-nowrap rounded-full border border-[#3a3a3a] px-3 py-1.5 text-[12px] text-[#c9c9c9] transition-colors hover:border-[#555] hover:text-white"
-        >
-          我的身份
-        </button>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="rounded-lg p-2 text-[#8a8a8a] transition-colors hover:text-white"
-          aria-label="編輯角色"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.6}>
-            <path d="M15.5 4.5 19.5 8.5 8 20H4v-4z" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={remove}
-          className="rounded-lg p-2 text-[#8a8a8a] transition-colors hover:text-[#ff9b9b]"
-          aria-label="刪除角色"
-        >
-          <IconTrash className="h-4 w-4" />
-        </button>
-      </header>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[14.5px] font-medium">{character.name}</span>
+              {character.level && (
+                <span className="shrink-0 rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10.5px] text-[#7ff0cd]" title={character.level.unlock}>
+                  {character.level.name}
+                </span>
+              )}
+            </div>
+            {character.level && (
+              <div className="mt-1 flex items-center gap-1.5">
+                <div className="h-1 w-24 overflow-hidden rounded-full bg-[#232323]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5]"
+                    style={{ width: `${character.level.progressPct}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-[#6d6d6d]">
+                  {character.level.nextMin === null ? "已達最高階段" : `好感度 ${character.affection ?? 0}`}
+                </span>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setScenesOpen((v) => !v)}
+            className={[
+              "whitespace-nowrap rounded-full border px-3 py-1.5 text-[12px] transition-colors",
+              scenesOpen ? "border-[#7ff0cd] text-[#7ff0cd]" : "border-[#3a3a3a] text-[#c9c9c9] hover:border-[#555] hover:text-white",
+            ].join(" ")}
+          >
+            <span className="flex items-center gap-1.5">
+              <IconImage className="h-3.5 w-3.5" />
+              場景
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPersonaOpen(true)}
+            className="whitespace-nowrap rounded-full border border-[#3a3a3a] px-3 py-1.5 text-[12px] text-[#c9c9c9] transition-colors hover:border-[#555] hover:text-white"
+          >
+            我的身份
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="rounded-lg p-2 text-[#8a8a8a] transition-colors hover:text-white"
+            aria-label="編輯角色"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.6}>
+              <path d="M15.5 4.5 19.5 8.5 8 20H4v-4z" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={remove}
+            className="rounded-lg p-2 text-[#8a8a8a] transition-colors hover:text-[#ff9b9b]"
+            aria-label="刪除角色"
+          >
+            <IconTrash className="h-4 w-4" />
+          </button>
+        </header>
 
       {toast && (
         <div
@@ -296,6 +312,9 @@ export default function CharacterChat({ character: initial }: { character: Chara
         />
       )}
       {personaOpen && <PersonaEditor onClose={() => setPersonaOpen(false)} />}
+      </div>
+
+      {scenesOpen && <CharacterScenes characterId={character.id} onClose={() => setScenesOpen(false)} />}
     </div>
   );
 }

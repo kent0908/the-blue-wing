@@ -143,6 +143,22 @@ alter table characters add column if not exists turn_count integer not null defa
 -- 不會被固定視窗大小限制住，prompt 也不會隨對話變長而無限膨脹。
 alter table characters add column if not exists memory_summary text not null default '';
 
+-- 陪聊角色的「解鎖場景」——高階方案專屬：達到某個好感度階段後，可以生成一張
+-- 專屬圖片或一段專屬影片留作紀念。生成本身走既有的 /api/images、/api/videos
+-- （額度、模型都一樣），這張表只負責記錄「這是哪個角色、哪個階段解鎖的」。
+create table if not exists character_scenes (
+  id           bigint generated always as identity primary key,
+  character_id bigint not null references characters(id) on delete cascade,
+  user_id      bigint not null references users(id) on delete cascade,
+  kind         text not null check (kind in ('image','video')),
+  level_index  integer not null default 0,
+  url          text not null,
+  prompt       text not null,
+  model        text not null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists character_scenes_char_idx on character_scenes(character_id, created_at desc);
+
 -- 每個角色的對話紀錄，跟「生成紀錄」是分開的概念——這是持續的陪聊串，不是
 -- 一次性的生成結果。
 create table if not exists character_messages (
