@@ -8,7 +8,6 @@ import {
   IconModel,
   IconVideo,
   IconImage,
-  IconChat,
   IconAudio,
   IconAvatar,
   IconExpand,
@@ -32,6 +31,7 @@ import {
   type ImageControlValues,
 } from "@/lib/imageModels";
 import { maxRefsForVideoModel } from "@/lib/videoModels";
+import { AUDIO_MODELS } from "@/lib/audioModels";
 
 interface RefAsset {
   id: number;
@@ -49,10 +49,13 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// "多輪對話" (text mode) removed from the switcher — still a valid Mode value
+// under the hood (語音生成 shares its "text" modality/chat-completions
+// fallback — see modalityForMode below — and ResultItem.kind reuses "text"
+// for audio results too), just no longer reachable from the UI.
 const MODE_ITEMS: { id: Mode; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
   { id: "image", label: "智慧生圖", icon: IconImage },
   { id: "video", label: "智慧影片", icon: IconVideo },
-  { id: "text", label: "多輪對話", icon: IconChat },
   { id: "audio", label: "語音", icon: IconAudio },
 ];
 
@@ -207,6 +210,10 @@ export default function Composer({
   const modalityForMode = mode === "video" ? "video" : mode === "image" ? "image" : "text";
   const available = useMemo(() => {
     const live = models.filter((m) => m.modality === modalityForMode);
+    // 語音生成 has no real audio modality on SIRAYA (see lib/audioModels.ts) —
+    // it shares "text"'s ~80-model chat-completions list otherwise, which is
+    // exactly the "太雜" the curation here fixes.
+    if (mode === "audio") return live.filter((m) => AUDIO_MODELS.includes(m.id));
     if (modalityForMode !== "image") return live;
     // Merge the curated image catalogue so links to a specific model resolve
     // even before /api/models has loaded (and so it's pickable in the dropdown).
@@ -218,7 +225,7 @@ export default function Composer({
     }));
     const curatedIds = new Set(curated.map((m) => m.id.toLowerCase()));
     return [...curated, ...live.filter((m) => !curatedIds.has(m.id.toLowerCase()))];
-  }, [models, modalityForMode]);
+  }, [models, modalityForMode, mode]);
 
   useEffect(() => {
     if (!available.length || available.some((m) => m.id === model)) return;

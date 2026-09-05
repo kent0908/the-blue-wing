@@ -36,7 +36,6 @@ const GROUP_A: Item[] = [
   { href: "/studio?mode=video", label: "影片生成", icon: IconVideo, badge: { text: "HOT", tone: "hot" } },
   { href: "/agent", label: "Agent", icon: IconAgent, badge: { text: "NEW", tone: "new" } },
   { href: "/studio?mode=audio", label: "語音生成", icon: IconAudio },
-  { href: "/studio?mode=text", label: "多輪對話", icon: IconChat },
   { href: "/avatar", label: "數位人", icon: IconAvatar },
 ];
 
