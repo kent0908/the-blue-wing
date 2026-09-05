@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import CharacterGrid from "@/components/CharacterGrid";
 
 interface Asset {
   id: number;
@@ -23,6 +24,7 @@ function fmtSize(n: number) {
 
 export default function AssetsPage() {
   const router = useRouter();
+  const [tab, setTab] = useState<"assets" | "characters">("assets");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -108,11 +110,13 @@ export default function AssetsPage() {
     <div
       className="h-full overflow-y-auto"
       onDragOver={(e) => {
+        if (tab !== "assets") return;
         e.preventDefault();
         setDragOver(true);
       }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {
+        if (tab !== "assets") return;
         e.preventDefault();
         setDragOver(false);
         if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
@@ -121,9 +125,38 @@ export default function AssetsPage() {
       <div className="mx-auto max-w-[1000px] px-6 py-8">
         <h1 className="text-[22px] font-semibold tracking-tight">資產庫</h1>
         <p className="mt-1 text-[13px] text-[#8a8a8a]">
-          上傳你的素材圖片，之後可在這裡管理、複製連結。單檔上限 {MAX_MB} MB。
+          {tab === "assets"
+            ? `上傳你的素材圖片，之後可在這裡管理、複製連結。單檔上限 ${MAX_MB} MB。`
+            : "把生成好的圖片變成可以長期互動的陪聊角色。"}
         </p>
 
+        <div className="mt-4 flex items-center gap-1 border-b border-[#1e1e1e]">
+          <button
+            type="button"
+            onClick={() => setTab("assets")}
+            className={`px-1 pb-2.5 text-[13.5px] transition-colors ${
+              tab === "assets" ? "border-b-2 border-white text-white" : "border-b-2 border-transparent text-[#8a8a8a] hover:text-white"
+            }`}
+          >
+            素材
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("characters")}
+            className={`ml-4 px-1 pb-2.5 text-[13.5px] transition-colors ${
+              tab === "characters" ? "border-b-2 border-white text-white" : "border-b-2 border-transparent text-[#8a8a8a] hover:text-white"
+            }`}
+          >
+            陪聊角色
+          </button>
+        </div>
+
+        {tab === "characters" ? (
+          <div className="mt-6">
+            <CharacterGrid />
+          </div>
+        ) : (
+          <>
         {!configured && (
           <div className="mt-4 rounded-xl border border-[#3a2e18] bg-[#1a150c] px-4 py-3 text-[12.5px] text-[#f0c27f]">
             尚未設定素材儲存空間（Vercel Blob）。設定完成前無法上傳新素材。
@@ -216,6 +249,8 @@ export default function AssetsPage() {
               </div>
             ))}
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

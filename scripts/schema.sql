@@ -112,3 +112,38 @@ create table if not exists canvas_workflows (
   updated_at timestamptz not null default now()
 );
 create index if not exists canvas_workflows_user_idx on canvas_workflows(user_id, updated_at desc);
+
+-- 陪聊角色 IP：把資產庫裡的一張圖（通常是生成出來的圖片或數位人）綁成一個有
+-- 名字、有人設的角色，之後可以長期跟它聊天。avatar_asset_id 掉了(素材被刪)
+-- 就變成沒有頭像，角色本身還在。
+create table if not exists characters (
+  id              bigint generated always as identity primary key,
+  user_id         bigint not null references users(id) on delete cascade,
+  name            text not null,
+  avatar_asset_id bigint references assets(id) on delete set null,
+  personality     text not null default '',
+  model           text not null default 'deepseek-v4-flash-0731',
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists characters_user_idx on characters(user_id, updated_at desc);
+alter table characters alter column model set default 'deepseek-v4-flash-0731';
+
+-- 每個角色的對話紀錄，跟「生成紀錄」是分開的概念——這是持續的陪聊串，不是
+-- 一次性的生成結果。
+create table if not exists character_messages (
+  id           bigint generated always as identity primary key,
+  character_id bigint not null references characters(id) on delete cascade,
+  role         text not null check (role in ('user','assistant')),
+  content      text not null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists character_messages_char_idx on character_messages(character_id, created_at);
+
+-- 使用者自己的陪聊身分（跨所有角色共用一份，不是每個角色各存一份）。
+create table if not exists user_personas (
+  user_id    bigint primary key references users(id) on delete cascade,
+  name       text not null default '',
+  bio        text not null default '',
+  updated_at timestamptz not null default now()
+);
