@@ -6,12 +6,22 @@ import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconChat, IconTrash, IconClose, IconArrowRight } from "./Icons";
 import PersonaEditor from "./PersonaEditor";
 
+export interface CharacterLevel {
+  name: string;
+  unlock: string;
+  progressPct: number;
+  nextMin: number | null;
+}
+
 export interface CharacterData {
   id: number;
   name: string;
   avatarSrc: string | null;
   personality: string;
+  likes?: string;
   model?: string;
+  affection?: number;
+  level?: CharacterLevel;
 }
 
 interface Message {
@@ -24,6 +34,14 @@ interface Message {
   failed?: boolean;
 }
 
+interface AffectionToast {
+  id: number;
+  gain: number;
+  leveledUp: boolean;
+  levelName: string;
+  unlock: string;
+}
+
 export default function CharacterChat({ character: initial }: { character: CharacterData }) {
   const router = useRouter();
   const [character, setCharacter] = useState(initial);
@@ -33,6 +51,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [personaOpen, setPersonaOpen] = useState(false);
+  const [toast, setToast] = useState<AffectionToast | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,6 +64,12 @@ export default function CharacterChat({ character: initial }: { character: Chara
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), toast.leveledUp ? 5000 : 2200);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const send = async () => {
     const content = input.trim();
@@ -69,6 +94,25 @@ export default function CharacterChat({ character: initial }: { character: Chara
         ...(cur ?? []).map((m) => (m.id === optimisticId ? { ...m, pending: false } : m)),
         j.reply,
       ]);
+      if (j.affection) {
+        setCharacter((cur) => ({
+          ...cur,
+          affection: j.affection.value,
+          level: {
+            name: j.affection.level,
+            unlock: j.affection.unlock,
+            progressPct: j.affection.progressPct,
+            nextMin: j.affection.nextMin,
+          },
+        }));
+        setToast({
+          id: Date.now(),
+          gain: j.affection.gain,
+          leveledUp: j.affection.leveledUp,
+          levelName: j.affection.level,
+          unlock: j.affection.unlock,
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "傳送失敗");
       setMessages((cur) => (cur ?? []).map((m) => (m.id === optimisticId ? { ...m, pending: false, failed: true } : m)));
@@ -80,14 +124,14 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const remove = async () => {
     if (!confirm(`刪除角色「${character.name}」？聊天紀錄也會一起消失。`)) return;
     const res = await fetch(`/api/characters/${character.id}`, { method: "DELETE" });
-    if (res.ok) router.push("/assets");
+    if (res.ok) router.push("/companions");
     else alert("刪除失敗");
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 items-center gap-3 border-b border-[#1c1c1c] px-5 py-3">
-        <Link href="/assets" className="text-[#8a8a8a] transition-colors hover:text-white">
+        <Link href="/companions" className="text-[#8a8a8a] transition-colors hover:text-white">
           <IconChevronLeft className="h-5 w-5" />
         </Link>
         {character.avatarSrc ? (
@@ -99,8 +143,27 @@ export default function CharacterChat({ character: initial }: { character: Chara
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14.5px] font-medium">{character.name}</div>
-          <div className="truncate text-[11px] text-[#7d7d7d]">{character.model ?? "deepseek-v4-flash-0731"}</div>
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[14.5px] font-medium">{character.name}</span>
+            {character.level && (
+              <span className="shrink-0 rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10.5px] text-[#7ff0cd]" title={character.level.unlock}>
+                {character.level.name}
+              </span>
+            )}
+          </div>
+          {character.level && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <div className="h-1 w-24 overflow-hidden rounded-full bg-[#232323]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5]"
+                  style={{ width: `${character.level.progressPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-[#6d6d6d]">
+                {character.level.nextMin === null ? "已達最高階段" : `好感度 ${character.affection ?? 0}`}
+              </span>
+            </div>
+          )}
         </div>
         <button
           type="button"
@@ -128,6 +191,17 @@ export default function CharacterChat({ character: initial }: { character: Chara
           <IconTrash className="h-4 w-4" />
         </button>
       </header>
+
+      {toast && (
+        <div
+          className={[
+            "pointer-events-none absolute left-1/2 top-16 z-20 -translate-x-1/2 rounded-full px-4 py-2 text-[12.5px] font-medium shadow-lg transition-opacity",
+            toast.leveledUp ? "bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16]" : "bg-[#1c1c1c] text-[#7ff0cd]",
+          ].join(" ")}
+        >
+          {toast.leveledUp ? `🎉 好感度提升：${toast.levelName}！解鎖：${toast.unlock}` : `好感度 +${toast.gain}`}
+        </div>
+      )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-3">
@@ -243,6 +317,7 @@ function EditCharacterModal({
 }) {
   const [name, setName] = useState(character.name);
   const [personality, setPersonality] = useState(character.personality);
+  const [likes, setLikes] = useState(character.likes ?? "");
   const [assets, setAssets] = useState<AssetLite[] | null>(null);
   const [avatarAssetId, setAvatarAssetId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -264,7 +339,7 @@ function EditCharacterModal({
     setSaving(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = { name: trimmed, personality };
+      const body: Record<string, unknown> = { name: trimmed, personality, likes };
       if (avatarAssetId !== null) body.avatarAssetId = avatarAssetId;
       const res = await fetch(`/api/characters/${character.id}`, {
         method: "PATCH",
@@ -333,6 +408,17 @@ function EditCharacterModal({
             rows={3}
             maxLength={2000}
             className="w-full resize-none rounded-lg bg-[#1c1c1c] px-3 py-2 text-[13.5px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
+          />
+        </div>
+
+        <div className="mt-3">
+          <label className="mb-1.5 block text-[12px] text-[#a8a8a8]">喜好（用逗號分隔）</label>
+          <input
+            value={likes}
+            onChange={(e) => setLikes(e.target.value)}
+            placeholder="例如：電影, 音樂, 貓"
+            maxLength={200}
+            className="h-9 w-full rounded-lg bg-[#1c1c1c] px-3 text-[13.5px] text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
           />
         </div>
 

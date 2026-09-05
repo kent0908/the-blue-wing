@@ -11,6 +11,7 @@ interface Character {
   avatarSrc: string | null;
   personality: string;
   updatedAt: string;
+  level: { name: string; progressPct: number };
 }
 
 interface AssetLite {
@@ -75,7 +76,7 @@ export default function CharacterGrid() {
           <button
             key={c.id}
             type="button"
-            onClick={() => router.push(`/assets/characters/${c.id}`)}
+            onClick={() => router.push(`/companions/${c.id}`)}
             className="group relative flex aspect-square flex-col overflow-hidden rounded-xl border border-[#262626] bg-[#111] text-left"
           >
             {c.avatarSrc ? (
@@ -91,6 +92,9 @@ export default function CharacterGrid() {
               <span className="truncate text-[11px] text-[#7d7d7d]">
                 {c.personality || "還沒設定人設"}
               </span>
+              <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10px] text-[#7ff0cd]">
+                {c.level.name}
+              </span>
             </div>
           </button>
         ))}
@@ -103,7 +107,7 @@ export default function CharacterGrid() {
       {creating && (
         <CreateCharacterModal
           onClose={() => setCreating(false)}
-          onCreated={(id) => router.push(`/assets/characters/${id}`)}
+          onCreated={(id) => router.push(`/companions/${id}`)}
         />
       )}
       {personaOpen && <PersonaEditor onClose={() => setPersonaOpen(false)} />}
@@ -114,6 +118,7 @@ export default function CharacterGrid() {
 function CreateCharacterModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
   const [name, setName] = useState("");
   const [personality, setPersonality] = useState("");
+  const [likes, setLikes] = useState("");
   const [assets, setAssets] = useState<AssetLite[] | null>(null);
   const [avatarAssetId, setAvatarAssetId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -138,7 +143,7 @@ function CreateCharacterModal({ onClose, onCreated }: { onClose: () => void; onC
       const res = await fetch("/api/characters", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed, personality, avatarAssetId }),
+        body: JSON.stringify({ name: trimmed, personality, likes, avatarAssetId }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error?.message || "建立失敗");
@@ -207,6 +212,18 @@ function CreateCharacterModal({ onClose, onCreated }: { onClose: () => void; onC
             maxLength={2000}
             className="w-full resize-none rounded-lg bg-[#1c1c1c] px-3 py-2 text-[13.5px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
           />
+        </div>
+
+        <div className="mt-3">
+          <label className="mb-1.5 block text-[12px] text-[#a8a8a8]">喜好（選填，用逗號分隔）</label>
+          <input
+            value={likes}
+            onChange={(e) => setLikes(e.target.value)}
+            placeholder="例如：電影, 音樂, 貓"
+            maxLength={200}
+            className="h-9 w-full rounded-lg bg-[#1c1c1c] px-3 text-[13.5px] text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
+          />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-[#6d6d6d]">聊到這些話題時，好感度會漲得比較快。</p>
         </div>
 
         {error && <p className="mt-3 text-[12px] text-[#ff9b9b]">{error}</p>}

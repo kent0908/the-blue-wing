@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_NAME = 40;
 const MAX_PERSONALITY = 2000;
+const MAX_LIKES = 200;
 
 /** GET /api/characters — the signed-in user's 陪聊角色, most recently chatted-with first. */
 export async function GET(req: NextRequest) {
@@ -28,10 +29,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: { message: "請幫角色取個名字", code: "missing_name" } }, { status: 400 });
   }
   const personality = String(body?.personality ?? "").trim().slice(0, MAX_PERSONALITY);
+  const likes = String(body?.likes ?? "").trim().slice(0, MAX_LIKES);
 
   // Only let the character point at an asset the caller actually owns.
   const avatarAssetId = await ownedAssetId(r.user.id, Number(body?.avatarAssetId) || null);
 
-  const row = await createCharacter(r.user.id, { name, avatarAssetId, personality });
+  const row = await createCharacter(r.user.id, { name, avatarAssetId, personality, likes });
   return NextResponse.json({ character: toPublicCharacter(row) }, { status: 201 });
 }

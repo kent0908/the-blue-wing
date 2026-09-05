@@ -15,7 +15,7 @@ export default function CharacterChatPage() {
     fetch(`/api/characters/${params.id}`)
       .then((r) => {
         if (r.status === 401) {
-          router.push(`/login?next=/assets/characters/${params.id}`);
+          router.push(`/login?next=/companions/${params.id}`);
           return null;
         }
         return r.ok ? r.json() : Promise.reject(new Error("找不到這個角色"));

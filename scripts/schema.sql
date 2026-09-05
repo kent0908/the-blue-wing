@@ -129,6 +129,20 @@ create table if not exists characters (
 create index if not exists characters_user_idx on characters(user_id, updated_at desc);
 alter table characters alter column model set default 'deepseek-v4-flash-0731';
 
+-- 喜好標籤（逗號分隔的自由文字），聊到符合的話題會多拿好感度。
+alter table characters add column if not exists likes text not null default '';
+-- 好感度：每則訊息 +1，聊到 likes 裡的話題額外加成。決定關係階段
+-- （見 lib/characters.ts 的 AFFECTION_LEVELS），階段越高語氣越親密、
+-- 解鎖的敘述越多——這是讓使用者持續回來聊天的核心機制。
+alter table characters add column if not exists affection integer not null default 0;
+-- 累積對話輪數，用來決定何時該重新整理 memory_summary（見下）。
+alter table characters add column if not exists turn_count integer not null default 0;
+-- 長期記憶摘要：每 MEMORY_REFRESH_EVERY 輪對話，請模型把「重要事實／
+-- 使用者偏好／關係進展」濃縮成幾條摘要存在這裡，每次對話都會帶著這份
+-- 摘要，而不是只帶最近幾句——這樣角色才會「記得」很久以前聊過的事，
+-- 不會被固定視窗大小限制住，prompt 也不會隨對話變長而無限膨脹。
+alter table characters add column if not exists memory_summary text not null default '';
+
 -- 每個角色的對話紀錄，跟「生成紀錄」是分開的概念——這是持續的陪聊串，不是
 -- 一次性的生成結果。
 create table if not exists character_messages (

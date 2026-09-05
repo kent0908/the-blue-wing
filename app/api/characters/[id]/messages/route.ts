@@ -7,9 +7,14 @@ import {
   getCharacter,
   listMessages,
   addMessage,
-  touchCharacter,
   getPersona,
   buildSystemPrompt,
+  buildMemoryUpdatePrompt,
+  matchesLikes,
+  recordTurn,
+  updateMemorySummary,
+  levelInfo,
+  MEMORY_REFRESH_EVERY,
 } from "@/lib/characters";
 
 export const runtime = "nodejs";
@@ -88,13 +93,46 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // no half-written turn behind.
     await addMessage(id, "user", content);
     const saved = await addMessage(id, "assistant", String(reply));
-    await touchCharacter(id);
     await addCredits(r.user.id, -cost, "text", character.model);
+
+    // 好感度：+1 for showing up, +4 more (so +5 total) for touching a 喜好 topic.
+    const gain = 1 + (matchesLikes(content, character.likes) ? 4 : 0);
+    const before = levelInfo(character.affection);
+    const { affection, turnCount } = await recordTurn(id, gain);
+    const after = levelInfo(affection);
+
+    // Long-term memory: every MEMORY_REFRESH_EVERY turns, compress the recent
+    // conversation into the rolling summary. Never let this block or fail the
+    // reply the user is waiting on — it's maintenance, not the main request.
+    if (turnCount % MEMORY_REFRESH_EVERY === 0) {
+      try {
+        const recent = await listMessages(id, MEMORY_REFRESH_EVERY * 2);
+        const memPrompt = buildMemoryUpdatePrompt(character, recent);
+        const memJson = await createChatCompletion({
+          model: character.model,
+          messages: [{ role: "user", content: memPrompt }],
+          max_tokens: 400,
+        });
+        const summary = memJson?.choices?.[0]?.message?.content;
+        if (summary) await updateMemorySummary(id, String(summary));
+      } catch (err) {
+        console.error("character memory summary refresh failed:", err);
+      }
+    }
 
     return NextResponse.json({
       reply: { id: String(saved.id), role: "assistant", content: saved.content, createdAt: saved.created_at },
       creditsSpent: cost,
       creditsBalance: balance - cost,
+      affection: {
+        value: affection,
+        gain,
+        level: after.name,
+        unlock: after.unlock,
+        progressPct: after.progressPct,
+        nextMin: after.nextMin,
+        leveledUp: after.index > before.index,
+      },
     });
   } catch (err) {
     return errorResponse(err);
