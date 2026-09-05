@@ -9,12 +9,14 @@
  * own Vercel Blob storage right after generation so 生成紀錄 stays valid
  * indefinitely, the same way user-uploaded assets already do.
  *
- * Public (not private+proxied like assets/[id]/raw) — these are read via a
- * plain <img>/<video> src in the history grid and the main viewer, and the
- * blob pathname includes a random suffix, so it's unguessable-by-obscurity
- * the same way the upstream signed URLs already were. Never throws — a
- * persistence failure just falls back to the original (possibly-expiring)
- * URL rather than losing the result.
+ * Private, streamed through our own /api/media/[...path] proxy (this
+ * project's Blob store is configured private-only — `access:"public"` is
+ * rejected outright, verified empirically via a throwaway debug route:
+ * "Cannot use public access on a private store"). Ownership is encoded
+ * directly in the pathname (`generations/<userId>/...`) so the proxy route
+ * can authorize by prefix-matching the caller's own id, no DB lookup needed.
+ * Never throws — a persistence failure just falls back to the original
+ * (possibly-expiring) URL rather than losing the result.
  */
 import { put } from "@vercel/blob";
 import { blobConfigured } from "./assets";
@@ -23,12 +25,9 @@ const DATA_URL_RE = /^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([\s\S]+)$/;
 
 export async function persistGeneratedMedia(
   sourceUrl: string,
-  opts: { userId: number; kind: "image" | "video"; debugRethrow?: boolean }
+  opts: { userId: number; kind: "image" | "video" }
 ): Promise<string> {
-  if (!blobConfigured()) {
-    if (opts.debugRethrow) throw new Error("blobConfigured() returned false");
-    return sourceUrl;
-  }
+  if (!blobConfigured()) return sourceUrl;
 
   try {
     let buf: Buffer;
@@ -47,14 +46,13 @@ export async function persistGeneratedMedia(
 
     const ext = contentType.split("/")[1]?.split(";")[0] || (opts.kind === "video" ? "mp4" : "png");
     const blob = await put(`generations/${opts.userId}/${opts.kind}-${Date.now()}.${ext}`, buf, {
-      access: "public",
+      access: "private",
       contentType,
       addRandomSuffix: true,
     });
-    return blob.url;
+    return `/api/media/${blob.pathname}`;
   } catch (err) {
     console.error("persistGeneratedMedia failed, keeping original URL:", err);
-    if (opts.debugRethrow) throw err;
     return sourceUrl;
   }
 }
