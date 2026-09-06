@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconImage, IconVideo } from "@/components/Icons";
 import Director3DStudioBody from "@/components/canvas/director3d/Director3DStudioBody";
-import { useDirector3DEditor, type RecordedFrame } from "@/components/canvas/director3d/useDirector3DEditor";
+import { useDirector3DEditor, type RecordedClip, type RecordedFrame } from "@/components/canvas/director3d/useDirector3DEditor";
 import { DIRECTOR3D_HANDOFF_KEY, DIRECTOR3D_SCENE_KEY, defaultDirector3DData, type Director3DSceneData } from "@/lib/canvas/director3d";
 
 function loadSavedScene(): Director3DSceneData {
@@ -31,6 +31,18 @@ async function uploadImage(dataUrl: string, filename: string): Promise<{ id: num
   return j.asset;
 }
 
+/** Uploads a recorded 運鏡 clip to the token-gated public route SIRAYA's
+ *  servers fetch directly — see app/api/video-refs/route.ts. */
+async function uploadVideoRef(clip: RecordedClip): Promise<{ url: string }> {
+  const form = new FormData();
+  const ext = clip.blob.type.includes("mp4") ? "mp4" : "webm";
+  form.append("file", clip.blob, `director3d-camera-move.${ext}`);
+  const res = await fetch("/api/video-refs", { method: "POST", body: form });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j?.error?.message || "運鏡影片上傳失敗");
+  return j;
+}
+
 /**
  * Standalone entry point for 3D導演台 — same editor as the Canvas-node
  * modal (Director3DStudioBody), just reachable directly from the sidebar
@@ -48,8 +60,13 @@ export default function Director3DStandalonePage() {
   const [sending, setSending] = useState<"image" | "video" | "frames" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const handoff = (refs: { id: number; src: string; name: string }[], mode: "image" | "video", promptHint?: string) => {
-    sessionStorage.setItem(DIRECTOR3D_HANDOFF_KEY, JSON.stringify({ refs, promptHint }));
+  const handoff = (
+    refs: { id: number; src: string; name: string }[],
+    mode: "image" | "video",
+    promptHint?: string,
+    videoRef?: { url: string }
+  ) => {
+    sessionStorage.setItem(DIRECTOR3D_HANDOFF_KEY, JSON.stringify({ refs, promptHint, videoRef }));
     router.push(`/studio?mode=${mode}`);
   };
 
@@ -68,13 +85,16 @@ export default function Director3DStandalonePage() {
     }
   };
 
-  const exportFramesForVideo = async (frames: RecordedFrame[], promptHint: string) => {
+  const exportFramesForVideo = async (frames: RecordedFrame[], promptHint: string, clip: RecordedClip | null) => {
     setErr(null);
     setSending("frames");
     try {
-      if (!frames.length) throw new Error("還沒有錄到任何畫面");
-      const assets = await Promise.all(frames.map((f, i) => uploadImage(f.url, `director3d-frame-${i}.jpg`)));
-      handoff(assets, "video", promptHint);
+      if (!frames.length && !clip) throw new Error("還沒有錄到任何畫面");
+      const [assets, videoRef] = await Promise.all([
+        Promise.all(frames.map((f, i) => uploadImage(f.url, `director3d-frame-${i}.jpg`))),
+        clip ? uploadVideoRef(clip) : Promise.resolve(undefined),
+      ]);
+      handoff(assets, "video", promptHint, videoRef);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "傳送失敗，請稍後再試");
     } finally {

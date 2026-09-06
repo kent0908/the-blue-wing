@@ -18,11 +18,18 @@ import {
   describeCameraMove,
   type ShotRequest,
 } from "@/lib/canvas/cameraShots";
+import { MIN_VIDEO_REF_PIXELS } from "@/lib/videoRefs";
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 
 /** How many still frames a 運鏡錄製 samples across its duration — handed to video generation as multi-reference images. */
 const RECORDING_FRAME_SAMPLES = 6;
+
+// Keep a 15-30s recording's file size under the ~4MB upload cap (see
+// lib/videoRefs.ts) — this is just a previz/reference clip, not a final
+// deliverable, so a lower bitrate is an acceptable trade for reliably
+// fitting under Vercel's request body limit.
+const RECORDING_BITS_PER_SECOND = 900_000;
 
 export interface RecordedFrame {
   url: string;
@@ -179,11 +186,19 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
       setRecordError("這個瀏覽器不支援錄製 3D 畫面，換 Chrome / Edge 試試");
       return;
     }
+    // SIRAYA rejects a reference clip below roughly 480p worth of pixels
+    // (see lib/videoRefs.ts) — checked here so a too-small viewport fails
+    // fast instead of after a full 15-30s recording.
+    if (canvas.width * canvas.height < MIN_VIDEO_REF_PIXELS) {
+      setRecordError("視窗太小，錄出來的畫面解析度會被影片生成 API 拒絕 — 請放大瀏覽器視窗再錄");
+      return;
+    }
     discardRecording();
 
     const stream = canvas.captureStream(30);
     const mimeType = ["video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
-    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    const recorderOptions = { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: RECORDING_BITS_PER_SECOND };
+    const mr = new MediaRecorder(stream, recorderOptions);
     chunksRef.current = [];
     mr.ondataavailable = (e) => {
       if (e.data.size) chunksRef.current.push(e.data);

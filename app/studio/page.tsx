@@ -37,13 +37,17 @@ function StudioInner() {
   // (the same shape a template preset's reference image uses), plus an
   // optional auto-generated camera-move prompt hint. Read once, since the
   // sessionStorage key is consumed (removed) on first read.
-  const [director3dHandoff] = useState<{ refs: { id: number; src: string; name: string }[]; promptHint?: string } | null>(() => {
+  const [director3dHandoff] = useState<{
+    refs: { id: number; src: string; name: string }[];
+    promptHint?: string;
+    videoRef?: { url: string };
+  } | null>(() => {
     if (typeof window === "undefined") return null;
     try {
       const raw = sessionStorage.getItem(DIRECTOR3D_HANDOFF_KEY);
       if (!raw) return null;
       sessionStorage.removeItem(DIRECTOR3D_HANDOFF_KEY);
-      return JSON.parse(raw) as { refs: { id: number; src: string; name: string }[]; promptHint?: string };
+      return JSON.parse(raw) as { refs: { id: number; src: string; name: string }[]; promptHint?: string; videoRef?: { url: string } };
     } catch {
       return null;
     }
@@ -56,6 +60,7 @@ function StudioInner() {
   const [presetPrompt, setPresetPrompt] = useState<string | undefined>(urlPrompt ?? director3dHandoff?.promptHint);
   const [presetImgValues, setPresetImgValues] = useState<Record<string, string | number> | undefined>();
   const [presetRefs, setPresetRefs] = useState<{ id: number; src: string; name: string }[] | undefined>(director3dHandoff?.refs);
+  const [presetVideoRef] = useState(director3dHandoff?.videoRef);
 
   useEffect(() => {
     if (!preset) return;
@@ -110,6 +115,7 @@ function StudioInner() {
     imagePayload?: Record<string, unknown>;
     assetIds?: number[];
     extraBody?: Record<string, unknown>;
+    videoUrl?: string;
   }) => {
     startJob(mode, args);
   };
@@ -170,6 +176,7 @@ function StudioInner() {
                 initialPrompt={presetPrompt}
                 initialImgValues={presetImgValues}
                 initialRefs={presetRefs}
+                initialVideoRef={presetVideoRef}
               />
             ) : (
               <div className="h-[168px] rounded-2xl border border-[#2a2a2a] bg-[#161616] bw-shimmer" />

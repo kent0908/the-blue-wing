@@ -10,7 +10,7 @@ import {
   type JointName,
 } from "@/lib/canvas/director3d";
 import { DEFAULT_SHOT, SHOT_PRESETS } from "@/lib/canvas/cameraShots";
-import type { Director3DEditor, RecordedFrame } from "./useDirector3DEditor";
+import type { Director3DEditor, RecordedClip, RecordedFrame } from "./useDirector3DEditor";
 
 // R3F touches WebGL/DOM at import time in a way that doesn't survive SSR —
 // load the scene client-side only.
@@ -64,8 +64,8 @@ export default function Director3DStudioBody({
   exportingFrames,
 }: {
   editor: Director3DEditor;
-  /** Uploads the recorded 運鏡's sampled stills + a camera-move text hint and hands off to 影片生成 — only the standalone page provides this; the Canvas-node modal has nowhere to navigate to, so it just omits the button. */
-  onExportFramesForVideo?: (frames: RecordedFrame[], promptHint: string) => void;
+  /** Uploads the recorded clip itself (as a real video-type reference — Seedance 2.0/2.5 only) plus its sampled stills and a camera-move text hint, and hands off to 影片生成 — only the standalone page provides this; the Canvas-node modal has nowhere to navigate to, so it just omits the button. */
+  onExportFramesForVideo?: (frames: RecordedFrame[], promptHint: string, clip: RecordedClip | null) => void;
   exportingFrames?: boolean;
 }) {
   const {
@@ -213,17 +213,18 @@ export default function Director3DStudioBody({
               {onExportFramesForVideo && (
                 <button
                   type="button"
-                  disabled={!!exportingFrames || recordedFrames.length === 0}
-                  onClick={() => onExportFramesForVideo(recordedFrames, cameraMoveHint)}
+                  disabled={!!exportingFrames}
+                  onClick={() => onExportFramesForVideo(recordedFrames, cameraMoveHint, recordedClip)}
                   className="w-full rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-2 py-1.5 text-[11px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-50"
                 >
-                  {exportingFrames ? "傳送中…" : `取樣 ${recordedFrames.length} 張畫面送去影片生成`}
+                  {exportingFrames ? "傳送中…" : "送去影片生成（運鏡影片＋畫面＋文字）"}
                 </button>
               )}
               <p className="text-[10px] leading-relaxed text-[#6d6d6d]">
-                影片生成 API 沒有「上傳影片當運鏡參考」這種功能，實際送過去的是這段錄製裡抽出的幾張畫面（當多重參考圖，僅
-                Seedance 系列模型支援）＋自動判斷的運鏡文字提示{cameraMoveHint ? `（目前判讀：「${cameraMoveHint}」，可在輸入框自行修改）` : ""}。
-                下載的影片是給你自己參考的分鏡，不會被 AI 直接讀取。
+                這段錄製會直接當「運鏡影片參考」送給 Seedance 2.0 / 2.5（僅這兩個版本支援，其他模型會自動忽略、退回只用畫面）；
+                同時也會把錄製時抽出的 {recordedFrames.length} 張畫面當多重參考圖，加上自動判讀的運鏡文字提示
+                {cameraMoveHint ? `（目前判讀：「${cameraMoveHint}」，可在輸入框自行修改）` : ""}
+                一起帶到輸入框。SIRAYA 對參考影片有解析度下限，畫面太小的視窗錄出來可能會被拒絕，建議放大瀏覽器視窗再錄。
               </p>
             </div>
           )}

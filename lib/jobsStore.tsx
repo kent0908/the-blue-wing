@@ -69,6 +69,8 @@ export interface SubmitArgs {
   imagePayload?: Record<string, unknown>;
   assetIds?: number[];
   extraBody?: Record<string, unknown>;
+  /** a recorded 3D導演台 運鏡 clip's URL — video mode + Seedance 2.0/2.5 only, see lib/videoModels.ts */
+  videoUrl?: string;
 }
 
 export interface ToastItem {
@@ -173,7 +175,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
    *  several of these run concurrently, each tracked by its own job id, and
    *  none of them depend on any page still being mounted to finish. */
   const runJob = useCallback(
-    async (jobId: string, jobMode: Mode, { prompt, model, settings, imagePayload, assetIds, extraBody }: SubmitArgs) => {
+    async (jobId: string, jobMode: Mode, { prompt, model, settings, imagePayload, assetIds, extraBody, videoUrl }: SubmitArgs) => {
       try {
         updateJob(jobId, { stage: 1 });
 
@@ -189,6 +191,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
               ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
               ...(assetIds?.length ? { assetIds } : {}),
               ...(extraBody ? { extra_body: extraBody } : {}),
+              ...(videoUrl ? { videoUrl } : {}),
             }),
           });
           const json = await readJson(res);

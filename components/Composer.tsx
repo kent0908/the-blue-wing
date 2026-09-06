@@ -30,7 +30,7 @@ import {
   MAX_REF_IMAGES,
   type ImageControlValues,
 } from "@/lib/imageModels";
-import { maxRefsForVideoModel } from "@/lib/videoModels";
+import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
 import { AUDIO_MODELS } from "@/lib/audioModels";
 
 interface RefAsset {
@@ -79,6 +79,7 @@ export default function Composer({
   initialPrompt,
   initialImgValues,
   initialRefs,
+  initialVideoRef,
 }: {
   mode: Mode;
   onModeChange: (m: Mode) => void;
@@ -91,6 +92,8 @@ export default function Composer({
     assetIds?: number[];
     /** model-specific passthrough — video mode only (e.g. { camera_fixed: true }) */
     extraBody?: Record<string, unknown>;
+    /** a recorded 3D導演台 運鏡 clip's URL — video mode + Seedance 2.0/2.5 only */
+    videoUrl?: string;
   }) => void;
   busy: boolean;
   /** model id from ?model= — pre-selects the model when it matches the mode */
@@ -101,6 +104,8 @@ export default function Composer({
   initialImgValues?: ImageControlValues;
   /** reference images from a template preset (already cloned to the user) */
   initialRefs?: RefAsset[];
+  /** a recorded 3D導演台 運鏡 clip handed off from /canvas/director3d — video mode only */
+  initialVideoRef?: { url: string; name?: string };
 }) {
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [settings, setSettings] = useState<GenSettings>(DEFAULT_SETTINGS);
@@ -115,6 +120,11 @@ export default function Composer({
 
   /* ---- reference materials (image-to-image / Seedance multi-reference video) ---- */
   const [refs, setRefs] = useState<RefAsset[]>(initialRefs ?? []);
+  // A recorded 3D導演台 運鏡 clip, handed off separately from image refs above —
+  // Seedance's r2v mode takes it as its own input_references entry (type
+  // "video"), not something that fits the @mention/image-strip UI. See
+  // lib/videoModels.ts's supportsVideoRefInput for which models accept it.
+  const [videoRef, setVideoRef] = useState<{ url: string; name?: string } | null>(initialVideoRef ?? null);
   const [refPicker, setRefPicker] = useState(false);
   const [library, setLibrary] = useState<RefAsset[] | null>(null);
   const [refBusy, setRefBusy] = useState(false);
@@ -272,6 +282,11 @@ export default function Composer({
   const canUseRefs =
     (mode === "image" && supportsRefImages(activeImageModel)) || (mode === "video" && refCap > 0);
 
+  // Reference-to-video (r2v) — verified live against SIRAYA-Seedance-2.5 on
+  // 2026-09-06 (see lib/videoModels.ts). Only these two model versions are
+  // confirmed to accept a video-type reference at all.
+  const videoRefSupported = mode === "video" && supportsVideoRefInput(model);
+
   // Only Seedream (image) / Seedance (video) are verified to accept the
   // `watermark` field — GPT Image 2 rejects it outright ("Unknown parameter:
   // 'watermark'") since it proxies straight to OpenAI's own API. Gate the
@@ -373,11 +388,13 @@ export default function Composer({
       imagePayload,
       assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
       extraBody: mode === "video" && watermarkSupported ? { watermark } : undefined,
+      videoUrl: videoRefSupported && videoRef ? videoRef.url : undefined,
     });
     setPrompt("");
     setRefs([]);
     setRefPicker(false);
     setMention(null);
+    setVideoRef(null);
   };
 
   return (
@@ -472,6 +489,23 @@ export default function Composer({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {videoRef && mode === "video" && (
+          <div className="relative flex h-[74px] w-[74px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-[#2f2f2f] bg-[#1c1c1c] px-1 text-center">
+            <span className="text-lg leading-none">🎬</span>
+            <span className="text-[9.5px] leading-tight text-[#9a9a9a]">
+              {videoRefSupported ? "運鏡影片" : "目前模型不支援"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setVideoRef(null)}
+              className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black"
+              aria-label="移除運鏡影片參考"
+            >
+              ×
+            </button>
           </div>
         )}
 
