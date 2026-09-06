@@ -82,6 +82,7 @@ export default function Director3DStudioBody({
     shot,
     setShot,
     updateSelected,
+    updateCharacter,
     updateJoint,
     applyPreset,
     setBodyStyle,
@@ -272,6 +273,10 @@ export default function Director3DStudioBody({
               canvasRef.current = el;
             }}
             onPose={updatePose}
+            onDragCharacter={(id, position) => updateCharacter(id, { position })}
+            onDragWaypoint={(characterId, index, position) => {
+              if (characterId === selected?.id) updateWaypoint(index, { position });
+            }}
           />
         </Suspense>
         {recording && (
@@ -428,15 +433,17 @@ export default function Director3DStudioBody({
           {selected && tab === "path" && (
             <div className="space-y-3">
               <p className="text-[10px] leading-relaxed text-[#6d6d6d]">
-                設定角色沿時間移動的路徑：每個路徑點是「幾秒時、在哪個位置、擺什麼姿勢」，點與點之間位置和姿勢都會自動平滑
-                內插——不是真的走路動畫（沒有腳步交替），但可以做出「角色從 A 走到 B、途中換個動作」的效果。錄製運鏡時，
-                只要角色有 2 個以上路徑點，就會自動照路徑播放。
+                直接在畫面裡<span className="text-[#c9c9c9]">按住角色拖曳</span>就能移動它（沿地面滑動，會暫時停用旋轉視角，
+                放開滑鼠就恢復）；已經加的路徑點在畫面上是黃色小球，接起來的虛線就是路徑，<span className="text-[#c9c9c9]">
+                黃色小球也可以直接拖曳</span>調整那個點的位置。時間和姿勢還是在下面清單裡設定——每個路徑點是「幾秒時、
+                在哪個位置、擺什麼姿勢」，點與點之間位置和姿勢都會自動平滑內插（不是真的走路動畫，沒有腳步交替）。
+                錄製運鏡時，只要角色有 2 個以上路徑點，就會自動照路徑播放。
               </p>
 
               <div className="space-y-2">
                 {(selected.path ?? []).length === 0 && (
                   <p className="rounded-lg bg-[#161616] px-2 py-3 text-center text-[11px] text-[#6d6d6d]">
-                    還沒有路徑點——先把角色拖到起始位置，按下面的按鈕新增第一個點
+                    還沒有路徑點——把角色拖到起始位置，按下面的按鈕新增第一個點
                   </p>
                 )}
                 {(selected.path ?? []).map((wp, i) => (

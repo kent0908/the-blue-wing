@@ -95,9 +95,14 @@ export function useDirector3DEditor(initial: Director3DSceneData, remotePersist?
 
   const selected = scene.characters.find((c) => c.id === selectedId) ?? null;
 
+  /** Updates any character by id — the general form; updateSelected below is just this pinned to whichever one is currently selected. */
+  const updateCharacter = (id: string, patch: Partial<CharacterState>) => {
+    setScene((s) => ({ ...s, characters: s.characters.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+  };
+
   const updateSelected = (patch: Partial<CharacterState>) => {
     if (!selected) return;
-    setScene((s) => ({ ...s, characters: s.characters.map((c) => (c.id === selected.id ? { ...c, ...patch } : c)) }));
+    updateCharacter(selected.id, patch);
   };
 
   const updateJoint = (joint: JointName, axis: "x" | "y" | "z", deg: number) => {
@@ -342,6 +347,7 @@ export function useDirector3DEditor(initial: Director3DSceneData, remotePersist?
     shot,
     setShot,
     updateSelected,
+    updateCharacter,
     updateJoint,
     applyPreset,
     setBodyStyle,

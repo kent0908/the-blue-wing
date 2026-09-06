@@ -45,7 +45,7 @@ export default function Director3DPanel({
       {/* toolbar */}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1c1c1c] px-4">
         <span className="text-[13px] font-medium text-white">3D 導演台</span>
-        <span className="text-[11px] text-[#6d6d6d]">拖曳畫面旋轉視角、滾輪縮放；點角色可選取</span>
+        <span className="text-[11px] text-[#6d6d6d]">拖曳空白處旋轉視角、滾輪縮放；拖曳角色本身可移動它</span>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" onClick={editor.takeScreenshot} className="h-8 rounded-full bg-[#1f1f1f] px-3.5 text-[12.5px] text-white hover:bg-[#282828]">
             📷 截圖

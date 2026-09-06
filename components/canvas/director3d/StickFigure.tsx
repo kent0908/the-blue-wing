@@ -40,10 +40,13 @@ export default function StickFigure({
   character,
   selected,
   onSelect,
+  onDragStart,
 }: {
   character: CharacterState;
   selected: boolean;
   onSelect: () => void;
+  /** Pointer-down on the figure — selects it and starts a floor-drag (see Director3DScene's DragPlane). */
+  onDragStart?: () => void;
 }) {
   const { position, rotation, scale, color, pose } = character;
   const c = selected ? "#7ff0cd" : color;
@@ -51,9 +54,14 @@ export default function StickFigure({
     e.stopPropagation();
     onSelect();
   };
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    onSelect();
+    onDragStart?.();
+  };
 
   return (
-    <group position={position} rotation={rotation} scale={scale} onClick={handleClick}>
+    <group position={position} rotation={rotation} scale={scale} onClick={handleClick} onPointerDown={handlePointerDown}>
       {/* hips — the root of the pose hierarchy, offset up so feet land near y=0 */}
       <group position={[0, 1.0, 0]} rotation={rot(pose, "hips")}>
         <Joint radius={0.075} color={c} />

@@ -139,7 +139,7 @@ function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData 
           <IconChevronLeft className="h-4 w-4" />
         </Link>
         <span className="text-[13px] font-medium text-white">3D 導演台</span>
-        <span className="hidden text-[11px] text-[#6d6d6d] sm:inline">拖曳畫面旋轉視角、滾輪縮放；點角色可選取；場景會存到你的帳號，換裝置登入也看得到</span>
+        <span className="hidden text-[11px] text-[#6d6d6d] sm:inline">拖曳空白處旋轉視角、滾輪縮放；拖曳角色本身可移動它；場景會存到你的帳號，換裝置登入也看得到</span>
         <div className="ml-auto flex items-center gap-2">
           {err && <span className="text-[11.5px] text-[#ff9b9b]">{err}</span>}
           <button type="button" onClick={editor.takeScreenshot} className="h-8 rounded-full bg-[#1f1f1f] px-3.5 text-[12.5px] text-white hover:bg-[#282828]">
