@@ -7,9 +7,10 @@ const TABS = [
   { href: "/admin/rates", key: "rates", label: "費率" },
   { href: "/admin/models", key: "models", label: "模型名稱 / 排序" },
   { href: "/admin/home", key: "home", label: "首頁 / 模板" },
+  { href: "/admin/landing", key: "landing", label: "入口頁媒體" },
 ] as const;
 
-export default function AdminTabs({ active }: { active: "users" | "rates" | "models" | "home" }) {
+export default function AdminTabs({ active }: { active: "users" | "rates" | "models" | "home" | "landing" }) {
   return (
     <div className="mb-5 flex items-center gap-1.5 border-b border-[#1e1e1e] pb-2">
       {TABS.map((t) => (

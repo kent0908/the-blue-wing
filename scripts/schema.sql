@@ -233,3 +233,18 @@ create table if not exists user_personas (
 
 -- Structured companion settings (additive).
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+-- Admin-managed media (image/video) shown on the public landing page (see
+-- lib/landingMedia.ts) — one row per named slot ("hero", "video", "image",
+-- "canvas", "companions"...). Deliberately separate from `assets` (a per-user
+-- private library, served only to its owner) and from `home_blocks`/its
+-- content_id (still used by /explore) — this is one fixed set of site-wide
+-- slots an admin overrides, publicly readable by anyone via
+-- /api/landing-media/[slot], not gated by ownership at all.
+create table if not exists landing_media (
+  slot         text primary key,
+  kind         text not null check (kind in ('image','video')),
+  pathname     text not null,
+  content_type text not null,
+  updated_at   timestamptz not null default now()
+);
