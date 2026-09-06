@@ -39,3 +39,21 @@ export function maxRefsForVideoModel(modelId: string | null | undefined): number
 export function supportsVideoRefs(modelId: string | null | undefined): boolean {
   return maxRefsForVideoModel(modelId) > 0;
 }
+
+/**
+ * Whether this model accepts an `input_references` entry of type "video"
+ * (not just "image") — i.e. reference-to-video (r2v) mode: a short clip
+ * guiding the camera move/composition, not just a still. Verified live
+ * against SIRAYA on 2026-09-06: SIRAYA-Seedance-2.5 accepted a real
+ * `{type:"video", url:<public mp4>}` reference and returned a processing
+ * job id (see the one-off test in that day's session) — matches the docs'
+ * claim that only Seedance 2.0/2.5 support it, not 1.0-pro/1.5-pro.
+ * SIRAYA also validates the reference clip's resolution server-side
+ * (rejected a clip under ~480p worth of pixels in that same test) — that
+ * isn't re-validated here, the API's own error surfaces to the user as-is.
+ */
+export function supportsVideoRefInput(modelId: string | null | undefined): boolean {
+  if (!modelId) return false;
+  const id = modelId.toLowerCase();
+  return /seedance-2\.(0|5)(-|$)/.test(id);
+}

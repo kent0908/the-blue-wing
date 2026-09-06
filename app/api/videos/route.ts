@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/apiauth";
 import { getBalance, addCredits, creditCost } from "@/lib/credits";
 import { recordGeneration } from "@/lib/generations";
 import { assetsToDataUrls } from "@/lib/assetData";
-import { maxRefsForVideoModel } from "@/lib/videoModels";
+import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 
 export const runtime = "nodejs";
@@ -64,10 +64,10 @@ export async function POST(req: NextRequest) {
     // instead). Both can be present at once — combine them, capped at this
     // model's reference limit. Only Seedance models are known to support
     // this on SIRAYA.
-    const { assetIds, imageUrls, ...videoBody } = body;
+    const { assetIds, imageUrls, videoUrl, ...videoBody } = body;
     const refCap = maxRefsForVideoModel(String(body.model));
     if (refCap > 0) {
-      const refs: { type: "image"; url: string }[] = [];
+      const refs: { type: "image" | "video"; url: string }[] = [];
       if (Array.isArray(assetIds) && assetIds.length) {
         const urls = await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
         refs.push(...urls.map((url) => ({ type: "image" as const, url })));
@@ -76,6 +76,13 @@ export async function POST(req: NextRequest) {
         for (const u of imageUrls) {
           if (typeof u === "string" && u.trim()) refs.push({ type: "image" as const, url: u.trim() });
         }
+      }
+      // A recorded 3D導演台 運鏡 clip — reference-to-video (r2v) mode.
+      // Seedance 2.0/2.5 only (verified live — see supportsVideoRefInput's
+      // comment); silently dropped for other models the same way stale
+      // image refs already are, rather than erroring the whole submission.
+      if (typeof videoUrl === "string" && videoUrl.trim() && supportsVideoRefInput(String(body.model))) {
+        refs.push({ type: "video", url: videoUrl.trim() });
       }
       if (refs.length) videoBody.input_references = refs.slice(0, refCap);
     }
