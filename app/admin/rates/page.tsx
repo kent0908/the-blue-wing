@@ -15,9 +15,11 @@ interface Rate {
 interface Model {
   id: string;
   modality: Modality;
+  displayName: string;
 }
 interface Row {
   modelId: string;
+  displayName: string;
   modality: Modality;
   credits: number | "";
   active: boolean;
@@ -53,11 +55,13 @@ export default function AdminRatesPage() {
       const byId = new Map(rates.map((r) => [r.modelId, r]));
       const ids = new Set<string>([...models.map((m) => m.id), ...rates.map((r) => r.modelId)]);
       const modalityOf = new Map(models.map((m) => [m.id, m.modality]));
+      const displayNameOf = new Map(models.map((m) => [m.id, m.displayName]));
 
       const merged: Row[] = [...ids].map((id) => {
         const r = byId.get(id);
         return {
           modelId: id,
+          displayName: displayNameOf.get(id) ?? id,
           modality: r?.modality ?? modalityOf.get(id) ?? "text",
           credits: r ? r.credits : "",
           active: r ? r.active : true,
@@ -115,7 +119,7 @@ export default function AdminRatesPage() {
       rows.filter(
         (r) =>
           (!mod || r.modality === mod) &&
-          (!q || r.modelId.toLowerCase().includes(q.toLowerCase()))
+          (!q || r.modelId.toLowerCase().includes(q.toLowerCase()) || r.displayName.toLowerCase().includes(q.toLowerCase()))
       ),
     [rows, q, mod]
   );
@@ -172,7 +176,7 @@ export default function AdminRatesPage() {
                 {filtered.map((r) => (
                   <tr key={r.modelId} className="border-t border-[#1e1e1e]">
                     <td className="px-3 py-2">
-                      <span className="text-white">{r.modelId}</span>
+                      <span className="text-white">{r.displayName}</span>
                       {!r.hasRate && <span className="ml-2 text-[10.5px] text-[#6d6d6d]">（用預設）</span>}
                     </td>
                     <td className="px-3 py-2">

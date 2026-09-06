@@ -52,6 +52,55 @@ function sizeFromRatio(ratio: string, fallback: string) {
 
 const KIND_FOR_MODE: Record<Mode, ResultItem["kind"]> = { image: "image", video: "video", text: "text", audio: "text" };
 
+/**
+ * A video job is the one kind that can outlive the page it was started on
+ * even without reloading — SIRAYA keeps rendering it for minutes after
+ * submission, and the whole point of jobsStore living at the root layout is
+ * that a client-side navigation doesn't kill the poll loop. A full page
+ * *reload* (F5, closing and reopening the tab) does, though — React state
+ * is gone either way. Real incident that prompted this: several submitted,
+ * charged, genuinely-completed-on-SIRAYA's-side videos never showed up in
+ * 生成紀錄 because nothing was left polling after a reload; recovered by
+ * manually re-polling each one. Persisting the handful of fields needed to
+ * resume polling to localStorage — and resuming them on mount — means a
+ * reload doesn't orphan a job that's still cooking server-side.
+ */
+interface PendingVideoRecord {
+  jobId: string;
+  videoId: string;
+  mode: Mode;
+  model: string;
+  prompt: string;
+}
+const PENDING_VIDEOS_KEY = "bw:pending-videos";
+
+function readPendingVideos(): PendingVideoRecord[] {
+  try {
+    const raw = localStorage.getItem(PENDING_VIDEOS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingVideo(rec: PendingVideoRecord) {
+  try {
+    const cur = readPendingVideos().filter((r) => r.videoId !== rec.videoId);
+    localStorage.setItem(PENDING_VIDEOS_KEY, JSON.stringify([...cur, rec]));
+  } catch {
+    // best-effort resumability only — a full/blocked storage quota shouldn't break generating
+  }
+}
+
+function removePendingVideo(videoId: string) {
+  try {
+    localStorage.setItem(PENDING_VIDEOS_KEY, JSON.stringify(readPendingVideos().filter((r) => r.videoId !== videoId)));
+  } catch {
+    // see writePendingVideo
+  }
+}
+
 /** See app/studio/page.tsx's original note: SIRAYA has no batch endpoint —
  *  this is a UI sanity cap, not a server-enforced one. */
 export const MAX_CONCURRENT_JOBS = 4;
@@ -99,7 +148,22 @@ export function useGenerationJobs(): JobsContextValue {
 }
 
 export function GenerationJobsProvider({ children }: { children: React.ReactNode }) {
-  const [jobs, setJobs] = useState<PendingJob[]>([]);
+  // Seed any video job that was still polling when the page last unloaded
+  // (see PendingVideoRecord's comment) directly into the initial state,
+  // rather than reading localStorage + setJobs inside a mount effect — same
+  // outcome, but a lazy initializer doesn't trigger an extra synchronous
+  // render the way setState-in-an-effect does.
+  const [jobs, setJobs] = useState<PendingJob[]>(() =>
+    readPendingVideos().map((rec) => ({
+      id: rec.jobId,
+      mode: rec.mode,
+      kind: "video" as const,
+      model: rec.model,
+      prompt: rec.prompt,
+      startedAt: Date.now(),
+      stage: 2,
+    }))
+  );
   const [results, setResults] = useState<ResultItem[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   // The provider itself only unmounts on a full page reload, but keep the
@@ -149,27 +213,73 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
 
   const pollVideoJob = useCallback(
     async (jobId: string, videoId: string, prompt: string, model: string) => {
-      for (let i = 0; i < 200; i++) {
-        if (unmountedRef.current) return;
-        await new Promise((r) => setTimeout(r, 4000));
-        if (unmountedRef.current) return;
-        const qs = new URLSearchParams({ model, prompt });
-        const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}?${qs.toString()}`);
-        const json = await readJson(res);
-        if (!res.ok) throw new Error(json?.error?.message || "查詢影片狀態失敗");
-        if (json.status === "completed" && json.url) {
-          pushResult({ id: `${videoId}`, kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
-          pushToast({ ok: true, mode: "video", title: "影片生成完成", detail: prompt });
-          dismissJob(jobId);
-          return;
+      // Recorded so a reload mid-poll can resume this exact job instead of
+      // orphaning it — see the module comment on PendingVideoRecord. Every
+      // exit path below (success / failure / timeout / thrown error) removes
+      // it again.
+      writePendingVideo({ jobId, videoId, mode: "video", model, prompt });
+      // Real incident (2026-09-06): a single failed poll — a network blip, a
+      // transient 5xx from SIRAYA's own status endpoint, a brief DB hiccup in
+      // our own /api/videos/[id] — used to throw immediately and abandon the
+      // job for good right here. The video itself keeps rendering server-side
+      // regardless; credits were already charged at submission; with nothing
+      // left polling, a genuinely-successful render would finish with no one
+      // around to notice, record it, or (since SIRAYA never actually reported
+      // "failed") refund it — charged, nothing to show for it, exactly the
+      // "有扣款但沒有任何影片生成成功" pattern reported by a real user. Only
+      // a *run* of consecutive poll failures — not one — should give up.
+      let consecutiveErrors = 0;
+      const MAX_CONSECUTIVE_ERRORS = 6; // ~24s of tolerated trouble at the 4s poll interval below
+      try {
+        for (let i = 0; i < 200; i++) {
+          if (unmountedRef.current) return;
+          await new Promise((r) => setTimeout(r, 4000));
+          if (unmountedRef.current) return;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let json: any;
+          try {
+            const qs = new URLSearchParams({ model, prompt });
+            const res = await fetch(`/api/videos/${encodeURIComponent(videoId)}?${qs.toString()}`);
+            json = await readJson(res);
+            if (!res.ok) throw new Error(json?.error?.message || `查詢影片狀態失敗（HTTP ${res.status}）`);
+          } catch (e) {
+            consecutiveErrors += 1;
+            if (consecutiveErrors > MAX_CONSECUTIVE_ERRORS) throw e;
+            continue; // transient — try again on the next tick instead of giving up
+          }
+          consecutiveErrors = 0;
+          if (json.status === "completed" && json.url) {
+            pushResult({ id: `${videoId}`, kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
+            pushToast({ ok: true, mode: "video", title: "影片生成完成", detail: prompt });
+            dismissJob(jobId);
+            return;
+          }
+          if (json.status === "failed") throw new Error("影片生成失敗");
+          updateJob(jobId, { stage: 2 });
         }
-        if (json.status === "failed") throw new Error("影片生成失敗");
-        updateJob(jobId, { stage: 2 });
+        throw new Error("影片生成逾時，請稍後到生成紀錄查看");
+      } finally {
+        removePendingVideo(videoId);
       }
-      throw new Error("影片生成逾時，請稍後到生成紀錄查看");
     },
     [dismissJob, pushResult, pushToast, updateJob]
   );
+
+  // The jobs themselves are already seeded into initial state above; this
+  // just (re-)starts the actual polling for each one — a real side effect
+  // (kicking off async work), not a state sync, so it belongs in an effect
+  // rather than the lazy initializer.
+  useEffect(() => {
+    for (const rec of readPendingVideos()) {
+      void pollVideoJob(rec.jobId, rec.videoId, rec.prompt, rec.model).catch((e) => {
+        const message = e instanceof Error ? e.message : "發生未預期的錯誤";
+        updateJob(rec.jobId, { error: message });
+        pushToast({ ok: false, mode: rec.mode, title: "影片生成失敗", detail: message });
+      });
+    }
+    // mount-only — deliberately not re-run per render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Runs one generation job to completion. Fire-and-forget from startJob —
    *  several of these run concurrently, each tracked by its own job id, and

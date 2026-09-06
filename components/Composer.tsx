@@ -22,6 +22,7 @@ import AdvancedParams from "./AdvancedParams";
 import {
   IMAGE_MODELS,
   getImageModel,
+  getImageModelForControls,
   displayModelName,
   defaultValues,
   buildImagePayload,
@@ -32,6 +33,7 @@ import {
 } from "@/lib/imageModels";
 import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
 import { AUDIO_MODELS } from "@/lib/audioModels";
+import { modelBadgeFor } from "@/lib/modelBadge";
 
 interface RefAsset {
   id: number;
@@ -141,10 +143,45 @@ export default function Composer({
   // was made user-controllable. true = keep the provider's watermark.
   const [watermark, setWatermark] = useState(false);
 
+  const modalityForMode = mode === "video" ? "video" : mode === "image" ? "image" : "text";
+  const available = useMemo(() => {
+    const live = models.filter((m) => m.modality === modalityForMode);
+    // 語音生成 has no real audio modality on SIRAYA (see lib/audioModels.ts) —
+    // it shares "text"'s ~80-model chat-completions list otherwise, which is
+    // exactly the "太雜" the curation here fixes.
+    if (mode === "audio") return live.filter((m) => AUDIO_MODELS.includes(m.id));
+    if (modalityForMode === "video") return live.filter(m => !/i2v/i.test(m.id));
+    if (modalityForMode !== "image") return live;
+    // Merge the curated image catalogue so links to a specific model resolve
+    // even before /api/models has loaded (and so it's pickable in the dropdown).
+    const curated: ModelInfo[] = IMAGE_MODELS.map((m) => ({
+      id: m.id,
+      ownedBy: m.family,
+      created: null,
+      modality: "image" as const,
+    }));
+    const curatedIds = new Set(curated.map((m) => m.id.toLowerCase()));
+    return [...curated, ...live.filter((m) => !curatedIds.has(m.id.toLowerCase()))];
+  }, [models, modalityForMode, mode]);
+
+  // The user's explicit pick (via the model dropdown) wins once it's in the
+  // current `available` list; otherwise fall back to `initialModel` (from
+  // ?model=) or just the first available model. Derived during render
+  // instead of an effect calling setModel — avoids a redundant extra render
+  // each time `available` finishes loading (react-hooks/set-state-in-effect).
+  const resolvedModel = useMemo(() => {
+    if (model && available.some((m) => m.id === model)) return model;
+    const preferred = initialModel
+      ? available.find((m) => m.id === initialModel || m.id.toLowerCase() === initialModel.toLowerCase())
+      : undefined;
+    const defaultVideo = mode === "video" ? available.find(m => m.id === "SIRAYA-Seedance-2.0-mini") ?? available.find(m => /seedance/i.test(m.id) && !/nsfw/i.test(m.id)) : undefined;
+    return (preferred ?? defaultVideo ?? available[0])?.id ?? "";
+  }, [model, available, initialModel, mode]);
+
   // Image mode: fixed MAX_REF_IMAGES cap, gated by the model's family.
   // Video mode: only Seedance models support this on SIRAYA, and the cap
   // varies per model (Seedance 2.5 → 50; see lib/videoModels.ts).
-  const refCap = mode === "video" ? maxRefsForVideoModel(model) : MAX_REF_IMAGES;
+  const refCap = mode === "video" ? maxRefsForVideoModel(resolvedModel) : MAX_REF_IMAGES;
 
   const addRef = (a: RefAsset) =>
     setRefs((cur) => (cur.some((r) => r.id === a.id) || cur.length >= refCap ? cur : [...cur, a]));
@@ -194,7 +231,6 @@ export default function Composer({
 
   useEffect(() => {
     let alive = true;
-    setLoadingModels(true);
     fetch("/api/models")
       .then(async (r) => {
         const j = await r.json();
@@ -217,39 +253,7 @@ export default function Composer({
     };
   }, []);
 
-  const modalityForMode = mode === "video" ? "video" : mode === "image" ? "image" : "text";
-  const available = useMemo(() => {
-    const live = models.filter((m) => m.modality === modalityForMode);
-    // 語音生成 has no real audio modality on SIRAYA (see lib/audioModels.ts) —
-    // it shares "text"'s ~80-model chat-completions list otherwise, which is
-    // exactly the "太雜" the curation here fixes.
-    if (mode === "audio") return live.filter((m) => AUDIO_MODELS.includes(m.id));
-    if (modalityForMode === "video") return live.filter(m => !/i2v/i.test(m.id));
-    if (modalityForMode !== "image") return live;
-    // Merge the curated image catalogue so links to a specific model resolve
-    // even before /api/models has loaded (and so it's pickable in the dropdown).
-    const curated: ModelInfo[] = IMAGE_MODELS.map((m) => ({
-      id: m.id,
-      ownedBy: m.family,
-      created: null,
-      modality: "image" as const,
-    }));
-    const curatedIds = new Set(curated.map((m) => m.id.toLowerCase()));
-    return [...curated, ...live.filter((m) => !curatedIds.has(m.id.toLowerCase()))];
-  }, [models, modalityForMode, mode]);
-
-  useEffect(() => {
-    if (!available.length || available.some((m) => m.id === model)) return;
-    const preferred = initialModel
-      ? available.find(
-          (m) => m.id === initialModel || m.id.toLowerCase() === initialModel.toLowerCase()
-        )
-      : undefined;
-    const defaultVideo = mode === "video" ? available.find(m => m.id === "SIRAYA-Seedance-2.0-mini") ?? available.find(m => /seedance/i.test(m.id) && !/nsfw/i.test(m.id)) : undefined;
-    setModel((preferred ?? defaultVideo ?? available[0]).id);
-  }, [available, model, initialModel, mode]);
-
-  const activeImageModel = modalityForMode === "image" ? getImageModel(model) : undefined;
+  const activeImageModel = modalityForMode === "image" ? getImageModelForControls(resolvedModel) : undefined;
 
   // Effective params = the model's defaults with the user's explicit edits on
   // top. Picking a different model clears imgEdits (see the model dropdown), so
@@ -264,20 +268,20 @@ export default function Composer({
   const cost = useMemo(
     () =>
       estimateCost({
-        model: model || "unknown",
+        model: resolvedModel || "unknown",
         modality: modalityForMode,
         prompt,
         maxTokens: settings.maxTokens,
         imageCount,
         seconds: settings.seconds,
       }),
-    [model, modalityForMode, prompt, settings, imageCount]
+    [resolvedModel, modalityForMode, prompt, settings, imageCount]
   );
 
   const credits =
-    creditsFromRateCard(rates, model, { imageCount, seconds: settings.seconds, maxTokens: settings.maxTokens }) ??
+    creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: settings.seconds, maxTokens: settings.maxTokens }) ??
     Math.max(1, Math.round(cost * CREDITS_PER_USD));
-  const canSubmit = !!prompt.trim() && !!model && !busy;
+  const canSubmit = !!prompt.trim() && !!resolvedModel && !busy;
 
   // Image mode: seedream/gemini models. Video mode: Seedance models only.
   // When neither applies, stale refs are simply ignored (submit + render both gate on this).
@@ -287,7 +291,7 @@ export default function Composer({
   // Reference-to-video (r2v) — verified live against SIRAYA-Seedance-2.5 on
   // 2026-09-06 (see lib/videoModels.ts). Only these two model versions are
   // confirmed to accept a video-type reference at all.
-  const videoRefSupported = mode === "video" && supportsVideoRefInput(model);
+  const videoRefSupported = mode === "video" && supportsVideoRefInput(resolvedModel);
 
   // Only Seedream (image) / Seedance (video) are verified to accept the
   // `watermark` field — GPT Image 2 rejects it outright ("Unknown parameter:
@@ -376,7 +380,7 @@ export default function Composer({
       }
     }
     const imagePayload = activeImageModel
-      ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds)
+      ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds, resolvedModel)
       : undefined;
     if (imagePayload) {
       if (moderation !== "auto") imagePayload.moderation = moderation;
@@ -385,7 +389,7 @@ export default function Composer({
 
     onSubmit({
       prompt: finalPrompt,
-      model,
+      model: resolvedModel,
       settings,
       imagePayload,
       assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
@@ -553,6 +557,7 @@ export default function Composer({
             placeholder={canUseRefs && refs.length > 0 ? `${PLACEHOLDER[mode]}（可打 @ 標記素材）` : PLACEHOLDER[mode]}
             rows={expanded ? 8 : 3}
             className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
+            style={{ maxHeight: expanded ? 320 : 92, overflowY: "auto" }}
           />
 
           {mention && (
@@ -672,7 +677,7 @@ export default function Composer({
           trigger={(open) => (
             <>
               <IconModel className="h-[15px] w-[15px]" />
-              {loadingModels ? "載入模型…" : model ? getImageModel(model)?.name ?? displayModelName(model) : "無可用模型"}
+              {loadingModels ? "載入模型…" : resolvedModel ? (available.find((m) => m.id === resolvedModel)?.displayName ?? getImageModel(resolvedModel)?.name ?? displayModelName(resolvedModel)) : "無可用模型"}
               <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
             </>
           )}
@@ -689,28 +694,34 @@ export default function Composer({
                   {loadingModels ? "載入中…" : "此模式目前沒有可用模型"}
                 </div>
               )}
-              {available.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className="bw-menu-item"
-                  onClick={() => {
-                    setModel(m.id);
-                    setImgEdits({});
-                    if (!supportsRefImages(getImageModel(m.id))) {
-                      setRefs([]);
-                      setRefPicker(false);
-                    }
-                    close();
-                  }}
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#242424]">
-                    <IconModel className="h-[15px] w-[15px]" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px]">{getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
-                  {m.id === model && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
-                </button>
-              ))}
+              {available.map((m) => {
+                const badge = modelBadgeFor(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className="bw-menu-item"
+                    onClick={() => {
+                      setModel(m.id);
+                      setImgEdits({});
+                      if (!supportsRefImages(getImageModelForControls(m.id))) {
+                        setRefs([]);
+                        setRefPicker(false);
+                      }
+                      close();
+                    }}
+                  >
+                    <span
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[11px] font-semibold"
+                      style={{ background: badge.bg, color: badge.fg }}
+                    >
+                      {badge.letter}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13.5px]">{m.displayName ?? getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
+                    {m.id === resolvedModel && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
           )}
         </Popover>

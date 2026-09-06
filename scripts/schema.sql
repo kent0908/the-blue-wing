@@ -91,6 +91,17 @@ create table if not exists model_rates (
   updated_at timestamptz not null default now()
 );
 
+-- Admin-editable display name / sort order per model (lib/modelDisplay.ts).
+-- NULL display_name/sort_order means "use the computed default" (cleaned-up
+-- id / grouped-by-family order) — a row only needs to exist here for the
+-- fields an admin actually chose to override.
+create table if not exists model_display (
+  model_id     text primary key,
+  display_name text,
+  sort_order   integer,
+  updated_at   timestamptz not null default now()
+);
+
 -- editable home-page content: hero slides, model showcase cards, canvas templates
 create table if not exists home_blocks (
   id          bigint generated always as identity primary key,

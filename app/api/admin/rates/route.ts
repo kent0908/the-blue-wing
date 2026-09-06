@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/apiauth";
 import { listRates, upsertRate, type Modality } from "@/lib/rateCard";
 import { listModels } from "@/lib/siraya";
 import { modalityOf } from "@/lib/pricing";
+import { getImageModel } from "@/lib/imageModels";
+import { listModelDisplayOverrides, resolveModelDisplay } from "@/lib/modelDisplay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,10 +16,21 @@ export async function GET(req: NextRequest) {
   const r = await requireAdmin(req);
   if ("error" in r) return r.error;
 
-  const [rates, raw] = await Promise.all([listRates(), listModels().catch(() => ({ data: [] }))]);
+  const [rates, raw, overrides] = await Promise.all([
+    listRates(),
+    listModels().catch(() => ({ data: [] })),
+    listModelDisplayOverrides().catch(() => new Map()),
+  ]);
   const data = Array.isArray(raw?.data) ? raw.data : [];
   const models = data
-    .map((m: Record<string, unknown>) => ({ id: String(m.id), modality: modalityOf(String(m.id)) }))
+    .map((m: Record<string, unknown>) => {
+      const id = String(m.id);
+      return {
+        id,
+        modality: modalityOf(id),
+        displayName: resolveModelDisplay(id, overrides, getImageModel(id)?.name).displayName,
+      };
+    })
     .sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
 
   return NextResponse.json({ rates, models });

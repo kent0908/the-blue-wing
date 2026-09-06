@@ -5,10 +5,10 @@ import Link from "next/link";
 import { IconImage, IconVideo, IconChat, IconClose } from "./Icons";
 import type { PendingJob } from "@/lib/types";
 
-const KIND_ICON = { image: IconImage, video: IconVideo, text: IconChat } as const;
-const STAGE_LABEL = ["送出請求", "路由到供應商", "模型生成中", "取回結果"];
+export const KIND_ICON = { image: IconImage, video: IconVideo, text: IconChat } as const;
+export const STAGE_LABEL = ["送出請求", "路由到供應商", "模型生成中", "取回結果"];
 
-function Elapsed({ startedAt }: { startedAt: number }) {
+export function Elapsed({ startedAt }: { startedAt: number }) {
   const [s, setS] = useState(() => Math.floor((Date.now() - startedAt) / 1000));
   useEffect(() => {
     const t = setInterval(() => setS(Math.floor((Date.now() - startedAt) / 1000)), 1000);

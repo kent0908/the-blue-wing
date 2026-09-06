@@ -21,7 +21,7 @@ export interface CreditPack {
 }
 
 export const CREDIT_PACKS: CreditPack[] = [
-  { code: "pack_100", credits: 100, priceUSD: 1 }, // $0.01/credit — no discount
+  { code: "pack_500", credits: 500, priceUSD: 5 }, // $0.01/credit — no discount
   { code: "pack_1000", credits: 1_000, priceUSD: 9 }, // $0.009/credit — 10% off
   { code: "pack_10000", credits: 10_000, priceUSD: 85 }, // $0.0085/credit — 15% off
   { code: "pack_100000", credits: 100_000, priceUSD: 800 }, // $0.008/credit — 20% off

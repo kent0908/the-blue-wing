@@ -1,5 +1,5 @@
 import { validateGeneration } from "@/lib/generationValidation";
-import { paidCall } from "@/lib/creditTransactions";
+import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createImage, type ImageGenerationRequest } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
@@ -7,8 +7,9 @@ import { requireUser } from "@/lib/apiauth";
 import { getBalance, creditCost } from "@/lib/credits";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
-import { MAX_REF_IMAGES, getImageModel, supportsWatermarkControl } from "@/lib/imageModels";
+import { MAX_REF_IMAGES, getImageModelForControls, supportsWatermarkControl } from "@/lib/imageModels";
 import { recordGeneration } from "@/lib/generations";
+import { sniffImageMimeFromBase64 } from "@/lib/imageMime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,8 +89,13 @@ export async function POST(req: NextRequest) {
     // parameters outright ("Unknown parameter: 'watermark'"). Only forward
     // the field for families verified to accept it; strip it otherwise, even
     // if the client sent one (defense in depth — see AdvancedParams.tsx for
-    // the client-side gating).
-    const imgModel = getImageModel(String(body.model));
+    // the client-side gating). getImageModelForControls (not getImageModel)
+    // since this is a real-behavior question, not a display one — an
+    // "NSFW-"-prefixed Seedream id is still Seedream underneath and still
+    // accepts this field; a real bug hunt (2026-09-06) found this used
+    // plain getImageModel() and so was silently stripping watermark control
+    // for every NSFW-* image model regardless of what the client sent.
+    const imgModel = getImageModelForControls(String(body.model));
     if (supportsWatermarkControl(imgModel)) {
       if (payload.watermark === undefined) payload.watermark = false;
     } else {
@@ -119,14 +125,22 @@ export async function POST(req: NextRequest) {
     if (cappedRefs.length === 1) payload.image = cappedRefs[0];
     else if (cappedRefs.length > 1) payload.image = cappedRefs;
 
-    const json = await paidCall(user.id, cost, "image", String(body.model), () => createImage(payload as unknown as ImageGenerationRequest));
+    const { result: json, chargeId } = await paidCall(user.id, cost, "image", String(body.model), () =>
+      createImage(payload as unknown as ImageGenerationRequest)
+    );
     const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({
-      url: d.url ? String(d.url) : d.b64_json ? `data:image/png;base64,${d.b64_json}` : null,
+      url: d.url ? String(d.url) : d.b64_json ? `data:${sniffImageMimeFromBase64(String(d.b64_json))};base64,${d.b64_json}` : null,
       revisedPrompt: (d.revised_prompt as string) ?? null,
     }));
 
     if (!images.some((im: { url: string | null }) => im.url)) {
-      // upstream returned nothing usable — don't charge
+      // Upstream returned HTTP 200 but nothing usable — no exception for
+      // paidCall to catch, so nothing was auto-refunded (a real gap found in
+      // a 2026-09-06 audit: the comment here always SAID "don't charge", but
+      // paidCall reserves the charge before this code ever runs, so it was
+      // never actually rolled back). A soft moderation block is the most
+      // likely real cause. Refund explicitly.
+      await refundCharge(user.id, chargeId);
       return NextResponse.json({ images, created: json?.created ?? null, usage: json?.usage ?? null });
     }
 

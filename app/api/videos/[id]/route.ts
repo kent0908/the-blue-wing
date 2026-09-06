@@ -23,7 +23,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   try {
     const { id } = await ctx.params;
-    if (!/^[a-zA-Z0-9_-]{1,200}$/.test(id)) {
+    // Sanity-cap the length, but generously: verified live that a real
+    // Seedance r2v (video-reference) job id can run 300+ characters — the
+    // security review's original 200-char cap rejected those as "invalid"
+    // outright, breaking polling for exactly the video-reference feature
+    // added in this same session. Character set is still tight (opaque
+    // token, no reason it'd ever need anything else).
+    if (!/^[a-zA-Z0-9_-]{1,2000}$/.test(id)) {
       return NextResponse.json({ error: { message: "無效的任務編號" } }, { status: 400 });
     }
     const { rows: owned } = await sql`

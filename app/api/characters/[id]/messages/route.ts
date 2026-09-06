@@ -1,4 +1,4 @@
-import { paidCall } from "@/lib/creditTransactions";
+import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { createChatCompletion } from "@/lib/siraya";
@@ -84,9 +84,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       { role: "user" as const, content },
     ];
 
-    const json = await paidCall(r.user.id, cost, "text", character.model, () => createChatCompletion({ model: character.model, messages, max_tokens: MAX_TOKENS }));
+    const { result: json, chargeId } = await paidCall(r.user.id, cost, "text", character.model, () =>
+      createChatCompletion({ model: character.model, messages, max_tokens: MAX_TOKENS })
+    );
     const reply = json?.choices?.[0]?.message?.content;
     if (!reply) {
+      // HTTP 200 but no reply content — same real gap as /api/chat: paidCall
+      // already reserved the charge, no exception was thrown for it to
+      // auto-refund. Refund explicitly.
+      await refundCharge(r.user.id, chargeId);
       return NextResponse.json({ error: { message: "角色沒有回應，請再試一次", code: "empty_reply" } }, { status: 502 });
     }
 

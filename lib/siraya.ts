@@ -158,6 +158,45 @@ export async function createImage(body: ImageGenerationRequest) {
   return res.json();
 }
 
+/**
+ * A genuinely separate endpoint from /images/generations — verified live
+ * on 2026-09-06: SIRAYA-Dola-Seedream-5.0-pro accepts real image_urls (http
+ * or base64 data URL) plus an optional mask_url and returns a real edited
+ * image (b64_json), both with and without a mask. `output_format` here
+ * only accepts "png"/"jpeg" — "url" (the default elsewhere in this app)
+ * gets rejected outright, so this always requests png.
+ */
+export interface ImageEditRequest {
+  model: string;
+  prompt: string;
+  /** URL(s) or base64 data URL(s) of the source image(s) to edit */
+  image_urls: string[];
+  /** URL or base64 data URL — transparent/white marks the region to edit, per SIRAYA's own docs */
+  mask_url?: string;
+  n?: number;
+  /**
+   * Same Seedream "AI generated" watermark quirk as /images/generations
+   * (see ImageGenerationRequest) — but for THIS endpoint specifically, the
+   * top-level `watermark` field (what /images/generations uses) does
+   * nothing at all: verified live (2026-09-06) with three separate variants
+   * (`watermark:false`, `water_mark:false`, and simply omitting it) all
+   * producing an identical visible badge. `extra_body.watermark:false` is
+   * what actually suppresses it for /images/edits — confirmed by a matched
+   * pair of otherwise-identical requests, badge present without it, gone
+   * with it.
+   */
+  extra_body?: { watermark?: boolean };
+}
+
+/** POST /images/edits */
+export async function createImageEdit(body: ImageEditRequest) {
+  const res = await sirayaFetch("/images/edits", {
+    method: "POST",
+    body: JSON.stringify({ ...body, output_format: "png" }),
+  });
+  return res.json();
+}
+
 export interface VideoInputReference {
   type: "image" | "video" | "audio";
   url: string;
