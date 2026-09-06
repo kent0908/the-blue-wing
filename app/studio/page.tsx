@@ -1,16 +1,17 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Composer from "@/components/Composer";
-import JobQueue from "@/components/JobQueue";
+import JobQueue, { Elapsed, KIND_ICON, STAGE_LABEL } from "@/components/JobQueue";
 import InspirationPanel from "@/components/InspirationPanel";
 import ExpiringMedia from "@/components/ExpiringMedia";
-import { IconCompass, IconHistory, IconDownload } from "@/components/Icons";
+import { IconCompass, IconHistory, IconDownload, IconClose, IconCollapse } from "@/components/Icons";
 import { downloadResult } from "@/lib/download";
 import { useGenerationJobs, MAX_CONCURRENT_JOBS } from "@/lib/jobsStore";
 import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
-import type { GenSettings, Mode, ResultItem } from "@/lib/types";
+import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
 
 /**
  * Which 生成紀錄 kind belongs on-screen for a given composer mode. The main
@@ -106,6 +107,15 @@ function StudioInner() {
   // lib/jobsStore.tsx.
   const { jobs, results, startJob, dismissJob } = useGenerationJobs();
 
+  // A running job for the current mode shows big in the main viewer by
+  // default — the very first version's behaviour, and the one that
+  // actually surfaces an error or "what stage is this at" without having
+  // to notice the small strip below the composer. "縮小" collapses just
+  // that one job back down to the strip; it un-collapses on its own the
+  // moment it errors, since minimizing was never meant to hide a failure.
+  const [minimizedJobIds, setMinimizedJobIds] = useState<Set<string>>(new Set());
+  const minimizeJob = (id: string) => setMinimizedJobIds((s) => new Set(s).add(id));
+
   const setMode = (m: Mode) => router.push(`/studio?mode=${m}`);
 
   const handleSubmit = (args: {
@@ -126,6 +136,10 @@ function StudioInner() {
   const resultsForMode = results.filter((r) => r.kind === KIND_FOR_MODE[mode]);
   const latest = (selectedId ? resultsForMode.find((r) => r.id === selectedId) : null) ?? resultsForMode[0];
   const atCapacity = jobs.length >= MAX_CONCURRENT_JOBS;
+  // An error always takes over the main viewer regardless of minimize state
+  // — that's the whole failure mode this is meant to fix. A still-running
+  // job only takes over while not minimized.
+  const activeJob = jobs.find((j) => j.mode === mode && (j.error || !minimizedJobIds.has(j.id)));
 
   return (
     <div className="flex h-full min-h-0">
@@ -148,7 +162,9 @@ function StudioInner() {
         </div>
 
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 pt-16">
-          {latest ? (
+          {activeJob ? (
+            <ActiveJobCard job={activeJob} onMinimize={() => minimizeJob(activeJob.id)} onDismiss={() => dismissJob(activeJob.id)} />
+          ) : latest ? (
             // Keyed by id so switching to a different result remounts fresh —
             // resets this item's own "did its media fail to load" state
             // without needing a parent effect to sync it back to false.
@@ -200,6 +216,60 @@ function StudioInner() {
           onClose={() => setPanelOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * The current mode's active job, shown big in the main viewer instead of
+ * tucked into the small strip below the composer — see the note on
+ * `activeJob` above for why. Mirrors JobQueue's own error/running visuals,
+ * just at a size where a stage label or an error message actually reads as
+ * "something is happening" rather than something you'd have to go looking
+ * for.
+ */
+function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMinimize: () => void; onDismiss: () => void }) {
+  const Icon = KIND_ICON[job.kind];
+  if (job.error) {
+    return (
+      <div className="w-full max-w-lg rounded-2xl border border-[#4a2020] bg-[#1a1010] p-6 text-center">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-[#2a1616] text-[22px] text-[#ff8a8a]">!</div>
+        <p className="text-[14px] leading-relaxed text-[#ff9b9b]">{job.error}</p>
+        {job.errorCta && (
+          <Link href={job.errorCta.href} className="mt-2 inline-block text-[12.5px] text-[#7ff0cd] hover:underline">
+            {job.errorCta.label}
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mx-auto mt-4 flex items-center gap-1.5 rounded-full bg-[#242424] px-4 py-1.5 text-[12.5px] text-white hover:bg-[#2e2e2e]"
+        >
+          <IconClose className="h-3.5 w-3.5" />
+          關閉
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full max-w-lg rounded-2xl border border-[#2a2a2a] bg-[#141414] p-8 text-center">
+      <button
+        type="button"
+        onClick={onMinimize}
+        title="縮小（生成不會中斷，改用下面的小卡片顯示）"
+        className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full text-[#6d6d6d] hover:bg-[#1f1f1f] hover:text-white"
+      >
+        <IconCollapse className="h-4 w-4" />
+      </button>
+      <span className="relative mx-auto mb-4 grid h-14 w-14 place-items-center">
+        <span className="absolute inset-0 rounded-full border border-[#7ff0cd]/50 bw-pulse-ring" />
+        <Icon className="h-6 w-6 text-[#7ff0cd]" />
+      </span>
+      <p className="text-[14px] text-white">{job.prompt || job.model}</p>
+      <p className="mt-2 text-[12.5px] text-[#7d7d7d]">
+        {STAGE_LABEL[Math.min(job.stage, STAGE_LABEL.length - 1)]} · <Elapsed startedAt={job.startedAt} />
+      </p>
     </div>
   );
 }

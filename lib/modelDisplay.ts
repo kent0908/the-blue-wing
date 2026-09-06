@@ -51,18 +51,23 @@ function sortKeyOf(id: string): SortKey {
 }
 
 /**
- * Default ordering with no admin input at all: same family adjacent
- * (Seedance next to Seedance, not scattered between Veo and Gemini), NSFW
- * variant right after its plain counterpart (same base name), version-aware
- * within that (so "2.5" sorts after "2.0", not before "10.0" alphabetically).
+ * Default ordering with no admin input at all: every plain (non-NSFW) model
+ * first, grouped by family (Seedance next to Seedance, not scattered
+ * between Veo and Gemini) and version-aware within that (so "2.5" sorts
+ * after "2.0", not before "10.0" alphabetically) — then every NSFW model
+ * as its own block at the very end, grouped and version-sorted the same
+ * way. Keeping the NSFW block entirely separate (rather than interleaved
+ * right after each plain counterpart) is deliberate: a normal-use picker
+ * shouldn't have an NSFW entry show up in the middle of the list you
+ * actually scroll through.
  */
 export function compareModelsDefault(idA: string, idB: string): number {
   const a = sortKeyOf(idA);
   const b = sortKeyOf(idB);
   return (
+    Number(a.isNsfw) - Number(b.isNsfw) ||
     a.family.localeCompare(b.family) ||
-    a.base.localeCompare(b.base, undefined, { numeric: true, sensitivity: "base" }) ||
-    Number(a.isNsfw) - Number(b.isNsfw)
+    a.base.localeCompare(b.base, undefined, { numeric: true, sensitivity: "base" })
   );
 }
 
