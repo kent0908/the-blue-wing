@@ -174,6 +174,18 @@ export interface ImageEditRequest {
   /** URL or base64 data URL — transparent/white marks the region to edit, per SIRAYA's own docs */
   mask_url?: string;
   n?: number;
+  /**
+   * Same Seedream "AI generated" watermark quirk as /images/generations
+   * (see ImageGenerationRequest) — but for THIS endpoint specifically, the
+   * top-level `watermark` field (what /images/generations uses) does
+   * nothing at all: verified live (2026-09-06) with three separate variants
+   * (`watermark:false`, `water_mark:false`, and simply omitting it) all
+   * producing an identical visible badge. `extra_body.watermark:false` is
+   * what actually suppresses it for /images/edits — confirmed by a matched
+   * pair of otherwise-identical requests, badge present without it, gone
+   * with it.
+   */
+  extra_body?: { watermark?: boolean };
 }
 
 /** POST /images/edits */

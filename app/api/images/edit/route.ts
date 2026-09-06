@@ -1,5 +1,5 @@
 import { validateGeneration } from "@/lib/generationValidation";
-import { paidCall } from "@/lib/creditTransactions";
+import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createImageEdit } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
@@ -59,12 +59,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const json = await paidCall(user.id, cost, "image", EDIT_MODEL, () =>
+    const { result: json, chargeId } = await paidCall(user.id, cost, "image", EDIT_MODEL, () =>
       createImageEdit({
         model: EDIT_MODEL,
         prompt: String(body.prompt),
         image_urls: [String(body.image)],
         mask_url: body.mask ? String(body.mask) : undefined,
+        // Not client-configurable here (this tool has no advanced-settings
+        // panel) — always off, matching the "no watermark by default"
+        // behaviour everywhere else. Found missing entirely in a real bug
+        // hunt (2026-09-06): every real edit through this route came back
+        // with a visible "AI generated" badge. A top-level `watermark`
+        // field (like /images/generations uses) does nothing at all for
+        // this endpoint — verified live; `extra_body.watermark` is what
+        // actually works here — see ImageEditRequest's comment.
+        extra_body: { watermark: false },
       })
     );
 
@@ -75,6 +84,10 @@ export async function POST(req: NextRequest) {
         ? `data:${sniffImageMimeFromBase64(String(first.b64_json))};base64,${first.b64_json}`
         : null;
     if (!rawUrl) {
+      // HTTP 200 but nothing usable — same real gap as /api/images (see its
+      // comment): paidCall already reserved the charge, no exception was
+      // thrown for it to auto-refund, so this must refund explicitly.
+      await refundCharge(user.id, chargeId);
       return NextResponse.json({ error: { message: "編輯失敗，沒有取得結果圖片" } }, { status: 502 });
     }
 

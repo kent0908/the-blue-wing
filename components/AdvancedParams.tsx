@@ -35,7 +35,14 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
       <span
         className={[
           "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-          on ? "bg-[#4a4a4a]" : "bg-[#2fae8c]",
+          // Was backwards — track colour and thumb position disagreed with
+          // each other (gray+thumb-right for "on", green+thumb-left for
+          // "off"), which is exactly the kind of inconsistent toggle that
+          // makes people misread which state they're actually in. A real
+          // user report (2026-09-06) turned out to be this: they'd read the
+          // green track as "on" (it's this app's own accent colour
+          // everywhere else) while the switch was actually off underneath.
+          on ? "bg-[#2fae8c]" : "bg-[#4a4a4a]",
         ].join(" ")}
       >
         <span

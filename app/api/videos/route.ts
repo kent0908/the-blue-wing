@@ -1,5 +1,5 @@
 import { validateGeneration } from "@/lib/generationValidation";
-import { paidCall } from "@/lib/creditTransactions";
+import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createVideo } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
@@ -148,12 +148,24 @@ export async function POST(req: NextRequest) {
       videoBody.extra_body = rest;
     }
 
-    const json = await paidCall(user.id, cost, "video", String(body.model), () => createVideo({ ...videoBody, async: true }));
+    const { result: json, chargeId } = await paidCall(user.id, cost, "video", String(body.model), () =>
+      createVideo({ ...videoBody, async: true })
+    );
 
     // Async submissions return { id, status: "processing" }; a provider that
     // completes synchronously returns { data: [{ url }] } instead.
     const immediateUrl = json?.data?.[0]?.url ?? null;
     const jobId = json?.id ?? null;
+
+    if (!immediateUrl && !jobId) {
+      // HTTP 200 but neither a job to poll nor a finished video — no
+      // exception was thrown, so paidCall's own refund never fired, and
+      // nothing is left to reconcile this against later (no job id means
+      // /api/videos/[id] has nothing to poll). Refund explicitly rather
+      // than leaving this charged with literally no way to ever complete.
+      await refundCharge(user.id, chargeId);
+      return NextResponse.json({ error: { message: "提交失敗，SIRAYA 沒有回傳任務編號或結果" } }, { status: 502 });
+    }
 
     // Charge on submission, tagged with the job id so /api/videos/[id] can
     // refund if the render ends up failing.

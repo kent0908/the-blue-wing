@@ -1,5 +1,5 @@
 import { validateGeneration } from "@/lib/generationValidation";
-import { paidCall } from "@/lib/creditTransactions";
+import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createChatCompletion, createChatCompletionStream } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
@@ -51,8 +51,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.stream) {
-      // streaming: charge upfront since token usage isn't observable here
-      const upstream = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletionStream(body));
+      // streaming: charge upfront since token usage isn't observable here.
+      // A genuinely empty/failed stream can't be detected here (the body is
+      // handed straight through unread) — that gap is real but a much
+      // smaller/rarer one than the non-streaming path below, left as-is.
+      const { result: upstream } = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletionStream(body));
       return new Response(upstream.body, {
         headers: {
           "Content-Type": "text/event-stream; charset=utf-8",
@@ -62,11 +65,19 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const json = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletion(body));
+    const { result: json, chargeId } = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletion(body));
 
     const replyText = json?.choices?.[0]?.message?.content;
     const lastUserPrompt = [...body.messages].reverse().find((m: { role: string }) => m.role === "user")?.content;
-    if (replyText && lastUserPrompt) {
+    if (!replyText) {
+      // HTTP 200 but no actual reply content (e.g. a moderation refusal
+      // returned as an empty completion rather than an error) — same real
+      // gap as /api/images: paidCall already reserved the charge, no
+      // exception was thrown for it to auto-refund. Refund explicitly.
+      await refundCharge(user.id, chargeId);
+      return NextResponse.json({ ...json, creditsSpent: 0, creditsBalance: balance });
+    }
+    if (lastUserPrompt) {
       await recordGeneration(user.id, {
         kind: "text",
         model: String(body.model),
