@@ -1,13 +1,18 @@
 import { SirayaApiError } from "./siraya";
 const bad=()=>{throw new SirayaApiError(400,"生成參數不正確或包含未支援的欄位");};
-export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text") {
+export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text"|"imageEdit") {
   const common=["model","prompt"];
   const keys=kind==="image"?["n","size","quality","style","response_format","negative_prompt","seed","background","output_compression","moderation","watermark","assetIds","image"]:
     kind==="video"?["seconds","resolution","aspect_ratio","generate_audio","negative_prompt","seed","extra_body","assetIds","imageUrls","videoUrl","async"]:
+    kind==="imageEdit"?["image","mask"]:
     ["messages","stream","temperature","max_tokens"];
   if(!body || typeof body!=="object" || Object.keys(body).some(k=>![...common,...keys].includes(k)))bad();
   if(typeof body.model!=="string"||!/^[a-zA-Z0-9._:-]{1,150}$/.test(body.model))bad();
   if(kind!=="text" && (typeof body.prompt!=="string"||!body.prompt.trim()||body.prompt.length>12000))bad();
+  if(kind==="imageEdit"){
+    if(typeof body.image!=="string"||!body.image.trim())bad();
+    if(body.mask!==undefined && (typeof body.mask!=="string"||!body.mask.trim()))bad();
+  }
   const integer=(key:string,def:number,min:number,max:number)=>{
     const value=body[key]??def;
     if(typeof value!=="number"||!Number.isSafeInteger(value)||value<min||value>max)bad();

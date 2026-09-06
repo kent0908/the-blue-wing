@@ -43,6 +43,7 @@ const GROUP_B: Item[] = [
   { href: "/apps", label: "AI 應用", icon: IconApps },
   { href: "/canvas", label: "智慧畫布", icon: IconCanvas, badge: { text: "NEW", tone: "new" } },
   { href: "/canvas/director3d", label: "3D 導演台", icon: IconAvatar, badge: { text: "NEW", tone: "new" } },
+  { href: "/editor", label: "圖層編輯", icon: IconImage, badge: { text: "NEW", tone: "new" } },
 ];
 
 const GROUP_C: Item[] = [
