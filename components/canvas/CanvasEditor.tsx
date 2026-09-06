@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { IconChevronLeft, IconPlus, IconPlay, IconTrash, IconImage, IconVideo, IconChat, IconAssets } from "../Icons";
+import { IconChevronLeft, IconPlus, IconPlay, IconTrash, IconImage, IconVideo, IconChat, IconAssets, IconAvatar } from "../Icons";
+import Director3DPanel from "./director3d/Director3DPanel";
+import type { Director3DSceneData } from "@/lib/canvas/director3d";
 import {
   NODE_SPECS,
   NODE_TYPES,
@@ -31,6 +33,7 @@ const NODE_ICON: Record<CanvasNodeType, (p: { className?: string }) => React.Rea
   loadImage: IconAssets,
   image: IconImage,
   video: IconVideo,
+  director3d: IconAvatar,
 };
 
 interface AssetLite {
@@ -90,6 +93,7 @@ export default function CanvasEditor({
   const [runningAll, setRunningAll] = useState(false);
   const [assetLibrary, setAssetLibrary] = useState<AssetLite[] | null>(null);
   const [videoModelIds, setVideoModelIds] = useState<string[]>([]);
+  const [director3dNodeId, setDirector3dNodeId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const panRef = useRef(pan);
@@ -455,6 +459,7 @@ export default function CanvasEditor({
               }}
               onRun={() => runOne(node.id)}
               onDataChange={(patch) => updateNodeData(node.id, patch)}
+              onOpenDirector3D={() => setDirector3dNodeId(node.id)}
               onOutputPortDown={(e) => {
                 e.stopPropagation();
                 const w = toWorld(e.clientX, e.clientY);
@@ -474,6 +479,19 @@ export default function CanvasEditor({
           </div>
         )}
       </div>
+
+      {director3dNodeId &&
+        (() => {
+          const n = graph.nodes.find((x) => x.id === director3dNodeId);
+          if (!n) return null;
+          return (
+            <Director3DPanel
+              initial={n.data as unknown as Director3DSceneData}
+              onSave={(data) => updateNodeData(n.id, data as unknown as Record<string, unknown>)}
+              onClose={() => setDirector3dNodeId(null)}
+            />
+          );
+        })()}
     </div>
   );
 }
@@ -490,6 +508,7 @@ function NodeCard({
   onRun,
   onDataChange,
   onOutputPortDown,
+  onOpenDirector3D,
 }: {
   node: CanvasNode;
   selected: boolean;
@@ -502,6 +521,7 @@ function NodeCard({
   onRun: () => void;
   onDataChange: (patch: Record<string, unknown>) => void;
   onOutputPortDown: (e: React.PointerEvent) => void;
+  onOpenDirector3D: () => void;
 }) {
   const spec = NODE_SPECS[node.type];
   const Icon = NODE_ICON[node.type];
@@ -722,8 +742,28 @@ function NodeCard({
           </>
         )}
 
-        {/* output preview — loadImage renders its own thumbnails above instead */}
-        {node.output?.kind === "image" && node.type !== "loadImage" && (
+        {node.type === "director3d" && (
+          <>
+            {node.data.capturedImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={String(node.data.capturedImage)} alt="3D 截圖" className="w-full rounded-lg border border-[#2c2c2c]" />
+            ) : (
+              <div className="grid h-20 place-items-center rounded-lg border border-dashed border-[#3a3a3a] text-[11px] text-[#6d6d6d]">
+                還沒截圖
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={onOpenDirector3D}
+              className="w-full rounded-lg border border-[#3a3a3a] bg-[#1c1c1c] py-1.5 text-[11.5px] text-[#c9c9c9] hover:border-[#555]"
+            >
+              開啟 3D 導演台
+            </button>
+          </>
+        )}
+
+        {/* output preview — loadImage/director3d render their own thumbnails above instead */}
+        {node.output?.kind === "image" && node.type !== "loadImage" && node.type !== "director3d" && (
           <div className={node.output.items.length > 1 ? "grid grid-cols-2 gap-1" : undefined}>
             {node.output.items.map((it, i) => (
               // eslint-disable-next-line @next/next/no-img-element

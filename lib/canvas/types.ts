@@ -6,10 +6,11 @@
  * equivalent in this app, or are a separate feature in their own right —
  * see app/canvas/page.tsx for the "coming later" list shown to the user.
  */
+import { defaultDirector3DData } from "./director3d";
 
 export type PortType = "text" | "image" | "video";
 
-export type CanvasNodeType = "text" | "loadImage" | "image" | "video";
+export type CanvasNodeType = "text" | "loadImage" | "image" | "video" | "director3d";
 
 export type RunStatus = "idle" | "running" | "done" | "error";
 
@@ -101,9 +102,16 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
     ],
     output: { id: "out", label: "影片", type: "video" },
   },
+  director3d: {
+    type: "director3d",
+    label: "3D 導演台",
+    hint: "在 3D 場景裡擺姿勢、調相機，截圖當參考圖",
+    inputs: [],
+    output: { id: "out", label: "截圖", type: "image" },
+  },
 };
 
-export const NODE_TYPES: CanvasNodeType[] = ["text", "loadImage", "image", "video"];
+export const NODE_TYPES: CanvasNodeType[] = ["text", "loadImage", "image", "video", "director3d"];
 
 /** Fixed layout constants shared by node rendering and edge-path math. */
 export const NODE_WIDTH = 240;
@@ -126,6 +134,8 @@ export function defaultNodeData(type: CanvasNodeType): Record<string, unknown> {
       return { model: "ByteDance-Seedream-4.0", prompt: "", size: "1024x1024" };
     case "video":
       return { model: "SIRAYA-Seedance-2.0-mini", prompt: "", seconds: 5, resolution: "480p" };
+    case "director3d":
+      return defaultDirector3DData() as unknown as Record<string, unknown>;
   }
 }
 

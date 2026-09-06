@@ -73,6 +73,12 @@ export async function runNode(
     return { kind: "text", text: String(node.data.text ?? "") };
   }
 
+  if (node.type === "director3d") {
+    const captured = node.data.capturedImage as string | null | undefined;
+    if (!captured) throw new Error("請先開啟 3D 導演台，擺好姿勢並截圖");
+    return { kind: "image", items: [{ url: captured }] };
+  }
+
   if (node.type === "loadImage") {
     const items = (node.data.items as LoadImageItem[] | undefined) ?? [];
     if (!items.length) throw new Error("請先選擇素材");

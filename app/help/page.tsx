@@ -19,6 +19,7 @@ const SECTIONS: Section[] = [
   { id: "video", title: "影片生成" },
   { id: "refs", title: "參考素材與 @ 提及" },
   { id: "advanced", title: "進階設定：浮水印、審核強度" },
+  { id: "canvas", title: "智慧畫布與 3D 導演台" },
   { id: "history", title: "生成紀錄與下載" },
   { id: "credits", title: "點數與方案" },
   { id: "faq", title: "常見問題" },
@@ -187,6 +188,30 @@ export default function HelpPage() {
                 這裡只放實際會生效的參數 — 「引導強度」「推理步數」這類擴散模型內部參數，Seedream / Seedance
                 並沒有對外開放，所以刻意沒有放假的滑桿。
               </p>
+            </Card>
+          </section>
+
+          {/* 智慧畫布與 3D 導演台 */}
+          <section className="space-y-3">
+            <H2 id="canvas">智慧畫布與 3D 導演台</H2>
+            <Card>
+              <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
+                <Link href="/canvas" className="text-[#7ff0cd] hover:underline">智慧畫布</Link>
+                是節點式的工作流編輯器：把文字、圖片、影片、素材這些節點拉出來、用線連起來，一個節點的輸出可以直接接
+                另一個節點的輸入（例如文字節點接到圖片生成節點的 prompt，或圖片生成節點的結果接到影片生成節點的參考圖）。
+              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
+                <li><span className="text-white">文字</span>：手動輸入文字，接給其他節點當 prompt。</li>
+                <li><span className="text-white">讀取素材</span>：從資產庫選圖，可一次選多張。</li>
+                <li><span className="text-white">圖片生成 / 影片生成</span>：跟輸入框裡的生成功能吃同一套 API，一樣會消耗點數。</li>
+                <li>
+                  <span className="text-white">3D 導演台</span>：在一個簡單的 3D 場景裡擺放、旋轉一個人形模型，套用現成姿勢或用
+                  RIG 面板逐關節微調，調好角度後截圖——這張截圖就是這個節點的輸出，可以直接接到後面的圖片／影片生成節點當參考圖，
+                  不用再手動找或畫參考圖。目前是單一自由視角相機＋純色背景，一次只能截一張靜態圖；多相機切換、360°
+                  全景背景、時間軸關鍵幀動畫錄影輸出還沒做，之後會再擴充。人形模型是純幾何圖形組成的假人（不是外部下載的模型），
+                  姿勢庫也是手動調的近似姿勢，不是動作捕捉來的精確資料。
+                </li>
+              </ul>
             </Card>
           </section>
 
