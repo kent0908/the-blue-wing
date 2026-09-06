@@ -165,7 +165,7 @@ const GPT_IMAGE_CONTROLS: ImageControl[] = [SIZE, QUALITY, BACKGROUND, COMPRESSI
 export const IMAGE_MODELS: ImageModel[] = [
   {
     id: "ByteDance-Seedream-4.0",
-    name: "ByteDance Seedream 4.0",
+    name: "Seedream 4.0",
     family: "seedream",
     price: "$0.03 / 張",
     blurb: "高性價比的通用文生圖，中文語意表現穩定。",
@@ -174,7 +174,7 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
   {
     id: "ByteDance-Seedream-4.5",
-    name: "ByteDance Seedream 4.5",
+    name: "Seedream 4.5",
     family: "seedream",
     price: "$0.04 / 張",
     blurb: "4.0 的升級版，細節與構圖更完整。僅支援 2K 以上尺寸。",
@@ -183,7 +183,7 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
   {
     id: "Dola-Seedream-5.0-lite",
-    name: "Dola Seedream 5.0 lite",
+    name: "Seedream 5.0 lite",
     family: "seedream",
     price: "$0.035 / 張",
     blurb: "第五代輕量版，速度快、成本低。僅支援 2K 以上尺寸。",
@@ -192,7 +192,7 @@ export const IMAGE_MODELS: ImageModel[] = [
   },
   {
     id: "Dola-Seedream-5.0-pro",
-    name: "Dola Seedream 5.0 pro",
+    name: "Seedream 5.0 pro",
     family: "seedream",
     price: "$0.045 / 張",
     blurb: "生產級視覺創作，質感與提示詞跟隨度最佳。僅支援 2K 以上尺寸。",
@@ -249,10 +249,17 @@ export const IMAGE_MODELS: ImageModel[] = [
 ];
 
 /**
- * Cleans up a raw model id for display in the picker — strips the "SIRAYA-"
- * router prefix (it's just routing plumbing, not something a user needs to
- * see) for models that aren't in the curated catalogue (video models mostly,
- * which have no catalogue entry so the raw id is shown as-is otherwise).
+ * Cleans up a raw model id for display in the picker — strips vendor/router
+ * prefixes that are just upstream plumbing (SIRAYA- the router, ByteDance-
+ * and Dola- the underlying model vendor for Seedream/Seedance) for models
+ * that aren't in the curated catalogue (video models mostly, which have no
+ * catalogue entry so the raw id is shown as-is otherwise). This is the
+ * client-safe twin of lib/modelDisplay.ts's cleanModelName (same regex,
+ * duplicated rather than shared — that file touches the DB at import time,
+ * which has no business in a browser bundle); /api/models applies the full
+ * override-aware version server-side, so a live-loaded model list already
+ * carries the real displayName and this is only the pre-load/no-override
+ * fallback.
  *
  * Deliberately does NOT touch an "NSFW-" prefix, even though the ask that
  * prompted this was to strip that too and quietly point the plain model name
@@ -264,7 +271,12 @@ export const IMAGE_MODELS: ImageModel[] = [
  * someone tell the two apart, so it stays visible.
  */
 export function displayModelName(id: string): string {
-  return id.replace(/^SIRAYA-/i, "");
+  // NSFW- can come before the vendor prefix (NSFW-Dola-Seedream-5.0-pro) —
+  // strip it off, clean the rest, then put it back, rather than anchoring
+  // the vendor regex to the very start of the string.
+  const nsfw = id.match(/^NSFW-(.+)$/i);
+  const rest = (nsfw ? nsfw[1] : id).replace(/^(SIRAYA|ByteDance|Dola)-/i, "");
+  return nsfw ? `NSFW-${rest}` : rest;
 }
 
 export function getImageModel(id: string | null | undefined): ImageModel | undefined {

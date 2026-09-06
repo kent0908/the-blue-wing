@@ -33,6 +33,10 @@ export interface CanvasNode {
   type: CanvasNodeType;
   x: number;
   y: number;
+  /** card width in px — the resize handle's drag target; falls back to NODE_WIDTH when unset (every node created before this existed). */
+  width?: number;
+  /** height cap (px) for this node's main text area (the "text" node's textarea, or a text-kind output preview) — same resize handle, other axis. Content beyond it scrolls instead of pushing the card taller, which is the whole point: a long prompt/output no longer forces every node below it down the canvas. */
+  textHeight?: number;
   /** node-type-specific fields — see defaultNodeData() */
   data: Record<string, unknown>;
   status?: RunStatus;
@@ -117,6 +121,13 @@ export const NODE_TYPES: CanvasNodeType[] = ["text", "loadImage", "image", "vide
 export const NODE_WIDTH = 240;
 export const NODE_HEADER_H = 40;
 export const NODE_PORT_ROW_H = 26;
+
+/** Resize-handle bounds — see CanvasNode's width/textHeight. */
+export const MIN_NODE_WIDTH = 200;
+export const MAX_NODE_WIDTH = 520;
+export const MIN_TEXT_HEIGHT = 72;
+export const MAX_TEXT_HEIGHT = 480;
+export const DEFAULT_TEXT_HEIGHT = 96;
 
 export interface LoadImageItem {
   assetId: number;

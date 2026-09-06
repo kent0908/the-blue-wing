@@ -149,6 +149,17 @@ body {
   animation: bw-pulse-ring 1.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
 }
 
+/* field-sizing:content lets a textarea grow with what you type instead of
+   staying a fixed 3-row box — nice for short prompts, but with nothing
+   capping it a long pasted prompt/character-sheet grows the box past the
+   viewport and pushes whatever's below it (a Composer's submit button, a
+   Canvas node's own bottom edge) off-screen or far down the page. The cap
+   here is a safety net for every textarea in the app; anything that wants
+   a smaller (or per-instance) limit sets its own inline max-height, which
+   wins via specificity — see components/Composer.tsx and
+   components/canvas/CanvasEditor.tsx's "text" node for two that do. */
 textarea {
   field-sizing: content;
+  max-height: 40vh;
+  overflow-y: auto;
 }

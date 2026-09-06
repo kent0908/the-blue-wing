@@ -11,6 +11,11 @@ import {
   NODE_WIDTH,
   NODE_HEADER_H,
   NODE_PORT_ROW_H,
+  MIN_NODE_WIDTH,
+  MAX_NODE_WIDTH,
+  MIN_TEXT_HEIGHT,
+  MAX_TEXT_HEIGHT,
+  DEFAULT_TEXT_HEIGHT,
   defaultNodeData,
   newId,
   type CanvasGraph,
@@ -46,10 +51,11 @@ type Interaction =
   | { kind: "pan"; startClientX: number; startClientY: number; startPan: { x: number; y: number } }
   | { kind: "dragNode"; id: string; offsetX: number; offsetY: number }
   | { kind: "connect"; fromNode: string; fromPort: string; portType: PortType; x: number; y: number }
+  | { kind: "resizeNode"; id: string; startClientX: number; startClientY: number; startWidth: number; startHeight: number }
   | null;
 
 function outputPos(n: CanvasNode) {
-  return { x: n.x + NODE_WIDTH, y: n.y + NODE_HEADER_H / 2 };
+  return { x: n.x + (n.width ?? NODE_WIDTH), y: n.y + NODE_HEADER_H / 2 };
 }
 function inputPos(n: CanvasNode, portId: string) {
   const idx = NODE_SPECS[n.type].inputs.findIndex((p) => p.id === portId);
@@ -92,7 +98,7 @@ export default function CanvasEditor({
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
   const [assetLibrary, setAssetLibrary] = useState<AssetLite[] | null>(null);
-  const [videoModelIds, setVideoModelIds] = useState<string[]>([]);
+  const [videoModels, setVideoModels] = useState<{ id: string; name: string }[]>([]);
   const [director3dNodeId, setDirector3dNodeId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -133,8 +139,10 @@ export default function CanvasEditor({
   useEffect(() => {
     fetch("/api/models")
       .then((r) => (r.ok ? r.json() : { models: [] }))
-      .then((j: { models: { id: string; modality: string }[] }) =>
-        setVideoModelIds(j.models.filter((m) => m.modality === "video").map((m) => m.id))
+      .then((j: { models: { id: string; modality: string; displayName?: string }[] }) =>
+        // /api/models already returns them pre-sorted (grouped by family,
+        // admin overrides honoured) — no reason to re-sort here too.
+        setVideoModels(j.models.filter((m) => m.modality === "video").map((m) => ({ id: m.id, name: m.displayName ?? m.id })))
       )
       .catch(() => {});
   }, []);
@@ -157,6 +165,14 @@ export default function CanvasEditor({
       } else if (interaction.kind === "connect") {
         const w = toWorld(e.clientX, e.clientY);
         setInteraction({ ...interaction, x: w.x, y: w.y });
+      } else if (interaction.kind === "resizeNode") {
+        // Divide by zoom — the drag happens in screen pixels, but width/textHeight
+        // are stored in the canvas's own (unzoomed) world units.
+        const dx = (e.clientX - interaction.startClientX) / zoomRef.current;
+        const dy = (e.clientY - interaction.startClientY) / zoomRef.current;
+        const width = Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, interaction.startWidth + dx));
+        const textHeight = Math.min(MAX_TEXT_HEIGHT, Math.max(MIN_TEXT_HEIGHT, interaction.startHeight + dy));
+        mutate((g) => ({ ...g, nodes: g.nodes.map((n) => (n.id === interaction.id ? { ...n, width, textHeight } : n)) }));
       }
     };
 
@@ -438,7 +454,7 @@ export default function CanvasEditor({
               node={node}
               selected={selectedNode === node.id}
               assetLibrary={assetLibrary}
-              videoModelIds={videoModelIds}
+              videoModels={videoModels}
               onEnsureAssets={ensureAssets}
               onSelect={() => {
                 setSelectedNode(node.id);
@@ -460,6 +476,19 @@ export default function CanvasEditor({
               onRun={() => runOne(node.id)}
               onDataChange={(patch) => updateNodeData(node.id, patch)}
               onOpenDirector3D={() => setDirector3dNodeId(node.id)}
+              onResizePointerDown={(e) => {
+                e.stopPropagation();
+                setSelectedNode(node.id);
+                setSelectedEdge(null);
+                setInteraction({
+                  kind: "resizeNode",
+                  id: node.id,
+                  startClientX: e.clientX,
+                  startClientY: e.clientY,
+                  startWidth: node.width ?? NODE_WIDTH,
+                  startHeight: node.textHeight ?? DEFAULT_TEXT_HEIGHT,
+                });
+              }}
               onOutputPortDown={(e) => {
                 e.stopPropagation();
                 const w = toWorld(e.clientX, e.clientY);
@@ -500,7 +529,7 @@ function NodeCard({
   node,
   selected,
   assetLibrary,
-  videoModelIds,
+  videoModels,
   onEnsureAssets,
   onSelect,
   onHeaderPointerDown,
@@ -509,11 +538,12 @@ function NodeCard({
   onDataChange,
   onOutputPortDown,
   onOpenDirector3D,
+  onResizePointerDown,
 }: {
   node: CanvasNode;
   selected: boolean;
   assetLibrary: AssetLite[] | null;
-  videoModelIds: string[];
+  videoModels: { id: string; name: string }[];
   onEnsureAssets: () => void;
   onSelect: () => void;
   onHeaderPointerDown: (e: React.PointerEvent) => void;
@@ -522,6 +552,7 @@ function NodeCard({
   onDataChange: (patch: Record<string, unknown>) => void;
   onOutputPortDown: (e: React.PointerEvent) => void;
   onOpenDirector3D: () => void;
+  onResizePointerDown: (e: React.PointerEvent) => void;
 }) {
   const spec = NODE_SPECS[node.type];
   const Icon = NODE_ICON[node.type];
@@ -537,7 +568,7 @@ function NodeCard({
         "absolute overflow-visible rounded-xl border bg-[#161616] shadow-lg",
         selected ? "border-[#7ff0cd]" : "border-[#2a2a2a]",
       ].join(" ")}
-      style={{ left: node.x, top: node.y, width: NODE_WIDTH }}
+      style={{ left: node.x, top: node.y, width: node.width ?? NODE_WIDTH }}
     >
       {/* header */}
       <div
@@ -598,8 +629,8 @@ function NodeCard({
             value={String(node.data.text ?? "")}
             onChange={(e) => onDataChange({ text: e.target.value })}
             placeholder="輸入文字…"
-            rows={3}
             className={fieldCls + " resize-none"}
+            style={{ minHeight: MIN_TEXT_HEIGHT, maxHeight: node.textHeight ?? DEFAULT_TEXT_HEIGHT, overflowY: "auto" }}
           />
         )}
 
@@ -708,10 +739,10 @@ function NodeCard({
         {node.type === "video" && (
           <>
             <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value })} className={fieldCls}>
-              {videoModelIds.length === 0 && <option value={String(node.data.model ?? "")}>{String(node.data.model ?? "載入中…")}</option>}
-              {videoModelIds.map((id) => (
-                <option key={id} value={id}>
-                  {id}
+              {videoModels.length === 0 && <option value={String(node.data.model ?? "")}>{String(node.data.model ?? "載入中…")}</option>}
+              {videoModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
                 </option>
               ))}
             </select>
@@ -775,9 +806,25 @@ function NodeCard({
           <video src={node.output.url} controls className="w-full rounded-lg border border-[#2c2c2c]" />
         )}
         {node.output?.kind === "text" && node.type !== "text" && (
-          <div className="rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] p-2 text-[11px] text-[#c9c9c9]">{node.output.text}</div>
+          <div
+            className="overflow-y-auto rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] p-2 text-[11px] text-[#c9c9c9]"
+            style={{ maxHeight: node.textHeight ?? DEFAULT_TEXT_HEIGHT }}
+          >
+            {node.output.text}
+          </div>
         )}
         {node.error && <div className="rounded-lg border border-[#4a2020] bg-[#1a1010] p-2 text-[11px] text-[#ff9b9b]">{node.error}</div>}
+      </div>
+
+      {/* resize handle — drags width + the text area's height together, see the "resizeNode" interaction in CanvasEditor */}
+      <div
+        onPointerDown={onResizePointerDown}
+        title="拖曳調整節點大小"
+        className="absolute -bottom-1 -right-1 h-4 w-4 cursor-nwse-resize rounded-tl-md text-[#5c5c5c] hover:text-[#7ff0cd]"
+      >
+        <svg viewBox="0 0 16 16" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M13 3 L3 13 M13 8 L8 13 M13 13 L13 13" strokeLinecap="round" />
+        </svg>
       </div>
     </div>
   );

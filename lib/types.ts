@@ -5,6 +5,10 @@ export interface ModelInfo {
   ownedBy: string;
   created: number | null;
   modality: "text" | "image" | "video";
+  /** admin-overridable label (see lib/modelDisplay.ts) — prefer this over the raw id/catalogue name everywhere a model list is rendered. */
+  displayName?: string;
+  /** admin-set explicit order, if any — /api/models already returns the list pre-sorted, this is only here in case a caller needs to re-sort a filtered subset. */
+  sortOrder?: number | null;
 }
 
 export interface GenSettings {

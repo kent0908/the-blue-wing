@@ -551,6 +551,7 @@ export default function Composer({
             placeholder={canUseRefs && refs.length > 0 ? `${PLACEHOLDER[mode]}（可打 @ 標記素材）` : PLACEHOLDER[mode]}
             rows={expanded ? 8 : 3}
             className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
+            style={{ maxHeight: expanded ? 320 : 92, overflowY: "auto" }}
           />
 
           {mention && (
@@ -670,7 +671,7 @@ export default function Composer({
           trigger={(open) => (
             <>
               <IconModel className="h-[15px] w-[15px]" />
-              {loadingModels ? "載入模型…" : model ? getImageModel(model)?.name ?? displayModelName(model) : "無可用模型"}
+              {loadingModels ? "載入模型…" : model ? (available.find((m) => m.id === model)?.displayName ?? getImageModel(model)?.name ?? displayModelName(model)) : "無可用模型"}
               <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
             </>
           )}
@@ -705,7 +706,7 @@ export default function Composer({
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#242424]">
                     <IconModel className="h-[15px] w-[15px]" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px]">{getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13.5px]">{m.displayName ?? getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
                   {m.id === model && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
                 </button>
               ))}
