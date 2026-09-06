@@ -4,6 +4,8 @@
  * Composer uses, so credits/limits/model catalogues stay in one place.
  */
 import type { CanvasGraph, CanvasNode, LoadImageItem, NodeOutput } from "./types";
+import { sizeOptionsFor } from "@/lib/imageModels";
+import { videoConstraintFor } from "@/lib/videoModels";
 
 /** Kahn's algorithm. Returns null if the graph has a cycle. */
 export function topoOrder(graph: CanvasGraph): string[] | null {
@@ -98,11 +100,18 @@ export async function runNode(
   const refUrls = imageSrc?.kind === "image" ? imageSrc.items.filter((it) => !it.assetId).map((it) => it.url) : [];
 
   if (node.type === "image") {
+    // Defensive clamp, not just the node's own size <select> (see
+    // CanvasEditor.tsx) — a canvas saved before the 2026-09-07
+    // data-accuracy audit can still have a size left over from switching
+    // models (or from before per-model options existed at all) that isn't
+    // actually valid for whichever model this node is set to now.
+    const validSizes = sizeOptionsFor(String(node.data.model ?? ""));
+    const requestedSize = String(node.data.size || "1024x1024");
     const body: Record<string, unknown> = {
       model: node.data.model,
       prompt,
       n: 1,
-      size: node.data.size || "1024x1024",
+      size: validSizes.includes(requestedSize) ? requestedSize : validSizes[0],
       response_format: "url",
     };
     if (refAssetIds.length) body.assetIds = refAssetIds;
@@ -120,11 +129,17 @@ export async function runNode(
   }
 
   if (node.type === "video") {
+    // Same defensive clamp as the image branch above, and as
+    // lib/jobsStore.tsx's video submission — a per-model real constraint
+    // (lib/videoModels.ts's videoConstraintFor), not whatever this node's
+    // own fields happen to hold.
+    const constraint = videoConstraintFor(String(node.data.model ?? ""));
+    const requestedResolution = String(node.data.resolution || "480p");
     const body: Record<string, unknown> = {
       model: node.data.model,
       prompt,
-      seconds: Number(node.data.seconds) || 5,
-      resolution: node.data.resolution || "480p",
+      seconds: Math.min(Number(node.data.seconds) || 5, constraint.maxSeconds),
+      resolution: constraint.resolutions.includes(requestedResolution) ? requestedResolution : constraint.resolutions[0],
     };
     if (refAssetIds.length) body.assetIds = refAssetIds;
     if (refUrls.length) body.imageUrls = refUrls;

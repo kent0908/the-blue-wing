@@ -1,5 +1,6 @@
 import { SirayaApiError } from "./siraya";
 import { videoConstraintFor } from "./videoModels";
+import { sizeOptionsFor } from "./imageModels";
 const bad=()=>{throw new SirayaApiError(400,"生成參數不正確或包含未支援的欄位");};
 export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text"|"imageEdit") {
   const common=["model","prompt"];
@@ -21,7 +22,12 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
   };
   if(kind==="image") {
     integer("n",1,1,10);
-    if(body.size!==undefined && (typeof body.size!=="string"|| !/^(1024x1024|1792x1024|1024x1792|2048x2048|2560x1440|1440x2560|2304x1728)$/.test(body.size)))bad();
+    // Per-model, not a flat shared list — same reasoning as the video
+    // resolution/duration fix (lib/videoModels.ts's videoConstraintFor):
+    // Seedream 4.5 / Dola 5.0 need a ≥3,686,400px size, GPT Image 2's real
+    // sizes aren't the same set as Seedream's — see lib/imageModels.ts's
+    // sizeOptionsFor for exactly which model needs which.
+    if(body.size!==undefined && (typeof body.size!=="string"|| !sizeOptionsFor(typeof body.model==="string"?body.model:null).includes(body.size)))bad();
   }
   if(kind==="video"){
     // Real per-model ceilings (lib/videoModels.ts's videoConstraintFor,

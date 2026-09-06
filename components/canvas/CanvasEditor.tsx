@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { IconChevronLeft, IconPlus, IconPlay, IconTrash, IconImage, IconVideo, IconChat, IconAssets, IconAvatar } from "../Icons";
 import Director3DPanel from "./director3d/Director3DPanel";
@@ -24,8 +25,8 @@ import {
   type PortType,
 } from "@/lib/canvas/types";
 import { topoOrder, upstreamOrder, inputsFor, runNode } from "@/lib/canvas/engine";
-import { IMAGE_MODELS } from "@/lib/imageModels";
-import { IMAGE_SIZES, RESOLUTIONS } from "@/lib/types";
+import { IMAGE_MODELS, sizeOptionsFor } from "@/lib/imageModels";
+import { videoConstraintFor } from "@/lib/videoModels";
 
 const PORT_COLOR: Record<PortType, string> = {
   text: "#7ea8ff",
@@ -557,6 +558,9 @@ function NodeCard({
   const spec = NODE_SPECS[node.type];
   const Icon = NODE_ICON[node.type];
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  // Screen position for the portaled asset picker below — see its own
+  // comment for why this can't just be a plain CSS-relative dropdown.
+  const [assetPickerPos, setAssetPickerPos] = useState<{ top: number; left: number } | null>(null);
 
   const fieldCls =
     "w-full rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2.5 py-1.5 text-[12px] text-white focus:border-[#4a4a4a] focus:outline-none";
@@ -664,8 +668,10 @@ function NodeCard({
               )}
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
                   onEnsureAssets();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setAssetPickerPos({ top: rect.bottom + 4, left: rect.left });
                   setAssetPickerOpen((v) => !v);
                 }}
                 className={[
@@ -676,8 +682,25 @@ function NodeCard({
                 {items.length > 0 ? `再選一張（已選 ${items.length} 張）` : "選擇素材（可選多張）"}
               </button>
 
-              {assetPickerOpen && (
-                <div className="bw-menu absolute left-0 top-[calc(100%+4px)] z-50 w-[260px] p-2">
+              {/*
+               * Portaled to document.body at a fixed screen position, not a
+               * plain CSS-relative dropdown — this node card lives inside
+               * 智慧畫布's pannable/zoomable canvas viewport, which is
+               * overflow-hidden (so nodes don't visually leak out during
+               * pan/zoom). A real bug found in a 2026-09-07 UI audit: any
+               * node not near the very top-left of the visible canvas would
+               * have this picker partly or entirely clipped by that
+               * ancestor — the exact same class of bug already fixed today
+               * for the sidebar's model flyout and 進階設定. Trade-off: the
+               * picker won't follow the node if you pan while it's open
+               * (rare — you're about to click inside it) — far better than
+               * being unreachable.
+               */}
+              {assetPickerOpen && assetPickerPos && createPortal(
+                <div
+                  className="bw-menu fixed z-50 w-[260px] p-2"
+                  style={{ top: assetPickerPos.top, left: assetPickerPos.left }}
+                >
                   <div className="mb-1.5 flex items-center justify-between">
                     <span className="text-[11px] text-white">選擇素材（可複選）</span>
                     <button type="button" onClick={() => setAssetPickerOpen(false)} className="text-[10.5px] text-[#8a8a8a] hover:text-white">
@@ -704,23 +727,39 @@ function NodeCard({
                       );
                     })}
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           );
         })()}
 
-        {node.type === "image" && (
+        {node.type === "image" && (() => {
+          // Per this model's own real size options (lib/imageModels.ts's
+          // sizeOptionsFor) — not one flat list every model shared before
+          // the 2026-09-07 audit, which offered sizes some models reject
+          // (Seedream 4.5/5.0 need ≥3,686,400px; GPT Image 2's real sizes
+          // aren't Seedream's) and even one or two the server itself didn't
+          // accept from any model. Falls back to this model's first valid
+          // size if a saved/previous choice no longer applies.
+          const imageSizes = sizeOptionsFor(String(node.data.model ?? ""));
+          const currentSize = String(node.data.size ?? "");
+          const selectedSize = imageSizes.includes(currentSize) ? currentSize : imageSizes[0];
+          return (
           <>
-            <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value })} className={fieldCls}>
+            <select
+              value={String(node.data.model ?? "")}
+              onChange={(e) => onDataChange({ model: e.target.value, size: sizeOptionsFor(e.target.value)[0] })}
+              className={fieldCls}
+            >
               {IMAGE_MODELS.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
               ))}
             </select>
-            <select value={String(node.data.size ?? "1024x1024")} onChange={(e) => onDataChange({ size: e.target.value })} className={fieldCls}>
-              {IMAGE_SIZES.map((s) => (
+            <select value={selectedSize} onChange={(e) => onDataChange({ size: e.target.value })} className={fieldCls}>
+              {imageSizes.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -734,12 +773,29 @@ function NodeCard({
               className={fieldCls + " resize-none"}
             />
           </>
-        )}
+          );
+        })()}
 
-        {node.type === "video" && (
+        {node.type === "video" && (() => {
+          // Same per-model reasoning as the image node above, via
+          // lib/videoModels.ts's videoConstraintFor — 2.0-mini/2.0-fast
+          // don't reach 1080p, base 2.0 alone has a real 4k tier, and only
+          // 2.5 reaches the full 30s (the exact bug this audit started
+          // from: a real user hit an upstream rejection because the
+          // resolution list here didn't know that).
+          const videoModelId = String(node.data.model ?? "");
+          const constraint = videoConstraintFor(videoModelId);
+          const currentResolution = String(node.data.resolution ?? "");
+          const selectedResolution = constraint.resolutions.includes(currentResolution) ? currentResolution : constraint.resolutions[0];
+          const currentSeconds = Number(node.data.seconds) || 5;
+          return (
           <>
-            <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value })} className={fieldCls}>
-              {videoModels.length === 0 && <option value={String(node.data.model ?? "")}>{String(node.data.model ?? "載入中…")}</option>}
+            <select
+              value={videoModelId}
+              onChange={(e) => onDataChange({ model: e.target.value, resolution: videoConstraintFor(e.target.value).resolutions[0] })}
+              className={fieldCls}
+            >
+              {videoModels.length === 0 && <option value={videoModelId}>{videoModelId || "載入中…"}</option>}
               {videoModels.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
@@ -750,13 +806,13 @@ function NodeCard({
               <input
                 type="number"
                 min={1}
-                max={20}
-                value={Number(node.data.seconds ?? 5)}
+                max={constraint.maxSeconds}
+                value={Math.min(currentSeconds, constraint.maxSeconds)}
                 onChange={(e) => onDataChange({ seconds: Number(e.target.value) })}
                 className={fieldCls + " w-1/2"}
               />
-              <select value={String(node.data.resolution ?? "480p")} onChange={(e) => onDataChange({ resolution: e.target.value })} className={fieldCls + " w-1/2"}>
-                {RESOLUTIONS.map((r) => (
+              <select value={selectedResolution} onChange={(e) => onDataChange({ resolution: e.target.value })} className={fieldCls + " w-1/2"}>
+                {constraint.resolutions.map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>
@@ -771,7 +827,8 @@ function NodeCard({
               className={fieldCls + " resize-none"}
             />
           </>
-        )}
+          );
+        })()}
 
         {node.type === "director3d" && (
           <>

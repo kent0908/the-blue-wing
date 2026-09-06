@@ -10,10 +10,12 @@ import { IconClose } from "../Icons";
  * spelling out the exact black/white/alpha convention; this follows the
  * common (OpenAI-style) one — transparent = "edit here", opaque = "keep" —
  * since gpt-image-1 is documented as compatible with this same endpoint.
- * Genuinely unverified in that specific detail (verified so far: the
- * endpoint + mask_url parameter are real and return a real edited image,
- * not which alpha value means what) — if it turns out inverted, this is a
- * one-line fix (swap fill/erase below), not a redesign.
+ * CONFIRMED correct, not just assumed: a real E2E test (2026-09-06) painted
+ * a precise circular mask over a photo and asked for a specific object in
+ * the center — the result showed that exact object appearing only inside
+ * the painted (transparent) circle, with the rest of the photo pixel-for-
+ * pixel untouched. If it were inverted, the edit would have covered
+ * everything EXCEPT the circle instead.
  */
 export default function MaskPainter({
   imageSrc,

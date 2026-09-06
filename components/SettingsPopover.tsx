@@ -4,12 +4,12 @@ import Popover from "./Popover";
 import { IconRatio, IconReset } from "./Icons";
 import {
   ASPECT_RATIOS,
-  IMAGE_SIZES,
   DEFAULT_SETTINGS,
   type GenSettings,
   type Mode,
 } from "@/lib/types";
 import { videoConstraintFor } from "@/lib/videoModels";
+import { sizeOptionsFor } from "@/lib/imageModels";
 
 function Choice({
   value,
@@ -48,11 +48,12 @@ export default function SettingsPopover({
   mode: Mode;
   settings: GenSettings;
   onChange: (s: GenSettings) => void;
-  /** currently selected model id — video mode only, to look up which resolutions/duration it actually supports (see lib/videoModels.ts's videoConstraintFor). */
+  /** currently selected model id — looks up which resolutions/duration (video, lib/videoModels.ts) or sizes (image, lib/imageModels.ts) it actually supports, instead of one flat list shared by every model. */
   model?: string;
 }) {
   const set = (patch: Partial<GenSettings>) => onChange({ ...settings, ...patch });
   const videoConstraint = mode === "video" ? videoConstraintFor(model) : null;
+  const imageSizeOptions = mode === "image" ? sizeOptionsFor(model) : null;
 
   const summary =
     mode === "video"
@@ -139,11 +140,11 @@ export default function SettingsPopover({
               </>
             )}
 
-            {mode === "image" && (
+            {mode === "image" && imageSizeOptions && (
               <>
                 <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">尺寸</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {IMAGE_SIZES.map((s) => (
+                  {imageSizeOptions.map((s) => (
                     <Choice key={s} value={s} active={settings.size === s} onClick={() => set({ size: s })} />
                   ))}
                 </div>
