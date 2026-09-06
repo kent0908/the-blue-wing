@@ -51,6 +51,21 @@ export type JointName = (typeof JOINT_NAMES)[number];
 
 export type Pose = Partial<Record<JointName, JointRotation>>;
 
+/**
+ * Two visual styles sharing the exact same joint hierarchy/pose shape (see
+ * Mannequin.tsx and StickFigure.tsx) — only how the bones/joints are drawn
+ * differs. "stick" is the plain sphere-joints + straight-bones skeleton
+ * look ("圓形加直立式"): easier to read at a glance if you're not used to
+ * posing a 3D model, since there's no boxy torso hiding which way a joint
+ * is actually rotated.
+ */
+export type BodyStyle = "mannequin" | "stick";
+
+export const BODY_STYLE_LABEL: Record<BodyStyle, string> = {
+  mannequin: "精細模特兒",
+  stick: "簡易關節人偶（新手推薦）",
+};
+
 export interface CharacterState {
   id: string;
   name: string;
@@ -60,6 +75,7 @@ export interface CharacterState {
   scale: number;
   color: string;
   pose: Pose;
+  bodyStyle: BodyStyle;
 }
 
 export interface Director3DSceneData {
@@ -69,6 +85,11 @@ export interface Director3DSceneData {
   /** last screenshot taken — this IS the node's output once captured */
   capturedImage?: string | null;
 }
+
+/** localStorage key the standalone /canvas/director3d page autosaves its scene under. */
+export const DIRECTOR3D_SCENE_KEY = "bw:director3d:scene";
+/** sessionStorage key used to hand a captured screenshot's asset off to /studio (see app/studio/page.tsx). */
+export const DIRECTOR3D_HANDOFF_KEY = "bw:director3d:handoff";
 
 let seq = 0;
 export function newCharacterId(): string {
@@ -85,6 +106,7 @@ export function defaultCharacter(name: string): CharacterState {
     scale: 1,
     color: "#c9c9c9",
     pose: {},
+    bodyStyle: "mannequin",
   };
 }
 

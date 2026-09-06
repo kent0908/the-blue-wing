@@ -213,6 +213,27 @@ export default function HelpPage() {
                 </li>
               </ul>
             </Card>
+            <Card>
+              <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
+                3D 導演台也有{" "}
+                <Link href="/canvas/director3d" className="text-[#7ff0cd] hover:underline">獨立頁面</Link>
+                （側邊欄「3D 導演台」），不用先建智慧畫布也能直接開來用；場景會自動存在瀏覽器裡，截圖後按「用於圖片生成」
+                或「用於影片生成」，會把截圖存進資產庫並直接帶去輸入框當參考圖。
+              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
+                <li>
+                  <span className="text-white">體型</span>：每個角色可在右側「attribute」分頁切換「精細模特兒」或「簡易關節
+                  人偶（圓形關節＋直立骨架，新手推薦）」，兩種骨架、比例、姿勢完全共用，只是畫法不同——不熟 3D
+                  操作時，球狀關節比箱型模特兒更容易看出「這一節現在轉到哪個方向」。
+                </li>
+                <li>
+                  <span className="text-white">快速運鏡</span>：左側「快速運鏡」是一鍵鏡頭按鈕（正面全身／半身／特寫、側面、
+                  背面、45° 側前、鳥瞰俯視、仰視英雄鏡），選好角色再點一下，鏡頭會自動移過去對準該角色；多角色時可用
+                  「全員入鏡」自動抓一個能框住所有角色的鏡頭。套用預設之後仍然可以照舊拖曳、滾輪微調，「重置視角」則是
+                  回到剛進場景時的預設鏡頭。
+                </li>
+              </ul>
+            </Card>
           </section>
 
           {/* 生成紀錄與下載 */}

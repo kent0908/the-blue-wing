@@ -1,9 +1,50 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { useEffect, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
+import * as THREE from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import Mannequin from "./Mannequin";
+import StickFigure from "./StickFigure";
 import type { Director3DSceneData } from "@/lib/canvas/director3d";
+import type { ShotRequest } from "@/lib/canvas/cameraShots";
+
+/**
+ * Eases the camera toward a requested position/target over a few frames
+ * instead of snapping to it — makes the 運鏡 preset buttons read as an
+ * actual camera move rather than a hard cut. Changing `shot`'s identity
+ * re-triggers the ease; free dragging (OrbitControls) still works at any
+ * time, including mid-ease (it just stops the ease early next frame since
+ * the distance check below will already be satisfied from the user's poll).
+ */
+function CameraRig({ shot, controlsRef }: { shot: ShotRequest | null; controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
+  const { camera } = useThree();
+  const targetPos = useRef(new THREE.Vector3());
+  const targetLook = useRef(new THREE.Vector3());
+  const easing = useRef(false);
+
+  useEffect(() => {
+    if (!shot) return;
+    targetPos.current.set(...shot.position);
+    targetLook.current.set(...shot.target);
+    easing.current = true;
+  }, [shot]);
+
+  useFrame((_, delta) => {
+    if (!easing.current) return;
+    const t = 1 - Math.pow(0.001, delta);
+    camera.position.lerp(targetPos.current, t);
+    const controls = controlsRef.current;
+    if (controls) {
+      controls.target.lerp(targetLook.current, t);
+      controls.update();
+    }
+    if (camera.position.distanceTo(targetPos.current) < 0.008) easing.current = false;
+  });
+
+  return null;
+}
 
 /**
  * The actual WebGL viewport. `onReady` hands the parent panel the raw
@@ -15,14 +56,19 @@ import type { Director3DSceneData } from "@/lib/canvas/director3d";
 export default function Director3DScene({
   scene,
   selectedId,
+  shot,
   onSelect,
   onReady,
 }: {
   scene: Director3DSceneData;
   selectedId: string | null;
+  /** a one-shot camera move request from a 運鏡 preset button, or null between clicks */
+  shot: ShotRequest | null;
   onSelect: (id: string) => void;
   onReady: (canvas: HTMLCanvasElement) => void;
 }) {
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+
   return (
     <Canvas
       shadows
@@ -53,11 +99,16 @@ export default function Director3DScene({
         </>
       )}
 
-      {scene.characters.map((ch) => (
-        <Mannequin key={ch.id} character={ch} selected={ch.id === selectedId} onSelect={() => onSelect(ch.id)} />
-      ))}
+      {scene.characters.map((ch) =>
+        ch.bodyStyle === "stick" ? (
+          <StickFigure key={ch.id} character={ch} selected={ch.id === selectedId} onSelect={() => onSelect(ch.id)} />
+        ) : (
+          <Mannequin key={ch.id} character={ch} selected={ch.id === selectedId} onSelect={() => onSelect(ch.id)} />
+        )
+      )}
 
-      <OrbitControls makeDefault target={[0, 0.9, 0]} enableDamping dampingFactor={0.15} />
+      <CameraRig shot={shot} controlsRef={controlsRef} />
+      <OrbitControls ref={controlsRef} makeDefault target={[0, 0.9, 0]} enableDamping dampingFactor={0.15} />
     </Canvas>
   );
 }

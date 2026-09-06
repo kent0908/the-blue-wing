@@ -84,9 +84,14 @@ export default function CanvasHomePage() {
 
         <div className="mt-4 rounded-xl border border-[#262626] bg-[#141414] px-4 py-3 text-[12px] leading-relaxed text-[#8a8a8a]">
           目前支援五種節點：文字、圖片生成、影片生成、讀取素材、3D 導演台 — 都是接這個站已經在跑的真實 API（3D
-          導演台的截圖也是真的能接到生成節點當參考圖）。3D 導演台目前只有單一自由視角相機、純色背景、單張截圖；多相機切換、
-          360° 全景背景、時間軸關鍵幀錄影輸出還在後續開發中。圖層合成、字型、錄音配音、Agent 呼叫其他節點當工具這些
-          ByteDance Canvas 才有的功能，這裡還沒有對應的 API 可以接，所以先不做假的。
+          導演台的截圖也是真的能接到生成節點當參考圖）。3D 導演台現在也有{" "}
+          <Link href="/canvas/director3d" className="text-[#7ff0cd] underline underline-offset-2">
+            獨立頁面
+          </Link>
+          ，不用先建一個畫布也能開來擺姿勢、截圖直接送去生成；角色可切換「精細模特兒」或「簡易關節人偶」兩種體型，另外有
+          一鍵運鏡按鈕（正面/側面/背面/俯視/仰視/特寫等常用鏡位）方便非專業人士取景。目前仍只有單一自由視角相機、純色背景、
+          單張截圖；多相機同時運作、360° 全景背景、時間軸關鍵幀錄影輸出還在後續開發中。圖層合成、字型、錄音配音、Agent
+          呼叫其他節點當工具這些 ByteDance Canvas 才有的功能，這裡還沒有對應的 API 可以接，所以先不做假的。
         </div>
 
         {error && <p className="mt-4 text-[13px] text-[#ff9b9b]">{error}</p>}

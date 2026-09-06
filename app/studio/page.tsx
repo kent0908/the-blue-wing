@@ -9,6 +9,7 @@ import ExpiringMedia from "@/components/ExpiringMedia";
 import { IconCompass, IconHistory, IconDownload } from "@/components/Icons";
 import { downloadResult } from "@/lib/download";
 import { useGenerationJobs, MAX_CONCURRENT_JOBS } from "@/lib/jobsStore";
+import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
 import type { GenSettings, Mode, ResultItem } from "@/lib/types";
 
 /**
@@ -35,7 +36,23 @@ function StudioInner() {
   const [presetModel, setPresetModel] = useState<string | undefined>(urlModel);
   const [presetPrompt, setPresetPrompt] = useState<string | undefined>(urlPrompt);
   const [presetImgValues, setPresetImgValues] = useState<Record<string, string | number> | undefined>();
-  const [presetRefs, setPresetRefs] = useState<{ id: number; src: string; name: string }[] | undefined>();
+  // A screenshot handed off from the standalone 3D導演台 page (see
+  // app/canvas/director3d/page.tsx) — it already uploaded the capture to the
+  // asset library before navigating here, so this is just picking the
+  // resulting {id,src,name} back up, the same shape a template preset's
+  // reference image uses.
+  const [presetRefs, setPresetRefs] = useState<{ id: number; src: string; name: string }[] | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    try {
+      const raw = sessionStorage.getItem(DIRECTOR3D_HANDOFF_KEY);
+      if (!raw) return undefined;
+      sessionStorage.removeItem(DIRECTOR3D_HANDOFF_KEY);
+      const h = JSON.parse(raw) as { id: number; src: string; name: string };
+      return [h];
+    } catch {
+      return undefined;
+    }
+  });
 
   useEffect(() => {
     if (!preset) return;
