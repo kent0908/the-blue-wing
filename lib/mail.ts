@@ -27,7 +27,7 @@ async function send(to: string, subject: string, html: string, logLabel: string,
   const from = process.env.MAIL_FROM || "The Blue Wing <onboarding@resend.dev>";
 
   if (!key) {
-    console.log(`[mail] RESEND_API_KEY not set — ${logLabel} for ${to}: ${url}`);
+    console.warn("[mail] Email delivery unavailable: missing configuration");
     return { sent: false };
   }
 

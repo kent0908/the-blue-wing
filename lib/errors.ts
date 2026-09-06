@@ -15,7 +15,7 @@ export function errorResponse(err: unknown) {
       { status: err.status }
     );
   }
-  const message = err instanceof Error ? err.message : "Unexpected error";
+  const message = "系統暫時無法處理，請稍後再試";
   return NextResponse.json(
     { error: { message, type: "internal_server_error", code: 500 } },
     { status: 500 }

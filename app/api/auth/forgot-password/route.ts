@@ -1,3 +1,4 @@
+import { authLimit } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { sql, type UserRow } from "@/lib/db";
 import { newToken } from "@/lib/auth";
@@ -15,6 +16,7 @@ const RESET_TTL_MS = 60 * 60 * 1000; // 1h
  * with no mail provider configured the link comes back as `devResetUrl`.
  */
 export async function POST(req: NextRequest) {
+  const limited = await authLimit(req); if(limited) return limited;
   let email = "";
   try {
     ({ email } = await req.json());
@@ -42,5 +44,6 @@ export async function POST(req: NextRequest) {
     console.error("reset mail failed:", e);
   }
 
-  return NextResponse.json(sent ? generic : { ...generic, devResetUrl: resetUrl });
+  return NextResponse.json(process.env.NODE_ENV === "development" && !sent ? { ...generic, devResetUrl: resetUrl } : generic);
 }
+

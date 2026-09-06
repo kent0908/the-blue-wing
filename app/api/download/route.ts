@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sql } from "@/lib/db";
 import dns from "node:dns/promises";
 import net from "node:net";
 import { requireUser } from "@/lib/apiauth";
@@ -28,7 +29,7 @@ function isPrivateIp(ip: string): boolean {
     const a = parts[0];
     const b = parts[1];
     return (
-      a === 10 ||
+      a >= 224 || (a === 100 && b >= 64 && b <= 127) || a === 10 ||
       a === 127 ||
       a === 0 ||
       (a === 169 && b === 254) ||
@@ -38,7 +39,7 @@ function isPrivateIp(ip: string): boolean {
   }
   if (net.isIPv6(ip)) {
     const lower = ip.toLowerCase();
-    return lower === "::1" || lower.startsWith("fe80") || lower.startsWith("fc") || lower.startsWith("fd");
+    return lower === "::" || lower.startsWith("::ffff:") || lower === "::1" || lower.startsWith("fe80") || lower.startsWith("fc") || lower.startsWith("fd");
   }
   return true; // not a recognisable IP - treat as unsafe
 }
@@ -58,13 +59,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: { message: "缺少 url 參數" } }, { status: 400 });
   }
 
+  const { rows: owned } = await sql`
+    select 1 from generations where user_id = ${auth.user.id} and url = ${rawUrl} limit 1
+  `;
+  if (!owned.length) {
+    return NextResponse.json({ error: { message: "找不到可下載的生成結果" } }, { status: 404 });
+  }
   let target: URL;
   try {
     target = new URL(rawUrl);
   } catch {
     return NextResponse.json({ error: { message: "無效的網址" } }, { status: 400 });
   }
-  if (target.protocol !== "https:" && target.protocol !== "http:") {
+  if (target.protocol !== "https:" || !!target.username || !!target.password || (!!target.port && target.port !== "443")) {
     return NextResponse.json({ error: { message: "只允許 http(s) 網址" } }, { status: 400 });
   }
 
@@ -79,7 +86,7 @@ export async function GET(req: NextRequest) {
 
   let upstream: Response;
   try {
-    upstream = await fetch(target.toString(), { redirect: "follow" });
+    upstream = await fetch(target.toString(), { redirect: "error", signal: AbortSignal.timeout(30000) });
   } catch {
     return NextResponse.json({ error: { message: "下載來源時發生錯誤" } }, { status: 502 });
   }
@@ -87,12 +94,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: { message: `來源回應失敗（${upstream.status}）` } }, { status: 502 });
   }
 
-  const safeName = safeFilename(rawName);
+  const safeName = encodeURIComponent(safeFilename(rawName));
   const contentLength = upstream.headers.get("content-length");
 
   return new NextResponse(upstream.body, {
     headers: {
-      "Content-Type": upstream.headers.get("content-type") || "application/octet-stream",
+      "Content-Type": "application/octet-stream",
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
       "Content-Disposition": `attachment; filename="${safeName}"`,
       ...(contentLength ? { "Content-Length": contentLength } : {}),
     },

@@ -12,6 +12,12 @@ const SESSION_COOKIE = "bw_session";
  */
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (pathname.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    const origin = req.headers.get("origin");
+    if (req.headers.get("sec-fetch-site") === "cross-site" || (origin && origin !== req.nextUrl.origin)) {
+      return NextResponse.json({ error: { message: "不允許跨站操作", code: "cross_origin" } }, { status: 403 });
+    }
+  }
   const hasSession = req.cookies.has(SESSION_COOKIE);
 
   if (!hasSession && (pathname.startsWith("/admin") || pathname.startsWith("/account"))) {
@@ -24,5 +30,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/account/:path*"],
+  matcher: ["/api/:path*", "/admin/:path*", "/account/:path*"],
 };

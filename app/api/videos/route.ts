@@ -1,8 +1,10 @@
+import { validateGeneration } from "@/lib/generationValidation";
+import { paidCall } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createVideo } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
-import { getBalance, addCredits, creditCost } from "@/lib/credits";
+import { getBalance, creditCost } from "@/lib/credits";
 import { recordGeneration } from "@/lib/generations";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
@@ -27,6 +29,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    validateGeneration(body, "video");
     if (!body?.model || !body?.prompt) {
       return NextResponse.json(
         { error: { message: "`model` and `prompt` are required.", type: "invalid_request_error", code: 400 } },
@@ -104,7 +107,7 @@ export async function POST(req: NextRequest) {
       videoBody.extra_body = rest;
     }
 
-    const json = await createVideo({ ...videoBody, async: true });
+    const json = await paidCall(user.id, cost, "video", String(body.model), () => createVideo({ ...videoBody, async: true }));
 
     // Async submissions return { id, status: "processing" }; a provider that
     // completes synchronously returns { data: [{ url }] } instead.
@@ -113,7 +116,6 @@ export async function POST(req: NextRequest) {
 
     // Charge on submission, tagged with the job id so /api/videos/[id] can
     // refund if the render ends up failing.
-    await addCredits(user.id, -cost, "video", jobId ? String(jobId) : String(body.model));
 
     // Providers that finish synchronously give us the url right away; async
     // jobs get recorded later by /api/videos/[id] once polling sees "completed".

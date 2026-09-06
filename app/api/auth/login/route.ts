@@ -1,3 +1,4 @@
+import { authLimit } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { sql, toPublicUser, type UserRow } from "@/lib/db";
 import { verifyPassword, createSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
@@ -6,8 +7,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const limited = await authLimit(req); if(limited) return limited;
   try {
     const { email, password } = await req.json();
+    if (typeof password !== "string" || password.length > 256) {
+      return NextResponse.json({ error: { message: "email 或密碼錯誤", code: "bad_credentials" } }, { status: 401 });
+    }
     const mail = String(email || "").trim().toLowerCase();
 
     const { rows } = await sql<UserRow>`select * from users where email = ${mail} limit 1`;
@@ -36,3 +41,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: { message: "登入失敗，請稍後再試", code: "internal_error" } }, { status: 500 });
   }
 }
+

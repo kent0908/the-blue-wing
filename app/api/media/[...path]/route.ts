@@ -18,6 +18,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
   if ("error" in auth) return auth.error;
 
   const { path } = await ctx.params;
+  if (path.some((part) => !part || part === "." || part === ".." || /[\\/%]/.test(part))) {
+    return NextResponse.json({ error: { message: "無效的檔案路徑" } }, { status: 400 });
+  }
   const pathname = path.join("/");
   if (!pathname.startsWith(`generations/${auth.user.id}/`)) {
     return NextResponse.json({ error: { message: "無權限存取", code: "forbidden" } }, { status: 403 });
@@ -30,6 +33,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
 
   return new Response(result.stream, {
     headers: {
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "X-Content-Type-Options": "nosniff",
       "Content-Type": result.blob.contentType || "application/octet-stream",
       "Cache-Control": "private, max-age=3600",
     },

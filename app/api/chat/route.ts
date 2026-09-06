@@ -1,8 +1,10 @@
+import { validateGeneration } from "@/lib/generationValidation";
+import { paidCall } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createChatCompletion, createChatCompletionStream } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
-import { getBalance, addCredits, creditCost } from "@/lib/credits";
+import { getBalance, creditCost } from "@/lib/credits";
 import { recordGeneration } from "@/lib/generations";
 
 export const runtime = "nodejs";
@@ -20,6 +22,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    validateGeneration(body, "text");
     if (!body?.model || !Array.isArray(body?.messages)) {
       return NextResponse.json(
         {
@@ -49,8 +52,7 @@ export async function POST(req: NextRequest) {
 
     if (body.stream) {
       // streaming: charge upfront since token usage isn't observable here
-      await addCredits(user.id, -cost, "text", String(body.model));
-      const upstream = await createChatCompletionStream(body);
+      const upstream = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletionStream(body));
       return new Response(upstream.body, {
         headers: {
           "Content-Type": "text/event-stream; charset=utf-8",
@@ -60,8 +62,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const json = await createChatCompletion(body);
-    await addCredits(user.id, -cost, "text", String(body.model));
+    const json = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletion(body));
 
     const replyText = json?.choices?.[0]?.message?.content;
     const lastUserPrompt = [...body.messages].reverse().find((m: { role: string }) => m.role === "user")?.content;
@@ -79,3 +80,5 @@ export async function POST(req: NextRequest) {
     return errorResponse(err);
   }
 }
+
+

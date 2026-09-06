@@ -3,7 +3,7 @@ import { getVideoStatus } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
-import { addCredits } from "@/lib/credits";
+import { refundCharge } from "@/lib/creditTransactions";
 import { recordGeneration } from "@/lib/generations";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 
@@ -23,6 +23,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   try {
     const { id } = await ctx.params;
+    if (!/^[a-zA-Z0-9_-]{1,200}$/.test(id)) {
+      return NextResponse.json({ error: { message: "無效的任務編號" } }, { status: 400 });
+    }
+    const { rows: owned } = await sql`
+      select 1 from credit_ledger
+      where user_id = ${user.id} and reason = 'video' and ref = ${id} and delta < 0
+      limit 1
+    `;
+    if (!owned.length) {
+      return NextResponse.json({ error: { message: "找不到任務" } }, { status: 404 });
+    }
     const json = await getVideoStatus(id);
     const rawUrl = json?.output_url ?? json?.data?.[0]?.url ?? null;
     const status = json?.status ?? (rawUrl ? "completed" : "processing");
@@ -54,26 +65,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
 
     if (status === "failed") {
-      const { rows } = await sql<{ delta: number; refunded: number }>`
-        select
-          coalesce((
-            select delta from credit_ledger
-            where user_id = ${user.id} and reason = 'video' and ref = ${id}
-            limit 1
-          ), 0)::int as delta,
-          (
-            select count(*)::int from credit_ledger
-            where user_id = ${user.id} and reason = 'video_refund' and ref = ${id}
-          ) as refunded
-      `;
-      const charge = rows[0];
-      if (charge && charge.delta < 0 && charge.refunded === 0) {
-        await addCredits(user.id, -charge.delta, "video_refund", id);
-      }
+      const { rows } = await sql`select id from credit_ledger where user_id=${user.id} and reason='video' and ref=${id} and delta<0 limit 1`;
+      if(rows[0]) await refundCharge(user.id,String(rows[0].id));
     }
-
     return NextResponse.json({ id, status, url, raw: json });
   } catch (err) {
     return errorResponse(err);
   }
 }
+

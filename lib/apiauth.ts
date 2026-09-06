@@ -1,3 +1,4 @@
+import { limitRequest } from "./rateLimit";
 /** Route-handler guards. Each returns either { user } or { error: NextResponse }. */
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "./auth";
@@ -19,6 +20,10 @@ export async function requireUser(req: NextRequest): Promise<Guarded> {
   }
   if (!user) return fail(401, "請先登入", "unauthorized");
   if (!user.email_verified) return fail(403, "請先完成 email 驗證再使用", "email_unverified");
+  try {
+    const write = !["GET","HEAD","OPTIONS"].includes(req.method);
+    if(!await limitRequest("user:"+user.id+":"+(write?"write":"read"),write?30:240,60)) return fail(429,"操作太頻繁，請稍後再試","rate_limited");
+  } catch {return fail(503,"服務暫時無法使用","unavailable");}
   return { user };
 }
 
@@ -28,3 +33,4 @@ export async function requireAdmin(req: NextRequest): Promise<Guarded> {
   if (r.user.role !== "admin") return fail(403, "需要管理員權限", "forbidden");
   return r;
 }
+

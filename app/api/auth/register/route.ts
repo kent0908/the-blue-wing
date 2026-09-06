@@ -1,6 +1,7 @@
+import { authLimit } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { sql, toPublicUser, type UserRow } from "@/lib/db";
-import { hashPassword, newToken, isBootstrapAdmin } from "@/lib/auth";
+import { hashPassword, newToken } from "@/lib/auth";
 import { sendVerifyEmail } from "@/lib/mail";
 
 export const runtime = "nodejs";
@@ -10,6 +11,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VERIFY_TTL_MS = 60 * 60 * 1000; // 1h
 
 export async function POST(req: NextRequest) {
+  const limited = await authLimit(req); if(limited) return limited;
   try {
     const { email, password } = await req.json();
     const mail = String(email || "").trim().toLowerCase();
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
     if (!EMAIL_RE.test(mail)) {
       return NextResponse.json({ error: { message: "email 格式不正確", code: "bad_email" } }, { status: 400 });
     }
-    if (typeof password !== "string" || password.length < 8) {
+    if (typeof password !== "string" || password.length < 8 || password.length > 256) {
       return NextResponse.json({ error: { message: "密碼至少 8 個字元", code: "weak_password" } }, { status: 400 });
     }
 
@@ -26,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "這個 email 已經註冊過了", code: "email_taken" } }, { status: 409 });
     }
 
-    const admin = isBootstrapAdmin(mail);
+    const admin = false; // Public registration never grants administrative privileges.
     const token = newToken(24);
     const expires = new Date(Date.now() + VERIFY_TTL_MS).toISOString();
 
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       needVerify: true,
       // only exposed when no mail provider is configured, so you can still test
-      devVerifyUrl: sent ? undefined : verifyUrl,
+      devVerifyUrl: process.env.NODE_ENV === "development" && !sent ? verifyUrl : undefined,
     });
   } catch (err) {
     console.error("register error:", err);
@@ -71,3 +73,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

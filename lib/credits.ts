@@ -1,3 +1,5 @@
+import { creditTransaction, ledgerBalance } from "./creditTransactions";
+import { SirayaApiError } from "./siraya";
 /**
  * Credit balance = SUM(credit_ledger.delta) for the user, EXCLUDING rows
  * whose expires_at has passed. Every grant and every spend is one
@@ -12,26 +14,15 @@ import { getPlan } from "./plans";
 
 export async function getBalance(userId: number): Promise<number> {
   await ensureDailyFreeCredits(userId);
-  const { rows } = await sql<{ bal: number }>`
-    select coalesce(sum(delta), 0)::int as bal from credit_ledger
-    where user_id = ${userId} and (expires_at is null or expires_at > now())
-  `;
-  return rows[0]?.bal ?? 0;
+  return creditTransaction(userId,c=>ledgerBalance(c,userId));
 }
-
-export async function addCredits(
-  userId: number,
-  delta: number,
-  reason: string,
-  ref?: string | null,
-  expiresAt?: string | null
-): Promise<void> {
-  await sql`
-    insert into credit_ledger (user_id, delta, reason, ref, expires_at)
-    values (${userId}, ${Math.trunc(delta)}, ${reason}, ${ref ?? null}, ${expiresAt ?? null})
-  `;
+export async function addCredits(userId:number,delta:number,reason:string,ref?:string|null,expiresAt?:string|null):Promise<void> {
+  if(!Number.isSafeInteger(delta)) throw new Error("Invalid credit delta");
+  await creditTransaction(userId,async c=>{
+    if(delta<0 && await ledgerBalance(c,userId)<-delta)throw new SirayaApiError(402,"點數不足");
+    await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref,expires_at) VALUES($1,$2,$3,$4,$5)",[userId,delta,reason,ref??null,expiresAt??null]);
+  });
 }
-
 /**
  * Free-tier users get a small daily allowance instead of a monthly one —
  * granted the moment they sign up, then topped back up once per calendar
@@ -117,7 +108,7 @@ function legacyCost(input: CostInput): number {
  */
 export async function creditCost(input: CostInput): Promise<number> {
   const rate = await getRate(input.model);
-  if (rate) {
+  if (rate && rate.modality === input.kind) {
     return creditCostFromRate({
       modality: rate.modality,
       credits: rate.credits,
@@ -127,5 +118,6 @@ export async function creditCost(input: CostInput): Promise<number> {
       resolution: input.resolution,
     });
   }
-  return legacyCost(input);
+  throw new SirayaApiError(400, "此模型尚未設定有效費率或已停用");
 }
+

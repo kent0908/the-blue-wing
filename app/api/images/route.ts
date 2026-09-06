@@ -1,8 +1,10 @@
+import { validateGeneration } from "@/lib/generationValidation";
+import { paidCall } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createImage, type ImageGenerationRequest } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
-import { getBalance, addCredits, creditCost } from "@/lib/credits";
+import { getBalance, creditCost } from "@/lib/credits";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 import { MAX_REF_IMAGES, getImageModel, supportsWatermarkControl } from "@/lib/imageModels";
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    validateGeneration(body, "image");
     if (!body?.model || !body?.prompt) {
       return NextResponse.json(
         { error: { message: "`model` and `prompt` are required.", type: "invalid_request_error", code: 400 } },
@@ -116,7 +119,7 @@ export async function POST(req: NextRequest) {
     if (cappedRefs.length === 1) payload.image = cappedRefs[0];
     else if (cappedRefs.length > 1) payload.image = cappedRefs;
 
-    const json = await createImage(payload as unknown as ImageGenerationRequest);
+    const json = await paidCall(user.id, cost, "image", String(body.model), () => createImage(payload as unknown as ImageGenerationRequest));
     const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({
       url: d.url ? String(d.url) : d.b64_json ? `data:image/png;base64,${d.b64_json}` : null,
       revisedPrompt: (d.revised_prompt as string) ?? null,
@@ -128,7 +131,6 @@ export async function POST(req: NextRequest) {
     }
 
     // charge only after a successful generation
-    await addCredits(user.id, -cost, "image", String(body.model));
     const balanceAfter = balance - cost;
 
     for (const im of images) {
@@ -153,3 +155,5 @@ export async function POST(req: NextRequest) {
     return errorResponse(err);
   }
 }
+
+

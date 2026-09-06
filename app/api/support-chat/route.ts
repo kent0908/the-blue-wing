@@ -1,3 +1,5 @@
+import { requireUser } from "@/lib/apiauth";
+import { limitRequest } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { createChatCompletion, type ChatMessage } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
@@ -32,7 +34,9 @@ ${planLines}
 
 /** POST /api/support-chat  { messages: {role,content}[] } — no auth, no credits. */
 export async function POST(req: NextRequest) {
+  const auth=await requireUser(req); if("error" in auth)return auth.error;
   try {
+    if(!await limitRequest("support:"+auth.user.id,20,86400))return NextResponse.json({error:{message:"今日客服額度已用完"}},{status:429});
     const body = await req.json().catch(() => ({}));
     const incoming: ChatMessage[] = Array.isArray(body?.messages) ? body.messages : [];
 
@@ -57,3 +61,4 @@ export async function POST(req: NextRequest) {
     return errorResponse(err);
   }
 }
+

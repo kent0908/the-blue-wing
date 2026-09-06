@@ -35,6 +35,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   return new Response(blob.stream, {
     headers: {
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "X-Content-Type-Options": "nosniff",
       "Content-Type": asset.content_type,
       "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400",
     },

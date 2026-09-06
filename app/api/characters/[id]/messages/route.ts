@@ -1,8 +1,9 @@
+import { paidCall } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { createChatCompletion } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
-import { getBalance, addCredits, creditCost } from "@/lib/credits";
+import { getBalance, creditCost } from "@/lib/credits";
 import {
   getCharacter,
   listMessages,
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       { role: "user" as const, content },
     ];
 
-    const json = await createChatCompletion({ model: character.model, messages, max_tokens: MAX_TOKENS });
+    const json = await paidCall(r.user.id, cost, "text", character.model, () => createChatCompletion({ model: character.model, messages, max_tokens: MAX_TOKENS }));
     const reply = json?.choices?.[0]?.message?.content;
     if (!reply) {
       return NextResponse.json({ error: { message: "角色沒有回應，請再試一次", code: "empty_reply" } }, { status: 502 });
@@ -93,7 +94,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // no half-written turn behind.
     await addMessage(id, "user", content);
     const saved = await addMessage(id, "assistant", String(reply));
-    await addCredits(r.user.id, -cost, "text", character.model);
 
     // 好感度：+1 for showing up, +4 more (so +5 total) for touching a 喜好 topic.
     const gain = 1 + (matchesLikes(content, character.likes) ? 4 : 0);
@@ -138,3 +138,4 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return errorResponse(err);
   }
 }
+
