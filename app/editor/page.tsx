@@ -240,9 +240,17 @@ export default function LayerEditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: redrawPrompt, image, mask: maskDataUrl }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error?.message || "重繪失敗");
-      if (!json.url) throw new Error("沒有取得重繪結果");
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        // A missing/unparseable JSON body here usually means the request
+        // never reached our route at all (e.g. Vercel's own ~4.5MB
+        // serverless body-size limit rejecting an oversized image+mask
+        // payload before our error-handling code ever ran) — surface the
+        // HTTP status so this isn't just a bare, undiagnosable "失敗".
+        const detail = json?.error?.message || (res.status === 413 ? "圖片太大，請換一張較小的圖片再試" : `重繪失敗（HTTP ${res.status}）`);
+        throw new Error(detail);
+      }
+      if (!json?.url) throw new Error("沒有取得重繪結果");
       snapshotHistory();
       updateLayer(maskingLayer.id, { src: json.url });
       setMaskingLayerId(null);
