@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
+import { validateProfile, type CharacterProfile } from "@/lib/characterProfile";
 import { getCharacter, updateCharacter, deleteCharacter, ownedAssetId, toPublicCharacter } from "@/lib/characters";
 
 export const runtime = "nodejs";
@@ -35,7 +36,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!existing) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
-  const patch: { name?: string; avatarAssetId?: number | null; personality?: string; likes?: string } = {};
+  const patch: { name?: string; avatarAssetId?: number | null; personality?: string; likes?: string; profile?: CharacterProfile } = {};
+  if (body?.profile !== undefined) {
+    try { patch.profile = validateProfile(body.profile); }
+    catch (e) { return NextResponse.json({ error: { message: e instanceof Error ? e.message : "角色設定不正確" } }, { status: 400 }); }
+  }
   if (typeof body?.name === "string") {
     const name = body.name.trim().slice(0, 40);
     if (!name) return NextResponse.json({ error: { message: "名字不能是空的", code: "missing_name" } }, { status: 400 });

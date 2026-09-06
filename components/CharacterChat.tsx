@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconChevronLeft, IconChat, IconTrash, IconClose, IconArrowRight, IconImage } from "./Icons";
+import { IconChevronLeft, IconChat, IconTrash, IconArrowRight, IconImage } from "./Icons";
 import PersonaEditor from "./PersonaEditor";
+import CharacterBuilder from "./CharacterBuilder";
+import type { CharacterProfile } from "@/lib/characterProfile";
 import CharacterScenes from "./CharacterScenes";
 
 export interface CharacterLevel {
@@ -19,6 +21,7 @@ export interface CharacterData {
   name: string;
   avatarSrc: string | null;
   personality: string;
+  profile?: CharacterProfile;
   likes?: string;
   model?: string;
   affection?: number;
@@ -225,7 +228,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
 
           {messages?.length === 0 && (
             <p className="mt-10 text-center text-[13px] leading-relaxed text-[#6d6d6d]">
-              跟「{character.name}」還沒有任何對話
+              {character.profile?.greeting || `跟「${character.name}」還沒有任何對話`}
               <br />
               打個招呼開始聊吧
             </p>
@@ -302,7 +305,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
       </div>
 
       {editing && (
-        <EditCharacterModal
+        <CharacterBuilder
           character={character}
           onClose={() => setEditing(false)}
           onSaved={(c) => {
@@ -319,144 +322,3 @@ export default function CharacterChat({ character: initial }: { character: Chara
   );
 }
 
-interface AssetLite {
-  id: number;
-  src: string;
-  name: string;
-}
-
-function EditCharacterModal({
-  character,
-  onClose,
-  onSaved,
-}: {
-  character: CharacterData;
-  onClose: () => void;
-  onSaved: (c: CharacterData) => void;
-}) {
-  const [name, setName] = useState(character.name);
-  const [personality, setPersonality] = useState(character.personality);
-  const [likes, setLikes] = useState(character.likes ?? "");
-  const [assets, setAssets] = useState<AssetLite[] | null>(null);
-  const [avatarAssetId, setAvatarAssetId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/assets")
-      .then((r) => r.json())
-      .then((j) => setAssets(j.assets ?? []))
-      .catch(() => setAssets([]));
-  }, []);
-
-  const save = async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setError("名字不能是空的");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const body: Record<string, unknown> = { name: trimmed, personality, likes };
-      if (avatarAssetId !== null) body.avatarAssetId = avatarAssetId;
-      const res = await fetch(`/api/characters/${character.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "儲存失敗");
-      onSaved(j.character);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "儲存失敗");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <div
-        className="w-full max-w-[440px] rounded-2xl border border-[#2a2a2a] bg-[#161616] p-5"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-medium">編輯角色</h2>
-          <button type="button" onClick={onClose} aria-label="關閉" className="text-[#8a8a8a] hover:text-white">
-            <IconClose className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="mt-4">
-          <label className="mb-1.5 block text-[12px] text-[#a8a8a8]">換頭像（選填，不選就維持原本的）</label>
-          <div className="grid max-h-[160px] grid-cols-5 gap-1.5 overflow-y-auto">
-            {assets === null && <span className="col-span-5 py-4 text-center text-[12px] text-[#6d6d6d]">載入中…</span>}
-            {assets?.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                title={a.name}
-                onClick={() => setAvatarAssetId((cur) => (cur === a.id ? null : a.id))}
-                className={`relative aspect-square overflow-hidden rounded-md border ${
-                  avatarAssetId === a.id ? "border-[#7ff0cd]" : "border-[#2a2a2a] hover:border-[#4a4a4a]"
-                }`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
-                <img src={a.src} alt={a.name} className="h-full w-full object-cover" />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <label className="mb-1.5 block text-[12px] text-[#a8a8a8]">角色名字</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={40}
-            className="h-9 w-full rounded-lg bg-[#1c1c1c] px-3 text-[13.5px] text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
-          />
-        </div>
-
-        <div className="mt-3">
-          <label className="mb-1.5 block text-[12px] text-[#a8a8a8]">人設</label>
-          <textarea
-            value={personality}
-            onChange={(e) => setPersonality(e.target.value)}
-            rows={3}
-            maxLength={2000}
-            className="w-full resize-none rounded-lg bg-[#1c1c1c] px-3 py-2 text-[13.5px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
-          />
-        </div>
-
-        <div className="mt-3">
-          <label className="mb-1.5 block text-[12px] text-[#a8a8a8]">喜好（用逗號分隔）</label>
-          <input
-            value={likes}
-            onChange={(e) => setLikes(e.target.value)}
-            placeholder="例如：電影, 音樂, 貓"
-            maxLength={200}
-            className="h-9 w-full rounded-lg bg-[#1c1c1c] px-3 text-[13.5px] text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
-          />
-        </div>
-
-        {error && <p className="mt-3 text-[12px] text-[#ff9b9b]">{error}</p>}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-9 rounded-full px-4 text-[13px] text-[#c9c9c9] hover:text-white">
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="h-9 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[13px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? "儲存中…" : "儲存"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

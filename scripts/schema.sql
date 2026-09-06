@@ -219,3 +219,6 @@ create table if not exists user_personas (
   bio        text not null default '',
   updated_at timestamptz not null default now()
 );
+
+-- Structured companion settings (additive).
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '{}'::jsonb;

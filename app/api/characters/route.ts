@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
+import { validateProfile } from "@/lib/characterProfile";
 import { listCharacters, createCharacter, ownedAssetId, toPublicCharacter } from "@/lib/characters";
 
 export const runtime = "nodejs";
@@ -30,10 +31,13 @@ export async function POST(req: NextRequest) {
   }
   const personality = String(body?.personality ?? "").trim().slice(0, MAX_PERSONALITY);
   const likes = String(body?.likes ?? "").trim().slice(0, MAX_LIKES);
+  let profile;
+  try { profile = validateProfile(body?.profile ?? {}); }
+  catch (e) { return NextResponse.json({ error: { message: e instanceof Error ? e.message : "角色設定不正確" } }, { status: 400 }); }
 
   // Only let the character point at an asset the caller actually owns.
   const avatarAssetId = await ownedAssetId(r.user.id, Number(body?.avatarAssetId) || null);
 
-  const row = await createCharacter(r.user.id, { name, avatarAssetId, personality, likes });
+  const row = await createCharacter(r.user.id, { name, avatarAssetId, personality, likes, profile });
   return NextResponse.json({ character: toPublicCharacter(row) }, { status: 201 });
 }
