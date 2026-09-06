@@ -22,6 +22,7 @@ import AdvancedParams from "./AdvancedParams";
 import {
   IMAGE_MODELS,
   getImageModel,
+  getImageModelForControls,
   displayModelName,
   defaultValues,
   buildImagePayload,
@@ -250,7 +251,7 @@ export default function Composer({
     };
   }, []);
 
-  const activeImageModel = modalityForMode === "image" ? getImageModel(resolvedModel) : undefined;
+  const activeImageModel = modalityForMode === "image" ? getImageModelForControls(resolvedModel) : undefined;
 
   // Effective params = the model's defaults with the user's explicit edits on
   // top. Picking a different model clears imgEdits (see the model dropdown), so
@@ -377,7 +378,7 @@ export default function Composer({
       }
     }
     const imagePayload = activeImageModel
-      ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds)
+      ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds, resolvedModel)
       : undefined;
     if (imagePayload) {
       if (moderation !== "auto") imagePayload.moderation = moderation;
@@ -701,7 +702,7 @@ export default function Composer({
                     onClick={() => {
                       setModel(m.id);
                       setImgEdits({});
-                      if (!supportsRefImages(getImageModel(m.id))) {
+                      if (!supportsRefImages(getImageModelForControls(m.id))) {
                         setRefs([]);
                         setRefPicker(false);
                       }

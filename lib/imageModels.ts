@@ -279,6 +279,18 @@ export function displayModelName(id: string): string {
   return nsfw ? `NSFW-${rest}` : rest;
 }
 
+/**
+ * Resolves the curated catalogue entry for an EXACT model id — deliberately
+ * does NOT strip an "NSFW-" prefix, unlike getImageModelForControls() below.
+ * Every caller here is display-name-adjacent (falls back to this when
+ * /api/models' own displayName is missing, or feeds a catalogue "name" into
+ * lib/modelDisplay.ts's resolveModelDisplay) — matching an NSFW id to its
+ * safe twin's entry would surface that twin's bare name/id, making an
+ * NSFW-* model render under the exact same label as its differently-
+ * moderated counterpart. See lib/modelDisplay.ts's cleanModelName for the
+ * same reasoning; getImageModelForControls is the prefix-aware sibling for
+ * the one thing that's actually safe to share (behavior/parameters).
+ */
 export function getImageModel(id: string | null | undefined): ImageModel | undefined {
   if (!id) return undefined;
   const lower = id.toLowerCase();
@@ -286,6 +298,27 @@ export function getImageModel(id: string | null | undefined): ImageModel | undef
     IMAGE_MODELS.find((m) => m.id === id) ||
     IMAGE_MODELS.find((m) => m.id.toLowerCase() === lower)
   );
+}
+
+/**
+ * Same lookup, but matches an "NSFW-"-prefixed id against its underlying
+ * (safe) catalogue entry — for resolving which CONTROLS/behavior apply
+ * (reference-image support, size limits, negative_prompt/seed, ...), never
+ * for display. Found via a real bug hunt (2026-09-06): Composer.tsx used
+ * plain getImageModel() for this, so every NSFW-* Seedream variant (same
+ * underlying model, unmoderated) fell through to undefined — losing
+ * reference-image support, negative_prompt/seed controls, and the hires
+ * SIZE default entirely, silently degrading to the generic 1024x1024
+ * fallback. (Verified live that the smaller size did NOT actually get
+ * rejected by SIRAYA for NSFW-Dola-Seedream-5.0-pro — so this wasn't
+ * causing outright failures, just a real, silent loss of every other
+ * per-model control the non-NSFW twin has.) Callers must still send the
+ * ORIGINAL id in the actual request — see buildImagePayload's `modelId`
+ * param — never `.id` off the object this returns, which is the safe twin's.
+ */
+export function getImageModelForControls(id: string | null | undefined): ImageModel | undefined {
+  if (!id) return undefined;
+  return getImageModel(id.replace(/^NSFW-/i, ""));
 }
 
 /** Families that accept a reference image (image-to-image) via the `image` field. */
@@ -331,15 +364,24 @@ export function defaultValues(model: ImageModel): ImageControlValues {
 /**
  * Assemble the POST /api/images body for a model, keeping only the parameters
  * that model's family accepts and dropping blank optional fields.
+ *
+ * `modelId` defaults to `model.id` but should be passed explicitly whenever
+ * the caller resolved `model` through getImageModel() from a possibly
+ * "NSFW-"-prefixed id — that lookup now strips the prefix to find the right
+ * catalogue *controls*, but the actual request must still go out under the
+ * id the user picked (whichever moderation profile that resolves to on
+ * SIRAYA's side), not the safe twin's bare id, or an NSFW selection would
+ * silently generate through the moderated model instead.
  */
 export function buildImagePayload(
   model: ImageModel,
   prompt: string,
   values: ImageControlValues,
-  assetIds: number[] = []
+  assetIds: number[] = [],
+  modelId: string = model.id
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    model: model.id,
+    model: modelId,
     prompt,
     response_format: "url",
   };

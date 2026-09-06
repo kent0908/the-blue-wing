@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/apiauth";
 import { getBalance, creditCost } from "@/lib/credits";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
-import { MAX_REF_IMAGES, getImageModel, supportsWatermarkControl } from "@/lib/imageModels";
+import { MAX_REF_IMAGES, getImageModelForControls, supportsWatermarkControl } from "@/lib/imageModels";
 import { recordGeneration } from "@/lib/generations";
 import { sniffImageMimeFromBase64 } from "@/lib/imageMime";
 
@@ -89,8 +89,13 @@ export async function POST(req: NextRequest) {
     // parameters outright ("Unknown parameter: 'watermark'"). Only forward
     // the field for families verified to accept it; strip it otherwise, even
     // if the client sent one (defense in depth — see AdvancedParams.tsx for
-    // the client-side gating).
-    const imgModel = getImageModel(String(body.model));
+    // the client-side gating). getImageModelForControls (not getImageModel)
+    // since this is a real-behavior question, not a display one — an
+    // "NSFW-"-prefixed Seedream id is still Seedream underneath and still
+    // accepts this field; a real bug hunt (2026-09-06) found this used
+    // plain getImageModel() and so was silently stripping watermark control
+    // for every NSFW-* image model regardless of what the client sent.
+    const imgModel = getImageModelForControls(String(body.model));
     if (supportsWatermarkControl(imgModel)) {
       if (payload.watermark === undefined) payload.watermark = false;
     } else {
