@@ -35,23 +35,72 @@ export const dynamic = "force-dynamic";
  * hostname — the hostname is authenticated, the connection target is pinned.
  */
 
+function ipv4Parts(ip: string): number[] | null {
+  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const parts = [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+  return parts.every((n) => n >= 0 && n <= 255) ? parts : null;
+}
+
+function isPrivateIpv4(parts: number[]): boolean {
+  const [a, b] = parts;
+  return (
+    a >= 224 || (a === 100 && b >= 64 && b <= 127) || a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+/**
+ * A real code-review finding (2026-09-06): the IPv6 branch used to
+ * pattern-match known-unsafe PREFIXES only (`::ffff:`, `fe80`, `fc`/`fd`,
+ * exact `::`/`::1`) without ever decoding an embedded IPv4 address. IPv6 has
+ * two notations that embed a plain IPv4 address in the low 32 bits —
+ * `::ffff:a.b.c.d` (mapped) and the older, still-parseable `::a.b.c.d`
+ * (compatible) — and the old code treated the FIRST as unconditionally
+ * unsafe (overzealous — it blocked public v4-mapped addresses too) while
+ * not recognising the SECOND at all, so `::127.0.0.1`, `::10.0.0.1`, or even
+ * `::169.254.169.254` (a cloud metadata endpoint, just spelled as
+ * IPv4-compatible IPv6) would sail through as "not private". In this route
+ * specifically the hostname being resolved is never attacker-chosen (the
+ * ownership check above only allows a URL that's already one of the
+ * caller's own recorded generation URLs — always our own storage or a
+ * trusted upstream provider domain, never user input), so this exact gap
+ * wasn't independently reachable — but isPrivateIp() is a general-purpose
+ * safety check and shouldn't have a silent bypass built in regardless of
+ * what currently calls it. Fixed by extracting any embedded IPv4 address in
+ * EITHER notation and checking it with the same v4 rules as a plain address.
+ */
 function isPrivateIp(ip: string): boolean {
   if (net.isIPv4(ip)) {
-    const parts = ip.split(".").map(Number);
-    const a = parts[0];
-    const b = parts[1];
-    return (
-      a >= 224 || (a === 100 && b >= 64 && b <= 127) || a === 10 ||
-      a === 127 ||
-      a === 0 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168)
-    );
+    const parts = ipv4Parts(ip);
+    return !parts || isPrivateIpv4(parts);
   }
   if (net.isIPv6(ip)) {
     const lower = ip.toLowerCase();
-    return lower === "::" || lower.startsWith("::ffff:") || lower === "::1" || lower.startsWith("fe80") || lower.startsWith("fc") || lower.startsWith("fd");
+
+    const mapped = lower.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+    if (mapped) {
+      const parts = ipv4Parts(mapped[1]);
+      return !parts || isPrivateIpv4(parts);
+    }
+    const compatible = lower.match(/^::(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+    if (compatible) {
+      const parts = ipv4Parts(compatible[1]);
+      return !parts || isPrivateIpv4(parts);
+    }
+
+    return (
+      lower === "::" ||
+      lower === "::1" ||
+      lower.startsWith("fe80") || // link-local, fe80::/10
+      lower.startsWith("fc") || lower.startsWith("fd") || // unique local, fc00::/7
+      lower.startsWith("ff") || // multicast, ff00::/8
+      lower === "100::" || lower.startsWith("100:0:0:0:") // discard-only, 100::/64
+    );
   }
   return true; // not a recognisable IP - treat as unsafe
 }
