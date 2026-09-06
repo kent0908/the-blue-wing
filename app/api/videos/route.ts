@@ -9,10 +9,38 @@ import { recordGeneration } from "@/lib/generations";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
+import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+// Video is the only generation kind that's genuinely async/long-running —
+// image and text charge-and-call inside one request/response (see
+// lib/creditTransactions.ts's paidCall), so there's nothing to be "in
+// flight" there. A charged video row counts as in-flight until either
+// recordGeneration (completed) or a video_refund (failed) shows up against
+// its ref; the frontend already caps concurrent jobs at the same number
+// (MAX_CONCURRENT_JOBS in lib/jobsStore.tsx) but that's UI-only and doesn't
+// stop a direct API caller from firing far more submissions than that.
+const MAX_CONCURRENT_VIDEO_JOBS = 4;
+
+async function countInFlightVideoJobs(userId: number): Promise<number> {
+  const { rows } = await sql<{ n: number }>`
+    select count(*)::int as n
+    from credit_ledger cl
+    where cl.user_id = ${userId}
+      and cl.reason = 'video'
+      and cl.delta < 0
+      and cl.ref not like 'pending:%'
+      and not exists (select 1 from generations g where g.user_id = cl.user_id and g.ref = cl.ref)
+      and not exists (
+        select 1 from credit_ledger r
+        where r.user_id = cl.user_id and r.reason = 'video_refund' and r.ref = cl.ref
+      )
+  `;
+  return rows[0]?.n ?? 0;
+}
 
 /**
  * POST /api/videos
@@ -34,6 +62,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: { message: "`model` and `prompt` are required.", type: "invalid_request_error", code: 400 } },
         { status: 400 }
+      );
+    }
+
+    const inFlight = await countInFlightVideoJobs(user.id);
+    if (inFlight >= MAX_CONCURRENT_VIDEO_JOBS) {
+      return NextResponse.json(
+        {
+          error: {
+            message: `同時最多 ${MAX_CONCURRENT_VIDEO_JOBS} 個影片生成在跑，等其中一個完成後再試`,
+            code: "too_many_concurrent",
+          },
+        },
+        { status: 429 }
       );
     }
 

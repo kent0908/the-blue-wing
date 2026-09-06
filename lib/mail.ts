@@ -22,7 +22,7 @@ function shell(heading: string, body: string, url: string, cta: string): string 
     </div>`;
 }
 
-async function send(to: string, subject: string, html: string, logLabel: string, url: string): Promise<MailResult> {
+async function send(to: string, subject: string, html: string): Promise<MailResult> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.MAIL_FROM || "The Blue Wing <onboarding@resend.dev>";
 
@@ -47,9 +47,7 @@ export function sendVerifyEmail(to: string, verifyUrl: string): Promise<MailResu
   return send(
     to,
     "驗證你的 The Blue Wing 帳號",
-    shell("歡迎加入 The Blue Wing", "<p>點下面的按鈕完成 email 驗證（連結 1 小時內有效）：</p>", verifyUrl, "驗證帳號"),
-    "verify link",
-    verifyUrl
+    shell("歡迎加入 The Blue Wing", "<p>點下面的按鈕完成 email 驗證（連結 1 小時內有效）：</p>", verifyUrl, "驗證帳號")
   );
 }
 
@@ -62,8 +60,6 @@ export function sendResetEmail(to: string, resetUrl: string): Promise<MailResult
       "<p>我們收到重設此帳號密碼的請求。點下面的按鈕設定新密碼（連結 1 小時內有效）：</p><p style=\"color:#666;font-size:13px\">如果不是你本人操作，請忽略這封信，密碼不會變更。</p>",
       resetUrl,
       "重設密碼"
-    ),
-    "reset link",
-    resetUrl
+    )
   );
 }

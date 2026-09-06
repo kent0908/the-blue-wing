@@ -71,7 +71,7 @@ export async function recentLedger(userId: number, limit = 50): Promise<LedgerRo
 }
 
 /* ---- what a generation costs, in credits ---- */
-import { getRate, creditCostFromRate, resolutionMultiplier } from "./rateCard";
+import { getRate, creditCostFromRate } from "./rateCard";
 
 export interface CostInput {
   kind: "image" | "video" | "text";
@@ -83,28 +83,15 @@ export interface CostInput {
   resolution?: string;
 }
 
-/** Hard-coded fallback used only when a model has no active `model_rates` row.
- *  Base rates are 480p — resolutionMultiplier() scales up from there, same
- *  as the rate-card path, so an un-seeded model still holds its margin at
- *  every resolution instead of just the default one. */
-function legacyCost(input: CostInput): number {
-  const id = input.model.toLowerCase();
-  if (input.kind === "image") {
-    const per = /gpt-image|gemini-3-pro-image|seedream-4\.5|seedream-5/.test(id) ? 14 : 10;
-    return per * Math.max(1, input.imageCount ?? 1);
-  }
-  if (input.kind === "video") {
-    const secs = Math.max(1, Math.ceil(input.seconds ?? 5));
-    const base = /veo|sora/.test(id) ? 70 : 45;
-    const perSecondAtRes = Math.ceil(base * resolutionMultiplier(input.resolution));
-    return secs * perSecondAtRes;
-  }
-  return 2 + Math.ceil((input.maxTokens ?? 1024) / 2000);
-}
-
 /**
- * Credits a generation will cost. Reads the editable `model_rates` card first;
- * falls back to legacyCost() when the model isn't in the table.
+ * Credits a generation will cost. Reads the editable `model_rates` card —
+ * deliberately does NOT fall back to a guessed price when a model has no
+ * active row (or the row's modality doesn't match the request): a silently
+ * wrong/legacy price for an un-seeded or misclassified model is a real
+ * underpricing risk, not just a display inconvenience. If this starts
+ * rejecting a model that should work, the fix is to add/correct its
+ * model_rates row (see scripts/apply-rate-card.mjs), not to re-add a
+ * fallback here.
  */
 export async function creditCost(input: CostInput): Promise<number> {
   const rate = await getRate(input.model);

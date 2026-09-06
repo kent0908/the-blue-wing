@@ -65,6 +65,20 @@ create index if not exists ledger_expiry_idx on credit_ledger(user_id, expires_a
 create unique index if not exists credit_ledger_daily_free_uidx
   on credit_ledger(user_id, ref) where reason = 'daily_free';
 
+-- Guards against the same failed charge being refunded twice (lib/creditTransactions.ts's
+-- refundCharge checks-then-inserts, which alone still has a race window —
+-- this constraint is the actual backstop).
+create unique index if not exists credit_refund_once
+  on credit_ledger(user_id, ref) where reason = 'charge_refund';
+
+-- Backing store for lib/rateLimit.ts's DB-shared (not per-instance-memory)
+-- rate limiter — a fixed-window counter per key.
+create table if not exists api_limits (
+  key   text primary key,
+  bucket bigint not null,
+  hits  integer not null
+);
+
 -- per-model credit rate card (single source of truth for pricing). Seeded by
 -- scripts/seed-rates.mjs; edited from /admin. credits = per image / per second
 -- of video / per 1k output tokens depending on modality.

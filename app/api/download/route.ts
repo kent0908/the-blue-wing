@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import dns from "node:dns/promises";
 import net from "node:net";
+import https from "node:https";
+import { Readable } from "node:stream";
 import { requireUser } from "@/lib/apiauth";
 
 export const runtime = "nodejs";
@@ -18,9 +20,19 @@ export const dynamic = "force-dynamic";
  * always saves instead of navigating.
  *
  * Only signed-in users can call this, and only to fetch http(s) URLs that
- * don't resolve to a private/loopback/link-local address; this is an open
+ * don't resolve to a private/loopback/link-local address AND that belong to
+ * one of their own recorded generations; this is otherwise an open
  * fetch-by-URL endpoint, so those checks exist to stop it being used as an
  * SSRF pivot against internal/cloud-metadata addresses.
+ *
+ * DNS rebinding: resolving the hostname here and then handing the same
+ * hostname to a normal fetch() would let an attacker-controlled DNS record
+ * (TTL 0) point somewhere private *after* this check but *before* the actual
+ * connection — the two lookups aren't the same lookup. So the real request
+ * below connects directly to one of the IPs already validated here (via
+ * https.request's `host`), while still sending the correct SNI/Host so TLS
+ * certificate verification and virtual-hosting work against the real
+ * hostname — the hostname is authenticated, the connection target is pinned.
  */
 
 function isPrivateIp(ip: string): boolean {
@@ -49,6 +61,40 @@ function safeFilename(name: string): string {
   return cleaned || "blue-wing-download";
 }
 
+interface PinnedResponse {
+  statusCode: number;
+  headers: Record<string, string | string[] | undefined>;
+  body: Readable;
+}
+
+/**
+ * Connects to `ip` directly (not `target.hostname` — that's the whole point,
+ * see the module comment) but still sends SNI + Host for `target.hostname`,
+ * so TLS certificate validation and any host-based routing on the other end
+ * both see the real domain. No redirect following — a 3xx comes back as an
+ * ordinary response for the caller to reject.
+ */
+function fetchPinned(target: URL, ip: string, timeoutMs: number): Promise<PinnedResponse> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        host: ip,
+        port: target.port || 443,
+        path: `${target.pathname}${target.search}`,
+        servername: target.hostname,
+        headers: { Host: target.hostname },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        resolve({ statusCode: res.statusCode ?? 502, headers: res.headers, body: res });
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireUser(req);
   if ("error" in auth) return auth.error;
@@ -75,29 +121,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: { message: "只允許 http(s) 網址" } }, { status: 400 });
   }
 
+  let pinnedIp: string;
   try {
     const addresses = await dns.lookup(target.hostname, { all: true });
     if (addresses.length === 0 || addresses.some((a) => isPrivateIp(a.address))) {
       return NextResponse.json({ error: { message: "不允許的網址" } }, { status: 400 });
     }
+    pinnedIp = addresses[0].address;
   } catch {
     return NextResponse.json({ error: { message: "無法解析網址主機" } }, { status: 400 });
   }
 
-  let upstream: Response;
+  let upstream: PinnedResponse;
   try {
-    upstream = await fetch(target.toString(), { redirect: "error", signal: AbortSignal.timeout(30000) });
+    upstream = await fetchPinned(target, pinnedIp, 30000);
   } catch {
     return NextResponse.json({ error: { message: "下載來源時發生錯誤" } }, { status: 502 });
   }
-  if (!upstream.ok || !upstream.body) {
-    return NextResponse.json({ error: { message: `來源回應失敗（${upstream.status}）` } }, { status: 502 });
+  if (upstream.statusCode >= 300 && upstream.statusCode < 400) {
+    upstream.body.resume();
+    return NextResponse.json({ error: { message: "來源要求重新導向，已拒絕" } }, { status: 502 });
+  }
+  if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
+    upstream.body.resume();
+    return NextResponse.json({ error: { message: `來源回應失敗（${upstream.statusCode}）` } }, { status: 502 });
   }
 
   const safeName = encodeURIComponent(safeFilename(rawName));
-  const contentLength = upstream.headers.get("content-length");
+  const contentLengthHeader = upstream.headers["content-length"];
+  const contentLength = Array.isArray(contentLengthHeader) ? contentLengthHeader[0] : contentLengthHeader;
 
-  return new NextResponse(upstream.body, {
+  return new NextResponse(Readable.toWeb(upstream.body) as ReadableStream, {
     headers: {
       "Content-Type": "application/octet-stream",
       "Cache-Control": "private, no-store",
