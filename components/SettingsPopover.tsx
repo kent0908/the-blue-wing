@@ -4,12 +4,12 @@ import Popover from "./Popover";
 import { IconRatio, IconReset } from "./Icons";
 import {
   ASPECT_RATIOS,
-  RESOLUTIONS,
   IMAGE_SIZES,
   DEFAULT_SETTINGS,
   type GenSettings,
   type Mode,
 } from "@/lib/types";
+import { videoConstraintFor } from "@/lib/videoModels";
 
 function Choice({
   value,
@@ -43,12 +43,16 @@ export default function SettingsPopover({
   mode,
   settings,
   onChange,
+  model,
 }: {
   mode: Mode;
   settings: GenSettings;
   onChange: (s: GenSettings) => void;
+  /** currently selected model id — video mode only, to look up which resolutions/duration it actually supports (see lib/videoModels.ts's videoConstraintFor). */
+  model?: string;
 }) {
   const set = (patch: Partial<GenSettings>) => onChange({ ...settings, ...patch });
+  const videoConstraint = mode === "video" ? videoConstraintFor(model) : null;
 
   const summary =
     mode === "video"
@@ -106,28 +110,30 @@ export default function SettingsPopover({
               </>
             )}
 
-            {mode === "video" && (
+            {mode === "video" && videoConstraint && (
               <>
                 <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">解析度</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {RESOLUTIONS.map((r) => (
+                  {videoConstraint.resolutions.map((r) => (
                     <Choice key={r} value={r} active={settings.resolution === r} onClick={() => set({ resolution: r })} />
                   ))}
                 </div>
 
-                <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">時長</div>
+                <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">
+                  時長{videoConstraint.maxSeconds < 30 && <span className="text-[#6d6d6d]">（此模型最長 {videoConstraint.maxSeconds} 秒）</span>}
+                </div>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
                     min={2}
-                    max={30}
+                    max={videoConstraint.maxSeconds}
                     step={1}
-                    value={settings.seconds}
+                    value={Math.min(settings.seconds, videoConstraint.maxSeconds)}
                     onChange={(e) => set({ seconds: Number(e.target.value) })}
                     className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-[#333] accent-white"
                   />
                   <div className="grid h-9 w-14 place-items-center rounded-lg bg-[#232323] text-[13px]">
-                    {settings.seconds}
+                    {Math.min(settings.seconds, videoConstraint.maxSeconds)}
                   </div>
                 </div>
               </>

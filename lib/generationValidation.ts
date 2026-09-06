@@ -1,4 +1,5 @@
 import { SirayaApiError } from "./siraya";
+import { videoConstraintFor } from "./videoModels";
 const bad=()=>{throw new SirayaApiError(400,"生成參數不正確或包含未支援的欄位");};
 export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text"|"imageEdit") {
   const common=["model","prompt"];
@@ -23,9 +24,17 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
     if(body.size!==undefined && (typeof body.size!=="string"|| !/^(1024x1024|1792x1024|1024x1792|2048x2048|2560x1440|1440x2560|2304x1728)$/.test(body.size)))bad();
   }
   if(kind==="video"){
-    integer("seconds",5,1,30);
+    // Real per-model ceilings (lib/videoModels.ts's videoConstraintFor,
+    // verified live against SIRAYA 2026-09-06) — not every Seedance version
+    // accepts the same resolutions or the same max duration (2.0-mini tops
+    // out at 720p/15s, only 2.5 reaches 1080p+30s, base 2.0 alone has a
+    // real 4k tier), so this is the same defense-in-depth backstop as
+    // lib/jobsStore.tsx's client-side clamp, for anyone calling the API
+    // directly.
+    const constraint=videoConstraintFor(typeof body.model==="string"?body.model:null);
+    integer("seconds",5,1,constraint.maxSeconds);
     body.resolution??="480p";
-    if(!["480p","720p","1080p"].includes(String(body.resolution)))bad();
+    if(!constraint.resolutions.includes(String(body.resolution)))bad();
     if(body.extra_body!==undefined){
       const extra=body.extra_body;
       if(!extra||typeof extra!=="object"||Object.keys(extra).some(k=>k!=="watermark")||("watermark" in extra && typeof extra.watermark!=="boolean"))bad();

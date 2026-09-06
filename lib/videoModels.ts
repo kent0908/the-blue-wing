@@ -57,3 +57,70 @@ export function supportsVideoRefInput(modelId: string | null | undefined): boole
   const id = modelId.toLowerCase();
   return /seedance-2\.(0|5)(-|$)/.test(id);
 }
+
+/**
+ * Per-model valid resolutions + max duration (seconds) for /videos/generations.
+ * The UI used to offer the same fixed {480p,720p,1080p} × up to 30s to every
+ * video model regardless of which one was selected, which is exactly why a
+ * real user hit "the parameter resolution specified in the request is not
+ * valid for model dreamina-seedance-2-0-mini in r2v" — 2.0-mini simply
+ * doesn't support 1080p at all, but the UI let it be selected anyway.
+ *
+ * Every row below is from a real, direct probe against SIRAYA on
+ * 2026-09-06 (not vendor docs, which don't cover most of these) — submitted
+ * a real 5s (or, to find an exact duration ceiling, slightly longer)
+ * generation per {model, resolution} and per {model, duration} combination
+ * and recorded which ones SIRAYA actually accepted:
+ *   - resolution sets are IDENTICAL between plain generation and r2v
+ *     (reference-to-video) for every model that supports r2v at all — r2v
+ *     does not further restrict resolution beyond what the base model allows
+ *   - "4k" is real and accepted for base Seedance 2.0 specifically (not for
+ *     2.0-fast, 2.0-mini, or 2.5) — "2k"/"1440p"/"2160p" were all tried and
+ *     rejected everywhere, so there is no distinct "2k" resolution tier on
+ *     this API, only 480p/720p/1080p/4k
+ *   - 1.0-pro / 1.0-pro-fast: SIRAYA's own error names the exact ceiling
+ *     ("duration must be ≤ 12"); 1.5-pro doesn't say a number in its error,
+ *     so its 12 here was found by direct probing (12 accepted, 15 rejected)
+ *   - 2.0 / 2.0-fast / 2.0-mini: SIRAYA's error for these never states a
+ *     number either; 15 was confirmed accepted and 30 rejected, matching
+ *     what the product owner already knew about 2.0-mini specifically — not
+ *     independently confirmed whether something between 16-29 might also
+ *     work, since 15 is the value actually wanted for the product here
+ *   - 2.5: only model confirmed to accept the full 30s
+ */
+interface VideoConstraint {
+  /** matched against the lowercased model id, longest prefix wins — same convention as RULES above */
+  prefix: string;
+  resolutions: string[];
+  maxSeconds: number;
+}
+
+const VIDEO_CONSTRAINTS: VideoConstraint[] = [
+  { prefix: "seedance-1.0-pro-fast", resolutions: ["480p", "720p", "1080p"], maxSeconds: 12 },
+  { prefix: "seedance-1.0-pro", resolutions: ["480p", "720p", "1080p"], maxSeconds: 12 },
+  { prefix: "seedance-1.5-pro", resolutions: ["480p", "720p", "1080p"], maxSeconds: 12 },
+  { prefix: "seedance-2.0-fast", resolutions: ["480p", "720p"], maxSeconds: 15 },
+  { prefix: "seedance-2.0-mini", resolutions: ["480p", "720p"], maxSeconds: 15 },
+  { prefix: "seedance-2.0", resolutions: ["480p", "720p", "1080p", "4k"], maxSeconds: 15 },
+  { prefix: "seedance-2.5", resolutions: ["480p", "720p", "1080p"], maxSeconds: 30 },
+];
+
+/** Applied when a video model isn't in the table above (e.g. Veo, Sora, or
+ *  anything SIRAYA adds later that hasn't been individually probed) — the
+ *  narrowest, most conservative option actually confirmed to work for
+ *  something on this API, rather than assuming the wide {…,4k}×30s ceiling. */
+const DEFAULT_VIDEO_CONSTRAINT: VideoConstraint = { prefix: "", resolutions: ["480p", "720p", "1080p"], maxSeconds: 12 };
+
+export function videoConstraintFor(modelId: string | null | undefined): VideoConstraint {
+  if (!modelId) return DEFAULT_VIDEO_CONSTRAINT;
+  const id = modelId.toLowerCase().replace(/^nsfw-/, "");
+  let best = DEFAULT_VIDEO_CONSTRAINT;
+  let bestLen = -1;
+  for (const c of VIDEO_CONSTRAINTS) {
+    if (id.includes(c.prefix) && c.prefix.length > bestLen) {
+      best = c;
+      bestLen = c.prefix.length;
+    }
+  }
+  return best;
+}

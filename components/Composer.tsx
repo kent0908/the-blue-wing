@@ -730,7 +730,7 @@ export default function Composer({
         {activeImageModel ? (
           <ImageParams model={activeImageModel} values={imgValues} onChange={setImgEdits} />
         ) : (
-          <SettingsPopover mode={mode} settings={settings} onChange={setSettings} />
+          <SettingsPopover mode={mode} settings={settings} onChange={setSettings} model={resolvedModel} />
         )}
 
         <AdvancedParams
