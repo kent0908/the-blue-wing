@@ -56,14 +56,14 @@ function escapeRegExp(s: string): string {
 const MODE_ITEMS: { id: Mode; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
   { id: "image", label: "智慧生圖", icon: IconImage },
   { id: "video", label: "智慧影片", icon: IconVideo },
-  { id: "audio", label: "語音", icon: IconAudio },
+  { id: "audio", label: "文字創作", icon: IconAudio },
 ];
 
 const PLACEHOLDER: Record<Mode, string> = {
   video: "描述你想生成的影片畫面",
   image: "描述你想生成的圖片畫面",
   text: "輸入你的問題或指令",
-  audio: "輸入要轉成語音的文字",
+  audio: "輸入你想撰寫、改寫或討論的內容",
 };
 
 /** Credits shown on the submit pill — 1 credit ≈ US$0.005, matching the
@@ -224,6 +224,7 @@ export default function Composer({
     // it shares "text"'s ~80-model chat-completions list otherwise, which is
     // exactly the "太雜" the curation here fixes.
     if (mode === "audio") return live.filter((m) => AUDIO_MODELS.includes(m.id));
+    if (modalityForMode === "video") return live.filter(m => !/i2v/i.test(m.id));
     if (modalityForMode !== "image") return live;
     // Merge the curated image catalogue so links to a specific model resolve
     // even before /api/models has loaded (and so it's pickable in the dropdown).
@@ -244,8 +245,9 @@ export default function Composer({
           (m) => m.id === initialModel || m.id.toLowerCase() === initialModel.toLowerCase()
         )
       : undefined;
-    setModel((preferred ?? available[0]).id);
-  }, [available, model, initialModel]);
+    const defaultVideo = mode === "video" ? available.find(m => m.id === "SIRAYA-Seedance-2.0-mini") ?? available.find(m => /seedance/i.test(m.id) && !/nsfw/i.test(m.id)) : undefined;
+    setModel((preferred ?? defaultVideo ?? available[0]).id);
+  }, [available, model, initialModel, mode]);
 
   const activeImageModel = modalityForMode === "image" ? getImageModel(model) : undefined;
 
@@ -752,3 +754,4 @@ export default function Composer({
     </div>
   );
 }
+

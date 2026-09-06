@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
-import TopBar from "@/components/TopBar";
-import SupportChat from "@/components/SupportChat";
+import AppFrame from "@/components/AppFrame";
+
+
 import JobToasts from "@/components/JobToasts";
 import { GenerationJobsProvider } from "@/lib/jobsStore";
 
@@ -17,17 +17,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-Hant">
       <body className="h-dvh overflow-hidden bg-black text-[var(--bw-text)]">
         <GenerationJobsProvider>
-          <div className="flex h-full">
-            <Sidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <TopBar />
-              <main className="min-h-0 flex-1">{children}</main>
-            </div>
-          </div>
-          <SupportChat />
+          <AppFrame>{children}</AppFrame>
           <JobToasts />
         </GenerationJobsProvider>
       </body>
     </html>
   );
 }
+

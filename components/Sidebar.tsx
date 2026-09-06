@@ -7,18 +7,12 @@ import {
   IconHome,
   IconImage,
   IconVideo,
-  IconAgent,
   IconAudio,
   IconChat,
   IconAvatar,
-  IconApps,
   IconCanvas,
   IconAssets,
-  IconAffiliate,
   IconCollapse,
-  IconDiscord,
-  IconX,
-  IconInstagram,
   IconWing,
 } from "./Icons";
 
@@ -34,13 +28,11 @@ const GROUP_A: Item[] = [
   { href: "/", label: "首頁", icon: IconHome },
   { href: "/studio?mode=image", label: "圖片生成", icon: IconImage },
   { href: "/studio?mode=video", label: "影片生成", icon: IconVideo, badge: { text: "HOT", tone: "hot" } },
-  { href: "/agent", label: "Agent", icon: IconAgent, badge: { text: "NEW", tone: "new" } },
-  { href: "/studio?mode=audio", label: "語音生成", icon: IconAudio },
+  { href: "/studio?mode=audio", label: "文字創作", icon: IconAudio },
   { href: "/avatar", label: "數位人", icon: IconAvatar },
 ];
 
 const GROUP_B: Item[] = [
-  { href: "/apps", label: "AI 應用", icon: IconApps },
   { href: "/canvas", label: "智慧畫布", icon: IconCanvas, badge: { text: "NEW", tone: "new" } },
   { href: "/canvas/director3d", label: "3D 導演台", icon: IconAvatar, badge: { text: "NEW", tone: "new" } },
 ];
@@ -133,11 +125,7 @@ function SidebarInner() {
       </nav>
 
       <div className="px-3 pb-4">
-        <NavLink
-          item={{ href: "/affiliate", label: "聯盟計畫", icon: IconAffiliate }}
-          active={pathname === "/affiliate"}
-          collapsed={collapsed}
-        />
+
         <button
           onClick={() => setCollapsed((v) => !v)}
           className={[
@@ -149,19 +137,7 @@ function SidebarInner() {
           {!collapsed && <span>收起</span>}
         </button>
 
-        {!collapsed && (
-          <div className="mt-4 flex items-center gap-4 px-3 text-[#6d6d6d]">
-            <a href="#" aria-label="Discord" className="transition-colors hover:text-white">
-              <IconDiscord className="h-[17px] w-[17px]" />
-            </a>
-            <a href="#" aria-label="X" className="transition-colors hover:text-white">
-              <IconX className="h-[15px] w-[15px]" />
-            </a>
-            <a href="#" aria-label="Instagram" className="transition-colors hover:text-white">
-              <IconInstagram className="h-[17px] w-[17px]" />
-            </a>
-          </div>
-        )}
+
       </div>
     </aside>
   );
@@ -174,3 +150,4 @@ export default function Sidebar() {
     </Suspense>
   );
 }
+

@@ -127,7 +127,7 @@ export default function InspirationPanel({
   const filtersActive = kindFilter !== "all" || timeFilter !== "all" || q.trim().length > 0;
 
   return (
-    <aside className="flex w-[390px] shrink-0 flex-col border-l border-[#1c1c1c] bg-black">
+    <aside className="absolute inset-y-0 right-0 z-30 max-w-full md:relative flex w-[390px] shrink-0 flex-col border-l border-[#1c1c1c] bg-black">
       <div className="flex items-center gap-1 px-4 py-3">
         <button
           onClick={() => setTab("inspiration")}
@@ -249,3 +249,4 @@ export default function InspirationPanel({
     </aside>
   );
 }
+

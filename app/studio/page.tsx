@@ -128,7 +128,7 @@ function StudioInner() {
   const atCapacity = jobs.length >= MAX_CONCURRENT_JOBS;
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="relative flex h-full min-h-0">
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div className="absolute right-6 top-4 z-20 flex items-center gap-1 rounded-full bg-[#141414]/90 p-1 backdrop-blur">
           <button
@@ -154,11 +154,11 @@ function StudioInner() {
             // without needing a parent effect to sync it back to false.
             <MainViewerItem key={latest.id} item={latest} />
           ) : jobs.length === 0 ? (
-            <h2 className="text-[34px] font-normal text-[#5c5c5c]">用 The Blue Wing 點亮你的創作</h2>
+            <h2 className="text-center text-xl sm:text-[34px] font-normal text-[#5c5c5c]">用 The Blue Wing 點亮你的創作</h2>
           ) : null}
         </div>
 
-        <div className="px-8 pb-8">
+        <div className="px-3 pb-4 sm:px-8 sm:pb-8">
           <div className="mx-auto w-full max-w-[840px]">
             <JobQueue jobs={jobs} onDismiss={dismissJob} />
             {atCapacity && (
@@ -249,3 +249,4 @@ export default function StudioPage() {
     </Suspense>
   );
 }
+
