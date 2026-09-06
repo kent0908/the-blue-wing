@@ -117,8 +117,20 @@ export default function Composer({
   const [loadingModels, setLoadingModels] = useState(true);
   const [rates, setRates] = useState<RateCardEntry[]>([]);
   const [model, setModel] = useState<string>("");
-  const [expanded, setExpanded] = useState(false);
+  // Real report (2026-09-07): a long, multi-scene shot-list prompt pasted
+  // in while still collapsed rendered in a cramped 92px box (or even the
+  // old fixed 320px "expanded" cap) with no way to see its own beginning
+  // again short of scrolling a tiny window through a wall of text.
+  // Auto-expanding once the prompt is long enough — not just on the manual
+  // 展開 click — means this happens right when a paste like that lands, not
+  // only after the user notices and remembers to toggle it themselves.
+  // `null` = no explicit user choice yet, follow the auto-expand rule;
+  // true/false = the user clicked 展開/收合 and that choice wins regardless
+  // of length (otherwise clicking 收合 on a long prompt couldn't ever
+  // actually collapse it).
+  const [manualExpand, setManualExpand] = useState<boolean | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const isExpanded = manualExpand ?? prompt.length > 200;
 
   /* ---- reference materials (image-to-image / Seedance multi-reference video) ---- */
   const [refs, setRefs] = useState<RefAsset[]>(initialRefs ?? []);
@@ -397,6 +409,7 @@ export default function Composer({
       videoUrl: videoRefSupported && videoRef ? videoRef.url : undefined,
     });
     setPrompt("");
+    setManualExpand(null);
     setRefs([]);
     setRefPicker(false);
     setMention(null);
@@ -407,7 +420,7 @@ export default function Composer({
     <div
       className={[
         "rounded-2xl border border-[#2a2a2a] bg-[#161616] transition-all",
-        expanded ? "min-h-[260px]" : "",
+        isExpanded ? "min-h-[260px]" : "",
       ].join(" ")}
     >
       <div className="relative flex gap-3 px-4 pt-4">
@@ -555,9 +568,16 @@ export default function Composer({
               setTimeout(() => setMention(null), 120);
             }}
             placeholder={canUseRefs && refs.length > 0 ? `${PLACEHOLDER[mode]}（可打 @ 標記素材）` : PLACEHOLDER[mode]}
-            rows={expanded ? 8 : 3}
+            rows={isExpanded ? 8 : 3}
             className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
-            style={{ maxHeight: expanded ? 320 : 92, overflowY: "auto" }}
+            // A flat 320px was the original "expanded" cap — nowhere near
+            // enough for a genuinely long multi-scene prompt (a real one hit
+            // ~1500+ characters), so scrolling that tiny a window through a
+            // wall of text to find the top again felt broken even though it
+            // was technically scrollable. Scaling with the viewport instead
+            // gives real room on real screens while still guaranteeing the
+            // submit button below it never gets pushed off-screen.
+            style={{ maxHeight: isExpanded ? "55vh" : 92, overflowY: "auto" }}
           />
 
           {mention && (
@@ -614,8 +634,8 @@ export default function Composer({
 
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-label={expanded ? "收合" : "展開"}
+          onClick={() => setManualExpand(!isExpanded)}
+          aria-label={isExpanded ? "收合" : "展開"}
           className="absolute right-4 top-4 text-[#7a7a7a] transition-colors hover:text-white"
         >
           <IconExpand className="h-4 w-4" />
