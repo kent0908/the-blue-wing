@@ -37,6 +37,11 @@ export default function Popover({
       </button>
       {open && (
         <div
+          // max-width is a safety net for any chip near a screen edge — the
+          // per-instance `align` should already keep the panel on-screen,
+          // but this stops it from ever being wider than the viewport itself
+          // (e.g. a narrow app window) regardless of which edge it grows from.
+          style={{ maxWidth: "calc(100vw - 24px)" }}
           className={`bw-menu absolute bottom-[calc(100%+8px)] z-40 p-1.5 ${widthClass} ${
             align === "right" ? "right-0" : "left-0"
           }`}

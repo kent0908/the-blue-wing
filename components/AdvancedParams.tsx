@@ -71,6 +71,12 @@ export default function AdvancedParams({
   return (
     <Popover
       widthClass="w-[320px]"
+      // This chip sits at the right end of the Composer's toolbar row (right
+      // before the price/send button) — anchoring the panel to grow
+      // rightward from its left edge (the default) pushed a 320px-wide panel
+      // straight off the right edge of the composer / screen. Growing
+      // leftward from the chip's right edge instead keeps it on-screen.
+      align="right"
       trigger={() => (
         <>
           <IconSettings className="h-[15px] w-[15px]" />

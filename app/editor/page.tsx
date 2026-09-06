@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { IconChevronLeft, IconPlus, IconTrash, IconClose } from "@/components/Icons";
 import MaskPainter from "@/components/layerEditor/MaskPainter";
-import { CANVAS_SIZES, fitLayer, flattenLayers, toDataUrl, type EditorLayer } from "@/lib/layerEditor";
+import { CANVAS_SIZES, fitLayer, flattenLayers, newLayerId, toDataUrl, type EditorLayer } from "@/lib/layerEditor";
 
 interface AssetLite {
   id: number;
@@ -16,6 +16,9 @@ type Interaction =
   | { kind: "drag"; id: string; offsetX: number; offsetY: number }
   | { kind: "resize"; id: string; startX: number; startY: number; startW: number; startH: number; startMouseX: number; startMouseY: number }
   | null;
+
+const ANNOTATION_LAYER_NAME = "標記";
+const ANNOTATE_COLOR = "#ff3b3b";
 
 function naturalSize(src: string): Promise<{ w: number; h: number }> {
   return new Promise((resolve, reject) => {
@@ -40,15 +43,80 @@ export default function LayerEditorPage() {
   const [redrawing, setRedrawing] = useState(false);
   const [redrawError, setRedrawError] = useState<string | null>(null);
 
+  // ---- 上一步 / 重做 (undo/redo) — one snapshot per user *gesture*, not per
+  // pointermove tick: pushed at the start of a drag/resize/field-edit and
+  // before every discrete action (add/remove/reorder/toggle/generate/redraw),
+  // not on every intermediate update, so undo steps back a whole action at a
+  // time instead of one pixel at a time. layersRef mirrors `layers` so async
+  // continuations (addLayer, submitRedraw run after an await) always
+  // snapshot the latest state instead of a stale render-time closure.
+  const [history, setHistory] = useState<EditorLayer[][]>([]);
+  const [future, setFuture] = useState<EditorLayer[][]>([]);
+  const layersRef = useRef<EditorLayer[]>(layers);
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+  const snapshotHistory = () => {
+    setHistory((h) => [...h.slice(-49), layersRef.current]);
+    setFuture([]);
+  };
+  const undo = () => {
+    if (!history.length) return;
+    const prev = history[history.length - 1];
+    setHistory((h) => h.slice(0, -1));
+    setFuture((f) => [...f, layers]);
+    setLayers(prev);
+    setSelectedId((id) => (id && prev.some((l) => l.id === id) ? id : null));
+  };
+  const redo = () => {
+    if (!future.length) return;
+    const next = future[future.length - 1];
+    setFuture((f) => f.slice(0, -1));
+    setHistory((h) => [...h, layers]);
+    setLayers(next);
+    setSelectedId((id) => (id && next.some((l) => l.id === id) ? id : null));
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  // ---- 圈出要修正的地方 (annotate): a freehand red marker drawn straight onto
+  // the canvas and baked in as its own layer before generating. Seedream has
+  // no coordinate/region parameter — a positional instruction in plain text
+  // ("the area on the left") is not reliably followed (see AdvancedParams'
+  // own prompt cheat-sheet) — but a visible mark that's actually part of the
+  // image the model sees is a real signal, not just wording. Not separately
+  // verified how precisely the model honours it; the prompt hint below says
+  // so.
+  const [annotating, setAnnotating] = useState(false);
+  const annotateCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const annotateDrawing = useRef(false);
+  const annotateLast = useRef<{ x: number; y: number } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selected = layers.find((l) => l.id === selectedId) ?? null;
+  const hasAnnotation = layers.some((l) => l.name === ANNOTATION_LAYER_NAME);
 
   const addLayer = async (src: string, name: string) => {
     try {
       const { w, h } = await naturalSize(src);
       const layer = fitLayer(src, name, canvasSize.width, canvasSize.height, w, h);
+      snapshotHistory();
       setLayers((cur) => [...cur, layer]);
       setSelectedId(layer.id);
     } catch (e) {
@@ -78,11 +146,13 @@ export default function LayerEditorPage() {
     setLayers((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)));
 
   const removeLayer = (id: string) => {
+    snapshotHistory();
     setLayers((cur) => cur.filter((l) => l.id !== id));
     if (selectedId === id) setSelectedId(null);
   };
 
   const moveLayer = (id: string, dir: -1 | 1) => {
+    snapshotHistory();
     setLayers((cur) => {
       const i = cur.findIndex((l) => l.id === id);
       const j = i + dir;
@@ -91,6 +161,11 @@ export default function LayerEditorPage() {
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
+  };
+
+  const toggleVisible = (l: EditorLayer) => {
+    snapshotHistory();
+    updateLayer(l.id, { visible: !l.visible });
   };
 
   /* ---- drag / resize ---- */
@@ -168,6 +243,7 @@ export default function LayerEditorPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error?.message || "重繪失敗");
       if (!json.url) throw new Error("沒有取得重繪結果");
+      snapshotHistory();
       updateLayer(maskingLayer.id, { src: json.url });
       setMaskingLayerId(null);
     } catch (e) {
@@ -176,6 +252,68 @@ export default function LayerEditorPage() {
       setRedrawing(false);
     }
   };
+
+  /* ---- 圈出要修正的地方 ---- */
+  const startAnnotating = () => {
+    setSelectedId(null);
+    setAnnotating(true);
+    requestAnimationFrame(() => {
+      const c = annotateCanvasRef.current;
+      if (!c) return;
+      c.width = canvasSize.width;
+      c.height = canvasSize.height;
+      c.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+    });
+  };
+  const clearAnnotationDrawing = () => {
+    const c = annotateCanvasRef.current;
+    const ctx = c?.getContext("2d");
+    if (!ctx || !c) return;
+    ctx.clearRect(0, 0, c.width, c.height);
+  };
+  const annotatePointerPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const paintAnnotation = (x: number, y: number) => {
+    const ctx = annotateCanvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = ANNOTATE_COLOR;
+    ctx.beginPath();
+    if (annotateLast.current) {
+      ctx.moveTo(annotateLast.current.x, annotateLast.current.y);
+      ctx.lineTo(x, y);
+    } else {
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+    }
+    ctx.stroke();
+    annotateLast.current = { x, y };
+  };
+  const confirmAnnotation = () => {
+    const c = annotateCanvasRef.current;
+    if (!c) return;
+    snapshotHistory();
+    setLayers((cur) => [
+      ...cur.filter((l) => l.name !== ANNOTATION_LAYER_NAME),
+      {
+        id: newLayerId(),
+        src: c.toDataURL("image/png"),
+        name: ANNOTATION_LAYER_NAME,
+        x: 0,
+        y: 0,
+        width: canvasSize.width,
+        height: canvasSize.height,
+        rotation: 0,
+        visible: true,
+      },
+    ]);
+    setAnnotating(false);
+  };
+  const cancelAnnotation = () => setAnnotating(false);
 
   const fieldCls = "w-full rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2 py-1 text-[11.5px] text-white focus:border-[#4a4a4a] focus:outline-none";
 
@@ -199,6 +337,40 @@ export default function LayerEditorPage() {
             </option>
           ))}
         </select>
+
+        <div className="ml-2 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!history.length}
+            title="上一步（Ctrl+Z）"
+            className="rounded-lg px-2 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#1f1f1f] disabled:opacity-30"
+          >
+            ↶ 上一步
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!future.length}
+            title="重做（Ctrl+Y）"
+            className="rounded-lg px-2 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#1f1f1f] disabled:opacity-30"
+          >
+            ↷ 重做
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={annotating ? cancelAnnotation : startAnnotating}
+          disabled={!layers.length && !annotating}
+          title={layers.length ? "在畫面上圈出想修改的地方，生成時會一起參考" : "先加一個圖層才能標記"}
+          className={`ml-2 rounded-lg px-2.5 py-1.5 text-[12px] disabled:opacity-30 ${
+            annotating ? "bg-[#3a1a1a] text-[#ff9b9b]" : "bg-[#1f1f1f] text-[#c9c9c9] hover:bg-[#282828]"
+          }`}
+        >
+          🖍 {annotating ? "標記中…" : "圈出要修正的地方"}
+        </button>
+
         <span className="hidden text-[11px] text-[#6d6d6d] sm:inline">拖曳圖層移動、右下角拖曳調整大小</span>
       </div>
 
@@ -274,7 +446,7 @@ export default function LayerEditorPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={l.src} alt="" className="h-6 w-6 shrink-0 rounded object-cover" />
                 <span className="min-w-0 flex-1 truncate">{l.name}</span>
-                <button type="button" onClick={(e) => { e.stopPropagation(); updateLayer(l.id, { visible: !l.visible }); }} className="text-[10px] text-[#6d6d6d] hover:text-white" title="顯示/隱藏">
+                <button type="button" onClick={(e) => { e.stopPropagation(); toggleVisible(l); }} className="text-[10px] text-[#6d6d6d] hover:text-white" title="顯示/隱藏">
                   {l.visible ? "👁" : "🚫"}
                 </button>
                 <button type="button" onClick={(e) => { e.stopPropagation(); moveLayer(l.id, 1); }} className="text-[#6d6d6d] hover:text-white" title="上移一層">↑</button>
@@ -302,8 +474,10 @@ export default function LayerEditorPage() {
               <div
                 key={l.id}
                 onPointerDown={(e) => {
+                  if (annotating) return;
                   e.stopPropagation();
                   setSelectedId(l.id);
+                  snapshotHistory();
                   const rect = containerRef.current!.getBoundingClientRect();
                   setInteraction({ kind: "drag", id: l.id, offsetX: e.clientX - rect.left - l.x, offsetY: e.clientY - rect.top - l.y });
                 }}
@@ -312,10 +486,11 @@ export default function LayerEditorPage() {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={l.src} alt={l.name} className="h-full w-full select-none object-fill" draggable={false} />
-                {l.id === selectedId && (
+                {l.id === selectedId && !annotating && (
                   <div
                     onPointerDown={(e) => {
                       e.stopPropagation();
+                      snapshotHistory();
                       setInteraction({ kind: "resize", id: l.id, startX: l.x, startY: l.y, startW: l.width, startH: l.height, startMouseX: e.clientX, startMouseY: e.clientY });
                     }}
                     className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 cursor-nwse-resize rounded-full border-2 border-black bg-[#7ff0cd]"
@@ -323,35 +498,84 @@ export default function LayerEditorPage() {
                 )}
               </div>
             ))}
+
+            {annotating && (
+              <canvas
+                ref={annotateCanvasRef}
+                className="absolute inset-0 cursor-crosshair"
+                onPointerDown={(e) => {
+                  annotateDrawing.current = true;
+                  annotateLast.current = null;
+                  const p = annotatePointerPos(e);
+                  paintAnnotation(p.x, p.y);
+                }}
+                onPointerMove={(e) => {
+                  if (!annotateDrawing.current) return;
+                  const p = annotatePointerPos(e);
+                  paintAnnotation(p.x, p.y);
+                }}
+                onPointerUp={() => {
+                  annotateDrawing.current = false;
+                  annotateLast.current = null;
+                }}
+                onPointerLeave={() => {
+                  annotateDrawing.current = false;
+                  annotateLast.current = null;
+                }}
+              />
+            )}
           </div>
         </div>
 
         {/* right: properties + AI actions */}
         <div className="flex w-[280px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-[#1c1c1c] p-3">
-          {selected ? (
+          {annotating ? (
+            <div className="space-y-2">
+              <div className="text-[11px] text-[#8a8a8a]">在畫面上圈出想修改的地方</div>
+              <p className="text-[10.5px] leading-relaxed text-[#6d6d6d]">
+                用滑鼠在畫布上塗畫，紅色標記會變成一個圖層跟畫面一起送給模型，之後在下面 prompt 裡描述「紅圈的地方想改成什麼」——
+                模型看得到這個標記，但不保證完全照著範圍修改，效果請以生成結果為準。
+              </p>
+              <button type="button" onClick={clearAnnotationDrawing} className="w-full rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">
+                清除塗畫
+              </button>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={cancelAnnotation} className="flex-1 rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmAnnotation}
+                  className="flex-1 rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-1.5 text-[12px] font-medium text-[#0a1a16] hover:brightness-105"
+                >
+                  完成標記
+                </button>
+              </div>
+            </div>
+          ) : selected ? (
             <div className="space-y-2">
               <div className="text-[11px] text-[#8a8a8a]">選取圖層：{selected.name}</div>
               <div className="grid grid-cols-2 gap-1.5">
                 <label className="text-[10px] text-[#8a8a8a]">
                   X
-                  <input type="number" value={Math.round(selected.x)} onChange={(e) => updateLayer(selected.id, { x: Number(e.target.value) })} className={fieldCls} />
+                  <input type="number" value={Math.round(selected.x)} onFocus={snapshotHistory} onChange={(e) => updateLayer(selected.id, { x: Number(e.target.value) })} className={fieldCls} />
                 </label>
                 <label className="text-[10px] text-[#8a8a8a]">
                   Y
-                  <input type="number" value={Math.round(selected.y)} onChange={(e) => updateLayer(selected.id, { y: Number(e.target.value) })} className={fieldCls} />
+                  <input type="number" value={Math.round(selected.y)} onFocus={snapshotHistory} onChange={(e) => updateLayer(selected.id, { y: Number(e.target.value) })} className={fieldCls} />
                 </label>
                 <label className="text-[10px] text-[#8a8a8a]">
                   寬
-                  <input type="number" value={Math.round(selected.width)} onChange={(e) => updateLayer(selected.id, { width: Math.max(20, Number(e.target.value)) })} className={fieldCls} />
+                  <input type="number" value={Math.round(selected.width)} onFocus={snapshotHistory} onChange={(e) => updateLayer(selected.id, { width: Math.max(20, Number(e.target.value)) })} className={fieldCls} />
                 </label>
                 <label className="text-[10px] text-[#8a8a8a]">
                   高
-                  <input type="number" value={Math.round(selected.height)} onChange={(e) => updateLayer(selected.id, { height: Math.max(20, Number(e.target.value)) })} className={fieldCls} />
+                  <input type="number" value={Math.round(selected.height)} onFocus={snapshotHistory} onChange={(e) => updateLayer(selected.id, { height: Math.max(20, Number(e.target.value)) })} className={fieldCls} />
                 </label>
               </div>
               <label className="block text-[10px] text-[#8a8a8a]">
                 旋轉角度
-                <input type="range" min={-180} max={180} value={selected.rotation} onChange={(e) => updateLayer(selected.id, { rotation: Number(e.target.value) })} className="w-full accent-[#7ff0cd]" />
+                <input type="range" min={-180} max={180} value={selected.rotation} onPointerDown={snapshotHistory} onChange={(e) => updateLayer(selected.id, { rotation: Number(e.target.value) })} className="w-full accent-[#7ff0cd]" />
               </label>
               <button
                 type="button"
@@ -367,6 +591,11 @@ export default function LayerEditorPage() {
 
           <div className="border-t border-[#1e1e1e] pt-3">
             <div className="mb-1.5 text-[11px] text-[#8a8a8a]">AI 生成 / 融合</div>
+            {hasAnnotation && (
+              <p className="mb-1.5 text-[10.5px] leading-relaxed text-[#ff9b9b]">
+                畫面上有紅色標記——記得在下面描述「紅圈的地方想改成什麼」，模型才知道那個標記代表什麼意思。
+              </p>
+            )}
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
