@@ -37,7 +37,7 @@ const field =
 export default function AdminHomeContentPage() {
   const router = useRouter();
   const [blocks, setBlocks] = useState<Block[]>([]);
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<{ id: string; displayName: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -70,7 +70,7 @@ export default function AdminHomeContentPage() {
     load();
     fetch("/api/models")
       .then((r) => (r.ok ? r.json() : { models: [] }))
-      .then((j) => setModels((j.models ?? []).map((m: { id: string }) => m.id)))
+      .then((j) => setModels((j.models ?? []).map((m: { id: string; displayName?: string }) => ({ id: m.id, displayName: m.displayName || m.id }))))
       .catch(() => {});
   }, [load]);
 
@@ -234,16 +234,18 @@ export default function AdminHomeContentPage() {
                               title="排序"
                             />
                           </div>
-                          <input
+                          <select
                             className={`${field} sm:col-span-2`}
-                            list={`models-${b.id}`}
-                            placeholder="模型 id（可空）"
                             value={b.model_id ?? ""}
-                            onChange={(e) => patch(b.id, { model_id: e.target.value })}
-                          />
-                          <datalist id={`models-${b.id}`}>
-                            {models.map((m) => <option key={m} value={m} />)}
-                          </datalist>
+                            onChange={(e) => patch(b.id, { model_id: e.target.value || null })}
+                          >
+                            <option value="">（不指定模型）</option>
+                            {models.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.displayName}
+                              </option>
+                            ))}
+                          </select>
                           <textarea
                             className="min-h-[52px] w-full rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-3 py-2 text-[13px] text-white focus:border-[#4a4a4a] focus:outline-none sm:col-span-2"
                             placeholder="預設 prompt（可空）"
