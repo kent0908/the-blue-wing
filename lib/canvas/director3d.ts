@@ -11,10 +11,12 @@
  * product itself uses, and sidesteps needing to source/license a 3D asset.
  *
  * v1 scope: one free-orbit camera, ground + solid-color background, pose
- * presets + per-joint rig sliders, screenshot capture. Multi-camera,
- * panorama backgrounds, and keyframe/video recording are follow-ups — see
- * the module comment in Director3DPanel.tsx for what's deliberately not
- * here yet.
+ * presets + per-joint rig sliders, screenshot capture, 15-30s camera-move
+ * recording (see cameraShots.ts), and a minimal movement-path system (see
+ * Waypoint below — position + a picked pose per point, linearly blended;
+ * not a real walk cycle). Multi-camera and panorama backgrounds are still
+ * follow-ups — see the module comment in Director3DPanel.tsx for what's
+ * deliberately not here yet.
  */
 
 export interface JointRotation {
@@ -66,6 +68,20 @@ export const BODY_STYLE_LABEL: Record<BodyStyle, string> = {
   stick: "簡易關節人偶（新手推薦）",
 };
 
+/**
+ * A point on a character's movement path: at `t` seconds, be at `position`
+ * holding `poseName` (one of POSE_PRESETS). Between two waypoints, position
+ * lerps linearly and the pose blends joint-by-joint (linear Euler-angle
+ * interpolation, not a real walk cycle — see interpolatePath()). Minimal
+ * "路徑點＋手動姿勢" version: you pick the pose at each point yourself,
+ * there's no automatic footstep animation.
+ */
+export interface Waypoint {
+  t: number;
+  position: [number, number, number];
+  poseName: string;
+}
+
 export interface CharacterState {
   id: string;
   name: string;
@@ -76,6 +92,8 @@ export interface CharacterState {
   color: string;
   pose: Pose;
   bodyStyle: BodyStyle;
+  /** movement path — see Waypoint. Undefined/short (<2 points) = character stays put. */
+  path?: Waypoint[];
 }
 
 export interface Director3DSceneData {
@@ -86,8 +104,6 @@ export interface Director3DSceneData {
   capturedImage?: string | null;
 }
 
-/** localStorage key the standalone /canvas/director3d page autosaves its scene under. */
-export const DIRECTOR3D_SCENE_KEY = "bw:director3d:scene";
 /** sessionStorage key used to hand a captured screenshot's asset off to /studio (see app/studio/page.tsx). */
 export const DIRECTOR3D_HANDOFF_KEY = "bw:director3d:handoff";
 
@@ -245,3 +261,52 @@ export const POSE_PRESETS: Record<string, Pose> = {
 };
 
 export const POSE_NAMES = Object.keys(POSE_PRESETS);
+
+/* ---- movement path interpolation — see Waypoint's own comment ---- */
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+function lerpPose(a: Pose, b: Pose, t: number): Pose {
+  const out: Pose = {};
+  for (const j of JOINT_NAMES) {
+    const pa = a[j] ?? { x: 0, y: 0, z: 0 };
+    const pb = b[j] ?? { x: 0, y: 0, z: 0 };
+    out[j] = { x: lerp(pa.x, pb.x, t), y: lerp(pa.y, pb.y, t), z: lerp(pa.z, pb.z, t) };
+  }
+  return out;
+}
+
+/** How long a path takes to play out, in seconds — the last waypoint's time. */
+export function pathDuration(path: Waypoint[] | undefined): number {
+  if (!path || !path.length) return 0;
+  return path.reduce((m, w) => Math.max(m, w.t), 0);
+}
+
+/**
+ * Where a character following `path` should be at time `t` (seconds since
+ * the path started) — lerped position, blended pose. Holds at the first/last
+ * waypoint outside the path's own time range. Returns null for an
+ * unusably-short path (0-1 points — nothing to interpolate between).
+ */
+export function interpolatePath(path: Waypoint[] | undefined, t: number): { position: [number, number, number]; pose: Pose } | null {
+  if (!path || path.length < 2) return null;
+  const sorted = [...path].sort((a, b) => a.t - b.t);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  if (t <= first.t) return { position: first.position, pose: POSE_PRESETS[first.poseName] ?? {} };
+  if (t >= last.t) return { position: last.position, pose: POSE_PRESETS[last.poseName] ?? {} };
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    if (t >= a.t && t <= b.t) {
+      const f = (t - a.t) / (b.t - a.t || 1);
+      const position: [number, number, number] = [
+        lerp(a.position[0], b.position[0], f),
+        lerp(a.position[1], b.position[1], f),
+        lerp(a.position[2], b.position[2], f),
+      ];
+      const pose = lerpPose(POSE_PRESETS[a.poseName] ?? {}, POSE_PRESETS[b.poseName] ?? {}, f);
+      return { position, pose };
+    }
+  }
+  return { position: last.position, pose: POSE_PRESETS[last.poseName] ?? {} };
+}

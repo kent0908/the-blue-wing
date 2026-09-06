@@ -6,6 +6,7 @@ import { IconPlus, IconTrash } from "../../Icons";
 import {
   BODY_STYLE_LABEL,
   POSE_NAMES,
+  pathDuration,
   type BodyStyle,
   type JointName,
 } from "@/lib/canvas/director3d";
@@ -86,6 +87,10 @@ export default function Director3DStudioBody({
     setBodyStyle,
     addCharacter,
     removeCharacter,
+    addWaypoint,
+    updateWaypoint,
+    removeWaypoint,
+    previewPath,
     applyShot,
     applyGroupShot,
     updatePose,
@@ -287,14 +292,14 @@ export default function Director3DStudioBody({
       {/* right: attribute / posture tabs */}
       <div className="flex w-[260px] shrink-0 flex-col border-l border-[#1c1c1c]">
         <div className="flex border-b border-[#1c1c1c]">
-          {(["attribute", "posture"] as const).map((t) => (
+          {(["attribute", "posture", "path"] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
               className={`flex-1 py-2 text-[12px] ${tab === t ? "border-b-2 border-[#7ff0cd] text-white" : "text-[#8a8a8a] hover:text-white"}`}
             >
-              {t === "attribute" ? "attribute" : "posture"}
+              {t}
             </button>
           ))}
         </div>
@@ -417,6 +422,84 @@ export default function Director3DStudioBody({
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {selected && tab === "path" && (
+            <div className="space-y-3">
+              <p className="text-[10px] leading-relaxed text-[#6d6d6d]">
+                設定角色沿時間移動的路徑：每個路徑點是「幾秒時、在哪個位置、擺什麼姿勢」，點與點之間位置和姿勢都會自動平滑
+                內插——不是真的走路動畫（沒有腳步交替），但可以做出「角色從 A 走到 B、途中換個動作」的效果。錄製運鏡時，
+                只要角色有 2 個以上路徑點，就會自動照路徑播放。
+              </p>
+
+              <div className="space-y-2">
+                {(selected.path ?? []).length === 0 && (
+                  <p className="rounded-lg bg-[#161616] px-2 py-3 text-center text-[11px] text-[#6d6d6d]">
+                    還沒有路徑點——先把角色拖到起始位置，按下面的按鈕新增第一個點
+                  </p>
+                )}
+                {(selected.path ?? []).map((wp, i) => (
+                  <div key={i} className="space-y-1.5 rounded-lg bg-[#161616] p-2">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5 text-[10px] text-[#8a8a8a]">
+                        時間（秒）
+                        <input
+                          type="number"
+                          step={0.5}
+                          min={0}
+                          value={wp.t}
+                          onChange={(e) => updateWaypoint(i, { t: Math.max(0, Number(e.target.value)) })}
+                          className="w-16 rounded-md border border-[#2c2c2c] bg-[#1c1c1c] px-1.5 py-0.5 text-[11px] text-white focus:border-[#4a4a4a] focus:outline-none"
+                        />
+                      </label>
+                      <button type="button" onClick={() => removeWaypoint(i)} className="text-[#6d6d6d] hover:text-[#ff8a8a]">
+                        <IconTrash className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(["x", "y", "z"] as const).map((axis, ai) => (
+                        <input
+                          key={axis}
+                          type="number"
+                          step={0.1}
+                          value={wp.position[ai]}
+                          onChange={(e) => {
+                            const next = [...wp.position] as [number, number, number];
+                            next[ai] = Number(e.target.value);
+                            updateWaypoint(i, { position: next });
+                          }}
+                          className={fieldCls}
+                        />
+                      ))}
+                    </div>
+                    <select
+                      value={wp.poseName}
+                      onChange={(e) => updateWaypoint(i, { poseName: e.target.value })}
+                      className={fieldCls}
+                    >
+                      {POSE_NAMES.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <button type="button" onClick={addWaypoint} className="w-full rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-[11px] text-[#c9c9c9] hover:bg-[#282828]">
+                ＋ 用目前位置新增路徑點
+              </button>
+
+              <button
+                type="button"
+                onClick={previewPath}
+                disabled={pathDuration(selected.path) <= 0}
+                className="w-full rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-2 py-1.5 text-[11px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-40"
+              >
+                ▶ 預覽路徑（{pathDuration(selected.path)}s）
+              </button>
             </div>
           )}
         </div>

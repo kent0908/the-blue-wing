@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   POSE_PRESETS,
   defaultCharacter,
+  interpolatePath,
+  pathDuration,
   type BodyStyle,
   type CharacterState,
   type Director3DSceneData,
   type JointName,
+  type Waypoint,
 } from "@/lib/canvas/director3d";
 import {
   DEFAULT_SHOT,
@@ -44,16 +47,19 @@ export interface RecordedClip {
 /**
  * All the state + mutation logic behind 3D導演台 — shared between the
  * Canvas-node modal (Director3DPanel) and the standalone /canvas/director3d
- * page, so the two entry points can't drift apart. `persistKey`, when given,
- * autosaves every scene change to localStorage under that key (used by the
- * standalone page so navigating away and back doesn't lose your blocking —
- * the modal flow leaves this unset since a Canvas node's own save/cancel
- * already owns that lifecycle).
+ * page, so the two entry points can't drift apart. `remotePersist`, when
+ * true, autosaves every scene change to this account's own row in
+ * director3d_scenes (see app/api/director3d/route.ts) — real per-account
+ * storage, isolated the same way every other table here is (a plain
+ * `where user_id = ...`), not the browser's localStorage. Debounced so a
+ * mid-drag slider doesn't fire a request per pixel. The modal flow leaves
+ * this false since a Canvas node's own save/cancel already owns that
+ * scene's lifecycle (it lives in that workflow's own graph document).
  */
-export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: string) {
+export function useDirector3DEditor(initial: Director3DSceneData, remotePersist?: boolean) {
   const [scene, setScene] = useState<Director3DSceneData>(initial);
   const [selectedId, setSelectedId] = useState<string | null>(initial.characters[0]?.id ?? null);
-  const [tab, setTab] = useState<"attribute" | "posture">("attribute");
+  const [tab, setTab] = useState<"attribute" | "posture" | "path">("attribute");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [captured, setCaptured] = useState<string | null>(initial.capturedImage ?? null);
   const [shot, setShot] = useState<ShotRequest | null>(null);
@@ -64,14 +70,28 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
     poseRef.current = pose;
   };
 
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextSaveRef = useRef(true); // don't PUT back the scene we just GET'd
   useEffect(() => {
-    if (!persistKey) return;
-    try {
-      localStorage.setItem(persistKey, JSON.stringify(scene));
-    } catch {
-      // best-effort autosave only — a full/blocked storage quota shouldn't break editing
+    if (!remotePersist) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
     }
-  }, [persistKey, scene]);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      fetch("/api/director3d", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scene }),
+      }).catch(() => {
+        // best-effort autosave only — a transient network error shouldn't interrupt editing
+      });
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [remotePersist, scene]);
 
   const selected = scene.characters.find((c) => c.id === selectedId) ?? null;
 
@@ -94,6 +114,26 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
 
   const setBodyStyle = (style: BodyStyle) => updateSelected({ bodyStyle: style });
 
+  /** Adds a waypoint at the selected character's current position, 3s after its last one (0s if it's the first). */
+  const addWaypoint = () => {
+    if (!selected) return;
+    const path = selected.path ?? [];
+    const t = path.length ? Math.max(...path.map((w) => w.t)) + 3 : 0;
+    const wp: Waypoint = { t, position: [...selected.position], poseName: "stand" };
+    updateSelected({ path: [...path, wp].sort((a, b) => a.t - b.t) });
+  };
+
+  const updateWaypoint = (index: number, patch: Partial<Waypoint>) => {
+    if (!selected?.path) return;
+    const next = selected.path.map((w, i) => (i === index ? { ...w, ...patch } : w));
+    updateSelected({ path: next.sort((a, b) => a.t - b.t) });
+  };
+
+  const removeWaypoint = (index: number) => {
+    if (!selected?.path) return;
+    updateSelected({ path: selected.path.filter((_, i) => i !== index) });
+  };
+
   const addCharacter = () => {
     const n = scene.characters.length + 1;
     const ch = defaultCharacter(`Role ${String.fromCharCode(64 + n)}`);
@@ -105,6 +145,53 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
   const removeCharacter = (id: string) => {
     setScene((s) => ({ ...s, characters: s.characters.filter((c) => c.id !== id) }));
     if (selectedId === id) setSelectedId(null);
+  };
+
+  /**
+   * Drives any character with a ≥2-point path along it — a plain
+   * requestAnimationFrame loop that writes interpolated position/pose back
+   * into `scene` every frame (rAF is ~60fps but React batches fine at that
+   * rate for a scene this small; it also means the loop naturally pauses
+   * with the tab, same as everything else on the canvas). Runs standalone
+   * for "預覽路徑", or alongside 錄製運鏡 so the recorded clip actually shows
+   * the movement — canvas.captureStream() just grabs whatever's on screen,
+   * so animating via normal re-renders is enough, no separate video-encoding
+   * path needed.
+   */
+  const pathAnimFrameRef = useRef<number | null>(null);
+  const pathAnimStartRef = useRef<number>(0);
+
+  const stopPathAnimation = () => {
+    if (pathAnimFrameRef.current !== null) cancelAnimationFrame(pathAnimFrameRef.current);
+    pathAnimFrameRef.current = null;
+  };
+
+  const startPathAnimation = () => {
+    stopPathAnimation();
+    pathAnimStartRef.current = performance.now();
+    const tick = () => {
+      const elapsed = (performance.now() - pathAnimStartRef.current) / 1000;
+      setScene((s) => {
+        let changed = false;
+        const characters = s.characters.map((c) => {
+          const r = interpolatePath(c.path, elapsed);
+          if (!r) return c;
+          changed = true;
+          return { ...c, position: r.position, pose: r.pose };
+        });
+        return changed ? { ...s, characters } : s;
+      });
+      pathAnimFrameRef.current = requestAnimationFrame(tick);
+    };
+    pathAnimFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  /** Manual "check the path looks right" playback, independent of recording. */
+  const previewPath = () => {
+    const duration = Math.max(0, ...scene.characters.map((c) => pathDuration(c.path)));
+    if (duration <= 0) return;
+    startPathAnimation();
+    setTimeout(stopPathAnimation, duration * 1000 + 150);
   };
 
   const takeScreenshot = (): string | null => {
@@ -161,6 +248,7 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
 
   const stopRecording = () => {
     clearRecordingTimers();
+    stopPathAnimation();
     const mr = mediaRecorderRef.current;
     if (mr && mr.state !== "inactive") mr.stop();
     setRecording(false);
@@ -212,6 +300,9 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
     mr.start();
     setRecording(true);
     setRecordElapsed(0);
+    // If any character has a movement path set, play it during the
+    // recording so the clip actually shows the motion, not just a static pose.
+    if (scene.characters.some((c) => pathDuration(c.path) > 0)) startPathAnimation();
 
     const durationMs = recordSeconds * 1000;
     for (let i = 0; i < RECORDING_FRAME_SAMPLES; i++) {
@@ -227,6 +318,7 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
   useEffect(() => {
     return () => {
       clearRecordingTimers();
+      stopPathAnimation();
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop();
     };
     // unmount cleanup only — deliberately not re-run per render
@@ -255,6 +347,10 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
     setBodyStyle,
     addCharacter,
     removeCharacter,
+    addWaypoint,
+    updateWaypoint,
+    removeWaypoint,
+    previewPath,
     takeScreenshot,
     applyShot,
     applyGroupShot,

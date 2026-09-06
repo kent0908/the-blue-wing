@@ -127,6 +127,20 @@ create table if not exists canvas_workflows (
 );
 create index if not exists canvas_workflows_user_idx on canvas_workflows(user_id, updated_at desc);
 
+-- Standalone 3D導演台 (/canvas/director3d) autosave — real per-account
+-- storage instead of the browser's localStorage, so it's available on any
+-- device you log into and isn't lost if you clear site data. One scene per
+-- user (matches the standalone page's single-autosave-slot model; a
+-- Canvas-node director3d's own scene still lives inline in that workflow's
+-- canvas_workflows.graph, untouched by this table). Isolation is the same
+-- pattern as every other per-user table here: every read/write goes through
+-- `where user_id = <the authenticated user>` — see app/api/director3d/route.ts.
+create table if not exists director3d_scenes (
+  user_id    bigint primary key references users(id) on delete cascade,
+  scene      jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 -- 陪聊角色 IP：把資產庫裡的一張圖（通常是生成出來的圖片或數位人）綁成一個有
 -- 名字、有人設的角色，之後可以長期跟它聊天。avatar_asset_id 掉了(素材被刪)
 -- 就變成沒有頭像，角色本身還在。

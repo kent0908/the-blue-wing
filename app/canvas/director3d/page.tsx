@@ -1,25 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconImage, IconVideo } from "@/components/Icons";
 import Director3DStudioBody from "@/components/canvas/director3d/Director3DStudioBody";
 import { useDirector3DEditor, type RecordedClip, type RecordedFrame } from "@/components/canvas/director3d/useDirector3DEditor";
-import { DIRECTOR3D_HANDOFF_KEY, DIRECTOR3D_SCENE_KEY, defaultDirector3DData, type Director3DSceneData } from "@/lib/canvas/director3d";
-
-function loadSavedScene(): Director3DSceneData {
-  try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem(DIRECTOR3D_SCENE_KEY) : null;
-    if (raw) {
-      const parsed = JSON.parse(raw) as Director3DSceneData;
-      if (Array.isArray(parsed.characters)) return parsed;
-    }
-  } catch {
-    // fall through to a fresh scene — a corrupt/old save shouldn't block opening the page
-  }
-  return defaultDirector3DData();
-}
+import { DIRECTOR3D_HANDOFF_KEY, defaultDirector3DData, type Director3DSceneData } from "@/lib/canvas/director3d";
 
 async function uploadImage(dataUrl: string, filename: string): Promise<{ id: number; src: string; name: string }> {
   const blob = await fetch(dataUrl).then((r) => r.blob());
@@ -46,17 +33,60 @@ async function uploadVideoRef(clip: RecordedClip): Promise<{ url: string }> {
 /**
  * Standalone entry point for 3D導演台 — same editor as the Canvas-node
  * modal (Director3DStudioBody), just reachable directly from the sidebar
- * instead of only from inside a 智慧畫布 workflow. Your scene autosaves to
- * this browser (see useDirector3DEditor's persistKey). A screenshot, or a
- * recorded 運鏡's sampled frames, hand off straight into 圖片生成/影片生成 as
- * reference images: upload to the asset library, then push the same
- * {id,src,name} shape a template preset's reference image uses (see
- * app/studio/page.tsx) via DIRECTOR3D_HANDOFF_KEY.
+ * instead of only from inside a 智慧畫布 workflow. Loads/saves the user's
+ * scene from this component so useDirector3DEditor's own autosave effect
+ * (remotePersist=true) has real initial data to diff against — see
+ * app/api/director3d/route.ts for the per-account storage this replaced
+ * localStorage with.
  */
 export default function Director3DStandalonePage() {
   const router = useRouter();
-  const [initial] = useState(loadSavedScene);
-  const editor = useDirector3DEditor(initial, DIRECTOR3D_SCENE_KEY);
+  const [initial, setInitial] = useState<Director3DSceneData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/director3d")
+      .then((r) => {
+        if (r.status === 401) {
+          router.push("/login?next=/canvas/director3d");
+          return null;
+        }
+        return r.ok ? r.json() : Promise.reject(new Error());
+      })
+      .then((j: { scene: Director3DSceneData | null } | null) => {
+        if (!alive || !j) return;
+        const scene = j.scene && Array.isArray(j.scene.characters) ? j.scene : defaultDirector3DData();
+        setInitial(scene);
+      })
+      .catch(() => alive && setLoadError("載入場景失敗，稍後再試"));
+    return () => {
+      alive = false;
+    };
+  }, [router]);
+
+  if (loadError) {
+    return (
+      <div className="grid h-full place-items-center">
+        <div className="max-w-sm rounded-xl border border-[#4a2020] bg-[#1a1010] px-5 py-4 text-center text-[13.5px] text-[#ffb4b4]">{loadError}</div>
+      </div>
+    );
+  }
+
+  if (!initial) {
+    return (
+      <div className="grid h-full place-items-center">
+        <div className="bw-shimmer h-8 w-8 rounded-full" />
+      </div>
+    );
+  }
+
+  return <Director3DStandaloneEditor initial={initial} />;
+}
+
+function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData }) {
+  const router = useRouter();
+  const editor = useDirector3DEditor(initial, true);
   const [sending, setSending] = useState<"image" | "video" | "frames" | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -109,7 +139,7 @@ export default function Director3DStandalonePage() {
           <IconChevronLeft className="h-4 w-4" />
         </Link>
         <span className="text-[13px] font-medium text-white">3D 導演台</span>
-        <span className="hidden text-[11px] text-[#6d6d6d] sm:inline">拖曳畫面旋轉視角、滾輪縮放；點角色可選取；場景會自動存在這台瀏覽器</span>
+        <span className="hidden text-[11px] text-[#6d6d6d] sm:inline">拖曳畫面旋轉視角、滾輪縮放；點角色可選取；場景會存到你的帳號，換裝置登入也看得到</span>
         <div className="ml-auto flex items-center gap-2">
           {err && <span className="text-[11.5px] text-[#ff9b9b]">{err}</span>}
           <button type="button" onClick={editor.takeScreenshot} className="h-8 rounded-full bg-[#1f1f1f] px-3.5 text-[12.5px] text-white hover:bg-[#282828]">
