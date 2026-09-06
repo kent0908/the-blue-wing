@@ -30,29 +30,32 @@ function StudioInner() {
   const urlPrompt = params.get("q") ?? undefined;
   const preset = params.get("preset");
 
+  // A screenshot (or a recorded 運鏡's sampled frames) handed off from the
+  // standalone 3D導演台 page (see app/canvas/director3d/page.tsx) — it
+  // already uploaded the capture(s) to the asset library before navigating
+  // here, so this is just picking the resulting {id,src,name}[] back up
+  // (the same shape a template preset's reference image uses), plus an
+  // optional auto-generated camera-move prompt hint. Read once, since the
+  // sessionStorage key is consumed (removed) on first read.
+  const [director3dHandoff] = useState<{ refs: { id: number; src: string; name: string }[]; promptHint?: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem(DIRECTOR3D_HANDOFF_KEY);
+      if (!raw) return null;
+      sessionStorage.removeItem(DIRECTOR3D_HANDOFF_KEY);
+      return JSON.parse(raw) as { refs: { id: number; src: string; name: string }[]; promptHint?: string };
+    } catch {
+      return null;
+    }
+  });
+
   // Template presets carry prompt / model / params / a reference image. Resolve
   // them before mounting the Composer so its initial state is already populated.
   const [presetReady, setPresetReady] = useState(!preset);
   const [presetModel, setPresetModel] = useState<string | undefined>(urlModel);
-  const [presetPrompt, setPresetPrompt] = useState<string | undefined>(urlPrompt);
+  const [presetPrompt, setPresetPrompt] = useState<string | undefined>(urlPrompt ?? director3dHandoff?.promptHint);
   const [presetImgValues, setPresetImgValues] = useState<Record<string, string | number> | undefined>();
-  // A screenshot handed off from the standalone 3D導演台 page (see
-  // app/canvas/director3d/page.tsx) — it already uploaded the capture to the
-  // asset library before navigating here, so this is just picking the
-  // resulting {id,src,name} back up, the same shape a template preset's
-  // reference image uses.
-  const [presetRefs, setPresetRefs] = useState<{ id: number; src: string; name: string }[] | undefined>(() => {
-    if (typeof window === "undefined") return undefined;
-    try {
-      const raw = sessionStorage.getItem(DIRECTOR3D_HANDOFF_KEY);
-      if (!raw) return undefined;
-      sessionStorage.removeItem(DIRECTOR3D_HANDOFF_KEY);
-      const h = JSON.parse(raw) as { id: number; src: string; name: string };
-      return [h];
-    } catch {
-      return undefined;
-    }
-  });
+  const [presetRefs, setPresetRefs] = useState<{ id: number; src: string; name: string }[] | undefined>(director3dHandoff?.refs);
 
   useEffect(() => {
     if (!preset) return;

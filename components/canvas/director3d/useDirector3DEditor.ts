@@ -10,14 +10,29 @@ import {
   type JointName,
 } from "@/lib/canvas/director3d";
 import {
+  DEFAULT_SHOT,
   SHOT_PRESETS,
   computeCharacterShot,
   computeGroupShot,
   computeOriginShot,
+  describeCameraMove,
   type ShotRequest,
 } from "@/lib/canvas/cameraShots";
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
+
+/** How many still frames a 運鏡錄製 samples across its duration — handed to video generation as multi-reference images. */
+const RECORDING_FRAME_SAMPLES = 6;
+
+export interface RecordedFrame {
+  url: string;
+  pose: ShotRequest;
+}
+
+export interface RecordedClip {
+  url: string;
+  blob: Blob;
+}
 
 /**
  * All the state + mutation logic behind 3D導演台 — shared between the
@@ -35,6 +50,12 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [captured, setCaptured] = useState<string | null>(initial.capturedImage ?? null);
   const [shot, setShot] = useState<ShotRequest | null>(null);
+  // Not React state — read at frame-sample time, not something that should
+  // trigger a re-render on every drag/zoom tick.
+  const poseRef = useRef<ShotRequest>(DEFAULT_SHOT);
+  const updatePose = (pose: ShotRequest) => {
+    poseRef.current = pose;
+  };
 
   useEffect(() => {
     if (!persistKey) return;
@@ -96,6 +117,110 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
 
   const applyGroupShot = () => setShot(computeGroupShot(scene.characters));
 
+  /**
+   * "錄製運鏡" — a real screen-capture of the 3D viewport (via
+   * canvas.captureStream + MediaRecorder), not a fake progress bar. You stay
+   * free to drag/orbit/zoom (or click a 運鏡 preset — same camera, so it
+   * composes) for however long the duration is set to; a handful of stills
+   * get sampled along the way for the "送去影片生成" handoff, since SIRAYA's
+   * video API takes reference images + a text prompt, not an actual
+   * motion-reference video — the recorded clip itself is a real, downloadable
+   * previz artifact, but nothing here can literally hand a video's motion to
+   * the generation model.
+   */
+  const [recordSeconds, setRecordSeconds] = useState(20);
+  const [recording, setRecording] = useState(false);
+  const [recordElapsed, setRecordElapsed] = useState(0);
+  const [recordedClip, setRecordedClip] = useState<RecordedClip | null>(null);
+  const [recordedFrames, setRecordedFrames] = useState<RecordedFrame[]>([]);
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearRecordingTimers = () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    if (tickRef.current) clearInterval(tickRef.current);
+    tickRef.current = null;
+  };
+
+  const captureFrameSample = () => {
+    if (!canvasRef.current) return;
+    const url = canvasRef.current.toDataURL("image/jpeg", 0.82);
+    setRecordedFrames((cur) => [...cur, { url, pose: poseRef.current }]);
+  };
+
+  const stopRecording = () => {
+    clearRecordingTimers();
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") mr.stop();
+    setRecording(false);
+  };
+
+  const discardRecording = () => {
+    setRecordedClip((cur) => {
+      if (cur) URL.revokeObjectURL(cur.url);
+      return null;
+    });
+    setRecordedFrames([]);
+    setRecordError(null);
+  };
+
+  const startRecording = () => {
+    setRecordError(null);
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      setRecordError("3D 場景還沒準備好，稍等一下再試");
+      return;
+    }
+    if (typeof canvas.captureStream !== "function" || typeof MediaRecorder === "undefined") {
+      setRecordError("這個瀏覽器不支援錄製 3D 畫面，換 Chrome / Edge 試試");
+      return;
+    }
+    discardRecording();
+
+    const stream = canvas.captureStream(30);
+    const mimeType = ["video/webm;codecs=vp9", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    chunksRef.current = [];
+    mr.ondataavailable = (e) => {
+      if (e.data.size) chunksRef.current.push(e.data);
+    };
+    mr.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(chunksRef.current, { type: mimeType || "video/webm" });
+      setRecordedClip({ url: URL.createObjectURL(blob), blob });
+    };
+    mediaRecorderRef.current = mr;
+    mr.start();
+    setRecording(true);
+    setRecordElapsed(0);
+
+    const durationMs = recordSeconds * 1000;
+    for (let i = 0; i < RECORDING_FRAME_SAMPLES; i++) {
+      const at = i === 0 ? 60 : Math.round((durationMs * i) / (RECORDING_FRAME_SAMPLES - 1));
+      timersRef.current.push(setTimeout(captureFrameSample, at));
+    }
+    timersRef.current.push(setTimeout(stopRecording, durationMs));
+    tickRef.current = setInterval(() => {
+      setRecordElapsed((s) => Math.min(recordSeconds, s + 1));
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearRecordingTimers();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") mediaRecorderRef.current.stop();
+    };
+    // unmount cleanup only — deliberately not re-run per render
+  }, []);
+
+  /** Rough auto-generated camera-move description from the first/last sampled frame — see describeCameraMove(). */
+  const cameraMoveHint =
+    recordedFrames.length >= 2 ? describeCameraMove(recordedFrames[0].pose, recordedFrames[recordedFrames.length - 1].pose) : "";
+
   return {
     scene,
     setScene,
@@ -118,6 +243,18 @@ export function useDirector3DEditor(initial: Director3DSceneData, persistKey?: s
     takeScreenshot,
     applyShot,
     applyGroupShot,
+    updatePose,
+    recordSeconds,
+    setRecordSeconds,
+    recording,
+    recordElapsed,
+    recordedClip,
+    recordedFrames,
+    recordError,
+    cameraMoveHint,
+    startRecording,
+    stopRecording,
+    discardRecording,
   };
 }
 

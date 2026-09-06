@@ -81,6 +81,50 @@ export function computeOriginShot(preset: ShotPreset): ShotRequest {
   return computeCharacterShot(preset, { position: [0, 0, 0], scale: 1 });
 }
 
+const rad2deg = (r: number) => (r * 180) / Math.PI;
+
+interface PoseFeatures {
+  azimuth: number;
+  elevation: number;
+  distance: number;
+}
+
+function poseFeatures(p: ShotRequest): PoseFeatures {
+  const dx = p.position[0] - p.target[0];
+  const dy = p.position[1] - p.target[1];
+  const dz = p.position[2] - p.target[2];
+  const distance = Math.hypot(dx, dy, dz) || 1;
+  return { azimuth: Math.atan2(dx, dz), elevation: Math.asin(dy / distance), distance };
+}
+
+/**
+ * A rough, best-effort text description of how the camera moved between two
+ * sampled poses — used as a prompt hint when handing a recorded 運鏡 off to
+ * video generation (see app/canvas/director3d/page.tsx). Deliberately
+ * coarse: SIRAYA's video API takes reference images + a text prompt, not an
+ * actual motion-reference video, so this is meant to nudge the model's own
+ * interpretation of "pan left" / "push in" — not claim frame-accurate
+ * motion transfer, which nothing here can actually do.
+ */
+export function describeCameraMove(from: ShotRequest, to: ShotRequest): string {
+  const a = poseFeatures(from);
+  const b = poseFeatures(to);
+  const parts: string[] = [];
+
+  let dAz = b.azimuth - a.azimuth;
+  while (dAz > Math.PI) dAz -= Math.PI * 2;
+  while (dAz < -Math.PI) dAz += Math.PI * 2;
+  if (Math.abs(rad2deg(dAz)) > 8) parts.push(dAz > 0 ? "鏡頭向右環繞移動" : "鏡頭向左環繞移動");
+
+  const dEl = rad2deg(b.elevation - a.elevation);
+  if (Math.abs(dEl) > 6) parts.push(dEl > 0 ? "同時升高視角（往上看）" : "同時降低視角（往下看）");
+
+  const dDist = b.distance - a.distance;
+  if (Math.abs(dDist) > 0.3) parts.push(dDist < 0 ? "並持續拉近（推鏡）" : "並持續拉遠（拉鏡）");
+
+  return parts.length ? parts.join("，") : "鏡頭在原地小幅度環顧";
+}
+
 /** Fit every character in frame at once — for multi-character blocking. */
 export function computeGroupShot(characters: CharacterState[]): ShotRequest {
   if (!characters.length) return computeOriginShot(SHOT_PRESETS[0]);

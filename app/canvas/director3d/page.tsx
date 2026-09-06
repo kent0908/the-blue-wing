@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconImage, IconVideo } from "@/components/Icons";
 import Director3DStudioBody from "@/components/canvas/director3d/Director3DStudioBody";
-import { useDirector3DEditor } from "@/components/canvas/director3d/useDirector3DEditor";
+import { useDirector3DEditor, type RecordedFrame } from "@/components/canvas/director3d/useDirector3DEditor";
 import { DIRECTOR3D_HANDOFF_KEY, DIRECTOR3D_SCENE_KEY, defaultDirector3DData, type Director3DSceneData } from "@/lib/canvas/director3d";
 
 function loadSavedScene(): Director3DSceneData {
@@ -21,21 +21,37 @@ function loadSavedScene(): Director3DSceneData {
   return defaultDirector3DData();
 }
 
+async function uploadImage(dataUrl: string, filename: string): Promise<{ id: number; src: string; name: string }> {
+  const blob = await fetch(dataUrl).then((r) => r.blob());
+  const form = new FormData();
+  form.append("file", blob, filename);
+  const res = await fetch("/api/assets", { method: "POST", body: form });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j?.error?.message || "上傳失敗");
+  return j.asset;
+}
+
 /**
  * Standalone entry point for 3D導演台 — same editor as the Canvas-node
  * modal (Director3DStudioBody), just reachable directly from the sidebar
  * instead of only from inside a 智慧畫布 workflow. Your scene autosaves to
- * this browser (see useDirector3DEditor's persistKey), and a screenshot
- * hands off straight into 圖片生成 / 影片生成 as a reference image — upload
- * it to the asset library, then push the same {id,src,name} shape a
- * template preset's reference image uses (see app/studio/page.tsx).
+ * this browser (see useDirector3DEditor's persistKey). A screenshot, or a
+ * recorded 運鏡's sampled frames, hand off straight into 圖片生成/影片生成 as
+ * reference images: upload to the asset library, then push the same
+ * {id,src,name} shape a template preset's reference image uses (see
+ * app/studio/page.tsx) via DIRECTOR3D_HANDOFF_KEY.
  */
 export default function Director3DStandalonePage() {
   const router = useRouter();
   const [initial] = useState(loadSavedScene);
   const editor = useDirector3DEditor(initial, DIRECTOR3D_SCENE_KEY);
-  const [sending, setSending] = useState<"image" | "video" | null>(null);
+  const [sending, setSending] = useState<"image" | "video" | "frames" | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const handoff = (refs: { id: number; src: string; name: string }[], mode: "image" | "video", promptHint?: string) => {
+    sessionStorage.setItem(DIRECTOR3D_HANDOFF_KEY, JSON.stringify({ refs, promptHint }));
+    router.push(`/studio?mode=${mode}`);
+  };
 
   const sendTo = async (mode: "image" | "video") => {
     setErr(null);
@@ -43,14 +59,22 @@ export default function Director3DStandalonePage() {
     try {
       const dataUrl = editor.captured ?? editor.takeScreenshot();
       if (!dataUrl) throw new Error("請先截圖");
-      const blob = await fetch(dataUrl).then((r) => r.blob());
-      const form = new FormData();
-      form.append("file", blob, "director3d.png");
-      const res = await fetch("/api/assets", { method: "POST", body: form });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "上傳截圖失敗");
-      sessionStorage.setItem(DIRECTOR3D_HANDOFF_KEY, JSON.stringify({ id: j.asset.id, src: j.asset.src, name: j.asset.name }));
-      router.push(`/studio?mode=${mode}`);
+      const asset = await uploadImage(dataUrl, "director3d.png");
+      handoff([asset], mode);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "傳送失敗，請稍後再試");
+    } finally {
+      setSending(null);
+    }
+  };
+
+  const exportFramesForVideo = async (frames: RecordedFrame[], promptHint: string) => {
+    setErr(null);
+    setSending("frames");
+    try {
+      if (!frames.length) throw new Error("還沒有錄到任何畫面");
+      const assets = await Promise.all(frames.map((f, i) => uploadImage(f.url, `director3d-frame-${i}.jpg`)));
+      handoff(assets, "video", promptHint);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "傳送失敗，請稍後再試");
     } finally {
@@ -92,7 +116,7 @@ export default function Director3DStandalonePage() {
         </div>
       </div>
 
-      <Director3DStudioBody editor={editor} />
+      <Director3DStudioBody editor={editor} onExportFramesForVideo={exportFramesForVideo} exportingFrames={sending === "frames"} />
     </div>
   );
 }

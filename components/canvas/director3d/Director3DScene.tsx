@@ -59,6 +59,7 @@ export default function Director3DScene({
   shot,
   onSelect,
   onReady,
+  onPose,
 }: {
   scene: Director3DSceneData;
   selectedId: string | null;
@@ -66,8 +67,15 @@ export default function Director3DScene({
   shot: ShotRequest | null;
   onSelect: (id: string) => void;
   onReady: (canvas: HTMLCanvasElement) => void;
+  /** fires on every camera move (drag, zoom, or an eased 運鏡 preset) — used to track the live pose while 錄製運鏡 is running */
+  onPose?: (pose: ShotRequest) => void;
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const reportPose = () => {
+    const controls = controlsRef.current;
+    if (!controls || !onPose) return;
+    onPose({ position: controls.object.position.toArray() as [number, number, number], target: controls.target.toArray() as [number, number, number] });
+  };
 
   return (
     <Canvas
@@ -108,7 +116,7 @@ export default function Director3DScene({
       )}
 
       <CameraRig shot={shot} controlsRef={controlsRef} />
-      <OrbitControls ref={controlsRef} makeDefault target={[0, 0.9, 0]} enableDamping dampingFactor={0.15} />
+      <OrbitControls ref={controlsRef} makeDefault target={[0, 0.9, 0]} enableDamping dampingFactor={0.15} onChange={reportPose} />
     </Canvas>
   );
 }

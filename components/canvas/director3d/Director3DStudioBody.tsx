@@ -10,7 +10,7 @@ import {
   type JointName,
 } from "@/lib/canvas/director3d";
 import { DEFAULT_SHOT, SHOT_PRESETS } from "@/lib/canvas/cameraShots";
-import type { Director3DEditor } from "./useDirector3DEditor";
+import type { Director3DEditor, RecordedFrame } from "./useDirector3DEditor";
 
 // R3F touches WebGL/DOM at import time in a way that doesn't survive SSR —
 // load the scene client-side only.
@@ -58,7 +58,16 @@ const fieldCls = "w-full rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2 py
  * page (which wraps it in a normal page with its own export actions) — see
  * useDirector3DEditor.ts for the state this reads/mutates.
  */
-export default function Director3DStudioBody({ editor }: { editor: Director3DEditor }) {
+export default function Director3DStudioBody({
+  editor,
+  onExportFramesForVideo,
+  exportingFrames,
+}: {
+  editor: Director3DEditor;
+  /** Uploads the recorded 運鏡's sampled stills + a camera-move text hint and hands off to 影片生成 — only the standalone page provides this; the Canvas-node modal has nowhere to navigate to, so it just omits the button. */
+  onExportFramesForVideo?: (frames: RecordedFrame[], promptHint: string) => void;
+  exportingFrames?: boolean;
+}) {
   const {
     scene,
     setScene,
@@ -79,6 +88,18 @@ export default function Director3DStudioBody({ editor }: { editor: Director3DEdi
     removeCharacter,
     applyShot,
     applyGroupShot,
+    updatePose,
+    recordSeconds,
+    setRecordSeconds,
+    recording,
+    recordElapsed,
+    recordedClip,
+    recordedFrames,
+    recordError,
+    cameraMoveHint,
+    startRecording,
+    stopRecording,
+    discardRecording,
   } = editor;
 
   return (
@@ -149,6 +170,66 @@ export default function Director3DStudioBody({ editor }: { editor: Director3DEdi
         </div>
 
         <div className="border-t border-[#1e1e1e] pt-3">
+          <div className="mb-1.5 flex items-center justify-between text-[11px] text-[#8a8a8a]">
+            <span>🎬 錄製運鏡</span>
+            {recording && <span className="flex items-center gap-1 text-[#ff8a8a]"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#ff5555]" />{recordElapsed}/{recordSeconds}s</span>}
+          </div>
+
+          {!recording && !recordedClip && (
+            <>
+              <Slider label="錄製時長（秒）" value={recordSeconds} min={15} max={30} onChange={setRecordSeconds} />
+              <button type="button" onClick={startRecording} className="mt-1.5 w-full rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-[11px] text-[#c9c9c9] hover:bg-[#282828]">
+                ● 開始錄製
+              </button>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[#6d6d6d]">
+                錄製期間可以自由拖曳、滾輪、點運鏡按鈕，畫面怎麼動就錄成怎樣——時間到會自動停止。
+              </p>
+            </>
+          )}
+
+          {recording && (
+            <button type="button" onClick={stopRecording} className="w-full rounded-lg bg-[#2a1414] px-2 py-1.5 text-[11px] text-[#ff9b9b] hover:bg-[#331818]">
+              ■ 提前停止
+            </button>
+          )}
+
+          {recordError && <p className="mt-1.5 text-[10px] leading-relaxed text-[#ff9b9b]">{recordError}</p>}
+
+          {!recording && recordedClip && (
+            <div className="mt-1.5 space-y-1.5">
+              <video src={recordedClip.url} controls loop className="w-full rounded-lg border border-[#2c2c2c]" />
+              <div className="grid grid-cols-2 gap-1.5">
+                <a
+                  href={recordedClip.url}
+                  download="director3d-camera-move.webm"
+                  className="rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-center text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]"
+                >
+                  下載影片
+                </a>
+                <button type="button" onClick={discardRecording} className="rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]">
+                  重新錄製
+                </button>
+              </div>
+              {onExportFramesForVideo && (
+                <button
+                  type="button"
+                  disabled={!!exportingFrames || recordedFrames.length === 0}
+                  onClick={() => onExportFramesForVideo(recordedFrames, cameraMoveHint)}
+                  className="w-full rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-2 py-1.5 text-[11px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-50"
+                >
+                  {exportingFrames ? "傳送中…" : `取樣 ${recordedFrames.length} 張畫面送去影片生成`}
+                </button>
+              )}
+              <p className="text-[10px] leading-relaxed text-[#6d6d6d]">
+                影片生成 API 沒有「上傳影片當運鏡參考」這種功能，實際送過去的是這段錄製裡抽出的幾張畫面（當多重參考圖，僅
+                Seedance 系列模型支援）＋自動判斷的運鏡文字提示{cameraMoveHint ? `（目前判讀：「${cameraMoveHint}」，可在輸入框自行修改）` : ""}。
+                下載的影片是給你自己參考的分鏡，不會被 AI 直接讀取。
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-[#1e1e1e] pt-3">
           <div className="mb-1.5 text-[11px] text-[#8a8a8a]">地面</div>
           <label className="flex items-center justify-between text-[11px] text-[#c9c9c9]">
             顯示地面
@@ -184,8 +265,15 @@ export default function Director3DStudioBody({ editor }: { editor: Director3DEdi
             onReady={(el) => {
               canvasRef.current = el;
             }}
+            onPose={updatePose}
           />
         </Suspense>
+        {recording && (
+          <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[11px] text-[#ff9b9b]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#ff5555]" />
+            錄製中 {recordElapsed}/{recordSeconds}s
+          </div>
+        )}
         {captured && (
           <div className="absolute bottom-3 right-3 w-[160px] overflow-hidden rounded-lg border border-[#3a3a3a] shadow-2xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
