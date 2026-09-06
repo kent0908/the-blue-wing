@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/apiauth";
 import { getBalance, creditCost } from "@/lib/credits";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 import { recordGeneration } from "@/lib/generations";
+import { sniffImageMimeFromBase64 } from "@/lib/imageMime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,7 +69,11 @@ export async function POST(req: NextRequest) {
     );
 
     const first = json?.data?.[0];
-    const rawUrl = first?.url ? String(first.url) : first?.b64_json ? `data:image/png;base64,${first.b64_json}` : null;
+    const rawUrl = first?.url
+      ? String(first.url)
+      : first?.b64_json
+        ? `data:${sniffImageMimeFromBase64(String(first.b64_json))};base64,${first.b64_json}`
+        : null;
     if (!rawUrl) {
       return NextResponse.json({ error: { message: "編輯失敗，沒有取得結果圖片" } }, { status: 502 });
     }

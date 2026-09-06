@@ -9,6 +9,7 @@ import { assetsToDataUrls } from "@/lib/assetData";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 import { MAX_REF_IMAGES, getImageModel, supportsWatermarkControl } from "@/lib/imageModels";
 import { recordGeneration } from "@/lib/generations";
+import { sniffImageMimeFromBase64 } from "@/lib/imageMime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
 
     const json = await paidCall(user.id, cost, "image", String(body.model), () => createImage(payload as unknown as ImageGenerationRequest));
     const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({
-      url: d.url ? String(d.url) : d.b64_json ? `data:image/png;base64,${d.b64_json}` : null,
+      url: d.url ? String(d.url) : d.b64_json ? `data:${sniffImageMimeFromBase64(String(d.b64_json))};base64,${d.b64_json}` : null,
       revisedPrompt: (d.revised_prompt as string) ?? null,
     }));
 
