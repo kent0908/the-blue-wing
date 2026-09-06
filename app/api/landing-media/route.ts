@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 import { getLandingMediaMap } from "@/lib/landingMedia";
 
 export const runtime = "nodejs";
-export const revalidate = 300;
+// NOT cached (unlike /api/models' revalidate=300, which this was originally
+// copied from) — this endpoint's main consumer is the admin page checking
+// whether its OWN just-completed upload took effect. A real test run
+// (2026-09-06) found the upload → onUploadCompleted → DB write path working
+// correctly, but this route kept returning the stale pre-upload snapshot
+// for the full 5-minute window regardless, making the admin UI look broken
+// even though nothing was actually wrong.
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/landing-media — public, no auth: which slots currently have an

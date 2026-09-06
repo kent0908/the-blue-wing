@@ -4,6 +4,18 @@ import { IconArrowRight, IconImage, IconVideo, IconCanvas, IconChat } from "@/co
 import { getLandingMediaMap } from "@/lib/landingMedia";
 import styles from "./landing.module.css";
 
+// This page has no dynamic APIs (no cookies/headers/searchParams read), so
+// Next.js's default would prerender it once at BUILD TIME and serve that
+// static HTML forever — meaning an admin's uploaded hero/feature media
+// (lib/landingMedia.ts) would never actually appear on the live site until
+// the next deploy, regardless of how promptly /api/landing-media itself
+// reflects the change. Real finding (2026-09-06): confirmed the upload →
+// DB-write path works, then found THIS is why the public page still didn't
+// show it. ISR re-runs the component (including the DB read below) at most
+// once per minute, so an upload shows up shortly after without paying for a
+// full server-render on every single visitor.
+export const revalidate = 60;
+
 const features=[
   {id:"video",label:"01 / AI VIDEO",title:"讓想像，開始流動。",text:"從一句描述到一段影像。用文字或參考圖片，開啟你的下一個故事。",href:"/studio?mode=video",action:"開始影片創作",icon:IconVideo},
   {id:"image",label:"02 / AI IMAGE",title:"每個靈感，都值得被看見。",text:"探索不同模型與視覺風格，把腦海中的畫面變成作品。",href:"/studio?mode=image",action:"開始圖片創作",icon:IconImage},
