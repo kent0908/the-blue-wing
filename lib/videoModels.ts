@@ -9,6 +9,15 @@
  * get a conservative default rather than assuming the same ceiling. Non-
  * Seedance models (veo, sora, …) default to 0 — no picker is shown for them
  * until reference support is confirmed.
+ *
+ * Real bug found 2026-09-07: attaching ANY input_references entry makes
+ * SIRAYA classify the whole request as task_type "r2v" — and the 1.0-pro /
+ * 1.0-pro-fast / 1.5-pro line rejects that task_type outright ("the
+ * specified task_type r2v does not support model seedance-1-0-pro-fast"),
+ * verified live. The old blanket "seedance" → 6 rule let a caller attach a
+ * reference to these anyway, which SIRAYA would then hard-reject — these
+ * three get their own 0 entries (longest-prefix-wins overrides the generic
+ * "seedance" rule below) rather than inheriting it.
  */
 
 interface VideoRefRule {
@@ -19,6 +28,9 @@ interface VideoRefRule {
 
 const RULES: VideoRefRule[] = [
   { prefix: "seedance-2.5", max: 50 },
+  { prefix: "seedance-1.0-pro-fast", max: 0 },
+  { prefix: "seedance-1.0-pro", max: 0 },
+  { prefix: "seedance-1.5-pro", max: 0 },
   { prefix: "seedance", max: 6 },
 ];
 

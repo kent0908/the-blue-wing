@@ -223,11 +223,18 @@ export interface VideoGenerationRequest {
   /**
    * Model-specific passthrough. `camera_fixed` (boolean) is real — verified
    * empirically — but only valid in image-to-video (i.e. with a reference
-   * attached); sending it in pure text-to-video is rejected. `watermark`
-   * (boolean) is also real for Seedance — verified empirically by generating
-   * the same clip with both values and comparing frames: the "AI generated"
-   * badge only appears when true. We always send one explicitly (default
-   * false) — see app/api/videos/route.ts.
+   * attached); sending it in pure text-to-video is rejected. NOT universal
+   * within Seedance, though: verified live (2026-09-07) that the 2.0-mini
+   * line rejects it the OTHER way — "the specified parameter camera_fixed is
+   * not supported for model dreamina-seedance-2-0-mini in r2v, must be
+   * empty" — i.e. for that specific model it's invalid precisely when a
+   * reference IS attached. lib/characterIdleVideo.ts doesn't send it at all
+   * for this reason; a future caller wanting it for OTHER Seedance versions
+   * should still verify per-model before relying on this comment's older
+   * claim. `watermark` (boolean) is also real for Seedance — verified
+   * empirically by generating the same clip with both values and comparing
+   * frames: the "AI generated" badge only appears when true. We always send
+   * one explicitly (default false) — see app/api/videos/route.ts.
    */
   extra_body?: Record<string, unknown>;
 }

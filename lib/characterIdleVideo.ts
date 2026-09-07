@@ -43,7 +43,15 @@ import type { CharacterRow } from "./characters";
 
 export const IDLE_VIDEO_SECONDS = 10;
 export const IDLE_VIDEO_RESOLUTION = "480p";
-export const FREE_IDLE_MODEL = "ByteDance-Seedance-1.0-pro-fast";
+// Free tier: plain text-to-video when there's no avatar to reference (cheap,
+// $0.01/s). Seedance 1.0 pro fast does NOT support input_references at all —
+// verified live (2026-09-07): SIRAYA rejects it outright ("the specified
+// task_type r2v does not support model seedance-1-0-pro-fast"). So when the
+// character DOES have an avatar, the free generation instead uses the
+// cheapest r2v-capable tier (Seedance 2.0 mini, ~3.6x pricier but still a
+// bounded once-a-month cost) so the free grant is still worth having.
+export const FREE_IDLE_MODEL_TEXT_ONLY = "ByteDance-Seedance-1.0-pro-fast";
+export const FREE_IDLE_MODEL_WITH_AVATAR = "SIRAYA-Seedance-2.0-mini";
 export const PAID_IDLE_MODEL = "NSFW-Seedance-2.0-mini";
 
 // Fixed cinematography template — kept byte-for-byte as given by the product
@@ -200,8 +208,18 @@ export async function startIdleVideoGeneration(
     const urls = await assetsToDataUrls(userId, [character.avatar_asset_id], 1);
     refs = urls.map((url) => ({ type: "image" as const, url }));
   }
+  // NOT setting camera_fixed here — verified live (2026-09-07) that SIRAYA
+  // rejects it outright for the Seedance 2.0 mini family once a reference is
+  // attached ("the specified parameter camera_fixed is not supported for
+  // model dreamina-seedance-2-0-mini in r2v, must be empty"), which silently
+  // broke every avatar-conditioned generation (the whole submission threw,
+  // the free slot got released, nothing was ever produced — or, for a
+  // character whose avatar was attached after its first couple of
+  // generations, refs was simply empty and this never fired at all; either
+  // way the fix is the same). The fixed negative_prompt already discourages
+  // camera movement in its own right — confirmed by direct testing that
+  // identity is preserved strongly through the reference alone.
   const extra_body: Record<string, unknown> = { watermark: false };
-  if (refs.length) extra_body.camera_fixed = true;
 
   const freeMarkerId = await claimFreeIdleQuota(userId);
   const free = freeMarkerId !== null;
@@ -213,7 +231,7 @@ export async function startIdleVideoGeneration(
     return null;
   }
 
-  const model = free ? FREE_IDLE_MODEL : PAID_IDLE_MODEL;
+  const model = free ? (refs.length ? FREE_IDLE_MODEL_WITH_AVATAR : FREE_IDLE_MODEL_TEXT_ONLY) : PAID_IDLE_MODEL;
   const cost = free ? 0 : await estimatePaidIdleCost();
 
   const submit = () =>
@@ -224,6 +242,11 @@ export async function startIdleVideoGeneration(
       resolution: IDLE_VIDEO_RESOLUTION as "480p",
       negative_prompt: IDLE_NEGATIVE_PROMPT,
       async: true,
+      // This model defaults to ALSO generating an audio track unless told
+      // otherwise — irrelevant (and risky: one real test hit a random
+      // "OutputAudioSensitiveContentDetected" rejection on it) for a muted
+      // looping background clip.
+      generate_audio: false,
       input_references: refs.length ? refs : undefined,
       extra_body,
     });
