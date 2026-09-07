@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { getCharacter } from "@/lib/characters";
-import { listIdleVideos, pollIdleVideoJob, toPublicIdleVideo } from "@/lib/characterIdleVideo";
+import { listIdleVideos, pollIdleVideoJob, hasPendingIdleVideo, toPublicIdleVideo } from "@/lib/characterIdleVideo";
 import { OUTFIT_CATALOG, OUTFIT_CHANGE_COST, isOutfitUnlocked, listOutfitChanges, purchaseOutfitChange } from "@/lib/characterOutfits";
 
 export const runtime = "nodejs";
@@ -77,6 +77,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const body = await req.json().catch(() => ({}));
     const outfitKey = typeof body?.outfitKey === "string" ? body.outfitKey.trim() : "";
     if (!outfitKey) return NextResponse.json({ error: { message: "缺少服裝代碼", code: "bad_request" } }, { status: 400 });
+
+    // Same guard as the plain idle-video regenerate route — without it,
+    // nothing stops a second 500-credit purchase (or a regular idle-video
+    // regen) from being submitted while an earlier one for this character is
+    // still generating.
+    if (await hasPendingIdleVideo(id, r.user.id)) {
+      return NextResponse.json(
+        { error: { message: "已經有一支影片正在生成中，請稍後再試", code: "already_pending" } },
+        { status: 409 }
+      );
+    }
 
     const { change, video } = await purchaseOutfitChange(r.user.id, character, outfitKey);
     return NextResponse.json(

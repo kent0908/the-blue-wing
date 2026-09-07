@@ -78,12 +78,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ...json, creditsSpent: 0, creditsBalance: balance });
     }
     if (lastUserPrompt) {
-      await recordGeneration(user.id, {
-        kind: "text",
-        model: String(body.model),
-        prompt: String(lastUserPrompt),
-        text: String(replyText),
-      });
+      // Same class of gap as /api/images (lower stakes here — text costs are
+      // tiny — but consistent to fix): a DB failure recording this reply,
+      // after the charge above already succeeded, previously had no refund.
+      try {
+        await recordGeneration(user.id, {
+          kind: "text",
+          model: String(body.model),
+          prompt: String(lastUserPrompt),
+          text: String(replyText),
+        });
+      } catch (err) {
+        await refundCharge(user.id, chargeId);
+        throw err;
+      }
     }
 
     return NextResponse.json({ ...json, creditsSpent: cost, creditsBalance: balance - cost });

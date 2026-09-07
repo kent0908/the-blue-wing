@@ -97,14 +97,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     // Persist both sides only after a successful reply — a failed call leaves
-    // no half-written turn behind.
-    await addMessage(id, "user", content);
-    const saved = await addMessage(id, "assistant", String(reply));
-
-    // 好感度：+1 for showing up, +4 more (so +5 total) for touching a 喜好 topic.
+    // no half-written turn behind. Same refund gap as /api/chat (found on the
+    // same 2026-09-07 re-audit) — a DB failure here, after the charge above
+    // already succeeded, previously had no refund path.
     const gain = 1 + (matchesLikes(content, character.likes) ? 4 : 0);
     const before = levelInfo(character.affection);
-    const { affection, turnCount } = await recordTurn(id, gain);
+    let saved: Awaited<ReturnType<typeof addMessage>>;
+    let affection: number;
+    let turnCount: number;
+    try {
+      await addMessage(id, "user", content);
+      saved = await addMessage(id, "assistant", String(reply));
+      const turn = await recordTurn(id, gain);
+      affection = turn.affection;
+      turnCount = turn.turnCount;
+    } catch (err) {
+      await refundCharge(r.user.id, chargeId);
+      throw err;
+    }
     const after = levelInfo(affection);
 
     // Long-term memory: every MEMORY_REFRESH_EVERY turns, compress the recent

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { getCharacter } from "@/lib/characters";
-import { toPublicIdleVideo } from "@/lib/characterIdleVideo";
+import { toPublicIdleVideo, hasPendingIdleVideo } from "@/lib/characterIdleVideo";
 import { listOutfitChanges, retryOutfitChange } from "@/lib/characterOutfits";
 
 export const runtime = "nodejs";
@@ -38,6 +38,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // numerically, not by reference equality against the parsed number.
     const change = changes.find((c) => Number(c.id) === changeId);
     if (!change) return NextResponse.json({ error: { message: "找不到這次換裝紀錄", code: "not_found" } }, { status: 404 });
+
+    if (await hasPendingIdleVideo(id, r.user.id)) {
+      return NextResponse.json(
+        { error: { message: "已經有一支影片正在生成中，請稍後再試", code: "already_pending" } },
+        { status: 409 }
+      );
+    }
 
     const video = await retryOutfitChange(r.user.id, character, change);
     return NextResponse.json({ video: toPublicIdleVideo(video) }, { status: 201 });

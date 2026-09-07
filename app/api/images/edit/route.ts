@@ -91,8 +91,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "編輯失敗，沒有取得結果圖片" } }, { status: 502 });
     }
 
-    const url = await persistGeneratedMedia(rawUrl, { userId: user.id, kind: "image" });
-    await recordGeneration(user.id, { kind: "image", model: EDIT_MODEL, prompt: String(body.prompt), url });
+    // Same gap as /api/images and /api/videos (see their comments, found on
+    // the same 2026-09-07 re-audit): a failure in either call below, after
+    // the charge above already succeeded, previously had no refund path.
+    let url: string;
+    try {
+      url = await persistGeneratedMedia(rawUrl, { userId: user.id, kind: "image" });
+      await recordGeneration(user.id, { kind: "image", model: EDIT_MODEL, prompt: String(body.prompt), url });
+    } catch (err) {
+      await refundCharge(user.id, chargeId);
+      throw err;
+    }
 
     return NextResponse.json({ url, creditsSpent: cost, creditsBalance: balance - cost });
   } catch (err) {

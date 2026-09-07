@@ -258,9 +258,9 @@ export async function startIdleVideoGeneration(
       extra_body,
     });
 
+  let chargeId: string | null = null;
   try {
     let json: { id?: string; data?: { url?: string }[]; status?: string };
-    let chargeId: string | null = null;
     if (free) {
       json = await submit();
     } else {
@@ -294,7 +294,14 @@ export async function startIdleVideoGeneration(
     if (status === "completed") await activateOnCompletion(row);
     return { row, free, cost };
   } catch (err) {
+    // Covers both: the explicit "no id/url" throw above (already refunded
+    // there, but refundCharge is idempotent so this is harmless) AND, more
+    // importantly, a failure in our OWN bookkeeping (the insert below) after
+    // a paid submission already succeeded — that path previously left the
+    // charge un-refunded entirely, a real gap found on re-audit (2026-09-07),
+    // same class of bug as lib/characterOutfits.ts's purchaseOutfitChange.
     if (free && freeMarkerId) await releaseFreeIdleQuota(freeMarkerId);
+    if (chargeId) await refundCharge(userId, chargeId);
     throw err;
   }
 }

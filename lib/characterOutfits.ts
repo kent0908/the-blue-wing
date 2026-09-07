@@ -181,35 +181,46 @@ export async function purchaseOutfitChange(
     throw new SirayaApiError(502, "提交失敗，SIRAYA 沒有回傳任務編號或結果");
   }
 
-  const { rows: changeRows } = await sql<OutfitChangeRow>`
-    insert into character_outfit_changes (character_id, user_id, outfit_key, credits_spent)
-    values (${character.id}, ${userId}, ${outfitKey}, ${OUTFIT_CHANGE_COST})
-    returning id, character_id, user_id, outfit_key, credits_spent, retry_used, created_at
-  `;
-  const change = changeRows[0];
+  // From here on the SIRAYA submission itself already succeeded (charge is
+  // committed) — a failure in our OWN bookkeeping (a transient DB error, say)
+  // must still refund, or the user is charged 500 credits for a purchase
+  // that never even shows up as a record to retry or investigate. Mirrors
+  // the same reasoning as paidCall's own doc comment: a real 5xx/network
+  // failure with no way to reconcile later must not be a silent credit loss.
+  try {
+    const { rows: changeRows } = await sql<OutfitChangeRow>`
+      insert into character_outfit_changes (character_id, user_id, outfit_key, credits_spent)
+      values (${character.id}, ${userId}, ${outfitKey}, ${OUTFIT_CHANGE_COST})
+      returning id, character_id, user_id, outfit_key, credits_spent, retry_used, created_at
+    `;
+    const change = changeRows[0];
 
-  let status: "pending" | "completed" = "pending";
-  let url: string | null = null;
-  if (immediateUrl) {
-    url = await persistGeneratedMedia(immediateUrl, { userId, kind: "video" });
-    status = "completed";
+    let status: "pending" | "completed" = "pending";
+    let url: string | null = null;
+    if (immediateUrl) {
+      url = await persistGeneratedMedia(immediateUrl, { userId, kind: "video" });
+      status = "completed";
+    }
+
+    const video = await insertIdleVideoRow({
+      characterId: character.id,
+      userId,
+      status,
+      jobId,
+      model: OUTFIT_MODEL,
+      prompt,
+      url,
+      creditsSpent: OUTFIT_CHANGE_COST,
+      purchaseId: change.id,
+      outfitKey,
+    });
+    if (status === "completed") await setActiveIdleVideo(character.id, userId, video.id);
+
+    return { change, video };
+  } catch (err) {
+    await refundCharge(userId, chargeId);
+    throw err;
   }
-
-  const video = await insertIdleVideoRow({
-    characterId: character.id,
-    userId,
-    status,
-    jobId,
-    model: OUTFIT_MODEL,
-    prompt,
-    url,
-    creditsSpent: OUTFIT_CHANGE_COST,
-    purchaseId: change.id,
-    outfitKey,
-  });
-  if (status === "completed") await setActiveIdleVideo(character.id, userId, video.id);
-
-  return { change, video };
 }
 
 /**
