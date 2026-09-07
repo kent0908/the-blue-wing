@@ -9,6 +9,7 @@ import CharacterBuilder from "./CharacterBuilder";
 import type { CharacterProfile } from "@/lib/characterProfile";
 import CharacterScenes from "./CharacterScenes";
 import CompanionIdleStage from "./CompanionIdleStage";
+import CompanionWardrobe from "./CompanionWardrobe";
 
 export interface CharacterLevel {
   name: string;
@@ -213,6 +214,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
 
       <div className="flex min-h-0 flex-1">
         <CompanionIdleStage characterId={character.id} avatarSrc={character.avatarSrc} />
+        <CompanionWardrobe characterId={character.id} />
         <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {toast && (
         <div

@@ -58,7 +58,7 @@ export const PAID_IDLE_MODEL = "NSFW-Seedance-2.0-mini";
 // spec. Character-specific appearance is prepended as its own paragraph
 // (buildIdlePrompt below), never spliced into this sentence, so this template
 // itself never drifts between characters.
-const IDLE_POSITIVE_TEMPLATE =
+export const IDLE_POSITIVE_TEMPLATE =
   "Full-body standing shot of an RPG game character, centered frontal view, eye-level angle, static fixed camera, locked-off shot. Subtle idle animation, breathing naturally, occasional subtle body sway. Soft breeze blowing, causing gentle hair sway and slight fabric movement. Occasional natural mouth opening and closing as if speaking briefly, calm facial expression, blinking naturally. Clean solid dark background or subtle atmospheric RPG interior, high fantasy aesthetic, sharp focus, 2D visual novel sprite style / Live2D aesthetic, cinematic lighting, 4k.";
 
 export const IDLE_NEGATIVE_PROMPT =
@@ -132,6 +132,9 @@ export interface IdleVideoRow {
   free: boolean;
   credits_spent: number;
   is_active: boolean;
+  /** set only for a wardrobe-generated video (lib/characterOutfits.ts) — null for a plain idle video. */
+  outfit_key: string | null;
+  purchase_id: number | null;
   created_at: string;
 }
 
@@ -142,6 +145,8 @@ export interface PublicIdleVideo {
   free: boolean;
   creditsSpent: number;
   isActive: boolean;
+  outfitKey: string | null;
+  purchaseId: number | null;
   createdAt: string;
 }
 
@@ -153,13 +158,15 @@ export function toPublicIdleVideo(r: IdleVideoRow): PublicIdleVideo {
     free: r.free,
     creditsSpent: r.credits_spent,
     isActive: r.is_active,
+    outfitKey: r.outfit_key,
+    purchaseId: r.purchase_id,
     createdAt: r.created_at,
   };
 }
 
 export async function listIdleVideos(characterId: number, userId: number): Promise<IdleVideoRow[]> {
   const { rows } = await sql<IdleVideoRow>`
-    select id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, created_at
+    select id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, outfit_key, purchase_id, created_at
     from character_idle_videos
     where character_id = ${characterId} and user_id = ${userId}
     order by created_at desc
@@ -281,10 +288,10 @@ export async function startIdleVideoGeneration(
     const { rows } = await sql<IdleVideoRow>`
       insert into character_idle_videos (character_id, user_id, status, job_id, model, prompt, url, free, credits_spent)
       values (${character.id}, ${userId}, ${status}, ${jobId}, ${model}, ${prompt}, ${url}, ${free}, ${cost})
-      returning id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, created_at
+      returning id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, outfit_key, purchase_id, created_at
     `;
     const row = rows[0];
-    if (status === "completed") await autoActivateIfFirst(row);
+    if (status === "completed") await activateOnCompletion(row);
     return { row, free, cost };
   } catch (err) {
     if (free && freeMarkerId) await releaseFreeIdleQuota(freeMarkerId);
@@ -294,8 +301,15 @@ export async function startIdleVideoGeneration(
 
 /** The first idle video a character ever finishes becomes its loop automatically
  *  ("完成後在紅框內固定循環") — later ones just join the pick-list until the
- *  user actively switches (setActiveIdleVideo). */
-async function autoActivateIfFirst(row: IdleVideoRow): Promise<void> {
+ *  user actively switches (setActiveIdleVideo). A wardrobe-generated video
+ *  (outfit_key set — lib/characterOutfits.ts) is different: choosing an
+ *  outfit means "I want to see this now", so it ALWAYS becomes the active
+ *  loop once it finishes, not just when nothing else is active yet. */
+async function activateOnCompletion(row: IdleVideoRow): Promise<void> {
+  if (row.outfit_key) {
+    await setActiveIdleVideo(row.character_id, row.user_id, row.id);
+    return;
+  }
   const { rows } = await sql<{ n: number }>`
     select count(*)::int as n from character_idle_videos
     where character_id = ${row.character_id} and user_id = ${row.user_id} and is_active = true
@@ -323,10 +337,10 @@ export async function pollIdleVideoJob(row: IdleVideoRow): Promise<IdleVideoRow>
     const { rows } = await sql<IdleVideoRow>`
       update character_idle_videos set status = 'completed', url = ${url}
       where id = ${row.id} and status = 'pending'
-      returning id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, created_at
+      returning id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, outfit_key, purchase_id, created_at
     `;
     const updated = rows[0] ?? { ...row, status: "completed" as const, url };
-    await autoActivateIfFirst(updated);
+    await activateOnCompletion(updated);
     return updated;
   }
 
@@ -346,7 +360,7 @@ export async function pollIdleVideoJob(row: IdleVideoRow): Promise<IdleVideoRow>
     const { rows } = await sql<IdleVideoRow>`
       update character_idle_videos set status = 'failed'
       where id = ${row.id} and status = 'pending'
-      returning id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, created_at
+      returning id, character_id, user_id, status, job_id, model, prompt, url, free, credits_spent, is_active, outfit_key, purchase_id, created_at
     `;
     return rows[0] ?? { ...row, status: "failed" as const };
   }

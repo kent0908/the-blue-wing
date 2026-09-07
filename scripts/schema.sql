@@ -278,3 +278,22 @@ create index if not exists character_idle_videos_char_idx on character_idle_vide
 -- lib/characterIdleVideo.ts 的 claimFreeIdleQuota）。
 create unique index if not exists credit_ledger_idle_video_free_uidx
   on credit_ledger(user_id, ref) where reason = 'idle_video_free';
+
+-- 換裝衣櫃——好感度 80（熱戀時刻）以上解鎖，花 500 點把角色的待機影片換成
+-- 指定服裝，每次購買附一次免費重新生成的機會（retry_used 記錄是否已經用
+-- 掉）。實際生成的影片仍然寫進 character_idle_videos（outfit_key／
+-- purchase_id 指回這裡），跟原本的待機影片共用同一套播放/選擇機制，只是多
+-- 記錄「這支影片對應哪一次換裝購買」。見 lib/characterOutfits.ts。
+create table if not exists character_outfit_changes (
+  id            bigint generated always as identity primary key,
+  character_id  bigint not null references characters(id) on delete cascade,
+  user_id       bigint not null references users(id) on delete cascade,
+  outfit_key    text not null,
+  credits_spent integer not null default 0,
+  retry_used    boolean not null default false,
+  created_at    timestamptz not null default now()
+);
+create index if not exists character_outfit_changes_char_idx on character_outfit_changes(character_id, created_at desc);
+
+alter table character_idle_videos add column if not exists outfit_key text;
+alter table character_idle_videos add column if not exists purchase_id bigint references character_outfit_changes(id) on delete set null;
