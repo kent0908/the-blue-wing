@@ -230,7 +230,14 @@ export default function CharacterScenes({ characterId, onClose }: { characterId:
                       // eslint-disable-next-line @next/next/no-img-element -- upstream/blob url
                       <img src={s.url} alt="" className="aspect-square w-full object-cover" />
                     ) : (
-                      <video src={s.url} className="aspect-square w-full object-cover" muted preload="metadata" />
+                      <video
+                        src={s.url}
+                        className="aspect-square w-full object-cover"
+                        muted
+                        preload="metadata"
+                        disablePictureInPicture
+                        disableRemotePlayback
+                      />
                     )}
                     <a
                       href={s.url}

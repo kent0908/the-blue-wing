@@ -860,7 +860,7 @@ function NodeCard({
           </div>
         )}
         {node.output?.kind === "video" && (
-          <video src={node.output.url} controls className="w-full rounded-lg border border-[#2c2c2c]" />
+          <video src={node.output.url} controls disablePictureInPicture disableRemotePlayback className="w-full rounded-lg border border-[#2c2c2c]" />
         )}
         {node.output?.kind === "text" && node.type !== "text" && (
           <div

@@ -203,7 +203,7 @@ export default function Director3DStudioBody({
 
           {!recording && recordedClip && (
             <div className="mt-1.5 space-y-1.5">
-              <video src={recordedClip.url} controls loop className="w-full rounded-lg border border-[#2c2c2c]" />
+              <video src={recordedClip.url} controls loop disablePictureInPicture disableRemotePlayback className="w-full rounded-lg border border-[#2c2c2c]" />
               <div className="grid grid-cols-2 gap-1.5">
                 <a
                   href={recordedClip.url}

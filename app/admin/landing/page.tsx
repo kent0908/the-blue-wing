@@ -117,7 +117,7 @@ export default function AdminLandingPage() {
               <div key={slot.key} className="flex items-center gap-4 rounded-xl border border-[#262626] bg-[#141414] p-4">
                 <div className="flex h-24 w-40 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#0a0a0a]">
                   {current?.kind === "video" ? (
-                    <video src={current.url} className="h-full w-full object-cover" muted loop autoPlay playsInline />
+                    <video src={current.url} className="h-full w-full object-cover" muted loop autoPlay playsInline disablePictureInPicture disableRemotePlayback />
                   ) : current?.kind === "image" ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={current.url} alt={slot.label} className="h-full w-full object-cover" />

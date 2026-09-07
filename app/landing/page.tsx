@@ -39,7 +39,7 @@ export default async function LandingPage(){
   <section className={styles.hero}>
     {media.hero ? (
       media.hero.kind === "video"
-        ? <video className={styles.heroMedia} src={media.hero.url} autoPlay muted loop playsInline aria-hidden="true"/>
+        ? <video className={styles.heroMedia} src={media.hero.url} autoPlay muted loop playsInline disablePictureInPicture disableRemotePlayback aria-hidden="true"/>
         // eslint-disable-next-line @next/next/no-img-element
         : <img className={styles.heroMedia} src={media.hero.url} alt="" aria-hidden="true"/>
     ) : (
@@ -61,7 +61,7 @@ export default async function LandingPage(){
     <div className={`${styles.art} ${styles['art'+i]}`} aria-label={`${f.title}${m?"視覺展示":"抽象視覺展示"}`}>
       {m ? (
         m.kind === "video"
-          ? <video className={styles.artMedia} src={m.url} autoPlay muted loop playsInline/>
+          ? <video className={styles.artMedia} src={m.url} autoPlay muted loop playsInline disablePictureInPicture disableRemotePlayback/>
           // eslint-disable-next-line @next/next/no-img-element
           : <img className={styles.artMedia} src={m.url} alt={f.title}/>
       ) : (<>

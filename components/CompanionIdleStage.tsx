@@ -136,7 +136,17 @@ export default function CompanionIdleStage({
       <div className="relative flex-1 overflow-hidden p-3">
         <div className="relative h-full w-full overflow-hidden rounded-2xl bg-gradient-to-b from-[#141414] to-[#0a0a0a]">
           {active ? (
-            <video key={active.id} src={active.url!} className="h-full w-full object-cover" autoPlay loop muted playsInline />
+            <video
+              key={active.id}
+              src={active.url!}
+              className="h-full w-full object-cover"
+              autoPlay
+              loop
+              muted
+              playsInline
+              disablePictureInPicture
+              disableRemotePlayback
+            />
           ) : avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
             <img src={avatarSrc} alt="" className="h-full w-full object-cover opacity-80" />
@@ -168,7 +178,14 @@ export default function CompanionIdleStage({
                 aria-label="設為待機影片"
                 title={v.isActive ? "目前使用中" : "設為待機影片"}
               >
-                <video src={v.url!} className="h-full w-full object-cover" muted preload="metadata" />
+                <video
+                  src={v.url!}
+                  className="h-full w-full object-cover"
+                  muted
+                  preload="metadata"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                />
               </button>
             ))}
           </div>
