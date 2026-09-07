@@ -10,6 +10,7 @@ import {
   levelInfo,
   sceneLevelIsExplicit,
   toPublicScene,
+  AFFECTION_LEVELS,
 } from "@/lib/characters";
 
 export const runtime = "nodejs";
@@ -73,6 +74,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       image: { prompt: buildScenePrompt(character, "image"), model: sceneModelFor("image", level.index) },
       video: { prompt: buildScenePrompt(character, "video"), model: sceneModelFor("video", level.index) },
     },
+    // So the panel can render the full 5-tier ladder (name + threshold, no
+    // prompt text) instead of only a one-line "not eligible yet" message —
+    // this data is not sensitive, just the same AFFECTION_LEVELS table
+    // already shown for chat.
+    currentAffection: character.affection,
+    currentLevelIndex: level.index,
+    levels: AFFECTION_LEVELS,
   });
 }
 

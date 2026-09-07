@@ -226,40 +226,49 @@ export default function CharacterChat({ character: initial }: { character: Chara
       )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
-        <div className="mx-auto flex max-w-2xl flex-col gap-3">
-          {messages === null && <div className="mx-auto h-6 w-6 animate-pulse rounded-full bg-[#1c1c1c]" />}
+        {messages === null && <div className="mx-auto h-6 w-6 animate-pulse rounded-full bg-[#1c1c1c]" />}
 
-          {messages?.length === 0 && (
-            <p className="mt-10 text-center text-[13px] leading-relaxed text-[#6d6d6d]">
+        {messages?.length === 0 && (
+          <div className="grid h-full place-items-center">
+            <p className="max-w-md px-5 text-center text-[13px] leading-relaxed text-[#6d6d6d]">
               {character.profile?.greeting || `跟「${character.name}」還沒有任何對話`}
               <br />
               打個招呼開始聊吧
             </p>
-          )}
+          </div>
+        )}
 
-          {messages?.map((m) => (
-            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={[
-                  "max-w-[75%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed",
-                  m.role === "user" ? "bg-[#2a2a2a] text-white" : "border border-[#262626] bg-[#141414] text-[#e5e5e5]",
-                  m.pending ? "opacity-60" : "",
-                  m.failed ? "border border-[#4a2020] text-[#ffb4b4]" : "",
-                ].join(" ")}
-              >
-                {m.content}
+        {/* min-h-full + justify-end: a short conversation sits at the
+            bottom of the visible pane and grows upward (like most chat
+            apps), instead of floating at the top with a huge dead area
+            below it — the "版面弄滿一點" fix. Once there's enough content
+            to overflow, this has no visible effect at all. */}
+        {messages && messages.length > 0 && (
+          <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-end gap-3">
+            {messages.map((m) => (
+              <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={[
+                    "max-w-[75%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed",
+                    m.role === "user" ? "bg-[#2a2a2a] text-white" : "border border-[#262626] bg-[#141414] text-[#e5e5e5]",
+                    m.pending ? "opacity-60" : "",
+                    m.failed ? "border border-[#4a2020] text-[#ffb4b4]" : "",
+                  ].join(" ")}
+                >
+                  {m.content}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {sending && (
-            <div className="flex justify-start">
-              <div className="rounded-2xl border border-[#262626] bg-[#141414] px-4 py-2.5 text-[13px] text-[#7d7d7d]">
-                {character.name} 正在輸入…
+            {sending && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl border border-[#262626] bg-[#141414] px-4 py-2.5 text-[13px] text-[#7d7d7d]">
+                  {character.name} 正在輸入…
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="shrink-0 px-5 pb-5">

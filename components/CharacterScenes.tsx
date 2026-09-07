@@ -12,6 +12,12 @@ interface Scene {
   createdAt: string;
 }
 
+interface Level {
+  min: number;
+  name: string;
+  unlock: string;
+}
+
 interface ScenesData {
   scenes: Scene[];
   unlocked: boolean;
@@ -21,6 +27,48 @@ interface ScenesData {
     image: { prompt: string; model: string };
     video: { prompt: string; model: string };
   };
+  currentAffection: number;
+  currentLevelIndex: number;
+  levels: Level[];
+}
+
+/** The 5/6-tier ladder (AFFECTION_LEVELS from lib/characters.ts, mirrored via
+ *  the API) — shown regardless of eligibility so the panel always has real
+ *  content instead of one or two lines in an otherwise empty column. */
+function LevelLadder({ data }: { data: ScenesData }) {
+  return (
+    <div className="space-y-1.5">
+      {data.levels.map((lv, i) => {
+        const reached = i <= data.currentLevelIndex;
+        const isCurrent = i === data.currentLevelIndex;
+        return (
+          <div
+            key={lv.name}
+            className={[
+              "flex items-center gap-2.5 rounded-lg px-2.5 py-2",
+              isCurrent ? "bg-[#141414] ring-1 ring-[#3a3a3a]" : "",
+            ].join(" ")}
+          >
+            <span
+              className={[
+                "grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-medium",
+                reached ? "bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16]" : "bg-[#1c1c1c] text-[#5c5c5c]",
+              ].join(" ")}
+            >
+              {reached ? "✓" : lv.min}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className={`text-[13px] font-medium ${reached ? "text-white" : "text-[#8a8a8a]"}`}>
+                {lv.name}
+                <span className="ml-1.5 text-[11px] font-normal text-[#6d6d6d]">好感度 {lv.min}+</span>
+              </div>
+              <div className="text-[11.5px] leading-relaxed text-[#6d6d6d]">{lv.unlock}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /**
@@ -138,11 +186,14 @@ export default function CharacterScenes({ characterId, onClose }: { characterId:
         )}
 
         {data && data.unlocked && !data.eligible && (
-          <p className="mt-8 text-center text-[13px] leading-relaxed text-[#6d6d6d]">
-            這個角色還沒解鎖任何關係階段
-            <br />
-            多聊聊，好感度到一定程度就能生成專屬場景
-          </p>
+          <>
+            <p className="mb-4 mt-2 text-center text-[13px] leading-relaxed text-[#6d6d6d]">
+              這個角色還沒解鎖任何關係階段（目前好感度 {data.currentAffection}）
+              <br />
+              多聊聊，達到下面的門檻就能生成專屬場景
+            </p>
+            <LevelLadder data={data} />
+          </>
         )}
 
         {data && data.unlocked && data.eligible && (
@@ -193,6 +244,11 @@ export default function CharacterScenes({ characterId, onClose }: { characterId:
                 ))}
               </div>
             )}
+
+            <div className="mt-6 border-t border-[#1c1c1c] pt-4">
+              <p className="mb-2 text-[12.5px] font-medium text-[#a8a8a8]">關係階段（目前好感度 {data.currentAffection}）</p>
+              <LevelLadder data={data} />
+            </div>
           </>
         )}
       </div>
