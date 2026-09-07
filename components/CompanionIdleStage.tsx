@@ -132,21 +132,25 @@ export default function CompanionIdleStage({
         : `重新生成（${data?.paidCost ?? "…"} 點）`;
 
   return (
-    <div className="flex w-[300px] shrink-0 flex-col border-r border-[#1c1c1c] bg-black">
-      <div className="relative flex-1 overflow-hidden">
-        {active ? (
-          <video key={active.id} src={active.url!} className="h-full w-full object-cover" autoPlay loop muted playsInline />
-        ) : avatarSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
-          <img src={avatarSrc} alt="" className="h-full w-full object-cover opacity-70" />
-        ) : (
-          <div className="h-full w-full bg-[#0a0a0a]" />
-        )}
-        {pending && (
-          <div className="absolute inset-0 grid place-items-center bg-black/55 text-center">
-            <p className="px-4 text-[13px] leading-relaxed text-[#e5e5e5]">夥伴正在啟程，請稍後…</p>
-          </div>
-        )}
+    <div className="flex w-[360px] shrink-0 flex-col border-r border-[#1c1c1c] bg-[#050505]">
+      <div className="relative flex-1 overflow-hidden p-3">
+        <div className="relative h-full w-full overflow-hidden rounded-2xl bg-gradient-to-b from-[#141414] to-[#0a0a0a]">
+          {active ? (
+            <video key={active.id} src={active.url!} className="h-full w-full object-cover" autoPlay loop muted playsInline />
+          ) : avatarSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
+            <img src={avatarSrc} alt="" className="h-full w-full object-cover opacity-80" />
+          ) : (
+            <div className="grid h-full w-full place-items-center px-6 text-center text-[12.5px] leading-relaxed text-[#5c5c5c]">
+              還沒有待機影片，點下方按鈕生成一支
+            </div>
+          )}
+          {pending && (
+            <div className="absolute inset-0 grid place-items-center bg-black/55 text-center">
+              <p className="px-4 text-[13px] leading-relaxed text-[#e5e5e5]">夥伴正在啟程，請稍後…</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="shrink-0 border-t border-[#1c1c1c] p-3">

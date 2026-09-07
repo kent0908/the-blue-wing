@@ -8,6 +8,7 @@ import {
   addScene,
   buildScenePrompt,
   levelInfo,
+  sceneLevelIsExplicit,
   toPublicScene,
 } from "@/lib/characters";
 
@@ -18,9 +19,24 @@ export const dynamic = "force-dynamic";
  *  images (image() field) for the still, Seedance 2.5 has the highest
  *  input_references cap for the clip. Both accept the character's own
  *  avatar asset as a reference via the same assetIds path the rest of the
- *  app already uses (see /api/images, /api/videos). */
+ *  app already uses (see /api/images, /api/videos).
+ *
+ * From 熱戀時刻 (affection 80) up, SCENE_PROMPTS (lib/characters.ts) actually
+ * asks for explicit content — switching to the NSFW twin at that point isn't
+ * optional polish, it's what makes the prompt achievable at all against the
+ * safe model's own content filtering. Below that, the safe model stays the
+ * default so nothing explicit gets generated before the relationship stage
+ * that's supposed to unlock it. */
 const SCENE_IMAGE_MODEL = "ByteDance-Seedream-4.5";
 const SCENE_VIDEO_MODEL = "SIRAYA-Seedance-2.5";
+const SCENE_IMAGE_MODEL_NSFW = "NSFW-Seedream-4.5";
+const SCENE_VIDEO_MODEL_NSFW = "NSFW-Seedance-2.5";
+
+function sceneModelFor(kind: "image" | "video", levelIndex: number): string {
+  const explicit = sceneLevelIsExplicit(levelIndex);
+  if (kind === "video") return explicit ? SCENE_VIDEO_MODEL_NSFW : SCENE_VIDEO_MODEL;
+  return explicit ? SCENE_IMAGE_MODEL_NSFW : SCENE_IMAGE_MODEL;
+}
 
 function parseId(id: string) {
   const n = parseInt(id, 10);
@@ -54,8 +70,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     eligible: level.index >= 1,
     avatarAssetId: character.avatar_asset_id,
     suggested: {
-      image: { prompt: buildScenePrompt(character, "image"), model: SCENE_IMAGE_MODEL },
-      video: { prompt: buildScenePrompt(character, "video"), model: SCENE_VIDEO_MODEL },
+      image: { prompt: buildScenePrompt(character, "image"), model: sceneModelFor("image", level.index) },
+      video: { prompt: buildScenePrompt(character, "video"), model: sceneModelFor("video", level.index) },
     },
   });
 }
@@ -113,11 +129,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const prompt = typeof body?.prompt === "string" && body.prompt.trim() ? body.prompt.trim() : buildScenePrompt(character, kind);
   const model =
-    typeof body?.model === "string" && body.model.trim()
-      ? body.model.trim()
-      : kind === "video"
-        ? SCENE_VIDEO_MODEL
-        : SCENE_IMAGE_MODEL;
+    typeof body?.model === "string" && body.model.trim() ? body.model.trim() : sceneModelFor(kind, level.index);
 
   const scene = await addScene(id, r.user.id, { kind, levelIndex: level.index, url, prompt, model });
   return NextResponse.json({ scene: toPublicScene(scene) }, { status: 201 });

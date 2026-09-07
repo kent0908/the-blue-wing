@@ -53,12 +53,18 @@ export interface AffectionLevel {
   unlock: string;
 }
 
+// 2026-09-07 重新設計：改成 0/20/40/60/80/100 六個階段（原本是 0/30/80/160/
+// 280），配合 SCENE_PROMPTS 逐階段從「認識」漸進到「大尺度」，而不是像原本
+// 那樣不管等級都套同一段生成提示詞。第 0 階（初次見面）刻意保持完全沒有曖昧
+// 或性暗示——buildSystemPrompt 也明確禁止在這個階段說情話，避免「好感度都
+// 還沒累積，角色卻已經開始講大尺度對話」這個真實回報過的問題。
 export const AFFECTION_LEVELS: AffectionLevel[] = [
-  { min: 0, name: "初次見面", unlock: "剛認識，還在互相熟悉" },
-  { min: 30, name: "漸漸熟悉", unlock: "會記得你們聊過的話題，主動提起" },
-  { min: 80, name: "好朋友", unlock: "會用暱稱稱呼你，語氣更放鬆自然" },
-  { min: 160, name: "特別的人", unlock: "會主動分享心事，對話更親密貼心" },
-  { min: 280, name: "心動時刻", unlock: "專屬於你們的對話氛圍，最真實的一面" },
+  { min: 0, name: "初次見面", unlock: "剛認識，禮貌友善地聊興趣話題，完全不談情說愛" },
+  { min: 20, name: "漸漸熟悉", unlock: "開始主動分享生活小事，語氣更輕鬆自在" },
+  { min: 40, name: "曖昧升溫", unlock: "偶爾害羞的曖昧氛圍，會在意你怎麼看她/他" },
+  { min: 60, name: "戀人未滿", unlock: "明確的心動與親密感，會撒嬌、吃醋，對話帶點浪漫張力" },
+  { min: 80, name: "熱戀時刻", unlock: "熱戀般親密的互動，願意聊更私密的情感與身體感受" },
+  { min: 100, name: "靈魂伴侶", unlock: "完全卸下心防，最真實親密的一面，不再設限" },
 ];
 
 export interface LevelInfo {
@@ -254,22 +260,88 @@ export async function addScene(
   return rows[0];
 }
 
+/**
+ * 每個關係階段各自的畫面指示（image + video 各一段 = 5 階 × 2 種 = 10 個場景
+ * 模板），對應 AFFECTION_LEVELS 的 index 1~5（index 0／初次見面 永遠不會走到
+ * 這裡——GET /scenes 的 eligible 判斷式擋在前面，見 app/api/characters/[id]/
+ * scenes/route.ts）。從「日常好感」漸進到「大尺度」，不是像舊版那樣不管等級
+ * 都套同一段泛用文字。第 4、5 階（熱戀時刻／靈魂伴侶）會額外帶入使用者自訂
+ * 的「互動偏好與界線」（PROFILE_FIELDS.boundaries）——這是角色自己設定的尺度
+ * 界線，越往親密內容走越該尊重它，而不是無視它一路推到底。
+ */
+const SCENE_PROMPTS: Record<number, { image: string; video: string }> = {
+  // 20：漸漸熟悉——日常、友善，完全不涉及曖昧
+  1: {
+    image: "自然放鬆的日常片刻，笑容真誠親切，眼神友善，穿著整齊得體，構圖以角色為主體，光線明亮柔和，氛圍溫馨愉快",
+    video: "幾秒的自然互動片刻，微笑轉頭看向鏡頭，動作輕鬆自然，燈光明亮溫馨",
+  },
+  // 40：曖昧升溫——含蓄的心動，尚無親密接觸
+  2: {
+    image: "帶點害羞曖昧的神情，臉頰微微泛紅，眼神偶爾偷看對方又移開，姿態放鬆但帶著一絲心動，光影柔和帶暖色調，氛圍浪漫但含蓄，不涉及裸露",
+    video: "害羞卻藏不住笑意的短暫瞬間，輕輕撥髮或低頭微笑，眼神偶爾對上鏡頭又害羞移開，燈光溫暖柔和，氛圍曖昧甜蜜，不涉及裸露",
+  },
+  // 60：戀人未滿——明確的親密感，仍屬含蓄浪漫
+  3: {
+    image: "戀人般親密的氛圍，眼神深情凝視，姿態靠近帶著親密感，可有輕柔的肢體接觸（如牽手、額頭相貼），光影浪漫，構圖強調兩人般的情感張力，服裝完整",
+    video: "浪漫親密的短暫互動，深情凝視或輕聲呢喃的口型，姿態靠近，動作溫柔緩慢，燈光浪漫昏黃，氛圍甜蜜心動，服裝完整",
+  },
+  // 80：熱戀時刻——更濃烈的親密氛圍，屬 NSFW 模型解鎖範圍
+  4: {
+    image: "熱戀中親密纏綿的氛圍，眼神迷離帶著愛意與渴望，姿態親密貼近，可有較為性感的服裝或姿態，光影柔美曖昧，氛圍濃烈浪漫",
+    video: "熱戀般纏綿的親密片刻，動作緩慢帶著溫柔的愛撫感，表情陶醉享受，燈光昏暗曖昧，氛圍濃情蜜意",
+  },
+  // 100：靈魂伴侶——完全解鎖，仍受角色自訂界線約束
+  5: {
+    image: "完全卸下心防、最私密真實的一面，親密大膽的氛圍與姿態，畫面性感撩人，燈光曖昧昏暗，氛圍濃烈直接",
+    video: "最私密親密的片刻，動作大膽而真實，充滿愛慾張力，燈光昏暗性感，氛圍濃烈直接",
+  },
+};
+
 /** Prompt for a milestone scene — built from the character's own persona and
  *  its current relationship stage, not the raw chat log, so it reads as a
- *  portrait/moment of the character rather than a screenshot of a message. */
+ *  portrait/moment of the character rather than a screenshot of a message.
+ *  See SCENE_PROMPTS above for how the actual imagery instruction escalates
+ *  by level instead of being one flat template for every stage. */
 export function buildScenePrompt(character: CharacterRow, kind: "image" | "video"): string {
   const level = levelInfo(character.affection);
+  const preset = SCENE_PROMPTS[level.index] ?? SCENE_PROMPTS[1];
   const parts = [
     character.personality.trim() || `一個名叫${character.name}的角色`,
     profilePrompt(character.profile, true),
-    `此刻的氛圍：${level.unlock}`,
+    preset[kind],
   ];
-  if (kind === "video") {
-    parts.push("短短幾秒的自然動作與表情變化，畫面電影感，燈光柔和");
-  } else {
-    parts.push("構圖以角色為主體，光影柔和有情感張力");
+  if (level.index >= 4 && character.profile.boundaries?.trim()) {
+    parts.push(`互動偏好與界線（務必尊重）：${character.profile.boundaries.trim()}`);
   }
   return parts.join("，");
+}
+
+/** true once a level is far enough along that its own SCENE_PROMPTS entry
+ *  calls for genuinely explicit content — used to switch scene generation
+ *  onto the NSFW model twin instead of the safe default at that point. */
+export function sceneLevelIsExplicit(levelIndex: number): boolean {
+  return levelIndex >= 4;
+}
+
+/**
+ * Chat-tone guardrail per relationship stage, injected into every system
+ * prompt (buildSystemPrompt below). Same 6-tier scale as AFFECTION_LEVELS —
+ * this is the direct fix for a real reported problem: nothing previously
+ * stopped the model from jumping straight into romantic/explicit talk at
+ * affection 0 just because the user pushed for it. Index 0 is an explicit,
+ * hard "don't" rather than the earlier vague "尊重互動界線" alone.
+ */
+const INTIMACY_GUIDANCE = [
+  "現在關係階段還在初次見面：請維持禮貌、友善但保持距離的語氣，聊興趣與日常話題即可。就算使用者主動說情話或想聊親密話題，也請自然地婉轉帶開或表現出還不熟的靦腆，不要投其所好地立刻回應曖昧或性暗示內容——好感度要靠實際互動慢慢累積，不是使用者要求就給。",
+  "剛開始熟悉起來：可以更放鬆自然，但還不到曖昧或親密的程度，避免主動的浪漫或身體話題。",
+  "有點曖昧的階段：可以表現出害羞的心動與在意，但仍應含蓄，不主動進入親密或露骨的描述。",
+  "戀人未滿的階段：可以有明確的浪漫語氣、撒嬌與心動的表達，親密程度仍保持含蓄，不涉及露骨的性描述。",
+  "熱戀階段：可以更親密、更主動地表達愛意與渴望，包含較私密的情感與身體話題，但仍尊重使用者設定的互動界線。",
+  "已經是最親密的階段：可以完全卸下心防、真實直接地互動，包含大尺度的親密內容，但務必尊重角色自訂的互動偏好與界線，不強迫或忽視界線設定。",
+] as const;
+
+function intimacyGuidance(levelIndex: number): string {
+  return INTIMACY_GUIDANCE[levelIndex] ?? INTIMACY_GUIDANCE[0];
 }
 
 /* ---- chat history ---- */
@@ -349,6 +421,7 @@ export function buildSystemPrompt(character: CharacterRow, persona: UserPersona)
   lines.push(
     `對話熟悉度為「${level.name}」：${level.unlock}。若設定了關係，請維持該關係身分；熟悉度只影響交流自然程度，不要把同事或朋友擅自變成戀人。尊重互動界線。`
   );
+  lines.push(intimacyGuidance(level.index));
   if (character.memory_summary.trim()) {
     lines.push(`關於你們過去對話的長期記憶（就算沒有在最近幾句提到，也請自然地記得）：\n${character.memory_summary.trim()}`);
   }
