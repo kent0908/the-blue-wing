@@ -8,6 +8,7 @@ import PersonaEditor from "./PersonaEditor";
 import CharacterBuilder from "./CharacterBuilder";
 import type { CharacterProfile } from "@/lib/characterProfile";
 import CharacterScenes from "./CharacterScenes";
+import CompanionIdleStage from "./CompanionIdleStage";
 
 export interface CharacterLevel {
   name: string;
@@ -134,8 +135,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
   };
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-col">
         <header className="flex shrink-0 items-center gap-3 border-b border-[#1c1c1c] px-5 py-3">
           <Link href="/companions" className="text-[#8a8a8a] transition-colors hover:text-white">
             <IconChevronLeft className="h-5 w-5" />
@@ -211,6 +211,9 @@ export default function CharacterChat({ character: initial }: { character: Chara
           </button>
         </header>
 
+      <div className="flex min-h-0 flex-1">
+        <CompanionIdleStage characterId={character.id} avatarSrc={character.avatarSrc} />
+        <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {toast && (
         <div
           className={[
@@ -315,9 +318,10 @@ export default function CharacterChat({ character: initial }: { character: Chara
         />
       )}
       {personaOpen && <PersonaEditor onClose={() => setPersonaOpen(false)} />}
-      </div>
+        </div>
 
-      {scenesOpen && <CharacterScenes characterId={character.id} onClose={() => setScenesOpen(false)} />}
+        {scenesOpen && <CharacterScenes characterId={character.id} onClose={() => setScenesOpen(false)} />}
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { validateProfile } from "@/lib/characterProfile";
 import { listCharacters, createCharacter, ownedAssetId, toPublicCharacter } from "@/lib/characters";
+import { startIdleVideoGeneration } from "@/lib/characterIdleVideo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,5 +40,17 @@ export async function POST(req: NextRequest) {
   const avatarAssetId = await ownedAssetId(r.user.id, Number(body?.avatarAssetId) || null);
 
   const row = await createCharacter(r.user.id, { name, avatarAssetId, personality, likes, profile });
+
+  // Best-effort: spend this month's free idle-video slot (if any is left) on
+  // the character's first loop right away. allowPaid:false means this is a
+  // genuine no-op (not an error) when the free slot is already used this
+  // month — never auto-charges. A SIRAYA submission failure here must never
+  // fail character creation itself.
+  try {
+    await startIdleVideoGeneration(r.user.id, row, { allowPaid: false });
+  } catch (err) {
+    console.error("auto idle-video generation failed for new character:", err);
+  }
+
   return NextResponse.json({ character: toPublicCharacter(row) }, { status: 201 });
 }

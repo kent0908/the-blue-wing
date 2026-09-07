@@ -238,9 +238,9 @@ ALTER TABLE characters ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '
 -- lib/landingMedia.ts) — one row per named slot ("hero", "video", "image",
 -- "canvas", "companions"...). Deliberately separate from `assets` (a per-user
 -- private library, served only to its owner) and from `home_blocks`/its
--- content_id (still used by /explore) — this is one fixed set of site-wide
--- slots an admin overrides, publicly readable by anyone via
--- /api/landing-media/[slot], not gated by ownership at all.
+-- content_id (still used by "/", the real 首頁 — see app/page.tsx) — this is
+-- one fixed set of site-wide slots an admin overrides, publicly readable by
+-- anyone via /api/landing-media/[slot], not gated by ownership at all.
 create table if not exists landing_media (
   slot         text primary key,
   kind         text not null check (kind in ('image','video')),
@@ -248,3 +248,33 @@ create table if not exists landing_media (
   content_type text not null,
   updated_at   timestamptz not null default now()
 );
+
+-- 陪聊角色的「待機影片」——聊天畫面裡持續循環播放的短片（見
+-- lib/characterIdleVideo.ts）。角色剛建立時，若該帳號本月的免費額度還沒用
+-- 掉，會自動用 Seedance 1.0 pro fast 生成一支（免費，不計入 credit_ledger 的
+-- 點數）；使用者也可以之後手動重新生成，額度用完後改成正常付費（預設
+-- NSFW-Seedance-2.0-mini，走跟其他生成一樣的 credit_ledger reason='video'
+-- charge/refund 機制）。多次生成的結果都保留在這裡，`is_active` 標記目前正
+-- 在使用中的那一支，使用者可以在清單裡任選一支切換。
+create table if not exists character_idle_videos (
+  id            bigint generated always as identity primary key,
+  character_id  bigint not null references characters(id) on delete cascade,
+  user_id       bigint not null references users(id) on delete cascade,
+  status        text not null default 'pending' check (status in ('pending','completed','failed')),
+  job_id        text,
+  model         text not null,
+  prompt        text not null,
+  url           text,
+  free          boolean not null default false,
+  credits_spent integer not null default 0,
+  is_active     boolean not null default false,
+  created_at    timestamptz not null default now()
+);
+create index if not exists character_idle_videos_char_idx on character_idle_videos(character_id, created_at desc);
+
+-- 每個帳號每個月只能用一次免費的待機影片生成額度——用跟 daily_free 一樣的
+-- 「delta=0 的 dedup 標記列」手法：ref 是當月的 "YYYY-MM"，插入時
+-- on conflict do nothing，插入成功才算真的拿到這個月的免費額度（見
+-- lib/characterIdleVideo.ts 的 claimFreeIdleQuota）。
+create unique index if not exists credit_ledger_idle_video_free_uidx
+  on credit_ledger(user_id, ref) where reason = 'idle_video_free';
