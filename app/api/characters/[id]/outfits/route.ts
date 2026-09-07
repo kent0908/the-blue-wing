@@ -41,7 +41,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       creditsSpent: c.credits_spent,
       retryUsed: c.retry_used,
       createdAt: c.created_at,
-      videos: videos.filter((v) => v.purchase_id === c.id).map(toPublicIdleVideo),
+      // Both ids are bigint columns, which come back from Postgres as
+      // strings — compare numerically rather than relying on both sides
+      // happening to stringify the same way.
+      videos: videos.filter((v) => Number(v.purchase_id) === Number(c.id)).map(toPublicIdleVideo),
     }));
 
     return NextResponse.json({

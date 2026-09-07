@@ -34,7 +34,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (!character) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
 
     const changes = await listOutfitChanges(id, r.user.id);
-    const change = changes.find((c) => c.id === changeId);
+    // c.id comes back from Postgres as a string (bigint column) — compare
+    // numerically, not by reference equality against the parsed number.
+    const change = changes.find((c) => Number(c.id) === changeId);
     if (!change) return NextResponse.json({ error: { message: "找不到這次換裝紀錄", code: "not_found" } }, { status: 404 });
 
     const video = await retryOutfitChange(r.user.id, character, change);
