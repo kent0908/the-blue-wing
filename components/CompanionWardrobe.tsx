@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconLock } from "./Icons";
+import { IconLock, IconChevronLeft, IconChevronRight } from "./Icons";
 
 interface OutfitIdleVideo {
   id: number;
@@ -18,10 +18,19 @@ interface OutfitChange {
   videos: OutfitIdleVideo[];
 }
 
+interface OutfitCatalogItem {
+  key: string;
+  label: string;
+  /** Admin-managed preview image — always null for now (no upload UI exists
+   *  yet for this), wired through so the card below already renders one the
+   *  moment that changes. */
+  imageUrl: string | null;
+}
+
 interface WardrobeData {
   eligible: boolean;
   cost: number;
-  catalog: { key: string; label: string }[];
+  catalog: OutfitCatalogItem[];
   changes: OutfitChange[];
 }
 
@@ -36,6 +45,7 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [busyRetryId, setBusyRetryId] = useState<number | null>(null);
+  const [open, setOpen] = useState(true);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aliveRef = useRef(true);
   const loadRef = useRef<() => void>(() => {});
@@ -113,9 +123,35 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
 
   const labelFor = (key: string) => data?.catalog.find((o) => o.key === key)?.label ?? key;
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="展開換裝衣櫃"
+        className="flex w-9 shrink-0 flex-col items-center gap-2 border-r border-[#1c1c1c] bg-[#050505] pt-4 text-[#8a8a8a] transition-colors hover:text-white"
+      >
+        <IconChevronRight className="h-4 w-4" />
+        <span className="text-[11px] tracking-widest" style={{ writingMode: "vertical-rl" }}>
+          換裝衣櫃
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="flex w-[300px] shrink-0 flex-col overflow-y-auto border-r border-[#1c1c1c] bg-[#050505] p-3">
-      <div className="mb-3 text-[13.5px] font-medium text-white">換裝衣櫃</div>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-[13.5px] font-medium text-white">換裝衣櫃</span>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="收合換裝衣櫃"
+          className="rounded-lg p-1 text-[#8a8a8a] transition-colors hover:text-white"
+        >
+          <IconChevronLeft className="h-4 w-4" />
+        </button>
+      </div>
 
       {!data && !error && <div className="mx-auto mt-8 h-6 w-6 animate-pulse rounded-full bg-[#1c1c1c]" />}
 
@@ -137,10 +173,18 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
                 type="button"
                 onClick={() => buy(o.key, o.label)}
                 disabled={!!busyKey}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-[#2a2a2a] bg-[#141414] px-2 py-3 text-center transition-colors hover:border-[#555] disabled:cursor-not-allowed disabled:opacity-50"
+                className="group relative flex flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-[#2a2a2a] bg-[#141414] px-2 py-3 text-center transition-colors hover:border-[#555] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <span className="text-[12.5px] font-medium text-white">{o.label}</span>
-                <span className="text-[10.5px] text-[#7ff0cd]">{busyKey === o.key ? "生成中…" : `${data.cost} 點`}</span>
+                {o.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element -- admin-managed preview, arbitrary source
+                  <img
+                    src={o.imageUrl}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover opacity-50 transition-opacity group-hover:opacity-70"
+                  />
+                )}
+                <span className="relative text-[12.5px] font-medium text-white">{o.label}</span>
+                <span className="relative text-[10.5px] text-[#7ff0cd]">{busyKey === o.key ? "生成中…" : `${data.cost} 點`}</span>
               </button>
             ))}
           </div>

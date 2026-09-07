@@ -50,7 +50,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return NextResponse.json({
       eligible: isOutfitUnlocked(character),
       cost: OUTFIT_CHANGE_COST,
-      catalog: OUTFIT_CATALOG.map((o) => ({ key: o.key, label: o.label })),
+      // imageUrl is always null for now — no admin-manageable preview image
+      // system exists yet for outfits (unlike lib/landingMedia.ts's slots).
+      // Wired through here so the client can already render one the moment
+      // that exists, without another round of frontend changes.
+      catalog: OUTFIT_CATALOG.map((o) => ({ key: o.key, label: o.label, imageUrl: null as string | null })),
       changes: changesOut,
     });
   } catch (err) {
