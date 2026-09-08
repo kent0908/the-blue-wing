@@ -23,6 +23,14 @@
 import { sql } from "./db";
 import type { AssetRow } from "./assets";
 import { readProfile, profilePrompt, type CharacterProfile } from "./characterProfile";
+import { AFFECTION_LEVELS, type AffectionLevel } from "./companionConstants";
+
+// Re-exported so every existing `import { AFFECTION_LEVELS } from
+// "@/lib/characters"` keeps working — the actual data now lives in
+// lib/companionConstants.ts (a dependency-free file client code can import
+// too, e.g. lib/supportFaq.ts — this file itself pulls in ./db and can't be
+// imported from a "use client" component).
+export { AFFECTION_LEVELS, type AffectionLevel };
 
 export const DEFAULT_CHARACTER_MODEL = "deepseek-v4-flash-0731";
 
@@ -46,26 +54,13 @@ export interface CharacterRow {
 }
 
 /* ---- 好感度階段 ---- */
-
-export interface AffectionLevel {
-  min: number;
-  name: string;
-  unlock: string;
-}
-
-// 2026-09-07 重新設計：改成 0/20/40/60/80/100 六個階段（原本是 0/30/80/160/
-// 280），配合 SCENE_PROMPTS 逐階段從「認識」漸進到「大尺度」，而不是像原本
-// 那樣不管等級都套同一段生成提示詞。第 0 階（初次見面）刻意保持完全沒有曖昧
-// 或性暗示——buildSystemPrompt 也明確禁止在這個階段說情話，避免「好感度都
-// 還沒累積，角色卻已經開始講大尺度對話」這個真實回報過的問題。
-export const AFFECTION_LEVELS: AffectionLevel[] = [
-  { min: 0, name: "初次見面", unlock: "剛認識，禮貌友善地聊興趣話題，完全不談情說愛" },
-  { min: 20, name: "漸漸熟悉", unlock: "開始主動分享生活小事，語氣更輕鬆自在" },
-  { min: 40, name: "曖昧升溫", unlock: "偶爾害羞的曖昧氛圍，會在意你怎麼看她/他" },
-  { min: 60, name: "戀人未滿", unlock: "明確的心動與親密感，會撒嬌、吃醋，對話帶點浪漫張力" },
-  { min: 80, name: "熱戀時刻", unlock: "熱戀般親密的互動，願意聊更私密的情感與身體感受" },
-  { min: 100, name: "靈魂伴侶", unlock: "完全卸下心防，最真實親密的一面，不再設限" },
-];
+// AFFECTION_LEVELS 本身定義在 lib/companionConstants.ts，這裡只 re-export
+// （見上方 import）——2026-09-07 重新設計成 0/20/40/60/80/100 六個階段
+// （原本是 0/30/80/160/280），配合 SCENE_PROMPTS 逐階段從「認識」漸進到
+// 「大尺度」，而不是像原本那樣不管等級都套同一段生成提示詞。第 0 階
+// （初次見面）刻意保持完全沒有曖昧或性暗示——buildSystemPrompt 也明確禁止
+// 在這個階段說情話，避免「好感度都還沒累積，角色卻已經開始講大尺度對話」
+// 這個真實回報過的問題。
 
 export interface LevelInfo {
   index: number;

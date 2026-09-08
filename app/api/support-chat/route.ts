@@ -3,7 +3,7 @@ import { limitRequest } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { createChatCompletion, type ChatMessage } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
-import { PLANS } from "@/lib/plans";
+import { faqAsPlainText } from "@/lib/supportFaq";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,25 +12,16 @@ const MODEL = "gemini-2.5-flash-lite";
 const MAX_TURNS = 20;
 const MAX_CHARS = 1000;
 
-const planLines = PLANS.map(
-  (p) => `- ${p.name}（${p.code}）：${p.priceUSD === 0 ? "免費" : "$" + p.priceUSD + "/月"}，每月 ${p.monthlyCredits} 點。${p.blurb}`
-).join("\n");
+// Same content the client renders as a browsable QA list
+// (components/SupportChat.tsx) — one source of truth (lib/supportFaq.ts)
+// instead of a hand-typed system prompt that quietly drifted out of date as
+// the product grew (it never mentioned 智慧畫布、3D導演台、圖層編輯、
+// 陪聊角色 at all). This is the fallback path for whatever a user types
+// that isn't one of the canned questions.
+const SYSTEM = `你是 The Blue Wing（一個 AI 影片／圖片／文字創作平台）的客服助手。用使用者的語言回答（預設繁體中文），簡潔、友善、只講與本平台相關的事。只根據下面的題庫內容回答，不要編造題庫沒提到的價格或功能；問到題庫沒有的東西，就老實說不確定，建議去 Discord 詢問或寄信給管理員。
 
-const SYSTEM = `你是 The Blue Wing（一個 AI 影片／圖片／文字創作平台）的客服助手。用使用者的語言回答（預設繁體中文），簡潔、友善、只講與本平台相關的事。
-
-平台重點：
-- 圖片生成：Seedream、Gemini、GPT-Image 等模型；可在輸入框旁「+ 素材」附參考圖做 image-to-image（Seedream / Gemini 支援）。
-- 影片生成：Seedance、Veo 等，依秒數計費。
-- 多輪對話、語音生成。
-- 資產庫（/assets）：上傳、管理自己的素材圖。
-- 帳號頁（/account）：查看點數餘額、點數紀錄、方案、改密碼。忘記密碼在登入頁點「忘記密碼」。
-- 點數：每次生成依模型與張數／秒數扣點；實際花費以生成後回應為準。
-
-方案：
-${planLines}
-目前金流尚未開放，付費方案請聯絡管理員開通。
-
-不知道或超出範圍的問題，請建議使用者到 Discord 詢問或寄信給管理員。不要編造價格或功能。`;
+題庫：
+${faqAsPlainText()}`;
 
 /** POST /api/support-chat  { messages: {role,content}[] } — no auth, no credits. */
 export async function POST(req: NextRequest) {

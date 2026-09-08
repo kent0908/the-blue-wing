@@ -24,13 +24,17 @@ import { readProfile, PROFILE_FIELDS, type ProfileKey } from "./characterProfile
 import { levelInfo, type CharacterRow } from "./characters";
 import { IDLE_POSITIVE_TEMPLATE, IDLE_NEGATIVE_PROMPT, setActiveIdleVideo, type IdleVideoRow } from "./characterIdleVideo";
 import { SirayaApiError } from "./siraya";
+import { OUTFIT_CHANGE_COST, OUTFIT_UNLOCK_LEVEL_INDEX } from "./companionConstants";
 
-export const OUTFIT_CHANGE_COST = 500;
+// Re-exported (data itself now lives in lib/companionConstants.ts, a
+// dependency-free file client code can also import — e.g. lib/supportFaq.ts)
+// so every existing `import { OUTFIT_CHANGE_COST } from "@/lib/characterOutfits"`
+// keeps working.
+export { OUTFIT_CHANGE_COST, OUTFIT_UNLOCK_LEVEL_INDEX };
+
 export const OUTFIT_MODEL = "NSFW-Seedance-2.0-mini";
 export const OUTFIT_SECONDS = 10;
 export const OUTFIT_RESOLUTION = "720p";
-/** Same threshold as lib/characters.ts's sceneLevelIsExplicit — 熱戀時刻 (affection 80). */
-export const OUTFIT_UNLOCK_LEVEL_INDEX = 4;
 
 export interface OutfitOption {
   key: string;
