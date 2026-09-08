@@ -15,8 +15,19 @@ import {
   IconAssets,
   IconCollapse,
   IconWing,
+  IconDiscord,
+  IconX,
+  IconInstagram,
 } from "./Icons";
 import { modelBadgeFor } from "@/lib/modelBadge";
+
+// 2026-09-08：社群連結，暫時都是 "#" 佔位——真正的邀請連結/帳號網址還沒拿到，
+// 先把版面跟圖示排好，之後換成真的網址只需要改這裡三個值。
+const SOCIAL_LINKS: { href: string; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
+  { href: "#", label: "Discord", icon: IconDiscord },
+  { href: "#", label: "X", icon: IconX },
+  { href: "#", label: "Instagram", icon: IconInstagram },
+];
 
 type Badge = { text: string; tone: "hot" | "new" };
 type Item = {
@@ -247,6 +258,23 @@ function SidebarInner() {
       </nav>
 
       <div className="px-3 pb-4">
+        {!collapsed && (
+          <div className="mb-2 flex items-center gap-1.5 border-t border-[#1e1e1e] px-1 pt-3">
+            {SOCIAL_LINKS.map((s) => (
+              <a
+                key={s.label}
+                href={s.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={s.label}
+                title={s.label}
+                className="grid h-8 w-8 place-items-center rounded-lg text-[#8a8a8a] transition-colors hover:bg-[#161616] hover:text-white"
+              >
+                <s.icon className="h-4 w-4" />
+              </a>
+            ))}
+          </div>
+        )}
 
         <button
           onClick={() => setCollapsed((v) => !v)}
