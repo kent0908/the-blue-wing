@@ -44,7 +44,6 @@ type Item = {
 
 const GROUP_A: Item[] = [
   { href: "/", label: "首頁", icon: IconHome },
-  { href: "/landing", label: "啟程", icon: IconWing },
   { href: "/studio?mode=image", label: "圖片生成", icon: IconImage, modelModality: "image" },
   { href: "/studio?mode=video", label: "影片生成", icon: IconVideo, badge: { text: "HOT", tone: "hot" }, modelModality: "video" },
   { href: "/studio?mode=audio", label: "文字創作", icon: IconAudio },
@@ -263,6 +262,7 @@ function SidebarInner() {
       </nav>
 
       <div className="px-3 pb-4">
+        <NavLink item={{ href: "/landing", label: "返回啟程", icon: IconWing }} active={isActive("/landing")} collapsed={collapsed} />
         {!collapsed && (
           <div className="mb-2 flex items-center gap-1.5 border-t border-[#1e1e1e] px-1 pt-3">
             {SOCIAL_LINKS.map((s) => (

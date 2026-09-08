@@ -164,7 +164,7 @@ function StudioInner() {
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 pt-16">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-3 pt-16 lg:px-5">
           {activeJob ? (
             <ActiveJobCard job={activeJob} onMinimize={() => minimizeJob(activeJob.id)} onDismiss={() => dismissJob(activeJob.id)} />
           ) : latest ? (
@@ -177,8 +177,8 @@ function StudioInner() {
           ) : null}
         </div>
 
-        <div className="px-3 pb-4 sm:px-8 sm:pb-8">
-          <div className="mx-auto w-full max-w-[840px]">
+        <div className="px-3 pb-4 lg:px-5 sm:pb-8">
+          <div className="w-full">
             <JobQueue jobs={jobs} onDismiss={dismissJob} />
             {atCapacity && (
               <p className="mb-2 text-center text-[11.5px] text-[#f0c27f]">
@@ -281,7 +281,7 @@ function MainViewerItem({ item }: { item: ResultItem }) {
   const [broken, setBroken] = useState(false);
   if(item.layerSetId) return <LayerDecompositionResult id={item.layerSetId}/>;
   return (
-    <div className="w-full max-w-3xl py-8">
+    <div className="w-full py-8">
       <div className="relative">
         {(item.kind === "image" || item.kind === "video") && item.url && (
           <ExpiringMedia

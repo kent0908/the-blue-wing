@@ -814,7 +814,7 @@ export default function Composer({
           watermarkSupported={watermarkSupported}
         />
 
-        <div className="ml-auto mr-12 flex items-center gap-3 sm:mr-0">
+        <div className="ml-auto mr-14 flex items-center gap-3">
           {isAdmin && <span data-testid="admin-provider-estimate" className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="服務商成本預估，僅管理員可見；站內扣點依既定費率">
             預估 {formatUSD(cost)}
           </span>}

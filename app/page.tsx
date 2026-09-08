@@ -46,8 +46,7 @@ function hrefFor(b: Block): string {
 
 // Restored 2026-09-07: this is the real 首頁 — it had been displaced by the
 // marketing/intro page (now its own independent route, app/landing/page.tsx)
-// when that was first built. The "返回啟程" button below is the way back to
-// that intro experience from inside the app.
+// when that was first built. The sidebar footer links back to that experience.
 export default function HomePage() {
   const router = useRouter();
 
@@ -164,12 +163,6 @@ export default function HomePage() {
       </div>
 
       <div className="pointer-events-none sticky bottom-6 flex flex-col items-center justify-center gap-3 px-6 xl:flex-row">
-        <Link
-          href="/landing"
-          className="pointer-events-auto flex items-center xl:absolute xl:left-6 gap-1.5 rounded-full border border-[#2a2a2a] bg-[#161616]/95 px-4 py-2 text-[12.5px] text-[#c9c9c9] backdrop-blur transition-colors hover:text-white"
-        >
-          ← 返回啟程
-        </Link>
         <div className="pointer-events-auto flex w-full max-w-[600px] items-center gap-3 rounded-full border border-[#2a2a2a] bg-[#161616]/95 py-2 pl-3 pr-2 backdrop-blur">
           <button aria-label="前往素材庫" onClick={() => router.push("/assets")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#242424] text-[#9a9a9a] transition-colors hover:text-white">
             <IconPlus className="h-4 w-4" />
