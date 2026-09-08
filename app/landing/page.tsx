@@ -64,13 +64,16 @@ export default async function LandingPage(){
          <f.icon className={styles.placeholderIcon}/><span>{index===0?'靈感，從這裡展開':'更多作品，敬請期待'}</span><small>{index===0?'CREATE YOUR NEXT STORY':'TO BE CONTINUED'}</small>
         </div>}
         <div className={styles.cardCaption}><span>{String(index+1).padStart(2,'0')}</span><span>{index===0?'精選展示':m?'延伸作品':'即將展開'}</span></div>
-         <Link href="/" className={styles.floatHome}>→ 前往首頁</Link>
 </div>;
       })}
     </div>
   </section>)}</div>
   <section className={styles.closing}><ClosingGlow/><p className={styles.eyebrow}>PEOPLE + AI, TOGETHER</p><h2>Blue Wing——人與AI，<br/>共同振翅，邁向未來。</h2><Link href="/studio?mode=image" className={styles.primary}>立即開始 <IconArrowRight className="h-5 w-5"/></Link></section>
   <footer className={styles.footer}><span>The Blue Wing</span><div><Link href="/">回到首頁</Link><Link href="/help">使用說明</Link><Link href="/login">登入帳號</Link></div></footer>
+  {/* One fixed bottom-left shortcut into the app. Page-level on purpose — a
+      2026-09-08 merge had pulled this inside the gallery-card .map(), which
+      rendered 12 identical position:fixed links stacked on the same spot. */}
+  <Link href="/" className={styles.floatHome}>→ 前往首頁</Link>
 </div>;
 }
 
