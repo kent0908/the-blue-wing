@@ -19,7 +19,7 @@ import {
   IconX,
   IconInstagram,
 } from "./Icons";
-import { modelBadgeFor } from "@/lib/modelBadge";
+import ModelLogo from "./ModelLogo";
 
 // 2026-09-08：社群連結，暫時都是 "#" 佔位——真正的邀請連結/帳號網址還沒拿到，
 // 先把版面跟圖示排好，之後換成真的網址只需要改這裡三個值。
@@ -122,20 +122,12 @@ function ModelFlyoutPortal({
     >
       <div className="px-2 pb-1.5 pt-1 text-[11px] text-[#8a8a8a]">模型</div>
       {list.length === 0 && <div className="px-2 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</div>}
-      {list.map((m) => {
-        const badge = modelBadgeFor(m.id);
-        return (
-          <Link key={m.id} href={`/studio?mode=${state.modality}&model=${encodeURIComponent(m.id)}`} className="bw-menu-item">
-            <span
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[10.5px] font-semibold"
-              style={{ background: badge.bg, color: badge.fg }}
-            >
-              {badge.letter}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[13px]">{m.displayName}</span>
-          </Link>
-        );
-      })}
+      {list.map((m) => (
+        <Link key={m.id} href={`/studio?mode=${state.modality}&model=${encodeURIComponent(m.id)}`} className="bw-menu-item">
+          <ModelLogo id={m.id} size={28} />
+          <span className="min-w-0 flex-1 truncate text-[13px]">{m.displayName}</span>
+        </Link>
+      ))}
     </div>,
     document.body
   );

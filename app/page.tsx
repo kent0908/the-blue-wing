@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import HeroCarousel from "@/components/HeroCarousel";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
-import { modelBadgeFor } from "@/lib/modelBadge";
+import ModelLogo from "@/components/ModelLogo";
 
 interface Block {
   id: number;
@@ -121,17 +121,8 @@ export default function HomePage() {
                 // eslint-disable-next-line @next/next/no-img-element -- public content proxy
                 <img src={m.imageUrl} alt="" className="h-24 w-full object-cover" />
               ) : m.modelId ? (
-                // Real per-model "logo" mark (lib/modelBadge.ts) — not an
-                // actual brand logo image (no redistribution rights for
-                // those), same deliberate substitute already used in the
-                // Composer's model picker.
                 <div className="grid h-24 w-full place-items-center bg-[#181818]">
-                  <span
-                    className="grid h-11 w-11 place-items-center rounded-xl text-[15px] font-semibold"
-                    style={{ background: modelBadgeFor(m.modelId).bg, color: modelBadgeFor(m.modelId).fg }}
-                  >
-                    {modelBadgeFor(m.modelId).letter}
-                  </span>
+                  <ModelLogo id={m.modelId} size={44} />
                 </div>
               ) : (
                 <div className="grid h-24 w-full place-items-center bg-[#181818]">

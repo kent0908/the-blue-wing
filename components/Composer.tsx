@@ -33,7 +33,7 @@ import {
 } from "@/lib/imageModels";
 import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
 import { AUDIO_MODELS } from "@/lib/audioModels";
-import { modelBadgeFor } from "@/lib/modelBadge";
+import ModelLogo from "@/components/ModelLogo";
 
 interface RefAsset {
   id: number;
@@ -714,34 +714,26 @@ export default function Composer({
                   {loadingModels ? "載入中…" : "此模式目前沒有可用模型"}
                 </div>
               )}
-              {available.map((m) => {
-                const badge = modelBadgeFor(m.id);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className="bw-menu-item"
-                    onClick={() => {
-                      setModel(m.id);
-                      setImgEdits({});
-                      if (!supportsRefImages(getImageModelForControls(m.id))) {
-                        setRefs([]);
-                        setRefPicker(false);
-                      }
-                      close();
-                    }}
-                  >
-                    <span
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[11px] font-semibold"
-                      style={{ background: badge.bg, color: badge.fg }}
-                    >
-                      {badge.letter}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[13.5px]">{m.displayName ?? getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
-                    {m.id === resolvedModel && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
-                  </button>
-                );
-              })}
+              {available.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className="bw-menu-item"
+                  onClick={() => {
+                    setModel(m.id);
+                    setImgEdits({});
+                    if (!supportsRefImages(getImageModelForControls(m.id))) {
+                      setRefs([]);
+                      setRefPicker(false);
+                    }
+                    close();
+                  }}
+                >
+                  <ModelLogo id={m.id} size={32} />
+                  <span className="min-w-0 flex-1 truncate text-[13.5px]">{m.displayName ?? getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
+                  {m.id === resolvedModel && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              ))}
             </div>
           )}
         </Popover>
