@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import HeroCarousel from "@/components/HeroCarousel";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
+import { modelBadgeFor } from "@/lib/modelBadge";
 
 interface Block {
   id: number;
@@ -18,7 +19,7 @@ interface Block {
 }
 
 const DEFAULT_SHOWCASE: Block[] = [
-  { id: -1, title: "Seedance 2.0", subtitle: "電影級影片生成", badge: "熱門", imageUrl: null, targetMode: "video", modelId: null, prompt: null },
+  { id: -1, title: "Seedance 2.0", subtitle: "電影級影片生成", badge: "熱門", imageUrl: null, targetMode: "video", modelId: "SIRAYA-Seedance-2.0", prompt: null },
   { id: -2, title: "GPT-Image-2", subtitle: "更清晰的圖像創作", badge: null, imageUrl: null, targetMode: "image", modelId: "gpt-image-2", prompt: null },
   { id: -3, title: "Seedream 5.0 Pro", subtitle: "生產級視覺創作", badge: null, imageUrl: null, targetMode: "image", modelId: "Dola-Seedream-5.0-pro", prompt: null },
   { id: -4, title: "Veo 3.1", subtitle: "原生音軌、電影級畫面", badge: "新", imageUrl: null, targetMode: "video", modelId: "veo-3.1-generate-001", prompt: null },
@@ -59,8 +60,23 @@ export default function HomePage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!j) return;
-        if (Array.isArray(j.showcase) && j.showcase.length) setShowcase(j.showcase.filter((b: Block) => b.title?.trim()));
-        if (Array.isArray(j.template) && j.template.length) setTemplates(j.template.filter((b: Block) => b.title?.trim()));
+        // Real bug found 2026-09-08: an admin config with SOME rows but all
+        // of them blank-titled (e.g. one half-filled-in draft row) used to
+        // wipe out the built-in DEFAULT_SHOWCASE/DEFAULT_TEMPLATES entirely —
+        // `j.showcase.length` was truthy (one row), so this always called
+        // setShowcase, and the .filter() then produced an empty array,
+        // leaving the row on the live site down to just the one hardcoded
+        // "Seedance 2.5" card with nothing beside it. Only replace the
+        // defaults when there's at least one REAL (non-blank-title) row to
+        // show instead.
+        if (Array.isArray(j.showcase)) {
+          const real = j.showcase.filter((b: Block) => b.title?.trim());
+          if (real.length) setShowcase(real);
+        }
+        if (Array.isArray(j.template)) {
+          const real = j.template.filter((b: Block) => b.title?.trim());
+          if (real.length) setTemplates(real);
+        }
       })
       .catch(() => {});
   }, []);
@@ -77,7 +93,7 @@ export default function HomePage() {
 
         <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <Link
-            href="/studio?mode=video"
+            href="/studio?mode=video&model=SIRAYA-Seedance-2.5"
             className="relative flex flex-col justify-center overflow-hidden rounded-xl p-5"
             style={{ background: "linear-gradient(115deg,#4fd1c5 0%,#3aa8e0 55%,#1d7fd6 100%)" }}
           >
@@ -104,6 +120,19 @@ export default function HomePage() {
               {m.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- public content proxy
                 <img src={m.imageUrl} alt="" className="h-24 w-full object-cover" />
+              ) : m.modelId ? (
+                // Real per-model "logo" mark (lib/modelBadge.ts) — not an
+                // actual brand logo image (no redistribution rights for
+                // those), same deliberate substitute already used in the
+                // Composer's model picker.
+                <div className="grid h-24 w-full place-items-center bg-[#181818]">
+                  <span
+                    className="grid h-11 w-11 place-items-center rounded-xl text-[15px] font-semibold"
+                    style={{ background: modelBadgeFor(m.modelId).bg, color: modelBadgeFor(m.modelId).fg }}
+                  >
+                    {modelBadgeFor(m.modelId).letter}
+                  </span>
+                </div>
               ) : (
                 <div className="grid h-24 w-full place-items-center bg-[#181818]">
                   <IconModel className="h-7 w-7 text-white" />

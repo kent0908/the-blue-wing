@@ -28,6 +28,10 @@ const features=[
 // home-blocks-driven page, moved back from app/explore/page.tsx); this page
 // is a standalone landing experience reachable via the home page's
 // bottom-left "返回啟程" button, or directly by URL for anonymous visitors.
+// 2026-09-08: added the reverse — a fixed bottom-left "→ 前往首頁" link here
+// too (styles.floatHome), so someone who lands here directly has the same
+// one-click way into the real app instead of only the footer link at the
+// very bottom of the page.
 export default async function LandingPage(){
   const media = await getLandingMediaMap();
   return <div className={styles.page}>
@@ -72,5 +76,6 @@ export default async function LandingPage(){
   })}</div>
   <section className={styles.closing}><p className={styles.eyebrow}>PEOPLE + AI, TOGETHER</p><h2>Blue Wing——人與AI，<br/>共同振翅，邁向未來。</h2><Link href="/studio?mode=image" className={styles.primary}>立即開始 <IconArrowRight className="h-5 w-5"/></Link></section>
   <footer className={styles.footer}><span>The Blue Wing</span><div><Link href="/">回到首頁</Link><Link href="/help">使用說明</Link><Link href="/login">登入帳號</Link></div></footer>
+  <Link href="/" className={styles.floatHome}>→ 前往首頁</Link>
 </div>;
 }
