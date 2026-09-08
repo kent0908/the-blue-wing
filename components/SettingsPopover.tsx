@@ -5,11 +5,12 @@ import { videoResolutionsForModel, normalizeVideoResolution } from "@/lib/videoM
 import { IconRatio, IconReset } from "./Icons";
 import {
   ASPECT_RATIOS,
-  IMAGE_SIZES,
   DEFAULT_SETTINGS,
   type GenSettings,
   type Mode,
 } from "@/lib/types";
+import { videoConstraintFor } from "@/lib/videoModels";
+import { sizeOptionsFor } from "@/lib/imageModels";
 
 function Choice({
   value,
@@ -44,13 +45,19 @@ export default function SettingsPopover({
   modelId,
   settings,
   onChange,
+  model,
 }: {
   mode: Mode;
   modelId?: string | null;
   settings: GenSettings;
   onChange: (s: GenSettings) => void;
+  /** currently selected model id — looks up which resolutions/duration (video, lib/videoModels.ts) or sizes (image, lib/imageModels.ts) it actually supports, instead of one flat list shared by every model. */
+  model?: string;
 }) {
   const set = (patch: Partial<GenSettings>) => onChange({ ...settings, ...patch });
+  const selectedModel = modelId ?? model;
+  const videoConstraint = mode === "video" ? videoConstraintFor(selectedModel) : null;
+  const imageSizeOptions = mode === "image" ? sizeOptionsFor(selectedModel) : null;
 
   const summary =
     mode === "video"
@@ -82,7 +89,7 @@ export default function SettingsPopover({
             </span>
             <button
               type="button"
-              onClick={() => onChange({ ...DEFAULT_SETTINGS, ...(mode === "video" ? { resolution: normalizeVideoResolution(modelId, DEFAULT_SETTINGS.resolution) } : {}) })}
+              onClick={() => onChange({ ...DEFAULT_SETTINGS, ...(mode === "video" ? { resolution: normalizeVideoResolution(selectedModel, DEFAULT_SETTINGS.resolution), seconds: Math.min(DEFAULT_SETTINGS.seconds, videoConstraintFor(selectedModel).maxSeconds) } : {}) })}
               className="flex items-center gap-1 text-[12px] text-[#8a8a8a] transition-colors hover:text-white"
             >
               <IconReset className="h-[13px] w-[13px]" />
@@ -108,38 +115,40 @@ export default function SettingsPopover({
               </>
             )}
 
-            {mode === "video" && (
+            {mode === "video" && videoConstraint && (
               <>
                 <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">解析度</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {videoResolutionsForModel(modelId).map((r) => (
+                  {videoResolutionsForModel(selectedModel).map((r) => (
                     <Choice key={r} value={r} active={settings.resolution === r} onClick={() => set({ resolution: r })} />
                   ))}
                 </div>
 
-                <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">時長</div>
+                <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">
+                  時長{videoConstraint.maxSeconds < 30 && <span className="text-[#6d6d6d]">（此模型最長 {videoConstraint.maxSeconds} 秒）</span>}
+                </div>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
                     min={2}
-                    max={30}
+                    max={videoConstraint.maxSeconds}
                     step={1}
-                    value={settings.seconds}
+                    value={Math.min(settings.seconds, videoConstraint.maxSeconds)}
                     onChange={(e) => set({ seconds: Number(e.target.value) })}
                     className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-[#333] accent-white"
                   />
                   <div className="grid h-9 w-14 place-items-center rounded-lg bg-[#232323] text-[13px]">
-                    {settings.seconds}
+                    {Math.min(settings.seconds, videoConstraint.maxSeconds)}
                   </div>
                 </div>
               </>
             )}
 
-            {mode === "image" && (
+            {mode === "image" && imageSizeOptions && (
               <>
                 <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">尺寸</div>
                 <div className="grid grid-cols-2 gap-2">
-                  {IMAGE_SIZES.map((s) => (
+                  {imageSizeOptions.map((s) => (
                     <Choice key={s} value={s} active={settings.size === s} onClick={() => set({ size: s })} />
                   ))}
                 </div>

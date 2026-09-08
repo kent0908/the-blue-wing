@@ -18,8 +18,19 @@ import {
   IconAssets,
   IconCollapse,
   IconWing,
+  IconDiscord,
+  IconX,
+  IconInstagram,
 } from "./Icons";
-import { modelBadgeFor } from "@/lib/modelBadge";
+import ModelLogo from "./ModelLogo";
+
+// 2026-09-08：社群連結，暫時都是 "#" 佔位——真正的邀請連結/帳號網址還沒拿到，
+// 先把版面跟圖示排好，之後換成真的網址只需要改這裡三個值。
+const SOCIAL_LINKS: { href: string; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
+  { href: "#", label: "Discord", icon: IconDiscord },
+  { href: "#", label: "X", icon: IconX },
+  { href: "#", label: "Instagram", icon: IconInstagram },
+];
 
 type Badge = { text: string; tone: "hot" | "new" };
 type Item = {
@@ -115,19 +126,13 @@ function ModelFlyoutPortal({
       <div className="px-2 pb-1.5 pt-1 text-[11px] text-[#8a8a8a]">模型</div>
       {list.length === 0 && <div className="px-2 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</div>}
       {list.map((m) => {
-        const badge = modelBadgeFor(m.id);
         return (
           <Link onMouseEnter={(e) => setSub({id:m.id,top:Math.min(e.currentTarget.getBoundingClientRect().top,window.innerHeight-300)})} onFocus={(e) => setSub({id:m.id,top:Math.min(e.currentTarget.getBoundingClientRect().top,window.innerHeight-300)})} key={m.id} href={`/studio?mode=${state.modality}&model=${encodeURIComponent(m.id)}`} className="bw-menu-item"
             onClick={(event) => {
               if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
               window.dispatchEvent(new CustomEvent("bluewing:model-select", { detail: { mode: state.modality, model: m.id } }));
             }}>
-            <span
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[10.5px] font-semibold"
-              style={{ background: badge.bg, color: badge.fg }}
-            >
-              {badge.letter}
-            </span>
+            <ModelLogo id={m.id} size={28} />
             <span className="min-w-0 flex-1 truncate text-[13px]">{modelLabel(m.displayName)}</span><span aria-hidden="true">›</span>
           </Link>
         );
@@ -258,6 +263,23 @@ function SidebarInner() {
       </nav>
 
       <div className="px-3 pb-4">
+        {!collapsed && (
+          <div className="mb-2 flex items-center gap-1.5 border-t border-[#1e1e1e] px-1 pt-3">
+            {SOCIAL_LINKS.map((s) => (
+              <a
+                key={s.label}
+                href={s.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={s.label}
+                title={s.label}
+                className="grid h-8 w-8 place-items-center rounded-lg text-[#8a8a8a] transition-colors hover:bg-[#161616] hover:text-white"
+              >
+                <s.icon className="h-4 w-4" />
+              </a>
+            ))}
+          </div>
+        )}
 
         <button
           onClick={() => setCollapsed((v) => !v)}

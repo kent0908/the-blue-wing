@@ -35,10 +35,10 @@ import {
   MAX_REF_IMAGES,
   type ImageControlValues,
 } from "@/lib/imageModels";
-import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
+import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput, videoConstraintFor } from "@/lib/videoModels";
 import { supportsImageWatermark, supportsVideoWatermark } from "@/lib/watermark";
 import { AUDIO_MODELS } from "@/lib/audioModels";
-import { modelBadgeFor } from "@/lib/modelBadge";
+import ModelLogo from "@/components/ModelLogo";
 
 interface RefAsset {
   id: number;
@@ -142,8 +142,10 @@ export default function Composer({
     return () => window.removeEventListener("bluewing:model-select", selectFromSidebar);
   }, [mode]);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  // Long prompts expand automatically until the user explicitly chooses a size.
+  const [manualExpand, setManualExpand] = useState<boolean | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const isExpanded = manualExpand ?? prompt.length > 200;
 
   /* ---- reference materials (image-to-image / Seedance multi-reference video) ---- */
   const [refs, setRefs] = useState<RefAsset[]>(initialRefs ?? []);
@@ -302,7 +304,7 @@ export default function Composer({
     [activeImageModel, imgEdits]
   );
 
-  const effectiveSettings = mode === "video" ? { ...settings, resolution: normalizeVideoResolution(resolvedModel, settings.resolution) } : settings;
+  const effectiveSettings = mode === "video" ? { ...settings, resolution: normalizeVideoResolution(resolvedModel, settings.resolution), seconds: Math.min(settings.seconds, videoConstraintFor(resolvedModel).maxSeconds) } : settings;
   const imageCount = operation === "layer-separation" ? 17 : activeImageModel ? Number(imgValues.n ?? 1) : settings.imageCount;
 
   const cost = useMemo(
@@ -313,13 +315,13 @@ export default function Composer({
         prompt,
         maxTokens: settings.maxTokens,
         imageCount,
-        seconds: settings.seconds,
+        seconds: effectiveSettings.seconds,
       }),
-    [resolvedModel, modalityForMode, prompt, settings, imageCount]
+    [resolvedModel, modalityForMode, prompt, settings, imageCount, effectiveSettings.seconds]
   );
 
   const credits =
-    creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: settings.seconds, maxTokens: settings.maxTokens, resolution: effectiveSettings.resolution });
+    creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: effectiveSettings.seconds, maxTokens: settings.maxTokens, resolution: effectiveSettings.resolution });
   const modeRefsValid = operation === "layer-separation" ? refs.length===1 : operation === "first-last-frame" ? refs.length === 2 && !providerIds.length : operation === "image-to-video" ? refs.length === 1 && !providerIds.length : operation === "subject-reference" ? refs.length+providerIds.length>0 : true;
   const canSubmit = modeRefsValid && (operation === "layer-separation" || !!prompt.trim()) && !!resolvedModel && !busy && credits !== null && (mode !== "video" || !!effectiveSettings.resolution);
 
@@ -442,6 +444,7 @@ export default function Composer({
     setLayerConfirm(false);
     setProviderSelection({model:"",operation:"",ids:[]});
     setPrompt("");
+    setManualExpand(null);
     setRefs([]);
     setRefPicker(false);
     setMention(null);
@@ -452,7 +455,7 @@ export default function Composer({
     <div
       className={[
         "rounded-2xl border border-[#2a2a2a] bg-[#161616] transition-all",
-        expanded ? "min-h-[260px]" : "",
+        isExpanded ? "min-h-[260px]" : "",
       ].join(" ")}
     >
       {(mode==="image"||mode==="video") && operations.length>0 && <GenerationModePanel model={resolvedModel} kind={mode} operation={operation} selected={providerIds} onSelected={ids=>setProviderSelection({model:resolvedModel,operation,ids})} onOperation={value=>{const query=new URLSearchParams(modeParams.toString());query.set("mode",mode);query.set("model",resolvedModel);query.set("operation",value);modeRouter.replace(`/studio?${query}`,{scroll:false});setRefs([]);}} />}
@@ -603,9 +606,16 @@ export default function Composer({
               setTimeout(() => setMention(null), 120);
             }}
             placeholder={canUseRefs && refs.length > 0 ? `${PLACEHOLDER[mode]}（可打 @ 標記素材）` : PLACEHOLDER[mode]}
-            rows={expanded ? 8 : 3}
+            rows={isExpanded ? 8 : 3}
             className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
-            style={{ maxHeight: expanded ? 320 : 92, overflowY: "auto" }}
+            // A flat 320px was the original "expanded" cap — nowhere near
+            // enough for a genuinely long multi-scene prompt (a real one hit
+            // ~1500+ characters), so scrolling that tiny a window through a
+            // wall of text to find the top again felt broken even though it
+            // was technically scrollable. Scaling with the viewport instead
+            // gives real room on real screens while still guaranteeing the
+            // submit button below it never gets pushed off-screen.
+            style={{ maxHeight: isExpanded ? "55vh" : 92, overflowY: "auto" }}
           />
 
           {mention && (
@@ -662,8 +672,8 @@ export default function Composer({
 
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-label={expanded ? "收合" : "展開"}
+          onClick={() => setManualExpand(!isExpanded)}
+          aria-label={isExpanded ? "收合" : "展開"}
           className="absolute right-4 top-4 text-[#7a7a7a] transition-colors hover:text-white"
         >
           <IconExpand className="h-4 w-4" />
@@ -743,7 +753,6 @@ export default function Composer({
                 </div>
               )}
               {available.map((m) => {
-                const badge = modelBadgeFor(m.id);
                 return (
                   <button
                     key={m.id}
@@ -759,12 +768,7 @@ export default function Composer({
                       close();
                     }}
                   >
-                    <span
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[11px] font-semibold"
-                      style={{ background: badge.bg, color: badge.fg }}
-                    >
-                      {badge.letter}
-                    </span>
+                    <ModelLogo id={m.id} size={32} />
                     <span className="min-w-0 flex-1 truncate text-[13.5px]">{modelLabel(m.displayName ?? getImageModel(m.id)?.name ?? m.id)}</span>
                     {m.id === resolvedModel && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
                   </button>

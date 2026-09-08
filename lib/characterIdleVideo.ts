@@ -20,7 +20,7 @@ export const PAID_IDLE_MODEL = "NSFW-Seedance-2.0-mini";
 // spec. Character-specific appearance is prepended as its own paragraph
 // (buildIdlePrompt below), never spliced into this sentence, so this template
 // itself never drifts between characters.
-const IDLE_POSITIVE_TEMPLATE =
+export const IDLE_POSITIVE_TEMPLATE =
   "Vertical 9:16 full-body portrait of an RPG game character, character fills the frame from head to feet with minimal margins, centered frontal view, eye-level angle, static fixed camera, locked-off shot. Subtle idle animation, breathing naturally, occasional subtle body sway. Soft breeze blowing, causing gentle hair sway and slight fabric movement. Lips gently closed and relaxed throughout, no talking, no lip-sync, calm facial expression, blinking naturally. Clean solid dark background or subtle atmospheric RPG interior, high fantasy aesthetic, sharp focus, 2D visual novel sprite style / Live2D aesthetic, cinematic lighting, 4k.";
 
 export const IDLE_NEGATIVE_PROMPT =
@@ -74,6 +74,8 @@ export interface IdleVideoRow {
   free_marker_id: number | null;
   charge_id: number | null;
   refund_done: boolean;
+  outfit_key: string | null;
+  purchase_id: number | null;
 }
 
 export interface PublicIdleVideo {
@@ -86,6 +88,8 @@ export interface PublicIdleVideo {
   createdAt: string;
   needsReview: boolean;
   message: string | null;
+  outfitKey: string | null;
+  purchaseId: number | null;
 }
 
 export function toPublicIdleVideo(r: IdleVideoRow): PublicIdleVideo {
@@ -98,6 +102,8 @@ export function toPublicIdleVideo(r: IdleVideoRow): PublicIdleVideo {
     creditsSpent: r.credits_spent,
     isActive: r.is_active,
     createdAt: r.created_at,
+    outfitKey: r.outfit_key ?? null,
+    purchaseId: r.purchase_id === null || r.purchase_id === undefined ? null : Number(r.purchase_id),
     needsReview,
     message: needsReview ? "提交結果尚待確認，已保留原任務避免重複扣點，請聯絡管理員協助核對" : null,
   };
@@ -200,6 +206,12 @@ export async function startIdleVideoGeneration(userId: number, character: Charac
 }
 
 async function autoActivateIfFirst(row: IdleVideoRow): Promise<void> {
+  // A completed wardrobe purchase replaces the selected outfit. Other idle loops
+  // keep the current selection, matching the established character workflow.
+  if (row.purchase_id) {
+    await setActiveIdleVideo(row.character_id, row.user_id, row.id);
+    return;
+  }
   const c = await sql.connect();
   try {
     await c.query("begin");

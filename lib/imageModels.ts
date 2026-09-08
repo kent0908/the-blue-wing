@@ -156,11 +156,35 @@ const SEED: ImageControl = {
   placeholder: "留空為隨機",
 };
 
+/**
+ * GPT Image 2 proxies straight to OpenAI's own images API (see
+ * supportsWatermarkControl's comment on the same proxy behavior rejecting
+ * `watermark`), and OpenAI's real gpt-image-1-family `size` enum is
+ * 1024x1024 / 1536x1024 / 1024x1536 (+ "auto") — NOT the 1792x1024 /
+ * 1024x1792 pair above, which are DALL·E 3's sizes. Found in a
+ * data-accuracy audit (2026-09-07): this file previously reused the plain
+ * `SIZE` control (Seedream/DALL·E-style) for GPT Image 2 too, which would
+ * send a size OpenAI's own backend doesn't accept for this model family.
+ * Based on OpenAI's documented API contract, not an independent SIRAYA
+ * probe — worth a single real spot-check before relying on it further.
+ */
+const SIZE_GPT_IMAGE: ImageControl = {
+  key: "size",
+  label: "尺寸",
+  kind: "select",
+  default: "1024x1024",
+  options: [
+    { value: "1024x1024", label: "1:1 · 1024×1024" },
+    { value: "1536x1024", label: "3:2 · 1536×1024" },
+    { value: "1024x1536", label: "2:3 · 1024×1536" },
+  ],
+};
+
 const SEEDREAM_CONTROLS: ImageControl[] = [SIZE, COUNT, NEGATIVE, SEED];
 // Seedream 4.5 / Dola 5.0 require ≥ 3,686,400 px
 const SEEDREAM_HIRES_CONTROLS: ImageControl[] = [SIZE_HIRES, COUNT, NEGATIVE, SEED];
 const GEMINI_CONTROLS: ImageControl[] = [SIZE, COUNT];
-const GPT_IMAGE_CONTROLS: ImageControl[] = [SIZE, QUALITY, BACKGROUND, COMPRESSION, COUNT];
+const GPT_IMAGE_CONTROLS: ImageControl[] = [SIZE_GPT_IMAGE, QUALITY, BACKGROUND, COMPRESSION, COUNT];
 
 /* ---- the catalogue (order matches the console model grid) ---- */
 
@@ -316,6 +340,31 @@ export function getImageModel(id: string | null | undefined): ImageModel | undef
 export function getImageModelForControls(id: string | null | undefined): ImageModel | undefined {
   if (!id) return undefined;
   return getImageModel(id.replace(/^NSFW-/i, "")) ?? getImageModel(canonicalBillingModel(id.replace(/^NSFW-/i, "")));
+}
+
+const ALL_KNOWN_SIZES = Array.from(
+  new Set([...(SIZE.options ?? []), ...(SIZE_HIRES.options ?? []), ...(SIZE_GPT_IMAGE.options ?? [])].map((o) => o.value))
+);
+
+/**
+ * Which `size` values are actually valid for a model — found via a
+ * data-accuracy audit (2026-09-07) after the same "one shared template for
+ * every model" mistake was found (and fixed) for video resolution/duration:
+ * 智慧畫布's image node offered the SAME flat lib/types.ts IMAGE_SIZES list
+ * (["1024x1024","1024x1536","1536x1024","1792x1024"]) no matter which model
+ * was selected — regardless of whether that model needs the ≥3,686,400px
+ * "hires" tier (Seedream 4.5 / Dola 5.0, see SIZE_HIRES above) and, worse,
+ * "1024x1536"/"1536x1024" aren't even in generationValidation.ts's own
+ * allowed-size regex, so the canvas could offer choices our own server
+ * would then reject. Returns the model's own real size options; falls back
+ * to the full known set (permissive, not blocking) for an uncatalogued
+ * model rather than guessing which subset is safe.
+ */
+export function sizeOptionsFor(modelId: string | null | undefined): string[] {
+  const model = getImageModelForControls(modelId);
+  if (!model) return ALL_KNOWN_SIZES;
+  const sizeControl = model.controls.find((c) => c.key === "size");
+  return sizeControl?.options?.map((o) => o.value) ?? ALL_KNOWN_SIZES;
 }
 
 /** Families that accept a reference image (image-to-image) via the `image` field. */

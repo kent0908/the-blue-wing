@@ -1,6 +1,6 @@
 /**
  * Admin-managed media (image/video) shown on the public landing page
- * (app/page.tsx) — one fixed slot per hero/feature visual, overridable
+ * (app/landing/page.tsx) — one fixed slot per hero/feature visual, overridable
  * independently. See scripts/schema.sql's landing_media table.
  *
  * Deliberately separate from the per-user 資產庫 (lib/assets.ts) and from

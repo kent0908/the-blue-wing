@@ -1,7 +1,8 @@
+import { sizeOptionsFor } from "./imageModels";
 import { validateLayerRequest } from "./layerDecomposition";
 ﻿import { assertPromptSafety } from "./promptSafety";
 import { SirayaApiError } from "./siraya";
-import { videoResolutionsForModel, normalizeVideoResolution } from "./videoModels";
+import { videoResolutionsForModel, normalizeVideoResolution, videoConstraintFor } from "./videoModels";
 const bad=()=>{throw new SirayaApiError(400,"生成參數不正確或包含未支援的欄位");};
 export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text"|"imageEdit") {
   const common=["model","prompt"];
@@ -27,12 +28,12 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
     integer("n",1,1,10);
     if(body.layer_decomposition!==undefined&&typeof body.layer_decomposition!=="boolean")bad();
     validateLayerRequest(body);
-    if(body.layer_decomposition!==true&&body.size!==undefined && (typeof body.size!=="string"|| !/^(1024x1024|1792x1024|1024x1792|2048x2048|2560x1440|1440x2560|2304x1728)$/.test(body.size)))bad();
+    if(body.layer_decomposition!==true&&body.size!==undefined && (typeof body.size!=="string"|| !sizeOptionsFor(String(body.model)).includes(body.size)))bad();
   }
   if(kind==="video"){
     if(body.generationMode!==undefined && (typeof body.generationMode!=="string" || body.generationMode.length>40))bad();
     if(body.providerAssetIds!==undefined && (!Array.isArray(body.providerAssetIds)||body.providerAssetIds.length>50||body.providerAssetIds.some((id:unknown)=>typeof id!=="number"||!Number.isSafeInteger(id)||id<1)))bad();
-    integer("seconds",5,1,30);
+    integer("seconds",5,1,videoConstraintFor(String(body.model)).maxSeconds);
     const resolutions = videoResolutionsForModel(String(body.model));
     if (!resolutions.length) throw new SirayaApiError(400, "此影片模型的解析度尚未完成設定，請選擇其他模型。");
     body.resolution ??= normalizeVideoResolution(String(body.model), "480p");

@@ -6,7 +6,7 @@ import { landingGallerySlots } from "@/lib/landingSlots";
 import Image from "next/image";
 import { IconArrowRight, IconImage, IconVideo, IconCanvas, IconChat } from "@/components/Icons";
 import { getLandingMediaMap } from "@/lib/landingMedia";
-import styles from "../landing.module.css";
+import styles from "./landing.module.css";
 
 // This page has no dynamic APIs (no cookies/headers/searchParams read), so
 // Next.js's default would prerender it once at BUILD TIME and serve that
@@ -64,7 +64,8 @@ export default async function LandingPage(){
          <f.icon className={styles.placeholderIcon}/><span>{index===0?'靈感，從這裡展開':'更多作品，敬請期待'}</span><small>{index===0?'CREATE YOUR NEXT STORY':'TO BE CONTINUED'}</small>
         </div>}
         <div className={styles.cardCaption}><span>{String(index+1).padStart(2,'0')}</span><span>{index===0?'精選展示':m?'延伸作品':'即將展開'}</span></div>
-       </div>;
+         <Link href="/" className={styles.floatHome}>→ 前往首頁</Link>
+</div>;
       })}
     </div>
   </section>)}</div>

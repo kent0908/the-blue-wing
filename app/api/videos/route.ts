@@ -199,16 +199,29 @@ export async function POST(req: NextRequest) {
     // Either way, re-host to our own storage first — the upstream url is
     // signed and expires (~24h), which would otherwise turn this generation
     // into a permanently broken video in 生成紀錄 once that window passes.
+    //
+    // Real gap found on re-audit (2026-09-07): unlike the async path (which
+    // /api/videos/[id] can later refund if the job itself fails), a failure
+    // in EITHER of these two calls — after the charge already succeeded —
+    // had no reconciliation path at all: no job id to poll, nothing to
+    // refund it later. Wrapped so a transient blob/DB failure here still
+    // gives the credits back instead of a silent charge with nothing to
+    // show for it.
     let persistedUrl = immediateUrl;
     if (immediateUrl) {
-      persistedUrl = await persistGeneratedMedia(immediateUrl, { userId: user.id, kind: "video" });
-      await recordGeneration(user.id, {
-        kind: "video",
-        model: String(body.model),
-        prompt: String(body.prompt),
-        url: persistedUrl,
-        ref: jobId ? String(jobId) : null,
-      });
+      try {
+        persistedUrl = await persistGeneratedMedia(immediateUrl, { userId: user.id, kind: "video" });
+        await recordGeneration(user.id, {
+          kind: "video",
+          model: String(body.model),
+          prompt: String(body.prompt),
+          url: persistedUrl,
+          ref: jobId ? String(jobId) : null,
+        });
+      } catch (err) {
+        await refundCharge(user.id, chargeId);
+        throw err;
+      }
     }
 
     return NextResponse.json({

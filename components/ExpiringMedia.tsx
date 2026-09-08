@@ -45,10 +45,10 @@ export default function ExpiringMedia({
 
   if (kind === "video") {
     return controls ? (
-      <video src={url} controls className={className} onError={fail} />
+      <video src={url} controls disablePictureInPicture disableRemotePlayback className={className} onError={fail} />
     ) : (
       // not interactive here (history thumbnails) — click selects it into the main viewer instead
-      <video src={url} className={className} preload="metadata" muted onError={fail} />
+      <video src={url} className={className} preload="metadata" muted disablePictureInPicture disableRemotePlayback onError={fail} />
     );
   }
   // eslint-disable-next-line @next/next/no-img-element

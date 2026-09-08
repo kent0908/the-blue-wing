@@ -31,9 +31,10 @@ interface IdleData {
  */
 export default function CompanionIdleStage({
   characterId,
+  wardrobeOpen = false,
 }: {
   characterId: number;
-
+  wardrobeOpen?: boolean;
 }) {
   const [data, setData] = useState<IdleData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export default function CompanionIdleStage({
   // function called directly from an effect body) doesn't trip the
   // react-hooks/set-state-in-effect rule.
   const load = useCallback(() => {
+    if (pollTimer.current) clearTimeout(pollTimer.current);
     return fetch(`/api/characters/${characterId}/idle-video`)
       .then((res) => res.json().catch(() => ({})).then((j) => ({ res, j })))
       .then(({ res, j }) => {
@@ -61,12 +63,12 @@ export default function CompanionIdleStage({
         setData(j);
         setError(null);
         const stillPending = (j.videos as IdleVideo[] | undefined)?.some((v) => v.status === "pending" && !v.needsReview);
-        if (stillPending) pollTimer.current = setTimeout(() => loadRef.current(), 4000);
+        if (stillPending || wardrobeOpen) pollTimer.current = setTimeout(() => loadRef.current(), 4000);
       })
       .catch(() => {
         if (aliveRef.current) setError("載入失敗");
       });
-  }, [characterId]);
+  }, [characterId, wardrobeOpen]);
 
   useEffect(() => {
     loadRef.current = load;

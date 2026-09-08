@@ -139,9 +139,24 @@ export function useDirector3DEditor(initial: Director3DSceneData, remotePersist?
     updateSelected({ path: selected.path.filter((_, i) => i !== index) });
   };
 
+  /** Next unused "Role X" letter given who's currently in the scene — real
+   *  bug found on re-audit (2026-09-08): naming purely off
+   *  `characters.length + 1` meant deleting a character and adding a new
+   *  one could reissue a name still in use by another character (e.g. A/B/C,
+   *  delete B → A/C (length 2) → add → "Role C", colliding with the
+   *  existing C). Falls back to a numbered name past Z (26 characters in
+   *  one scene is already an extreme case). */
+  const nextCharacterName = (): string => {
+    const used = new Set(scene.characters.map((c) => c.name));
+    for (let letter = 65; letter <= 90; letter++) {
+      const name = `Role ${String.fromCharCode(letter)}`;
+      if (!used.has(name)) return name;
+    }
+    return `Role ${scene.characters.length + 1}`;
+  };
+
   const addCharacter = () => {
-    const n = scene.characters.length + 1;
-    const ch = defaultCharacter(`Role ${String.fromCharCode(64 + n)}`);
+    const ch = defaultCharacter(nextCharacterName());
     ch.position = [scene.characters.length * 0.9, 0, 0];
     setScene((s) => ({ ...s, characters: [...s.characters, ch] }));
     setSelectedId(ch.id);
@@ -149,7 +164,14 @@ export function useDirector3DEditor(initial: Director3DSceneData, remotePersist?
 
   const removeCharacter = (id: string) => {
     setScene((s) => ({ ...s, characters: s.characters.filter((c) => c.id !== id) }));
-    if (selectedId === id) setSelectedId(null);
+    // Real UX bug found on re-audit: used to just clear selection outright,
+    // forcing a manual re-click even when other characters are still in the
+    // scene — fall back to whichever one is now first, same as how a fresh
+    // scene starts out with its first character selected.
+    if (selectedId === id) {
+      const remaining = scene.characters.filter((c) => c.id !== id);
+      setSelectedId(remaining[0]?.id ?? null);
+    }
   };
 
   /**

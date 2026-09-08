@@ -9,6 +9,7 @@ import CharacterBuilder from "./CharacterBuilder";
 import type { CharacterProfile } from "@/lib/characterProfile";
 import CharacterScenes from "./CharacterScenes";
 import CompanionIdleStage from "./CompanionIdleStage";
+import CompanionWardrobe from "./CompanionWardrobe";
 import RelationshipStages from "./RelationshipStages";
 import styles from "./CharacterChat.module.css";
 
@@ -59,6 +60,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const [editing, setEditing] = useState(false);
   const [personaOpen, setPersonaOpen] = useState(false);
   const [relationshipOpen, setRelationshipOpen] = useState(true);
+  const [wardrobeOpen, setWardrobeOpen] = useState(false);
   const [scenesOpen, setScenesOpen] = useState(false);
   const [toast, setToast] = useState<AffectionToast | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -197,9 +199,10 @@ export default function CharacterChat({ character: initial }: { character: Chara
           </div>
         </header>
         <nav className={styles.mobileTabs} aria-label="陪聊設定">
-          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(true); }}>關係階段</button>
-          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); }}>解鎖場景</button>
-          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(true); setRelationshipOpen(false); }}>我的身分</button>
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(true); setWardrobeOpen(false); }}>關係階段</button>
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(false); }}>解鎖場景</button>
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(true); setRelationshipOpen(false); setWardrobeOpen(false); }}>我的身分</button>
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(true); }}>換裝衣櫃</button>
         </nav>
 
       {toast && (
@@ -214,7 +217,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
       )}
 
       <div className={styles.layout}>
-        <aside className={styles.portrait} aria-label="人物立繪"><CompanionIdleStage key={`${character.id}:${character.avatarSrc ?? ""}`} characterId={character.id} /></aside>
+        <aside className={styles.portrait} aria-label="人物立繪"><CompanionIdleStage key={`${character.id}:${character.avatarSrc ?? ""}`} characterId={character.id} wardrobeOpen={wardrobeOpen} /></aside>
         <section className={styles.conversation} aria-label="聊天紀錄與訊息">
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
         <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end gap-4">
@@ -303,14 +306,16 @@ export default function CharacterChat({ character: initial }: { character: Chara
         </section>
         <aside className={styles.details + " " + ((scenesOpen || personaOpen) ? styles.detailsOpen : "")} aria-label="場景與身分設定">
           <div className={styles.tabs}>
-            <button type="button" aria-pressed={relationshipOpen} onClick={() => { setRelationshipOpen(true); setPersonaOpen(false); }}>關係階段</button>
-            <button type="button" aria-pressed={!personaOpen && !relationshipOpen} onClick={() => { setRelationshipOpen(false); setPersonaOpen(false); }}>解鎖場景</button>
-            <button type="button" aria-pressed={personaOpen} onClick={() => { setPersonaOpen(true); setRelationshipOpen(false); }}>我的身分</button>
+            <button type="button" aria-pressed={relationshipOpen} onClick={() => { setRelationshipOpen(true); setPersonaOpen(false); setWardrobeOpen(false); }}>關係階段</button>
+            <button type="button" aria-pressed={!personaOpen && !relationshipOpen && !wardrobeOpen} onClick={() => { setRelationshipOpen(false); setPersonaOpen(false); setWardrobeOpen(false); }}>解鎖場景</button>
+            <button type="button" aria-pressed={personaOpen} onClick={() => { setPersonaOpen(true); setRelationshipOpen(false); setWardrobeOpen(false); }}>我的身分</button>
+            <button type="button" aria-pressed={wardrobeOpen} onClick={() => { setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(true); }}>換裝衣櫃</button>
           </div>
           <button type="button" className="shrink-0 border-b border-white/10 px-4 py-2 text-left text-xs text-[#a2bcb2]" onClick={() => setEditing(true)}>編輯角色設定</button>
           {relationshipOpen && <div className="min-h-0 flex-1 overflow-y-auto"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label="關閉設定">關閉</button></div><RelationshipStages affection={character.affection ?? 0} /></div>}
           {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
-          <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen}><CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} /></div>
+          <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen}><CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} /></div>
+          {wardrobeOpen && <div className="flex min-h-0 flex-1 flex-col"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => { setScenesOpen(false); setWardrobeOpen(false); setRelationshipOpen(true); }} aria-label="關閉衣櫃">關閉</button></div><div className="flex min-h-0 flex-1 overflow-y-auto [&>div]:w-full"><CompanionWardrobe key={`${character.id}:${character.affection ?? 0}`} characterId={character.id} /></div></div>}
         </aside>
       </div>
       {editing && (
@@ -327,4 +332,3 @@ export default function CharacterChat({ character: initial }: { character: Chara
     </div>
   );
 }
-

@@ -9,7 +9,12 @@ function load(file, deps = {}) {
 }
 const caps = load('lib/videoModels.ts');
 class SirayaApiError extends Error { constructor(status,message) {super(message);this.status=status} }
-const {validateGeneration} = load('lib/generationValidation.ts', {'./siraya':{SirayaApiError},'./videoModels':caps});
+const labels=load('lib/modelLabel.ts');
+const billing=load('lib/billingModel.ts');
+const images=load('lib/imageModels.ts',{'./modelLabel':labels,'./billingModel':billing});
+const safety=load('lib/promptSafety.ts');
+const layers=load('lib/layerDecomposition.ts',{'./siraya':{SirayaApiError}});
+const {validateGeneration} = load('lib/generationValidation.ts', {'./imageModels':images,'./layerDecomposition':layers,'./promptSafety':safety,'./siraya':{SirayaApiError},'./videoModels':caps});
 const matrix = [
   ...['1.0-i2v','1.0-t2v'].map(v=>['happyhorse-'+v,['720p','1080p']]),
   ...['1.1-i2v','1.1-t2v'].map(v=>['happyhorse-'+v,['480p','720p','1080p']]),

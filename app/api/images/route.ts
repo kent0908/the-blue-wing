@@ -163,15 +163,26 @@ export async function POST(req: NextRequest) {
     // charge only after a successful generation
     const balanceAfter = balance - cost;
 
-    for (const im of images) {
-      if (im.url) {
-        // Re-host to our own storage: upstream `url` responses are signed
-        // and expire (~24h), and b64_json responses are huge inline data
-        // URLs — either way, persist once here so 生成紀錄 doesn't quietly
-        // turn into a broken image later (or bloat every history payload).
-        im.url = await persistGeneratedMedia(im.url, { userId: user.id, kind: "image" });
-        await recordGeneration(user.id, { kind: "image", model: String(body.model), prompt: String(body.prompt), url: im.url });
+    // Real gap found on re-audit (2026-09-07): a failure in EITHER call below
+    // — after the charge above already succeeded — had no reconciliation
+    // path (no job id to poll later, nothing to catch and refund it). Same
+    // bug class as /api/videos's own immediate-completion branch. Wrapped so
+    // a transient blob/DB failure here refunds instead of silently charging
+    // for nothing.
+    try {
+      for (const im of images) {
+        if (im.url) {
+          // Re-host to our own storage: upstream `url` responses are signed
+          // and expire (~24h), and b64_json responses are huge inline data
+          // URLs — either way, persist once here so 生成紀錄 doesn't quietly
+          // turn into a broken image later (or bloat every history payload).
+          im.url = await persistGeneratedMedia(im.url, { userId: user.id, kind: "image" });
+          await recordGeneration(user.id, { kind: "image", model: String(body.model), prompt: String(body.prompt), url: im.url });
+        }
       }
+    } catch (err) {
+      await refundCharge(user.id, chargeId);
+      throw err;
     }
 
     return NextResponse.json({

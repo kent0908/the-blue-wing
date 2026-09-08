@@ -33,8 +33,40 @@ export function cleanModelName(id: string): string {
 
 interface SortKey {
   family: string;
+  familyRank: number;
+  version: number;
+  tier: number;
   base: string;
   isNsfw: boolean;
+}
+
+/**
+ * Which family leads its modality's list. Seedream (image) and Seedance
+ * (video) are the house families and always come first; they never compete
+ * with each other since no list mixes modalities. Everything unlisted falls
+ * to the end and stays alphabetical among itself.
+ */
+const FAMILY_RANK: Record<string, number> = {
+  seedream: 0,
+  seedance: 0,
+  gemini: 1,
+  veo: 1,
+  gpt: 2,
+  wan: 3,
+  happyhorse: 4,
+};
+
+/**
+ * Flagship-first ordering for the variant suffix within one version:
+ * pro < (plain) < fast < lite < mini. "-pro-fast" scores between pro and
+ * plain so 1.0-pro still leads 1.0-pro-fast.
+ */
+function tierOf(rest: string): number {
+  let score = /(^|-)pro(-|$)/.test(rest) ? 0 : 1;
+  if (/(^|-)fast(-|$)/.test(rest)) score += 0.5;
+  if (/(^|-)lite(-|$)/.test(rest)) score += 1.5;
+  if (/(^|-)mini(-|$)/.test(rest)) score += 2;
+  return score;
 }
 
 function sortKeyOf(id: string): SortKey {
@@ -42,26 +74,43 @@ function sortKeyOf(id: string): SortKey {
   const isNsfw = /^NSFW-/i.test(cleaned);
   const base = cleaned.replace(/^NSFW-/i, "").toLowerCase();
   const family = base.match(/^[a-z]+/)?.[0] ?? base;
-  return { family, base, isNsfw };
+  const versionMatch = base.match(/(\d+(?:\.\d+)?)/);
+  const version = versionMatch ? parseFloat(versionMatch[1]) : -1;
+  const rest = versionMatch ? base.slice(base.indexOf(versionMatch[1]) + versionMatch[1].length) : "";
+  return {
+    family,
+    familyRank: FAMILY_RANK[family] ?? 9,
+    version,
+    tier: tierOf(rest),
+    base,
+    isNsfw,
+  };
 }
 
 /**
  * Default ordering with no admin input at all: every plain (non-NSFW) model
- * first, grouped by family (Seedance next to Seedance, not scattered
- * between Veo and Gemini) and version-aware within that (so "2.5" sorts
- * after "2.0", not before "10.0" alphabetically) — then every NSFW model
- * as its own block at the very end, grouped and version-sorted the same
- * way. Keeping the NSFW block entirely separate (rather than interleaved
- * right after each plain counterpart) is deliberate: a normal-use picker
- * shouldn't have an NSFW entry show up in the middle of the list you
- * actually scroll through.
+ * first, then every NSFW model as its own block at the very end. Keeping the
+ * NSFW block entirely separate (rather than interleaved right after each
+ * plain counterpart) is deliberate: a normal-use picker shouldn't have an
+ * NSFW entry show up in the middle of the list you actually scroll through.
+ *
+ * Within each block: house family first (FAMILY_RANK — Seedream leads the
+ * image list, Seedance the video one), then NEWEST VERSION FIRST, then
+ * flagship variant first (tierOf). Version-descending is the 2026-09-08
+ * change — it used to sort ascending, which buried the newest release
+ * (Seedance 2.5, Seedream 5.0) at the bottom of its own family while
+ * alphabetically-first families like happyhorse sat above Seedance entirely.
+ * An admin-set sort_order still overrides all of this (see sortByDisplay).
  */
 export function compareModelsDefault(idA: string, idB: string): number {
   const a = sortKeyOf(idA);
   const b = sortKeyOf(idB);
   return (
     Number(a.isNsfw) - Number(b.isNsfw) ||
+    a.familyRank - b.familyRank ||
     a.family.localeCompare(b.family) ||
+    b.version - a.version ||
+    a.tier - b.tier ||
     a.base.localeCompare(b.base, undefined, { numeric: true, sensitivity: "base" })
   );
 }

@@ -298,3 +298,52 @@ create table if not exists generation_layer_sets (
  created_at timestamptz not null default now()
 );
 create index if not exists generation_layer_sets_owner_idx on generation_layer_sets(user_id,created_at desc);
+
+-- Additional merged feature tables (additive).
+create table if not exists landing_media (
+  slot         text primary key,
+  kind         text not null check (kind in ('image','video')),
+  pathname     text not null,
+  content_type text not null,
+  updated_at   timestamptz not null default now()
+);
+
+create table if not exists character_outfit_changes (
+  id            bigint generated always as identity primary key,
+  character_id  bigint not null references characters(id) on delete cascade,
+  user_id       bigint not null references users(id) on delete cascade,
+  outfit_key    text not null,
+  credits_spent integer not null default 0,
+  retry_used    boolean not null default false,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists character_outfit_changes_char_idx on character_outfit_changes(character_id, created_at desc);
+create table if not exists canvas_templates (
+  id          bigint generated always as identity primary key,
+  name        text not null,
+  description text not null default '',
+  graph       jsonb not null,
+  created_by  bigint references users(id) on delete set null,
+  sort_order  integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists canvas_templates_sort_idx on canvas_templates(sort_order, created_at desc);
+create table if not exists canvas_plaza_posts (
+  id          bigint generated always as identity primary key,
+  user_id     bigint not null references users(id) on delete cascade,
+  name        text not null,
+  description text not null default '',
+  graph       jsonb not null,
+  status      text not null default 'visible' check (status in ('visible','hidden')),
+  copy_count  integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists canvas_plaza_posts_status_idx on canvas_plaza_posts(status, created_at desc);
+create index if not exists canvas_plaza_posts_user_idx on canvas_plaza_posts(user_id, created_at desc);
+alter table character_idle_videos add column if not exists outfit_key text;
+alter table character_idle_videos add column if not exists purchase_id bigint references character_outfit_changes(id) on delete set null;

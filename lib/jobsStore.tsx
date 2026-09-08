@@ -12,6 +12,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "./types";
+import { videoConstraintFor } from "./videoModels";
 import { runningJobCount } from "./jobVisibility";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -293,14 +294,26 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
         updateJob(jobId, { stage: 1 });
 
         if (jobMode === "video") {
+          // Defensive clamp, not just the Composer's own settings UI: every
+          // Seedance version has its own real resolution/duration ceiling
+          // (see lib/videoModels.ts's videoConstraintFor — found via a real
+          // audit against SIRAYA, 2026-09-06), and `settings` can carry a
+          // value picked for a DIFFERENT model (e.g. 1080p/30s from
+          // Seedance 2.5) into a submission against a narrower one (e.g.
+          // 2.0-mini only goes to 720p/15s) if the UI state wasn't perfectly
+          // in sync when the model was switched. Whatever the UI showed,
+          // the actual request sent here is always valid for `model`.
+          const constraint = videoConstraintFor(model);
+          const resolution = constraint.resolutions.includes(settings.resolution) ? settings.resolution : constraint.resolutions[0];
+          const seconds = Math.min(settings.seconds, constraint.maxSeconds);
           const res = await fetch("/api/videos", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               model,
               prompt,
-              seconds: settings.seconds,
-              resolution: settings.resolution,
+              seconds,
+              resolution,
               ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
               ...(assetIds?.length ? { assetIds } : {}),
               ...(generationMode ? { generationMode } : {}),

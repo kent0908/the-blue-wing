@@ -30,8 +30,14 @@ export const DEFAULT_SETTINGS: GenSettings = {
 };
 
 export const ASPECT_RATIOS = ["auto", "1:1", "3:4", "4:3", "9:16", "16:9", "21:9"];
-export const RESOLUTIONS = ["480p", "720p", "1080p"];
-export const IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024", "1792x1024"];
+// Removed IMAGE_SIZES and RESOLUTIONS (2026-09-07 data-accuracy audit): both
+// were one flat list shared by every model regardless of which one was
+// selected — IMAGE_SIZES mixed Seedream/DALL·E-style sizes (1792x1024) with
+// GPT Image's real ones (1024x1536, 1536x1024) into a list no model fully
+// accepts; RESOLUTIONS offered 1080p/4k combinations several Seedance
+// versions actually reject (the exact bug this whole audit started from).
+// See lib/imageModels.ts's sizeOptionsFor() and lib/videoModels.ts's
+// videoConstraintFor() for the real per-model lists.
 
 export const MODE_LABELS: Record<Mode, string> = {
   image: "智慧生圖",

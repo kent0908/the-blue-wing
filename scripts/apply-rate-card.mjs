@@ -57,6 +57,23 @@ const VIDEO_RATES = {
   "veo-3.1-generate-001": 70,
 };
 
+// ---- text: flat credits per message (lib/rateCard.ts adds a small token
+// component on top: +1 per 2000 max_tokens) ----
+// Real gap found 2026-09-07: model_rates had ZERO text rows at all, meaning
+// every text feature (陪聊角色 companion chat, studio 多輪對話) was failing
+// every single message with "此模型尚未設定有效費率或已停用" — lib/credits.ts's
+// creditCost() deliberately has no fallback price for an unseeded model. Not
+// BytePlus-published pricing (DeepSeek isn't a BytePlus model on this rate
+// card) — conservative estimate off DeepSeek's known-cheap per-token pricing,
+// not independently verified against a current published rate the way the
+// Seedream/Seedance numbers above are.
+const TEXT_RATES = {
+  "deepseek-v4-flash": 1,
+  "deepseek-v4-flash-0731": 1,
+  "deepseek-v4-pro": 2,
+  "deepseek-v4-pro-0813": 2,
+};
+
 // ---- image: credits per image — real BytePlus $/image, verified ----
 const IMAGE_RATES = {
   "ByteDance-Seedream-4.0": 12, // $0.03 -> 4.0x
@@ -95,6 +112,10 @@ for (const [id, credits] of Object.entries(VIDEO_RATES)) {
 }
 for (const [id, credits] of Object.entries(IMAGE_RATES)) {
   await upsert(id, "image", credits);
+  n++;
+}
+for (const [id, credits] of Object.entries(TEXT_RATES)) {
+  await upsert(id, "text", credits);
   n++;
 }
 console.log(`✓ Applied ${n} model_rates rows.`);
