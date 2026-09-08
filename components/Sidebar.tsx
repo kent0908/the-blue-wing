@@ -30,6 +30,9 @@ type Item = {
 
 const GROUP_A: Item[] = [
   { href: "/", label: "首頁", icon: IconHome },
+  // 2026-09-08：改成側欄的正式導覽項目（原本只有「/」頁面左下角一顆浮動
+  // 按鈕），指向獨立出去的入口/行銷頁 app/landing/page.tsx。
+  { href: "/landing", label: "啟程", icon: IconWing },
   { href: "/studio?mode=image", label: "圖片生成", icon: IconImage, modelModality: "image" },
   { href: "/studio?mode=video", label: "影片生成", icon: IconVideo, badge: { text: "HOT", tone: "hot" }, modelModality: "video" },
   { href: "/studio?mode=audio", label: "文字創作", icon: IconAudio },
