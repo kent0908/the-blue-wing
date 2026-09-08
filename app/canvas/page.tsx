@@ -248,6 +248,94 @@ export default function CanvasHomePage() {
 
         {error && <p className="mt-4 text-[13px] text-[#ff9b9b]">{error}</p>}
 
+        {/* 我的畫布 */}
+        <section className="mt-8">
+          <h2 className="text-[15px] font-medium">我的畫布</h2>
+
+          {workflows === null && !error && (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bw-shimmer h-[120px] rounded-xl" />
+              ))}
+            </div>
+          )}
+
+          {workflows?.length === 0 && (
+            <div className="mt-16 text-center text-[13px] text-[#5c5c5c]">
+              還沒有任何畫布
+              <br />
+              按右上角「建立新畫布」開始，或下面挑一個模板／廣場分享來改
+            </div>
+          )}
+
+          {workflows && workflows.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {workflows.map((w) => (
+                <Link
+                  key={w.id}
+                  href={`/canvas/${w.id}`}
+                  className="group relative flex h-[120px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">
+                      <IconCanvas className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{w.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-[#7d7d7d]">
+                    <span>{w.nodeCount} 個節點</span>
+                    <span>{new Date(w.updatedAt).toLocaleDateString("zh-TW")}</span>
+                  </div>
+                  <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        shareToPlaza(w);
+                      }}
+                      disabled={busyId === w.id}
+                      aria-label="分享到廣場"
+                      title="分享到藍翼廣場"
+                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
+                    >
+                      <IconGlobe className="h-3.5 w-3.5" />
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          publishTemplate(w);
+                        }}
+                        disabled={busyId === w.id}
+                        aria-label="發布為官方模板"
+                        title="發布為官方模板"
+                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
+                      >
+                        <IconApps className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        remove(w.id);
+                      }}
+                      aria-label="刪除"
+                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
+                    >
+                      <IconTrash className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* 官方模板 */}
         <section className="mt-8">
           <div className="flex items-center gap-2">
@@ -331,94 +419,6 @@ export default function CanvasHomePage() {
                     ) : undefined
                   }
                 />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 我的畫布 */}
-        <section className="mt-8">
-          <h2 className="text-[15px] font-medium">我的畫布</h2>
-
-          {workflows === null && !error && (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bw-shimmer h-[120px] rounded-xl" />
-              ))}
-            </div>
-          )}
-
-          {workflows?.length === 0 && (
-            <div className="mt-16 text-center text-[13px] text-[#5c5c5c]">
-              還沒有任何畫布
-              <br />
-              按右上角「建立新畫布」開始，或上面挑一個模板／廣場分享來改
-            </div>
-          )}
-
-          {workflows && workflows.length > 0 && (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {workflows.map((w) => (
-                <Link
-                  key={w.id}
-                  href={`/canvas/${w.id}`}
-                  className="group relative flex h-[120px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">
-                      <IconCanvas className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{w.name}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-[#7d7d7d]">
-                    <span>{w.nodeCount} 個節點</span>
-                    <span>{new Date(w.updatedAt).toLocaleDateString("zh-TW")}</span>
-                  </div>
-                  <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        shareToPlaza(w);
-                      }}
-                      disabled={busyId === w.id}
-                      aria-label="分享到廣場"
-                      title="分享到藍翼廣場"
-                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
-                    >
-                      <IconGlobe className="h-3.5 w-3.5" />
-                    </button>
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          publishTemplate(w);
-                        }}
-                        disabled={busyId === w.id}
-                        aria-label="發布為官方模板"
-                        title="發布為官方模板"
-                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
-                      >
-                        <IconApps className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        remove(w.id);
-                      }}
-                      aria-label="刪除"
-                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
-                    >
-                      <IconTrash className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </Link>
               ))}
             </div>
           )}

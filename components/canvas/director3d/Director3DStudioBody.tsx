@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useRef } from "react";
 import dynamic from "next/dynamic";
 import { IconPlus, IconTrash } from "../../Icons";
 import {
@@ -108,6 +108,14 @@ export default function Director3DStudioBody({
     discardRecording,
   } = editor;
 
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewClip = () => {
+    const v = previewVideoRef.current;
+    if (!v) return;
+    v.currentTime = 0;
+    v.play();
+  };
+
   return (
     <div className="flex min-h-0 flex-1">
       {/* left: character list + scene settings + 運鏡 */}
@@ -183,7 +191,7 @@ export default function Director3DStudioBody({
 
           {!recording && !recordedClip && (
             <>
-              <Slider label="錄製時長（秒）" value={recordSeconds} min={15} max={30} onChange={setRecordSeconds} />
+              <Slider label="錄製時長（秒）" value={recordSeconds} min={1} max={30} onChange={setRecordSeconds} />
               <button type="button" onClick={startRecording} className="mt-1.5 w-full rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-[11px] text-[#c9c9c9] hover:bg-[#282828]">
                 ● 開始錄製
               </button>
@@ -203,8 +211,19 @@ export default function Director3DStudioBody({
 
           {!recording && recordedClip && (
             <div className="mt-1.5 space-y-1.5">
-              <video src={recordedClip.url} controls loop disablePictureInPicture disableRemotePlayback className="w-full rounded-lg border border-[#2c2c2c]" />
-              <div className="grid grid-cols-2 gap-1.5">
+              <video
+                ref={previewVideoRef}
+                src={recordedClip.url}
+                controls
+                loop
+                disablePictureInPicture
+                disableRemotePlayback
+                className="w-full rounded-lg border border-[#2c2c2c]"
+              />
+              <div className="grid grid-cols-3 gap-1.5">
+                <button type="button" onClick={previewClip} className="rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]">
+                  ▶ 預覽
+                </button>
                 <a
                   href={recordedClip.url}
                   download="director3d-camera-move.webm"
@@ -230,7 +249,7 @@ export default function Director3DStudioBody({
                 這段錄製會直接當「運鏡影片參考」送給 Seedance 2.0 / 2.5（僅這兩個版本支援，其他模型會自動忽略、退回只用畫面）；
                 同時也會把錄製時抽出的 {recordedFrames.length} 張畫面當多重參考圖，加上自動判讀的運鏡文字提示
                 {cameraMoveHint ? `（目前判讀：「${cameraMoveHint}」，可在輸入框自行修改）` : ""}
-                一起帶到輸入框。SIRAYA 對參考影片有解析度下限，畫面太小的視窗錄出來可能會被拒絕，建議放大瀏覽器視窗再錄。
+                一起帶到輸入框。參考影片有解析度下限，畫面太小的視窗錄出來可能會被拒絕，建議放大瀏覽器視窗再錄。
               </p>
             </div>
           )}
