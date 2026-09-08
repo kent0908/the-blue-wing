@@ -29,12 +29,12 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
       role="switch"
       aria-checked={on}
       onClick={() => onChange(!on)}
-      className="flex w-full items-center justify-between gap-3 py-1"
+      className="flex w-full min-w-0 items-center justify-between gap-3 py-1"
     >
-      <span className="text-left text-[12.5px] text-[#c9c9c9]">{label}</span>
+      <span className="min-w-0 flex-1 text-left text-[12.5px] leading-relaxed text-[#c9c9c9]">{label}</span>
       <span
         className={[
-          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+          "relative block h-5 w-9 shrink-0 overflow-hidden rounded-full transition-colors",
           // Was backwards — track colour and thumb position disagreed with
           // each other (gray+thumb-right for "on", green+thumb-left for
           // "off"), which is exactly the kind of inconsistent toggle that
@@ -47,7 +47,7 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
       >
         <span
           className={[
-            "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
+            "absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
             on ? "translate-x-[18px]" : "translate-x-0.5",
           ].join(" ")}
         />
@@ -76,7 +76,7 @@ export default function AdvancedParams({
   const active = (mode === "image" && moderation === "low") || (watermarkSupported && watermark);
 
   return (
-    <Popover
+    <Popover label="進階設定"
       widthClass="w-[320px]"
       // This chip sits at the right end of the Composer's toolbar row (right
       // before the price/send button) — anchoring the panel to grow
@@ -92,20 +92,20 @@ export default function AdvancedParams({
       )}
     >
       {() => (
-        <div className="max-h-[70vh] overflow-y-auto p-3">
+        <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden p-3">
           <div className="pb-3 text-[13px] font-medium text-white">進階設定</div>
 
           {(mode === "image" || mode === "video") && (
             <div className="border-t border-[#262626] pt-3">
               {watermarkSupported ? (
                 <>
-                  <Switch label="保留浮水印（AI generated 標記）" on={watermark} onChange={onWatermarkChange} />
+                  <Switch label="生成浮水印" on={watermark} onChange={onWatermarkChange} />
                   <p className="mt-1 text-[10.5px] leading-relaxed text-[#6d6d6d]">
-                    預設關閉，生成結果不帶浮水印；打開後畫面右下角會出現「AI generated」標記。
+                    {watermark ? "已開啟：請求服務商加入生成浮水印。" : "已關閉（預設）：請求服務商不加入生成浮水印。"}
                   </p>
                 </>
               ) : (
-                <p className="text-[11.5px] leading-relaxed text-[#6d6d6d]">這個模型沒有浮水印開關（由服務商決定）</p>
+                <p className="text-[11.5px] leading-relaxed text-[#6d6d6d]">此模型未提供可控制的浮水印參數；不會傳送不支援的設定。</p>
               )}
             </div>
           )}

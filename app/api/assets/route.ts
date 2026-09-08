@@ -17,10 +17,12 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const r = await requireUser(req);
   if ("error" in r) return r.error;
-
+  // Existing image pickers keep their image-only response. The full library opts in.
+  const allMedia = req.nextUrl.searchParams.get("media") === "all";
   const { rows } = await sql<AssetRow>`
     select id, user_id, url, pathname, content_type, size, filename, created_at
     from assets where user_id = ${r.user.id}
+      and (${allMedia} or content_type like 'image/%')
     order by created_at desc
     limit 300
   `;
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
   const ext = ALLOWED_ASSET_TYPES[file.type];
   if (!ext) {
     return NextResponse.json(
-      { error: { message: "只接受圖片檔（PNG / JPG / WebP / GIF / SVG）", code: "bad_type" } },
+      { error: { message: "接受圖片、MP4 / WebM 影片及 MP3 / WAV / M4A 音訊；單檔上限 4 MB", code: "bad_type" } },
       { status: 400 }
     );
   }

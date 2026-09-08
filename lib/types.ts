@@ -13,7 +13,7 @@ export interface ModelInfo {
 
 export interface GenSettings {
   aspectRatio: string; // "auto" | "1:1" | ...
-  resolution: string; // "480p" | "720p" | "1080p"
+  resolution: string; // Model-specific: "480p" | "720p" | "1080p" | "4k"
   seconds: number;
   imageCount: number;
   size: string; // for images, e.g. 1024x1024
@@ -41,6 +41,7 @@ export const MODE_LABELS: Record<Mode, string> = {
 };
 
 export interface ResultItem {
+  layerSetId?: string;
   id: string;
   kind: "image" | "video" | "text";
   url?: string;

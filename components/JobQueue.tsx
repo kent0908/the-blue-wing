@@ -1,5 +1,7 @@
 "use client";
 
+import { modelLabel } from "@/lib/modelLabel";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { IconImage, IconVideo, IconChat, IconClose } from "./Icons";
@@ -60,7 +62,7 @@ export default function JobQueue({ jobs, onDismiss }: { jobs: PendingJob[]; onDi
                   <Icon className="h-3.5 w-3.5 text-[#7ff0cd]" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[11.5px] text-white">{j.prompt || j.model}</div>
+                  <div className="truncate text-[11.5px] text-white">{j.prompt || modelLabel(j.model)}</div>
                   <div className="truncate text-[10.5px] text-[#7d7d7d]">
                     {STAGE_LABEL[Math.min(j.stage, STAGE_LABEL.length - 1)]} · <Elapsed startedAt={j.startedAt} />
                   </div>

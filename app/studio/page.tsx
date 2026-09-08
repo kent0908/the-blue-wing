@@ -1,5 +1,8 @@
 "use client";
 
+import LayerDecompositionResult from "@/components/LayerDecompositionResult";
+import { modelLabel } from "@/lib/modelLabel";
+
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,6 +13,7 @@ import ExpiringMedia from "@/components/ExpiringMedia";
 import { IconCompass, IconHistory, IconDownload, IconClose, IconCollapse } from "@/components/Icons";
 import { downloadResult } from "@/lib/download";
 import { useGenerationJobs, MAX_CONCURRENT_JOBS } from "@/lib/jobsStore";
+import { mainViewerJob, runningJobCount } from "@/lib/jobVisibility";
 import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
 
@@ -111,8 +115,8 @@ function StudioInner() {
   // default — the very first version's behaviour, and the one that
   // actually surfaces an error or "what stage is this at" without having
   // to notice the small strip below the composer. "縮小" collapses just
-  // that one job back down to the strip; it un-collapses on its own the
-  // moment it errors, since minimizing was never meant to hide a failure.
+  // that one job back down to the strip. Older failures stay in that queue
+  // when newer work is running or has already produced a result.
   const [minimizedJobIds, setMinimizedJobIds] = useState<Set<string>>(new Set());
   const minimizeJob = (id: string) => setMinimizedJobIds((s) => new Set(s).add(id));
 
@@ -124,6 +128,8 @@ function StudioInner() {
     settings: GenSettings;
     imagePayload?: Record<string, unknown>;
     assetIds?: number[];
+  generationMode?: string;
+  providerAssetIds?: number[];
     extraBody?: Record<string, unknown>;
     videoUrl?: string;
   }) => {
@@ -135,11 +141,8 @@ function StudioInner() {
   // (the panel on the right) still lists everything mixed together.
   const resultsForMode = results.filter((r) => r.kind === KIND_FOR_MODE[mode]);
   const latest = (selectedId ? resultsForMode.find((r) => r.id === selectedId) : null) ?? resultsForMode[0];
-  const atCapacity = jobs.length >= MAX_CONCURRENT_JOBS;
-  // An error always takes over the main viewer regardless of minimize state
-  // — that's the whole failure mode this is meant to fix. A still-running
-  // job only takes over while not minimized.
-  const activeJob = jobs.find((j) => j.mode === mode && (j.error || !minimizedJobIds.has(j.id)));
+  const atCapacity = runningJobCount(jobs) >= MAX_CONCURRENT_JOBS;
+  const activeJob = mainViewerJob(jobs, mode, minimizedJobIds, resultsForMode[0]?.createdAt, Boolean(selectedId));
 
   return (
     <div className="relative flex h-full min-h-0">
@@ -188,7 +191,7 @@ function StudioInner() {
                 onModeChange={setMode}
                 onSubmit={handleSubmit}
                 busy={atCapacity}
-                initialModel={presetModel}
+                initialModel={urlModel ?? presetModel}
                 initialPrompt={presetPrompt}
                 initialImgValues={presetImgValues}
                 initialRefs={presetRefs}
@@ -266,7 +269,7 @@ function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMini
         <span className="absolute inset-0 rounded-full border border-[#7ff0cd]/50 bw-pulse-ring" />
         <Icon className="h-6 w-6 text-[#7ff0cd]" />
       </span>
-      <p className="text-[14px] text-white">{job.prompt || job.model}</p>
+      <p className="text-[14px] text-white">{job.prompt || modelLabel(job.model)}</p>
       <p className="mt-2 text-[12.5px] text-[#7d7d7d]">
         {STAGE_LABEL[Math.min(job.stage, STAGE_LABEL.length - 1)]} · <Elapsed startedAt={job.startedAt} />
       </p>
@@ -276,6 +279,7 @@ function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMini
 
 function MainViewerItem({ item }: { item: ResultItem }) {
   const [broken, setBroken] = useState(false);
+  if(item.layerSetId) return <LayerDecompositionResult id={item.layerSetId}/>;
   return (
     <div className="w-full max-w-3xl py-8">
       <div className="relative">
@@ -306,7 +310,7 @@ function MainViewerItem({ item }: { item: ResultItem }) {
         )}
       </div>
       <p className="mt-4 text-center text-[12.5px] text-[#6d6d6d]">
-        {item.model} · {item.prompt}
+        {modelLabel(item.model)} · {item.prompt}
       </p>
     </div>
   );

@@ -233,3 +233,68 @@ create table if not exists user_personas (
 
 -- Structured companion settings (additive).
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS profile jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+-- Trusted, resumable character-scene generation requests. Additive only.
+create table if not exists character_scene_requests (
+  id uuid primary key,
+  character_id bigint not null references characters(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  kind text not null check (kind in ('image','video')),
+  level_index integer not null,
+  avatar_asset_id bigint not null,
+  model text not null,
+  prompt text not null,
+  status text not null check (status in ('submitting','processing','completed','failed')),
+  job_id text,
+  output_url text,
+  scene_id bigint references character_scenes(id) on delete set null,
+  credits_spent integer not null default 0,
+  error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists character_scene_requests_active_idx
+  on character_scene_requests(user_id,character_id,kind)
+  where status in ('submitting','processing');
+create index if not exists character_scene_requests_owner_idx
+  on character_scene_requests(user_id,character_id,created_at desc);
+
+-- Restore the previous idle-video table without deleting or replacing rows.
+create table if not exists character_idle_videos (
+  id bigint generated always as identity primary key,
+  character_id bigint not null references characters(id) on delete cascade,
+  user_id bigint not null references users(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending','completed','failed')),
+  job_id text, model text not null, prompt text not null, url text,
+  free boolean not null default false,
+  credits_spent integer not null default 0,
+  is_active boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists character_idle_videos_char_idx on character_idle_videos(character_id,created_at desc);
+create unique index if not exists credit_ledger_idle_video_free_uidx on credit_ledger(user_id,ref) where reason='idle_video_free';
+alter table character_idle_videos add column if not exists free_marker_id bigint;
+alter table character_idle_videos add column if not exists charge_id bigint;
+alter table character_idle_videos add column if not exists refund_done boolean not null default false;
+
+alter table character_idle_videos add column if not exists source_url text;
+
+-- Persisted, expiring generation quotes. Additive fields; existing rows retained.
+alter table character_scene_requests add column if not exists credits_quoted integer not null default 0;
+alter table character_scene_requests add column if not exists seconds integer;
+alter table character_scene_requests add column if not exists resolution text;
+alter table character_scene_requests add column if not exists summary text;
+alter table character_scene_requests add column if not exists expires_at timestamptz;
+alter table character_scene_requests drop constraint if exists character_scene_requests_status_check;
+alter table character_scene_requests add constraint character_scene_requests_status_check check(status in ('quoted','submitting','processing','completed','failed'));
+-- Owned, persistent manifests for Seedream Pro layer decomposition.
+create table if not exists generation_layer_sets (
+ id uuid primary key,
+ user_id bigint not null references users(id) on delete cascade,
+ model text not null,
+ prompt text not null,
+ layers jsonb not null,
+ credits_spent integer not null,
+ created_at timestamptz not null default now()
+);
+create index if not exists generation_layer_sets_owner_idx on generation_layer_sets(user_id,created_at desc);

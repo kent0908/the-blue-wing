@@ -12,6 +12,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "./types";
+import { runningJobCount } from "./jobVisibility";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function readJson(res: Response): Promise<any> {
@@ -117,6 +118,8 @@ export interface SubmitArgs {
   settings: GenSettings;
   imagePayload?: Record<string, unknown>;
   assetIds?: number[];
+  generationMode?: string;
+  providerAssetIds?: number[];
   extraBody?: Record<string, unknown>;
   /** a recorded 3D導演台 運鏡 clip's URL — video mode + Seedance 2.0/2.5 only, see lib/videoModels.ts */
   videoUrl?: string;
@@ -285,7 +288,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
    *  several of these run concurrently, each tracked by its own job id, and
    *  none of them depend on any page still being mounted to finish. */
   const runJob = useCallback(
-    async (jobId: string, jobMode: Mode, { prompt, model, settings, imagePayload, assetIds, extraBody, videoUrl }: SubmitArgs) => {
+    async (jobId: string, jobMode: Mode, { prompt, model, settings, imagePayload, assetIds, extraBody, videoUrl, generationMode, providerAssetIds }: SubmitArgs) => {
       try {
         updateJob(jobId, { stage: 1 });
 
@@ -300,6 +303,8 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
               resolution: settings.resolution,
               ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
               ...(assetIds?.length ? { assetIds } : {}),
+              ...(generationMode ? { generationMode } : {}),
+              ...(providerAssetIds?.length ? { providerAssetIds } : {}),
               ...(extraBody ? { extra_body: extraBody } : {}),
               ...(videoUrl ? { videoUrl } : {}),
             }),
@@ -345,6 +350,13 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           }
           updateJob(jobId, { stage: 3 });
           let any = false;
+          if(json.layerSetId){
+            const base = (json.layers??[]).find((layer:{z_index:number})=>layer.z_index===0);
+            pushResult({id:`layers-${json.layerSetId}`,kind:"image",url:base?.url,layerSetId:json.layerSetId,prompt,model,createdAt:Date.now()});
+            dismissJob(jobId);
+            pushToast({ok:true,mode:"image",title:"圖層分離完成",detail:`實扣 ${json.creditsSpent} 點，退回 ${json.creditsRefunded} 點`});
+            return;
+          }
           (json.images ?? []).forEach((img: { url: string | null }, i: number) => {
             if (img.url) {
               pushResult({ id: `${Date.now()}-${i}`, kind: "image", url: img.url, prompt, model, createdAt: Date.now() });
@@ -385,7 +397,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
 
   const startJob = useCallback(
     (jobMode: Mode, args: SubmitArgs) => {
-      if (jobs.length >= MAX_CONCURRENT_JOBS) return; // submit button is disabled at this point too
+      if (runningJobCount(jobs) >= MAX_CONCURRENT_JOBS) return;
       const jobId = newId("job");
       setJobs((prev) => [
         ...prev,
@@ -393,7 +405,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
       ]);
       void runJob(jobId, jobMode, args);
     },
-    [jobs.length, runJob]
+    [jobs, runJob]
   );
 
   return (

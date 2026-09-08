@@ -1,0 +1,2 @@
+﻿require('@next/env').loadEnvConfig(process.cwd());
+(async()=>{const key=process.env.SIRAYA_ASSET_API_KEY||process.env.SIRAYA_API_KEY;if(!key){console.log('ASSET_API_KEY_NOT_CONFIGURED');return;}const r=await fetch('https://console-api.siraya.ai/extapi/v1/assets?page=1&pageSize=1',{headers:{Authorization:`Bearer ${key}`}});const j=await r.json().catch(()=>({}));console.log(JSON.stringify({status:r.status,success:j.isSuccess,code:j.code||j.error?.code,reachable:r.ok}));})().catch(()=>{console.log('ASSET_API_NETWORK_ERROR');process.exitCode=1});

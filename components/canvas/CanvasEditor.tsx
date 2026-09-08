@@ -1,5 +1,7 @@
 "use client";
 
+import { modelLabel } from "@/lib/modelLabel";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { IconChevronLeft, IconPlus, IconPlay, IconTrash, IconImage, IconVideo, IconChat, IconAssets, IconAvatar } from "../Icons";
@@ -23,9 +25,14 @@ import {
   type CanvasNodeType,
   type PortType,
 } from "@/lib/canvas/types";
-import { topoOrder, upstreamOrder, inputsFor, runNode } from "@/lib/canvas/engine";
+import { topoOrder, upstreamOrder, executeGraph } from "@/lib/canvas/engine";
+import { CanvasSaveState, CanvasRunLock } from "@/lib/canvas/saveState";
+import { validateGraph } from "@/lib/canvas/validation";
+import { canvasNodeCredits, canvasRunCredits } from "@/lib/canvas/cost";
+import type { RateCardEntry } from "@/lib/pricing";
 import { IMAGE_MODELS } from "@/lib/imageModels";
-import { IMAGE_SIZES, RESOLUTIONS } from "@/lib/types";
+import { IMAGE_SIZES } from "@/lib/types";
+import { videoResolutionsForModel, normalizeVideoResolution } from "@/lib/videoModels";
 
 const PORT_COLOR: Record<PortType, string> = {
   text: "#7ea8ff",
@@ -81,14 +88,30 @@ export default function CanvasEditor({
   workflowId,
   initialName,
   initialGraph,
+  initialVersion,
 }: {
   workflowId: string;
   initialName: string;
   initialGraph: CanvasGraph;
+  initialVersion: string;
 }) {
+  const [rates, setRates] = useState<RateCardEntry[]>([]);
+  const [costDetails, setCostDetails] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => fetch("/api/rates", { cache: "no-store" }).then(r => r.ok ? r.json() : { rates: [] }).then(j => { if (alive) setRates(j.rates ?? []); }).catch(() => { if (alive) setRates([]); });
+    void refresh();
+    window.addEventListener("focus", refresh);
+    return () => { alive = false; window.removeEventListener("focus", refresh); };
+  }, []);
   const [name, setName] = useState(initialName);
-  const [graph, setGraph] = useState<CanvasGraph>(initialGraph);
-  const [dirty, setDirty] = useState(false);
+  const [graph, setGraph] = useState<CanvasGraph>(() => ({ ...initialGraph, nodes: initialGraph.nodes.map(n => n.status === "running" ? { ...n, status: "error", output: null, error: "上次執行已中斷，請確認生成紀錄後再執行" } : n) }));
+  const [dirty, setDirty] = useState(initialGraph.nodes.some(n => n.status === "running"));
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveState] = useState(() => { const state = new CanvasSaveState(initialVersion); if (initialGraph.nodes.some(n => n.status === "running")) state.edit(); return state; });
+  const [runLock] = useState(() => new CanvasRunLock());
+  const runController = useRef<AbortController | null>(null);
+  const nameRef = useRef(initialName);
   const [saving, setSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -111,14 +134,35 @@ export default function CanvasEditor({
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
+  const commitGraph = useCallback((next: CanvasGraph) => {
+    graphRef.current = next;
+    setGraph(next);
+    saveState.edit();
+    setDirty(saveState.dirty);
+  }, [saveState]);
+  const mutate = useCallback((fn: (g: CanvasGraph) => CanvasGraph) => {
+    if (runLock.busy) return;
+    const current = graphRef.current;
+    let next = fn(current);
+    const signature = (g: CanvasGraph) => JSON.stringify({ nodes: g.nodes.map(n => ({ id: n.id, type: n.type, data: n.data })), edges: g.edges });
+    if (signature(current) !== signature(next)) {
+      next = { ...next, nodes: next.nodes.map(n => ({ ...n, status: "idle", output: null, error: null })) };
+    }
+    commitGraph(next);
+  }, [runLock, commitGraph]);
   useEffect(() => {
-    graphRef.current = graph;
-  }, [graph]);
-
-  const mutate = (fn: (g: CanvasGraph) => CanvasGraph) => {
-    setGraph((g) => fn(g));
-    setDirty(true);
-  };
+    const guard = (e: BeforeUnloadEvent) => {
+      if (saveState.dirty || saveState.saving || runLock.busy) { e.preventDefault(); e.returnValue = ""; }
+    };
+    const leave = (e: MouseEvent) => {
+      const link = (e.target as HTMLElement).closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!link || link.target === "_blank" || e.ctrlKey || e.metaKey || e.shiftKey || link.href === location.href) return;
+      if ((saveState.dirty || saveState.saving || runLock.busy) && !confirm("畫布尚有未儲存內容或執行中的工作。確定離開？可先取消並儲存或匯出草稿。")) { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener("beforeunload", guard);
+    document.addEventListener("click", leave, true);
+    return () => { window.removeEventListener("beforeunload", guard); document.removeEventListener("click", leave, true); runController.current?.abort(); };
+  }, [saveState, runLock]);
 
   const toWorld = useCallback((clientX: number, clientY: number) => {
     const rect = containerRef.current!.getBoundingClientRect();
@@ -142,7 +186,7 @@ export default function CanvasEditor({
       .then((j: { models: { id: string; modality: string; displayName?: string }[] }) =>
         // /api/models already returns them pre-sorted (grouped by family,
         // admin overrides honoured) — no reason to re-sort here too.
-        setVideoModels(j.models.filter((m) => m.modality === "video").map((m) => ({ id: m.id, name: m.displayName ?? m.id })))
+        setVideoModels(j.models.filter((m) => m.modality === "video" && !/nsfw/i.test(m.id)).map((m) => ({ id: m.id, name: modelLabel(m.displayName ?? m.id) })))
       )
       .catch(() => {});
   }, []);
@@ -198,7 +242,7 @@ export default function CanvasEditor({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [interaction, toWorld]);
+  }, [interaction, toWorld, mutate]);
 
   /* ---- wheel-to-zoom (native listener so preventDefault actually works) ---- */
   useEffect(() => {
@@ -238,22 +282,33 @@ export default function CanvasEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedNode, selectedEdge]);
+  }, [selectedNode, selectedEdge, mutate]);
 
   /* ---- save ---- */
-  const save = useCallback(async () => {
-    setSaving(true);
+  const save = async () => {
+    if (saveState.saving || runLock.busy) return;
+    const snapshot = { name: nameRef.current, graph: graphRef.current };
+    setSaving(true); setSaveError(null);
     try {
-      await fetch(`/api/canvas/${workflowId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, graph: graphRef.current }),
+      validateGraph(snapshot.graph);
+      await saveState.save(async version => {
+        const res = await fetch(`/api/canvas/${workflowId}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...snapshot, version }),
+        });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(result.error?.message || `儲存失敗（${res.status}），草稿仍保留`);
+        if (result.workflow?.id !== workflowId) throw new Error("儲存回應與畫布不符，請保留草稿");
+        return { version: result.workflow.version };
       });
-      setDirty(false);
-    } finally {
-      setSaving(false);
-    }
-  }, [workflowId, name]);
+    } catch (e) { setSaveError(e instanceof Error ? e.message : "儲存失敗，草稿仍保留"); }
+    finally { setSaving(false); setDirty(saveState.dirty); }
+  };
+  const exportDraft = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ name: nameRef.current, graph: graphRef.current, version: saveState.version }, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a"); link.href = url; link.download = `canvas-${workflowId}-draft.json`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   /* ---- node ops ---- */
   const addNode = (type: CanvasNodeType, at?: { x: number; y: number }) => {
@@ -268,59 +323,33 @@ export default function CanvasEditor({
     mutate((g) => ({ ...g, nodes: g.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)) }));
   };
 
-  const setNodeRunState = (id: string, patch: Partial<CanvasNode>) => {
-    setGraph((g) => ({ ...g, nodes: g.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }));
-  };
-
-  const runOne = async (nodeId: string) => {
-    const order = upstreamOrder(graphRef.current, nodeId);
-    if (!order.length) {
-      setNodeRunState(nodeId, { status: "error", error: "圖裡有循環連接，無法執行" });
-      return;
-    }
-    for (const id of order) {
-      const node = graphRef.current.nodes.find((n) => n.id === id);
-      if (!node) continue;
-      setNodeRunState(id, { status: "running", error: null });
+  const execute = async (nodeId?: string) => {
+    if (saveState.saving) return;
+    await runLock.run(async () => {
+      setRunningAll(true); setSaveError(null);
+      const controller = new AbortController(); runController.current = controller;
       try {
-        const inputs = inputsFor(graphRef.current, id);
-        const output = await runNode(node, inputs);
-        setNodeRunState(id, { status: "done", output, error: null });
-        graphRef.current = { ...graphRef.current, nodes: graphRef.current.nodes.map((n) => (n.id === id ? { ...n, status: "done", output } : n)) };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "執行失敗";
-        setNodeRunState(id, { status: "error", error: msg });
-        return;
-      }
-    }
+        const snapshot = structuredClone(validateGraph(graphRef.current));
+        const order = nodeId ? upstreamOrder(snapshot, nodeId) : topoOrder(snapshot);
+        if (!order || (nodeId && !order.length)) throw new Error("圖裡有循環連接，請先移除循環連線");
+        const currentRatesResponse = await fetch("/api/rates", { cache: "no-store" });
+        if (!currentRatesResponse.ok) throw new Error("無法取得點數費率，請稍後再試");
+        const currentRates = (await currentRatesResponse.json()).rates ?? [];
+        setRates(currentRates);
+        if (canvasRunCredits(snapshot, currentRates, order) === null) throw new Error("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行");
+        await executeGraph(snapshot, order, (id, patch) => {
+          if (!controller.signal.aborted) commitGraph({ ...graphRef.current, nodes: graphRef.current.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
+        }, controller.signal);
+      } catch (e) { if (!controller.signal.aborted) setSaveError(e instanceof Error ? e.message : "執行失敗"); }
+      finally { if (!controller.signal.aborted) setRunningAll(false); runController.current = null; }
+    });
   };
+  const runOne = (id: string) => execute(id);
+  const runAll = () => execute();
 
-  const runAll = async () => {
-    const order = topoOrder(graphRef.current);
-    if (!order) {
-      alert("圖裡有循環連接（節點互相依賴），請先移除造成循環的連線");
-      return;
-    }
-    setRunningAll(true);
-    for (const id of order) {
-      const node = graphRef.current.nodes.find((n) => n.id === id);
-      if (!node) continue;
-      setNodeRunState(id, { status: "running", error: null });
-      try {
-        const inputs = inputsFor(graphRef.current, id);
-        const output = await runNode(node, inputs);
-        setNodeRunState(id, { status: "done", output, error: null });
-        graphRef.current = { ...graphRef.current, nodes: graphRef.current.nodes.map((n) => (n.id === id ? { ...n, status: "done", output } : n)) };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "執行失敗";
-        setNodeRunState(id, { status: "error", error: msg });
-        setRunningAll(false);
-        return;
-      }
-    }
-    setRunningAll(false);
-  };
-
+  const totalCredits = canvasRunCredits(graph, rates);
+  const selectedCredits = selectedNode ? canvasRunCredits(graph, rates, upstreamOrder(graph, selectedNode)) : null;
+  const directorNode = graph.nodes.find(n => n.id === director3dNodeId);
   const nodeById = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph.nodes]);
 
   return (
@@ -332,17 +361,20 @@ export default function CanvasEditor({
         </Link>
         <input
           value={name}
+          maxLength={120}
+          disabled={runningAll}
           onChange={(e) => {
-            setName(e.target.value);
-            setDirty(true);
+            nameRef.current = e.target.value; setName(e.target.value);
+            saveState.edit(); setDirty(saveState.dirty);
           }}
           className="w-[220px] rounded-lg bg-transparent px-2 py-1 text-[14px] font-medium text-white focus:bg-[#161616] focus:outline-none"
         />
-        <span className="text-[11.5px] text-[#6d6d6d]">{saving ? "儲存中…" : dirty ? "尚未儲存" : "已儲存"}</span>
+        <span className="text-[11.5px] text-[#6d6d6d]">{runningAll ? "執行中，請勿關閉" : saving ? "儲存中…" : dirty ? "尚未儲存" : "已儲存"}</span>
 
         <div className="relative ml-4">
           <button
             type="button"
+            disabled={runningAll}
             onClick={() => setAddMenuOpen((v) => !v)}
             className="flex h-8 items-center gap-1.5 rounded-full bg-[#1f1f1f] px-3 text-[12.5px] text-white transition-colors hover:bg-[#282828]"
           >
@@ -368,10 +400,11 @@ export default function CanvasEditor({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          <button type="button" onClick={exportDraft} className="whitespace-nowrap text-xs text-[#7ff0cd]">匯出草稿</button>
           <button
             type="button"
             onClick={runAll}
-            disabled={runningAll || graph.nodes.length === 0}
+            disabled={runningAll || saving || graph.nodes.length === 0}
             className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[12.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <IconPlay className="h-3.5 w-3.5" />
@@ -380,7 +413,7 @@ export default function CanvasEditor({
           <button
             type="button"
             onClick={save}
-            disabled={saving}
+            disabled={saving || runningAll}
             className="h-8 rounded-full border border-[#3a3a3a] px-4 text-[12.5px] text-white transition-colors hover:border-[#555] disabled:opacity-50"
           >
             儲存
@@ -388,9 +421,21 @@ export default function CanvasEditor({
         </div>
       </div>
 
+      <div className="shrink-0 border-b border-[#252525] bg-[#101817] px-4 py-2 text-xs text-[#9ce9d5]">
+        <button type="button" onClick={() => setCostDetails(v => !v)} aria-expanded={costDetails} className="text-left">
+          全部執行：約 {totalCredits === null ? "費率未設定" : `${totalCredits} 點`}　{selectedNode && `選取節點含上游：約 ${selectedCredits === null ? "費率未設定" : `${selectedCredits} 點`}　`}{costDetails ? "收合明細 ▴" : "查看點數明細 ▾"}
+        </button>
+        {costDetails && <div className="mt-2 max-h-36 overflow-auto text-[#b1bfbb]">
+          {graph.nodes.map((n, index) => <div key={n.id} className="flex flex-wrap justify-between gap-2 py-1"><span>{index + 1}. {NODE_SPECS[n.type].label} {n.data.model ? modelLabel(String(n.data.model)) : ""}</span><span>{canvasNodeCredits(n, rates) === null ? "費率未設定" : `${canvasNodeCredits(n, rates)} 點`}</span></div>)}
+          <p className="pt-2 text-[#849a93]">依站內費率估算；圖片以每節點 1 張計算，影片依時長及解析度計算。單點執行包含上游節點；每次重跑重新計費，實際扣點以執行紀錄為準。</p>
+        </div>}
+      </div>
+
+      {saveError && <p role="alert" className="shrink-0 bg-[#301919] px-4 py-2 text-sm text-red-200">{saveError}</p>}
       {/* canvas */}
       <div
         ref={containerRef}
+        inert={runningAll}
         className="relative flex-1 select-none overflow-hidden"
         style={{
           backgroundImage: "radial-gradient(circle, #1e1e1e 1px, transparent 1px)",
@@ -509,18 +554,11 @@ export default function CanvasEditor({
         )}
       </div>
 
-      {director3dNodeId &&
-        (() => {
-          const n = graph.nodes.find((x) => x.id === director3dNodeId);
-          if (!n) return null;
-          return (
-            <Director3DPanel
-              initial={n.data as unknown as Director3DSceneData}
-              onSave={(data) => updateNodeData(n.id, data as unknown as Record<string, unknown>)}
-              onClose={() => setDirector3dNodeId(null)}
-            />
-          );
-        })()}
+      {directorNode && <Director3DPanel
+        initial={directorNode.data as unknown as Director3DSceneData}
+        onSave={data => updateNodeData(directorNode.id, data as unknown as Record<string, unknown>)}
+        onClose={() => setDirector3dNodeId(null)}
+      />}
     </div>
   );
 }
@@ -713,9 +751,10 @@ function NodeCard({
         {node.type === "image" && (
           <>
             <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value })} className={fieldCls}>
-              {IMAGE_MODELS.map((m) => (
+              {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>請重新選擇模型</option>}
+              {IMAGE_MODELS.filter((m) => !/nsfw/i.test(m.id)).map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name}
+                  {modelLabel(m.name)}
                 </option>
               ))}
             </select>
@@ -738,11 +777,12 @@ function NodeCard({
 
         {node.type === "video" && (
           <>
-            <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value })} className={fieldCls}>
-              {videoModels.length === 0 && <option value={String(node.data.model ?? "")}>{String(node.data.model ?? "載入中…")}</option>}
+            <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value, resolution: normalizeVideoResolution(e.target.value, String(node.data.resolution ?? "480p")) })} className={fieldCls}>
+              {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>請重新選擇模型</option>}
+              {videoModels.length === 0 && <option value="">載入中…</option>}
               {videoModels.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name}
+                  {modelLabel(m.name)}
                 </option>
               ))}
             </select>
@@ -755,8 +795,9 @@ function NodeCard({
                 onChange={(e) => onDataChange({ seconds: Number(e.target.value) })}
                 className={fieldCls + " w-1/2"}
               />
-              <select value={String(node.data.resolution ?? "480p")} onChange={(e) => onDataChange({ resolution: e.target.value })} className={fieldCls + " w-1/2"}>
-                {RESOLUTIONS.map((r) => (
+              <select value={videoResolutionsForModel(String(node.data.model ?? "")).includes(String(node.data.resolution ?? "480p") as never) ? String(node.data.resolution ?? "480p") : ""} onChange={(e) => onDataChange({ resolution: e.target.value })} className={fieldCls + " w-1/2"}>
+                <option value="" disabled>請選擇支援的解析度</option>
+                {videoResolutionsForModel(String(node.data.model ?? "")).map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>

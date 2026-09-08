@@ -1,0 +1,39 @@
+.layout { position: relative; display: grid; grid-template-columns: minmax(200px, 28%) minmax(0, 1fr) 300px; flex: 1; min-height: 0; }
+.portrait { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: radial-gradient(ellipse at center, #23352f, #0c1111 75%); border-right: 1px solid #ffffff12; }
+.portraitImage { width: 100%; height: 100%; object-fit: contain; object-position: center; }
+.portraitCaption { position: absolute; bottom: 0; left: 0; right: 0; display: flex; flex-direction: column; gap: 5px; padding: 44px 20px 20px; background: linear-gradient(transparent, #091210e8); pointer-events: none; }
+.portraitCaption strong { font-size: 20px; color: #eefbf6; }
+.portraitCaption span { font-size: 12px; color: #7ff0cd; }
+.emptyPortrait { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #96aaa3; font-size: 13px; }
+.emptyPortrait button { color: #7ff0cd; border: 1px solid #7ff0cd55; border-radius: 20px; padding: 8px 16px; }
+.conversation { display: flex; min-height: 0; min-width: 0; flex-direction: column; }
+.details { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-left: 1px solid #ffffff12; background: #101615; overflow: hidden; }
+.details > aside { flex: 1; }
+.tabs { display: flex; flex-shrink: 0; gap: 5px; padding: 12px 10px; border-bottom: 1px solid #ffffff12; }
+.tabs button { flex: 1; padding: 8px 4px; border-radius: 9px; font-size: 12px; color: #aebdb8; }
+.tabs button[aria-pressed=true] { color: #7ff0cd; background: #7ff0cd12; }
+.tabs button:hover { background: #ffffff0a; }
+@media (max-width: 1100px) {
+ .layout { grid-template-columns: minmax(180px, 30%) minmax(0, 1fr); }
+ .details { display: none; position: absolute; right: 0; top: 0; bottom: 0; width: min(340px, 100%); z-index: 30; box-shadow: -16px 0 50px #0008; }
+ .detailsOpen { display: flex; }
+}
+@media (max-width: 640px) {
+ .layout { display: flex; flex-direction: column; }
+ .portrait { height: 240px; flex-shrink: 0; border-right: 0; border-bottom: 1px solid #ffffff12; }
+ .portraitImage { object-position: 25% center; width: 50%; }
+ .portraitCaption { left: 45%; top: 0; padding: 16px; justify-content: center; background: none; }
+ .portraitCaption strong { font-size: 17px; }
+ .conversation { flex: 1; }
+ .emptyPortrait { gap: 5px; font-size: 12px; }
+ .emptyPortrait svg { display: none; }
+}
+
+.mobileTabs { display: none; }
+.scenePanel { display: flex; flex: 1; min-height: 0; }
+.scenePanel[hidden] { display: none; }
+.portraitCaption { bottom: 48px; }
+@media(max-width:1100px) { .mobileTabs { display: flex; flex-shrink: 0; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #ffffff12; } .mobileTabs button { flex: 1; color: #9ee7d2; font-size: 12px; padding: 7px; border-radius: 8px; background: #ffffff06; } }
+@media(max-width:640px) { .portraitCaption { bottom: 0; } }
+
+@media(max-width:1100px) { .details .tabs { display: none; } }

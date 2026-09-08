@@ -1,5 +1,10 @@
+import { LAYER_DECOMPOSITION_AVAILABLE, LAYER_DECOMPOSITION_UNAVAILABLE_REASON } from "@/lib/layerCapability";
+import { MAX_LAYER_OUTPUTS, validateLayerInput, parseLayerResponse } from "@/lib/layerDecomposition";
+import { saveLayerSet } from "@/lib/layerSets";
+import { SirayaApiError } from "@/lib/siraya";
+import { assertModelAccess } from "@/lib/companionGenerationAccess";
 import { validateGeneration } from "@/lib/generationValidation";
-import { paidCall, refundCharge } from "@/lib/creditTransactions";
+import { paidCall, refundCharge, settleCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
 import { createImage, type ImageGenerationRequest } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
@@ -7,8 +12,9 @@ import { requireUser } from "@/lib/apiauth";
 import { getBalance, creditCost } from "@/lib/credits";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
-import { MAX_REF_IMAGES, getImageModelForControls, supportsWatermarkControl } from "@/lib/imageModels";
+import { MAX_REF_IMAGES } from "@/lib/imageModels";
 import { recordGeneration } from "@/lib/generations";
+import { applyWatermarkDefaults } from "@/lib/watermark";
 import { sniffImageMimeFromBase64 } from "@/lib/imageMime";
 
 export const runtime = "nodejs";
@@ -33,6 +39,8 @@ const ALLOWED: (keyof ImageGenerationRequest)[] = [
   "output_compression",
   "moderation",
   "watermark",
+  "layer_decomposition",
+  "output_format",
 ];
 
 /**
@@ -48,8 +56,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    if(body?.layer_decomposition === true && !LAYER_DECOMPOSITION_AVAILABLE) return NextResponse.json({error:{message:LAYER_DECOMPOSITION_UNAVAILABLE_REASON,code:"layer_metadata_unavailable"}},{status:503});
+    assertModelAccess(req, body?.model);
     validateGeneration(body, "image");
-    if (!body?.model || !body?.prompt) {
+    const isLayers = body.layer_decomposition === true;
+    if (!body?.model || (!body?.prompt && !isLayers)) {
       return NextResponse.json(
         { error: { message: "`model` and `prompt` are required.", type: "invalid_request_error", code: 400 } },
         { status: 400 }
@@ -59,9 +70,14 @@ export async function POST(req: NextRequest) {
     const cost = await creditCost({
       kind: "image",
       model: String(body.model),
-      imageCount: Number(body.n) || 1,
+      imageCount: isLayers ? MAX_LAYER_OUTPUTS : Number(body.n) || 1,
     });
+    if(isLayers && body.confirmedMaxCredits !== cost) throw new SirayaApiError(409,"請確認圖層分離最高預扣點數後再生成");
     const balance = await getBalance(user.id);
+    const confirmedCredits = req.headers.get("x-blue-wing-expected-credits");
+    if (confirmedCredits !== null && (!/^\d+$/.test(confirmedCredits) || Number(confirmedCredits) !== cost)) {
+      return NextResponse.json({ error: { message: "點數已變更，請重新預覽並確認", code: "stale_quote" } }, { status: 409 });
+    }
     if (balance < cost) {
       return NextResponse.json(
         {
@@ -80,26 +96,6 @@ export async function POST(req: NextRequest) {
     const payload = {} as Record<string, unknown>;
     for (const key of ALLOWED) {
       if (body[key] !== undefined) payload[key] = body[key];
-    }
-
-    // Seedream defaults to a visible "AI generated" watermark unless told
-    // otherwise (docs claim default false, but real output disagrees —
-    // verified empirically). Other families do NOT "ignore it harmlessly" —
-    // GPT Image 2 proxies straight to OpenAI's own API, which rejects unknown
-    // parameters outright ("Unknown parameter: 'watermark'"). Only forward
-    // the field for families verified to accept it; strip it otherwise, even
-    // if the client sent one (defense in depth — see AdvancedParams.tsx for
-    // the client-side gating). getImageModelForControls (not getImageModel)
-    // since this is a real-behavior question, not a display one — an
-    // "NSFW-"-prefixed Seedream id is still Seedream underneath and still
-    // accepts this field; a real bug hunt (2026-09-06) found this used
-    // plain getImageModel() and so was silently stripping watermark control
-    // for every NSFW-* image model regardless of what the client sent.
-    const imgModel = getImageModelForControls(String(body.model));
-    if (supportsWatermarkControl(imgModel)) {
-      if (payload.watermark === undefined) payload.watermark = false;
-    } else {
-      delete payload.watermark;
     }
 
     // reference image(s): can come from the user's own asset library
@@ -125,8 +121,28 @@ export async function POST(req: NextRequest) {
     if (cappedRefs.length === 1) payload.image = cappedRefs[0];
     else if (cappedRefs.length > 1) payload.image = cappedRefs;
 
+    if(isLayers){
+      if(refs.length!==1)throw new SirayaApiError(400,"圖層分離需選擇一張原圖");
+      validateLayerInput(refs[0]);
+      payload.size ??= "2K";payload.output_format="png";delete payload.n;
+      const unitCost=cost/MAX_LAYER_OUTPUTS;
+      const {result}=await paidCall(user.id,cost,"image_layers",String(body.model),async(chargeId)=>{
+        const json=await createImage(applyWatermarkDefaults(payload as unknown as ImageGenerationRequest,"image"));
+        const layers=parseLayerResponse(json?.data);
+        for(const layer of layers){
+          layer.url=await persistGeneratedMedia(layer.url,{userId:user.id,kind:"image"});
+          if(!layer.url.startsWith('/api/media/'))throw new SirayaApiError(502,"圖層儲存失敗，已取消本次扣點，請稍後重試");
+        }
+        const creditsSpent=layers.length*unitCost;
+        const creditsRefunded=await settleCharge(user.id,chargeId,creditsSpent);
+        const layerSetId=await saveLayerSet(user.id,String(body.model),String(body.prompt??''),layers,creditsSpent);
+        return {layers,layerSetId,creditsSpent,creditsRefunded,created:json.created??null};
+      });
+      return NextResponse.json({...result,images:result.layers.map(l=>({url:l.url})),reservedCredits:cost,creditsBalance:await getBalance(user.id)});
+    }
+
     const { result: json, chargeId } = await paidCall(user.id, cost, "image", String(body.model), () =>
-      createImage(payload as unknown as ImageGenerationRequest)
+      createImage(applyWatermarkDefaults(payload as unknown as ImageGenerationRequest, "image"))
     );
     const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({
       url: d.url ? String(d.url) : d.b64_json ? `data:${sniffImageMimeFromBase64(String(d.b64_json))};base64,${d.b64_json}` : null,

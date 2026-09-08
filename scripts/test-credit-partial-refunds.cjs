@@ -1,0 +1,18 @@
+﻿const fs=require('fs'),ts=require('typescript'),assert=require('assert/strict');const m={exports:{}};new Function('exports','module',ts.transpileModule(fs.readFileSync('lib/creditReplay.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(m.exports,m);const {replayCredits}=m.exports;
+const event=(id,delta,reason,ref,day,expires=null)=>({id,delta,reason,ref,created_at:`2026-09-${String(day).padStart(2,'0')}T00:00:00Z`,expires_at:expires?`2026-09-${String(expires).padStart(2,'0')}T00:00:00Z`:null});
+const day=n=>Date.parse(`2026-09-${String(n).padStart(2,'0')}T12:00:00Z`);
+const grants=[event('1',100,'grant',null,1,10),event('2',100,'grant',null,1,20),event('3',100,'grant',null,1)];
+const reserved=[...grants,event('4',-250,'image_layers','model',2)];
+const partial=event('5',150,'charge_partial_refund','4',3);
+assert.equal(replayCredits([...reserved,partial],day(4)),200,'partial returns exactly150');
+assert.equal(replayCredits([...reserved,partial],day(11)),200,'actual100 charged oldest lot first');
+assert.equal(replayCredits([...reserved,partial],day(21)),100,'refunded expiring lot does not become perpetual');
+const full=event('6',100,'charge_refund','4',12);
+assert.equal(replayCredits([...reserved,partial,full],day(12)),200,'full afterpartial restoresexpired100 but no currentbalance boost');
+assert.equal(replayCredits([...reserved,partial,full,event('7',250,'charge_refund','4',13)],day(14)),200,'duplicate full cannot credit twice');
+assert.equal(replayCredits([...reserved,partial,partial],day(4)),200,'duplicate eventid ignored');
+assert.equal(replayCredits([...reserved,event('5',150,'charge_partial_refund','4',21)],day(21)),100,'late partial preserves expiredlot expiry');
+assert.equal(replayCredits([...grants,event('9',99,'charge_partial_refund','missing',2)],day(4)),300,'orphan partial is not a newgrant');
+assert.equal(replayCredits([...reserved,event('5',250,'charge_refund','4',3)],day(4)),300,'legacy fullrefund unchanged');
+assert.equal(replayCredits([...reserved,partial,event('6',-50,'image','model',4)],day(5)),150,'refunded lots available forlater legitimate spend');
+console.log('Credit expiry and partial refund: 10 checks passed');

@@ -1,3 +1,4 @@
+import { modelLabel } from "./modelLabel";
 /**
  * Model display name / sort order — a thin admin-editable layer on top of
  * the raw SIRAYA model id. Two independent concerns:
@@ -27,13 +28,7 @@ import { sql } from "./db";
  * displayModelName, which this supersedes for video/uncatalogued models.
  */
 export function cleanModelName(id: string): string {
-  // Some ids put NSFW- first and the vendor prefix after it
-  // (NSFW-Dola-Seedream-5.0-pro) — strip NSFW- off, clean the rest, then put
-  // it back, rather than anchoring the vendor-prefix regex to the very start
-  // of the string (which would miss exactly this case).
-  const nsfw = id.match(/^NSFW-(.+)$/i);
-  const rest = (nsfw ? nsfw[1] : id).replace(/^(SIRAYA|ByteDance|Dola)-/i, "");
-  return nsfw ? `NSFW-${rest}` : rest;
+  return modelLabel(id);
 }
 
 interface SortKey {
@@ -127,7 +122,7 @@ export function resolveModelDisplay(
 ): { displayName: string; sortOrder: number | null } {
   const override = overrides.get(id);
   return {
-    displayName: override?.displayName ?? catalogName ?? cleanModelName(id),
+    displayName: modelLabel(override?.displayName ?? catalogName ?? id),
     sortOrder: override?.sortOrder ?? null,
   };
 }

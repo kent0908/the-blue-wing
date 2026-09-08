@@ -9,7 +9,7 @@ import { GenerationJobsProvider } from "@/lib/jobsStore";
 export const metadata: Metadata = {
   title: "The Blue Wing — AI 影片、圖片與創作平台",
   description:
-    "The Blue Wing 把頂尖的影片、圖片與文字模型收在同一個介面裡，一句話就能出片。由 SIRAYA Model Router 提供模型路由。",
+    "The Blue Wing 把頂尖的影片、圖片與文字模型收在同一個介面裡，一句話就能出片。",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

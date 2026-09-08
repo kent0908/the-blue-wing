@@ -1,5 +1,7 @@
 "use client";
 
+import { modelLabel } from "@/lib/modelLabel";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -176,7 +178,7 @@ export default function AdminRatesPage() {
                 {filtered.map((r) => (
                   <tr key={r.modelId} className="border-t border-[#1e1e1e]">
                     <td className="px-3 py-2">
-                      <span className="text-white">{r.displayName}</span>
+                      <span className="text-white">{modelLabel(r.displayName)}</span>
                       {!r.hasRate && <span className="ml-2 text-[10.5px] text-[#6d6d6d]">（用預設）</span>}
                     </td>
                     <td className="px-3 py-2">

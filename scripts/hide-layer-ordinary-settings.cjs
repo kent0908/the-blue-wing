@@ -1,0 +1,1 @@
+﻿const fs=require('fs');let p='components/Composer.tsx',s=fs.readFileSync(p,'utf8');s=s.replace('{activeImageModel ? (\n          <ImageParams','{operation==="layer-separation" ? null : activeImageModel ? (\n          <ImageParams');fs.writeFileSync(p,s);

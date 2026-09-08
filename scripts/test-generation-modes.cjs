@@ -1,0 +1,35 @@
+const fs = require('node:fs');
+const ts = require('typescript');
+const assert = require('node:assert/strict');
+const moduleValue = { exports: {} };
+const capability = { exports: {} };
+new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/layerCapability.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(capability,capability.exports);
+new Function('module', 'exports', 'require', ts.transpileModule(fs.readFileSync('lib/generationModes.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(moduleValue, moduleValue.exports, id => { if(id === './layerCapability') return capability.exports; throw new Error('Unexpected dependency '+id); });
+const { getGenerationModes, buildVideoModePayload: build } = moduleValue.exports;
+const model = 'SIRAYA-Seedance-2.0-mini';
+const base = { model, mode: 'freestyle', prompt: 'A landscape', seconds: 5, aspectRatio: '16:9' };
+assert.deepEqual(build(base), { prompt: 'A landscape', seconds: 5, aspect_ratio: '16:9' });
+assert.deepEqual(build({ ...base, mode: 'subject-reference', references: [{ type: 'image', url: 'asset://owned-approved' }] }).input_references, [{ type: 'image', url: 'asset://owned-approved', role: 'reference_image' }]);
+assert.throws(() => build({ ...base, mode: 'subject-reference' }), /至少/);
+assert.throws(() => build({ ...base, references: [{ type: 'video', url: 'asset://video' }] }), /點數/);
+assert.throws(() => build({ ...base, references: [{ type: 'audio', url: 'https://media.test/audio.mp3' }] }), /僅使用音訊/);
+assert.equal(build({ ...base, model: 'SIRAYA-Seedance-2.5', references: [{ type: 'audio', url: 'https://media.test/audio.mp3' }] }).input_references[0].role, 'reference_audio');
+assert.throws(() => build({ ...base, references: Array.from({ length: 10 }, () => ({ type: 'image', url: 'asset://a' })) }), /上限/);
+const frames = build({ ...base, model: 'SIRAYA-Seedance-2.5', mode: 'first-last-frame', imageUrls: ['https://media.test/first.jpg', 'https://media.test/last.jpg'] });
+assert.equal(frames.aspect_ratio, 'adaptive');
+assert.deepEqual(frames.frame_images.map(frame => frame.frame_type), ['first_frame', 'last_frame']);
+assert.ok(!('input_references' in frames));
+assert.throws(() => build({ ...base, mode: 'first-last-frame', imageUrls: ['first'], references: [{ type: 'image', url: 'ref' }] }), /同時/);
+assert.throws(() => build({ ...base, mode: 'first-last-frame', imageUrls: ['first'] }), /各一張/);
+assert.throws(() => build({ ...base, seconds: -1 }), /時長/);
+assert.throws(() => build({ ...base, seconds: 16 }), /時長/);
+assert.equal(build({ ...base, model: 'SIRAYA-Seedance-2.5', seconds: 30 }).seconds, 30);
+assert.equal(build({ ...base, model: 'ByteDance-Seedance-1.0-pro-fast', mode: 'image-to-video', imageUrls: ['https://media.test/image.jpg'] }).image_url, 'https://media.test/image.jpg');
+assert.throws(() => build({ ...base, model: 'ByteDance-Seedance-1.5-pro', mode: 'text-to-video', imageUrls: ['image'] }), /不接受/);
+for (const mode of ['video-edit', 'video-extend']) {
+  assert.equal(getGenerationModes(model, 'video').find(item => item.id === mode).enabled, false);
+  assert.throws(() => build({ ...base, mode }), /尚未開放/);
+}
+assert.equal(getGenerationModes('Dola-Seedream-5.0-pro', 'image').find(item => item.id === 'layer-separation').enabled, false);
+assert.deepEqual(getGenerationModes('unknown-model', 'video'), []);
+console.log('PASS: documented mode payloads, references, frame exclusivity, quotas, durations and disabled unverified/unpriced operations.');

@@ -1,0 +1,1 @@
+﻿const fs=require('fs');const p='components/Composer.tsx';let s=fs.readFileSync(p,'utf8');s=s.replace('const refCap = mode === "video" ? maxRefsForVideoModel(resolvedModel) : MAX_REF_IMAGES;','const refCap = operation === "first-last-frame" ? 2 : operation === "image-to-video" ? 1 : mode === "video" ? maxRefsForVideoModel(resolvedModel) : MAX_REF_IMAGES;');fs.writeFileSync(p,s);

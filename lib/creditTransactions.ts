@@ -25,7 +25,9 @@ export async function refundCharge(userId:number, chargeId:string) {
     if (!charge) return;
     const existing=await c.query("SELECT 1 FROM credit_ledger WHERE user_id=$1 AND ((reason='charge_refund' AND ref=$2) OR (reason='video_refund' AND ref=$3)) LIMIT 1",[userId,chargeId,charge.ref]);
     if(existing.rows.length)return;
-    await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref) VALUES($1,$2,'charge_refund',$3)",[userId,-charge.delta,chargeId]);
+    const partial=await c.query("SELECT COALESCE(SUM(delta),0) AS total FROM credit_ledger WHERE user_id=$1 AND ref=$2 AND reason='charge_partial_refund'",[userId,chargeId]);
+    const remaining=-Number(charge.delta)-Number(partial.rows[0]?.total??0);
+    if(remaining>0)await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref) VALUES($1,$2,'charge_refund',$3)",[userId,remaining,chargeId]);
   });
 }
 /**
@@ -55,7 +57,7 @@ export async function refundCharge(userId:number, chargeId:string) {
  * paidCall can't know what "usable" means for every kind, so that decision
  * stays with the caller.
  */
-export async function paidCall<T>(userId:number,cost:number,kind:string,ref:string,call:()=>Promise<T>):Promise<{result:T,chargeId:string}> {
+export async function paidCall<T>(userId:number,cost:number,kind:string,ref:string,call:(chargeId:string)=>Promise<T>):Promise<{result:T,chargeId:string}> {
   if(!Number.isSafeInteger(cost)||cost<=0)throw new SirayaApiError(400,"無效的計費數量");
   const chargeId=await creditTransaction(userId,async c=>{
     if(await ledgerBalance(c,userId)<cost)throw new SirayaApiError(402,"點數不足，其他生成可能已預扣點數");
@@ -63,14 +65,34 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
     return String(rows[0].id);
   });
   let result:T;
-  try {result=await call();} catch(e) {
+  try {result=await call(chargeId);} catch(e) {
     await refundCharge(userId,chargeId);
     throw e;
   }
   if(kind==="video") {
     const id=(result as {id?:unknown})?.id;
-    if(id)await sql.query("UPDATE credit_ledger SET ref=$1 WHERE id=$2 AND user_id=$3",[String(id),chargeId,userId]);
+    if(id) {
+      try {
+        await sql.query("UPDATE credit_ledger SET ref=$1 WHERE id=$2 AND user_id=$3",[String(id),chargeId,userId]);
+      } catch (error) {
+        // Without this binding no polling endpoint can find or refund the
+        // paid job. Roll back this known charge rather than lose its identity.
+        await refundCharge(userId, chargeId);
+        throw error;
+      }
+    }
   }
   return {result,chargeId};
 }
 
+/** Settle a bounded reservation once, under the same per-user ledger lock. */
+export async function settleCharge(userId:number,chargeId:string,actualCost:number) {
+ return creditTransaction(userId,async c=>{
+  const {rows}=await c.query("SELECT delta FROM credit_ledger WHERE id=$1 AND user_id=$2 AND delta<0",[chargeId,userId]);
+  if(!rows.length||!Number.isSafeInteger(actualCost)||actualCost<0||actualCost>-rows[0].delta)throw new SirayaApiError(500,'無效的圖層結算');
+  const refunded=await c.query("SELECT COALESCE(SUM(delta),0) AS total FROM credit_ledger WHERE user_id=$1 AND ref=$2 AND reason IN ('charge_refund','charge_partial_refund')",[userId,chargeId]);
+  const difference=-rows[0].delta-actualCost-Number(refunded.rows[0].total);
+  if(difference>0)await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref) VALUES($1,$2,'charge_partial_refund',$3)",[userId,difference,chargeId]);
+  return Math.max(0,difference);
+ });
+}

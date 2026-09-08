@@ -1,0 +1,1 @@
+﻿const fs=require('fs');let p='components/Composer.tsx',s=fs.readFileSync(p,'utf8');s=s.replace('import { useRouter,','import Link from "next/link";\nimport { useRouter,');s=s.replace('<a href="/layers" className="mt-2 inline-block underline">查看圖層紀錄</a>','<Link href="/layers" className="mt-2 inline-block underline">查看圖層紀錄</Link>');fs.writeFileSync(p,s);

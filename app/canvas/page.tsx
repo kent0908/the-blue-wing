@@ -57,7 +57,8 @@ export default function CanvasHomePage() {
 
   const remove = async (id: string) => {
     if (!confirm("刪除這個畫布？此動作無法復原。")) return;
-    await fetch(`/api/canvas/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/canvas/${id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) { setError("刪除失敗，畫布仍保留，請稍後再試"); return; }
     setWorkflows((cur) => cur?.filter((w) => w.id !== id) ?? cur);
   };
 

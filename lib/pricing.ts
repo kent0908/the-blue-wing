@@ -1,3 +1,5 @@
+import { canonicalBillingModel } from "./billingModel";
+import { creditCostFromRate } from "./creditFormula";
 /**
  * Cost estimation.
  *
@@ -131,19 +133,17 @@ export interface RateCardEntry {
 
 /**
  * Credits a generation will cost per the /api/rates card. Returns null when the
- * model has no entry, so the caller can fall back to its USD-derived estimate.
+ * model has no entry, so the UI can show that the site rate is unavailable.
  */
 export function creditsFromRateCard(
   rates: RateCardEntry[],
   modelId: string,
-  opts: { imageCount?: number; seconds?: number; maxTokens?: number }
+  opts: { imageCount?: number; seconds?: number; maxTokens?: number; resolution?: string }
 ): number | null {
-  const hit = rates.find((r) => r.modelId === modelId);
+  const canonical = canonicalBillingModel(modelId).toLowerCase();
+  const hit = rates.find((r) => r.modelId.toLowerCase() === canonical);
   if (!hit) return null;
-  const per = Math.max(0, Math.trunc(hit.credits));
-  if (hit.modality === "image") return Math.max(1, per * Math.max(1, Math.trunc(opts.imageCount ?? 1)));
-  if (hit.modality === "video") return Math.max(1, per * Math.max(1, Math.ceil(opts.seconds ?? 5)));
-  return Math.max(1, per + Math.ceil((opts.maxTokens ?? 1024) / 2000));
+  return creditCostFromRate({ modality: hit.modality, credits: hit.credits, ...opts });
 }
 
 /** Classify a model id into a modality using its id and SIRAYA's model families. */

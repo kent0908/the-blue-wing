@@ -143,3 +143,23 @@ export async function runNode(
 
   throw new Error("未知節點類型");
 }
+
+/** Execute against a fixed snapshot; publish results only for that snapshot. */
+export async function executeGraph(graph: CanvasGraph, order: string[], publish: (id: string, patch: Partial<CanvasNode>) => void, signal?: AbortSignal, runner = runNode): Promise<void> {
+  for (const id of order) {
+    if (signal?.aborted) return;
+    const node = graph.nodes.find(n => n.id === id);
+    if (!node) continue;
+    publish(id, { status: "running", output: null, error: null });
+    try {
+      const output = await runner(node, inputsFor(graph, id));
+      if (signal?.aborted) return;
+      node.output = output; node.status = "done";
+      publish(id, { status: "done", output, error: null });
+    } catch (e) {
+      if (signal?.aborted) return;
+      publish(id, { status: "error", output: null, error: e instanceof Error ? e.message : "執行失敗" });
+      throw e;
+    }
+  }
+}

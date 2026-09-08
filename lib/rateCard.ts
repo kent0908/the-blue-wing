@@ -9,6 +9,8 @@
  * Server-only: every export here touches the DB or is called from route handlers.
  */
 import { sql } from "./db";
+import { canonicalBillingModel } from "./billingModel";
+export { creditCostFromRate, resolutionMultiplier, VIDEO_RESOLUTION_MULTIPLIER } from "./creditFormula";
 
 export type Modality = "image" | "video" | "text";
 
@@ -24,17 +26,6 @@ export type Modality = "image" | "video" | "text";
  * margin built into that base rate holds at every resolution, not just the
  * default one.
  */
-export const VIDEO_RESOLUTION_MULTIPLIER: Record<string, number> = {
-  "480p": 1,
-  "720p": 2.25,
-  "1080p": 5.5,
-  "4k": 11,
-};
-
-export function resolutionMultiplier(resolution?: string): number {
-  return VIDEO_RESOLUTION_MULTIPLIER[(resolution || "480p").toLowerCase()] ?? 1;
-}
-
 export interface ModelRate {
   modelId: string;
   modality: Modality;
@@ -57,31 +48,12 @@ const rowToRate = (r: Row): ModelRate => ({
 });
 
 /** Final charge for one generation, given its per-unit rate and the request shape. */
-export function creditCostFromRate(input: {
-  modality: Modality;
-  credits: number;
-  imageCount?: number;
-  seconds?: number;
-  maxTokens?: number;
-  /** video only — "480p" | "720p" | "1080p" | "4k" */
-  resolution?: string;
-}): number {
-  const per = Math.max(0, Math.trunc(input.credits));
-  if (input.modality === "image") return Math.max(1, per * Math.max(1, Math.trunc(input.imageCount ?? 1)));
-  if (input.modality === "video") {
-    const perSecondAtRes = Math.ceil(per * resolutionMultiplier(input.resolution));
-    return Math.max(1, perSecondAtRes * Math.max(1, Math.ceil(input.seconds ?? 5)));
-  }
-  // text: flat per-message credits + a token component
-  return Math.max(1, per + Math.ceil((input.maxTokens ?? 1024) / 2000));
-}
-
 /** Active rate for a model, or null when there's no (active) row — caller falls back. */
 export async function getRate(modelId: string): Promise<ModelRate | null> {
   try {
     const { rows } = await sql<Row>`
       select model_id, modality, credits, active from model_rates
-      where model_id = ${modelId} limit 1
+      where lower(model_id) = ${canonicalBillingModel(modelId).toLowerCase()} limit 1
     `;
     const r = rows[0];
     return r && r.active ? rowToRate(r) : null;

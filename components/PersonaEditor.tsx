@@ -8,7 +8,7 @@ import { IconClose } from "./Icons";
  * Fed into buildSystemPrompt() server-side so every character addresses the
  * user consistently (matches Yollo's "set your name, gender and personality").
  */
-export default function PersonaEditor({ onClose }: { onClose: () => void }) {
+export default function PersonaEditor({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [loading, setLoading] = useState(true);
@@ -50,14 +50,22 @@ export default function PersonaEditor({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+    <div
+      className={embedded ? "min-w-0 w-full" : "fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 px-4 py-6"}
+      onClick={embedded ? undefined : onClose}
+    >
       <div
-        className="w-full max-w-[420px] rounded-2xl border border-[#2a2a2a] bg-[#161616] p-5"
+        role={embedded ? "region" : "dialog"}
+        aria-modal={embedded ? undefined : true}
+        aria-label="設定我的身份"
+        className={embedded
+          ? "min-w-0 w-full overflow-hidden rounded-2xl border border-[#2a2a2a] bg-[#161616] p-4"
+          : "min-w-0 w-full max-w-[420px] rounded-2xl border border-[#2a2a2a] bg-[#161616] p-5"}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
           <h2 className="text-[15px] font-medium">設定我的身份</h2>
-          <button type="button" onClick={onClose} aria-label="關閉" className="text-[#8a8a8a] hover:text-white">
+          <button type="button" onClick={onClose} aria-label="關閉" className="shrink-0 text-[#8a8a8a] hover:text-white">
             <IconClose className="h-4 w-4" />
           </button>
         </div>
@@ -93,9 +101,9 @@ export default function PersonaEditor({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {error && <p className="mt-3 text-[12px] text-[#ff9b9b]">{error}</p>}
+        {error && <p role="alert" className="mt-3 break-words text-[12px] text-[#ff9b9b]">{error}</p>}
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onClose}

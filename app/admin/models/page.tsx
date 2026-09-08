@@ -1,5 +1,7 @@
 "use client";
 
+import { modelLabel } from "@/lib/modelLabel";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,7 +25,7 @@ interface Row extends ApiModel {
 const MODALITY_LABEL: Record<Modality, string> = { image: "圖片", video: "影片", text: "文字" };
 
 function toRow(m: ApiModel): Row {
-  return { ...m, nameInput: m.displayName, orderInput: m.sortOrder === null ? "" : String(m.sortOrder), dirty: false };
+  return { ...m, nameInput: modelLabel(m.displayName), orderInput: m.sortOrder === null ? "" : String(m.sortOrder), dirty: false };
 }
 
 export default function AdminModelsPage() {
@@ -126,7 +128,7 @@ export default function AdminModelsPage() {
         <AdminTabs active="models" />
 
         <p className="text-[13px] leading-relaxed text-[#8a8a8a]">
-          每個模型前台顯示的名字跟排序。沒特別設定的話，名字會自動去掉 SIRAYA / ByteDance / Dola 這類廠商字首，排序會把
+          每個模型前台顯示的名字跟排序。沒特別設定的話，名字會自動去掉供應商字首，排序會把
           同系列模型（Seedance、Seedream、Gemini…）自動排在一起——這兩欄留白就是用這個自動結果。改完按「存」，整站的模型
           選單（生成頁、智慧畫布）都會馬上套用；按「重設」清空這一列的自訂設定，回到自動結果。排序數字越小越前面，同樣是
           留白的模型彼此之間還是照自動分組排列，只有你有填數字的才會被排到指定位置。
@@ -170,14 +172,14 @@ export default function AdminModelsPage() {
                 {filtered.map((r) => (
                   <tr key={r.id} className="border-t border-[#1e1e1e]">
                     <td className="px-3 py-2">
-                      <span className="text-[#c9c9c9]">{r.id}</span>
+                      <span className="text-[#c9c9c9]">{modelLabel(r.id)}</span>
                       {r.hasOverride && <span className="ml-2 text-[10.5px] text-[#7ff0cd]">（已自訂）</span>}
                     </td>
                     <td className="px-3 py-2 text-[#9a9a9a]">{MODALITY_LABEL[r.modality]}</td>
                     <td className="px-3 py-2">
                       <input
                         value={r.nameInput}
-                        placeholder={r.defaultName}
+                        placeholder={modelLabel(r.defaultName)}
                         onChange={(e) => patch(r.id, { nameInput: e.target.value })}
                         className="h-8 w-56 rounded border border-[#2c2c2c] bg-[#1c1c1c] px-2 text-[12.5px] text-white focus:border-[#4a4a4a] focus:outline-none"
                       />

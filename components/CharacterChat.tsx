@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconChevronLeft, IconChat, IconTrash, IconArrowRight, IconImage } from "./Icons";
+import { IconChevronLeft, IconChat, IconTrash, IconArrowRight } from "./Icons";
 import PersonaEditor from "./PersonaEditor";
 import CharacterBuilder from "./CharacterBuilder";
 import type { CharacterProfile } from "@/lib/characterProfile";
 import CharacterScenes from "./CharacterScenes";
+import CompanionIdleStage from "./CompanionIdleStage";
+import RelationshipStages from "./RelationshipStages";
+import styles from "./CharacterChat.module.css";
 
 export interface CharacterLevel {
   name: string;
@@ -55,6 +58,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [personaOpen, setPersonaOpen] = useState(false);
+  const [relationshipOpen, setRelationshipOpen] = useState(true);
   const [scenesOpen, setScenesOpen] = useState(false);
   const [toast, setToast] = useState<AffectionToast | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -134,21 +138,21 @@ export default function CharacterChat({ character: initial }: { character: Chara
   };
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center gap-3 border-b border-[#1c1c1c] px-5 py-3">
-          <Link href="/companions" className="text-[#8a8a8a] transition-colors hover:text-white">
+    <div className="flex h-full min-h-0 justify-center bg-[#090c0b] sm:p-4 lg:p-6">
+      <div className="relative flex h-full max-h-[960px] w-full max-w-[1720px] min-h-0 min-w-0 flex-col overflow-hidden border border-white/10 bg-[#101313] sm:rounded-2xl">
+        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-[#141918] px-3 py-3 sm:gap-3 sm:px-5">
+          <Link href="/companions" aria-label="返回角色列表" className="shrink-0 text-[#8a8a8a] transition-colors hover:text-white">
             <IconChevronLeft className="h-5 w-5" />
           </Link>
           {character.avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
-            <img src={character.avatarSrc} alt="" className="h-9 w-9 rounded-full object-cover" />
+            <img src={character.avatarSrc} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
           ) : (
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-[#1c1c1c] text-[#5c5c5c]">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#1c1c1c] text-[#5c5c5c]">
               <IconChat className="h-4 w-4" />
             </div>
           )}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-[calc(100%-100px)] sm:basis-0">
             <div className="flex items-center gap-2">
               <span className="truncate text-[14.5px] font-medium">{character.name}</span>
               {character.level && (
@@ -171,26 +175,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
               </div>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => setScenesOpen((v) => !v)}
-            className={[
-              "whitespace-nowrap rounded-full border px-3 py-1.5 text-[12px] transition-colors",
-              scenesOpen ? "border-[#7ff0cd] text-[#7ff0cd]" : "border-[#3a3a3a] text-[#c9c9c9] hover:border-[#555] hover:text-white",
-            ].join(" ")}
-          >
-            <span className="flex items-center gap-1.5">
-              <IconImage className="h-3.5 w-3.5" />
-              場景
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setPersonaOpen(true)}
-            className="whitespace-nowrap rounded-full border border-[#3a3a3a] px-3 py-1.5 text-[12px] text-[#c9c9c9] transition-colors hover:border-[#555] hover:text-white"
-          >
-            我的身份
-          </button>
+          <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -209,7 +194,13 @@ export default function CharacterChat({ character: initial }: { character: Chara
           >
             <IconTrash className="h-4 w-4" />
           </button>
+          </div>
         </header>
+        <nav className={styles.mobileTabs} aria-label="陪聊設定">
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(true); }}>關係階段</button>
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); }}>解鎖場景</button>
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(true); setRelationshipOpen(false); }}>我的身分</button>
+        </nav>
 
       {toast && (
         <div
@@ -222,8 +213,11 @@ export default function CharacterChat({ character: initial }: { character: Chara
         </div>
       )}
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
-        <div className="mx-auto flex max-w-2xl flex-col gap-3">
+      <div className={styles.layout}>
+        <aside className={styles.portrait} aria-label="人物立繪"><CompanionIdleStage key={`${character.id}:${character.avatarSrc ?? ""}`} characterId={character.id} /></aside>
+        <section className={styles.conversation} aria-label="聊天紀錄與訊息">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-end gap-4">
           {messages === null && <div className="mx-auto h-6 w-6 animate-pulse rounded-full bg-[#1c1c1c]" />}
 
           {messages?.length === 0 && (
@@ -238,13 +232,14 @@ export default function CharacterChat({ character: initial }: { character: Chara
             <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
                 className={[
-                  "max-w-[75%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed",
+                  "max-w-[88%] whitespace-pre-wrap [overflow-wrap:anywhere] sm:max-w-[80%] rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed",
                   m.role === "user" ? "bg-[#2a2a2a] text-white" : "border border-[#262626] bg-[#141414] text-[#e5e5e5]",
                   m.pending ? "opacity-60" : "",
                   m.failed ? "border border-[#4a2020] text-[#ffb4b4]" : "",
                 ].join(" ")}
               >
                 {m.content}
+                {m.failed && <span className="mt-2 block text-xs text-[#ffb4b4]">未送達 · 請查看下方提示</span>}
               </div>
             </div>
           ))}
@@ -259,17 +254,18 @@ export default function CharacterChat({ character: initial }: { character: Chara
         </div>
       </div>
 
-      <div className="shrink-0 px-5 pb-5">
-        <div className="mx-auto flex max-w-2xl items-end gap-2 rounded-2xl border border-[#2a2a2a] bg-[#161616] p-2.5">
+      <div className="shrink-0 border-t border-white/10 bg-[#141918] px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-5">
+        <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-[#2a2a2a] bg-[#161616] p-2.5">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 send();
               }
             }}
+            aria-label={`傳訊息給 ${character.name}`}
             placeholder={`傳訊息給 ${character.name}`}
             rows={1}
             className="max-h-[120px] min-w-0 flex-1 resize-none bg-transparent px-2 py-1.5 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
@@ -290,7 +286,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
           </button>
         </div>
         {error && (
-          <p className="mx-auto mt-2 max-w-2xl text-[12px] text-[#ff9b9b]">
+          <p role="alert" className="mx-auto mt-2 max-w-3xl rounded-xl border border-red-300/20 bg-red-300/5 px-3 py-2 text-[13px] text-[#ffb4b4]">
             {error}
             {error.includes("點數不足") && (
               <>
@@ -304,6 +300,19 @@ export default function CharacterChat({ character: initial }: { character: Chara
         )}
       </div>
 
+        </section>
+        <aside className={styles.details + " " + ((scenesOpen || personaOpen) ? styles.detailsOpen : "")} aria-label="場景與身分設定">
+          <div className={styles.tabs}>
+            <button type="button" aria-pressed={relationshipOpen} onClick={() => { setRelationshipOpen(true); setPersonaOpen(false); }}>關係階段</button>
+            <button type="button" aria-pressed={!personaOpen && !relationshipOpen} onClick={() => { setRelationshipOpen(false); setPersonaOpen(false); }}>解鎖場景</button>
+            <button type="button" aria-pressed={personaOpen} onClick={() => { setPersonaOpen(true); setRelationshipOpen(false); }}>我的身分</button>
+          </div>
+          <button type="button" className="shrink-0 border-b border-white/10 px-4 py-2 text-left text-xs text-[#a2bcb2]" onClick={() => setEditing(true)}>編輯角色設定</button>
+          {relationshipOpen && <div className="min-h-0 flex-1 overflow-y-auto"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label="關閉設定">關閉</button></div><RelationshipStages affection={character.affection ?? 0} /></div>}
+          {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
+          <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen}><CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} /></div>
+        </aside>
+      </div>
       {editing && (
         <CharacterBuilder
           character={character}
@@ -314,10 +323,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
           }}
         />
       )}
-      {personaOpen && <PersonaEditor onClose={() => setPersonaOpen(false)} />}
       </div>
-
-      {scenesOpen && <CharacterScenes characterId={character.id} onClose={() => setScenesOpen(false)} />}
     </div>
   );
 }

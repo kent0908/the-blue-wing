@@ -1,0 +1,3 @@
+﻿const fs=require('fs');const p='scripts/test-generation-modes.cjs';let s=fs.readFileSync(p,'utf8');s=s.replace("new Function('module', 'exports',",`const capability = { exports: {} };
+new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/layerCapability.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(capability,capability.exports);
+new Function('module', 'exports', 'require',`);s=s.replace(')(moduleValue, moduleValue.exports);',")(moduleValue, moduleValue.exports, id => { if(id === './layerCapability') return capability.exports; throw new Error('Unexpected dependency '+id); });");s=s.replace("item.id === 'layer-separation').enabled, true)","item.id === 'layer-separation').enabled, false)");fs.writeFileSync(p,s);

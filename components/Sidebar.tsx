@@ -1,5 +1,8 @@
 "use client";
 
+import { getGenerationModes } from "@/lib/generationModes";
+import { modelLabel } from "@/lib/modelLabel";
+
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -30,6 +33,7 @@ type Item = {
 
 const GROUP_A: Item[] = [
   { href: "/", label: "首頁", icon: IconHome },
+  { href: "/landing", label: "啟程", icon: IconWing },
   { href: "/studio?mode=image", label: "圖片生成", icon: IconImage, modelModality: "image" },
   { href: "/studio?mode=video", label: "影片生成", icon: IconVideo, badge: { text: "HOT", tone: "hot" }, modelModality: "video" },
   { href: "/studio?mode=audio", label: "文字創作", icon: IconAudio },
@@ -98,8 +102,10 @@ function ModelFlyoutPortal({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
-  const list = models.filter((m) => m.modality === state.modality);
+  const [sub, setSub] = useState<{ id: string; top: number } | null>(null);
+  const list = models.filter((m) => m.modality === state.modality && !/nsfw/i.test(m.id));
   return createPortal(
+    <>
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -111,18 +117,26 @@ function ModelFlyoutPortal({
       {list.map((m) => {
         const badge = modelBadgeFor(m.id);
         return (
-          <Link key={m.id} href={`/studio?mode=${state.modality}&model=${encodeURIComponent(m.id)}`} className="bw-menu-item">
+          <Link onMouseEnter={(e) => setSub({id:m.id,top:Math.min(e.currentTarget.getBoundingClientRect().top,window.innerHeight-300)})} onFocus={(e) => setSub({id:m.id,top:Math.min(e.currentTarget.getBoundingClientRect().top,window.innerHeight-300)})} key={m.id} href={`/studio?mode=${state.modality}&model=${encodeURIComponent(m.id)}`} className="bw-menu-item"
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              window.dispatchEvent(new CustomEvent("bluewing:model-select", { detail: { mode: state.modality, model: m.id } }));
+            }}>
             <span
               className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[10.5px] font-semibold"
               style={{ background: badge.bg, color: badge.fg }}
             >
               {badge.letter}
             </span>
-            <span className="min-w-0 flex-1 truncate text-[13px]">{m.displayName}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px]">{modelLabel(m.displayName)}</span><span aria-hidden="true">›</span>
           </Link>
         );
       })}
-    </div>,
+    </div>
+    {sub && getGenerationModes(sub.id,state.modality).length>0 && <div aria-label="模型功能" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} className="bw-menu fixed z-[60] w-[210px] p-1.5" style={{top:Math.max(8,sub.top),left:Math.min(state.left+238,window.innerWidth-218)}}>
+      {getGenerationModes(sub.id,state.modality).map(item => item.enabled ? <Link key={item.id} className="bw-menu-item" href={`/studio?mode=${state.modality}&model=${encodeURIComponent(sub.id)}&operation=${item.id}`} onClick={() => window.dispatchEvent(new CustomEvent("bluewing:model-select",{detail:{mode:state.modality,model:sub.id}}))}>{item.label}</Link> : <div key={item.id} className="px-3 py-2 text-xs text-[#777]" aria-disabled="true">{item.label}<p className="mt-1 text-[10px] leading-4">{item.reason}</p></div>)}
+    </div>}
+    </>,
     document.body
   );
 }

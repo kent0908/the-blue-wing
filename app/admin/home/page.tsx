@@ -1,5 +1,7 @@
 "use client";
 
+import { modelLabel } from "@/lib/modelLabel";
+
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -242,7 +244,7 @@ export default function AdminHomeContentPage() {
                             <option value="">（不指定模型）</option>
                             {models.map((m) => (
                               <option key={m.id} value={m.id}>
-                                {m.displayName}
+                                {modelLabel(m.displayName)}
                               </option>
                             ))}
                           </select>

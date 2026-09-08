@@ -36,13 +36,14 @@ export default function TopBar() {
   };
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-end gap-1 bg-black pr-2 sm:pr-6">
+    <header className="flex h-14 shrink-0 items-center justify-end gap-1 whitespace-nowrap bg-black pr-2 sm:pr-6 [&>a]:shrink-0 [&>button]:shrink-0">
       <Link
         href="/help"
+        aria-label="說明"
         className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white"
       >
         <IconHelp className="h-[17px] w-[17px]" />
-        說明
+        <span className="hidden sm:inline">說明</span>
       </Link>
 
       {me?.user ? (
@@ -56,7 +57,7 @@ export default function TopBar() {
             {(me.credits ?? 0).toLocaleString()}
           </Link>
           {me.user.role === "admin" && (
-            <Link href="/admin" className="rounded-lg px-3 py-1.5 text-[13px] text-[#d4d4d4] transition-colors hover:text-white">
+            <Link href="/admin" className="rounded-lg px-2 py-1.5 text-[13px] sm:px-3 text-[#d4d4d4] transition-colors hover:text-white">
               後台
             </Link>
           )}
@@ -65,7 +66,7 @@ export default function TopBar() {
             className="max-w-[80px] sm:max-w-[160px] truncate rounded-lg px-2 py-1.5 text-[13px] text-[#d4d4d4] transition-colors hover:text-white"
             title={me.user.email}
           >
-            {me.user.email}
+            <span className="sm:hidden">帳號</span><span className="hidden sm:inline">{me.user.email}</span>
           </Link>
           <button
             onClick={logout}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
+import { validateGraph, validateName } from "@/lib/canvas/validation";
 import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -33,17 +34,22 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser(req);
   if ("error" in auth) return auth.error;
 
-  const body = await req.json().catch(() => ({}));
-  const name = typeof body?.name === "string" && body.name.trim() ? body.name.trim().slice(0, 120) : "未命名畫布";
-  const graph = body?.graph && typeof body.graph === "object" ? body.graph : { nodes: [], edges: [] };
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: { message: "請提供合法 JSON 物件" } }, { status: 400 });
+  let name, graph;
+  try {
+    name = validateName(body.name ?? "未命名畫布");
+    graph = validateGraph(body.graph ?? { nodes: [], edges: [] });
+  } catch (e) { return NextResponse.json({ error: { message: e instanceof Error ? e.message : "資料不正確" } }, { status: 400 }); }
+
 
   const { rows } = await sql`
     insert into canvas_workflows (user_id, name, graph)
     values (${auth.user.id}, ${name}, ${JSON.stringify(graph)}::jsonb)
-    returning id, name, graph, updated_at, created_at
+    returning id, name, graph, updated_at, created_at, md5(xmin::text || ':' || updated_at::text) as version
   `;
   const r = rows[0];
   return NextResponse.json({
-    workflow: { id: String(r.id), name: r.name, graph: r.graph, updatedAt: r.updated_at, createdAt: r.created_at },
+    workflow: { version: r.version, id: String(r.id), name: r.name, graph: r.graph, updatedAt: r.updated_at, createdAt: r.created_at },
   });
 }

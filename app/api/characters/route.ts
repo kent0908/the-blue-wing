@@ -1,3 +1,4 @@
+import { startIdleVideoGeneration, hasFreeIdleQuota } from "@/lib/characterIdleVideo";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { validateProfile } from "@/lib/characterProfile";
@@ -5,6 +6,7 @@ import { listCharacters, createCharacter, ownedAssetId, toPublicCharacter } from
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const MAX_NAME = 40;
 const MAX_PERSONALITY = 2000;
@@ -39,5 +41,15 @@ export async function POST(req: NextRequest) {
   const avatarAssetId = await ownedAssetId(r.user.id, Number(body?.avatarAssetId) || null);
 
   const row = await createCharacter(r.user.id, { name, avatarAssetId, personality, likes, profile });
+  // Restore the original first-loop flow. Only the monthly free quota can
+  // be used automatically; no avatar or no free quota means no generation.
+  if (row.avatar_asset_id) {
+    try {
+      if (await hasFreeIdleQuota(r.user.id)) await startIdleVideoGeneration(r.user.id, row, { allowPaid: false });
+    } catch {
+      // Character creation remains successful. The idle panel offers retry.
+      console.error("Automatic free idle video could not be started");
+    }
+  }
   return NextResponse.json({ character: toPublicCharacter(row) }, { status: 201 });
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ProviderAssetLibrary from "@/components/ProviderAssetLibrary";
 
 interface Asset {
   id: number;
@@ -12,7 +13,7 @@ interface Asset {
   createdAt: string;
 }
 
-const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml";
+const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/webm,audio/mpeg,audio/wav,audio/x-wav,audio/mp4";
 const MAX_MB = 4;
 
 function fmtSize(n: number) {
@@ -35,7 +36,7 @@ export default function AssetsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/assets");
+      const res = await fetch("/api/assets?media=all");
       if (res.status === 401) return router.push("/login?next=/assets");
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error?.message || "載入失敗");
@@ -120,8 +121,9 @@ export default function AssetsPage() {
     >
       <div className="mx-auto max-w-[1000px] px-6 py-8">
         <h1 className="text-[22px] font-semibold tracking-tight">資產庫</h1>
+        <ProviderAssetLibrary sources={assets} />
         <p className="mt-1 text-[13px] text-[#8a8a8a]">
-          上傳你的素材圖片，之後可在這裡管理、複製連結。單檔上限 {MAX_MB} MB。
+          上傳圖片、影片或音訊，之後可在這裡管理、登錄人物參考素材。單檔上限 {MAX_MB} MB。
         </p>
 
         {!configured && (
@@ -137,8 +139,8 @@ export default function AssetsPage() {
             dragOver ? "border-[#7ff0cd] bg-[#10201c]" : "border-[#333] bg-[#141414] hover:border-[#4a4a4a]"
           }`}
         >
-          <span className="text-[13px] text-white">拖曳圖片到這裡，或點擊選擇檔案</span>
-          <span className="mt-1 text-[11.5px] text-[#6d6d6d]">PNG · JPG · WebP · GIF · SVG</span>
+          <span className="text-[13px] text-white">拖曳素材到這裡，或點擊選擇檔案</span>
+          <span className="mt-1 text-[11.5px] text-[#6d6d6d]">PNG · JPG · WebP · GIF · SVG · MP4 · WebM · MP3 · WAV · M4A（每個檔案最多 4 MB）</span>
         </button>
         <input
           ref={inputRef}
@@ -190,16 +192,22 @@ export default function AssetsPage() {
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {assets.map((a) => (
               <div key={a.id} className="group relative overflow-hidden rounded-xl border border-[#262626] bg-[#111]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream, not a static asset */}
-                <img src={a.src} alt="" className="aspect-square w-full object-cover" loading="lazy" />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-2 py-1.5">
+                {a.contentType.startsWith("video/") ? (
+                  <video src={a.src} aria-label={a.name} className="aspect-square w-full object-contain" controls playsInline preload="metadata" />
+                ) : a.contentType.startsWith("audio/") ? (
+                  <div className="flex aspect-square flex-col items-center justify-center gap-4 px-2"><span className="text-sm text-[#9caaa5]">音訊素材</span><audio src={a.src} aria-label={a.name} className="w-full" controls preload="metadata" /></div>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream, not a static asset
+                  <img src={a.src} alt={a.name} className="aspect-square w-full object-cover" loading="lazy" />
+                )}
+                <div className="bg-[#151515] px-2 py-1.5">
                   <div className="truncate text-[10.5px] text-white" title={a.name}>{a.name}</div>
                   <div className="flex items-center justify-between gap-1 text-[10.5px] text-[#c9c9c9]">
                     <span>{fmtSize(a.size)}</span>
                     <span className="text-[#8a8a8a]">{new Date(a.createdAt).toLocaleDateString("zh-TW")}</span>
                   </div>
                 </div>
-                <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex justify-end gap-1 px-2 pb-2">
                   <button
                     onClick={() => copyUrl(a)}
                     className="rounded bg-black/70 px-1.5 py-0.5 text-[10.5px] text-white hover:bg-black"

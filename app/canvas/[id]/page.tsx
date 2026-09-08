@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CanvasEditor from "@/components/canvas/CanvasEditor";
+import { validateGraph } from "@/lib/canvas/validation";
 import type { CanvasGraph } from "@/lib/canvas/types";
 
 interface WorkflowData {
   id: string;
+  version: string;
   name: string;
   graph: CanvasGraph;
 }
@@ -29,8 +31,8 @@ export default function CanvasWorkflowPage() {
       })
       .then((j: { workflow: WorkflowData } | null) => {
         if (!alive || !j) return;
-        const graph = j.workflow.graph && Array.isArray(j.workflow.graph.nodes) ? j.workflow.graph : { nodes: [], edges: [] };
-        setData({ id: j.workflow.id, name: j.workflow.name, graph });
+        const graph = validateGraph(j.workflow.graph);
+        setData({ version: j.workflow.version, id: j.workflow.id, name: j.workflow.name, graph });
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : "載入失敗"));
     return () => {
@@ -56,5 +58,5 @@ export default function CanvasWorkflowPage() {
     );
   }
 
-  return <CanvasEditor workflowId={data.id} initialName={data.name} initialGraph={data.graph} />;
+  return <CanvasEditor key={data.id} initialVersion={data.version} workflowId={data.id} initialName={data.name} initialGraph={data.graph} />;
 }

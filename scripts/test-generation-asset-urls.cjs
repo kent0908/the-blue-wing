@@ -1,0 +1,28 @@
+const fs = require('node:fs'), ts = require('typescript'), assert = require('node:assert/strict');
+process.env.GENERATION_ASSET_SECRET = 'local-test-only-not-a-production-secret';
+const assets = new Map([[1, { user: 7, content_type: 'image/png' }], [2, { user: 8, content_type: 'image/png' }], [3, { user: 7, content_type: 'image/svg+xml' }]]);
+const db = { sql: async (_strings, id, user) => ({ rows: assets.get(id)?.user === user ? [{ id, ...assets.get(id) }] : [] }) };
+const mod = { exports: {} };
+new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync('lib/generationAssetUrls.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(id => id === './db' ? db : require(id), mod, mod.exports);
+const { createGenerationAssetUrls: create, verifyGenerationAssetToken: verify } = mod.exports;
+(async () => {
+  const [link] = await create(7, [1], 'https://the-blue-wing.vercel.app');
+  const url = new URL(link), expiry = Number(url.searchParams.get('expires')), token = url.searchParams.get('token');
+  assert.equal(url.pathname, '/api/generation-assets/1');
+  assert.ok(verify(7, 1, expiry, token));
+  assert.ok(!verify(8, 1, expiry, token));
+  assert.ok(!verify(7, 2, expiry, token));
+  assert.ok(!verify(7, 1, expiry + 1, token));
+  assert.ok(!verify(7, 1, expiry, token, expiry));
+  assert.ok(!verify(7, 1, expiry, 'bad'));
+  assert.ok(!verify(7, 1, expiry, token, expiry - 3601));
+  await assert.rejects(create(7, [2], 'https://the-blue-wing.vercel.app'), /不存在/);
+  await assert.rejects(create(7, [3], 'https://the-blue-wing.vercel.app'), /不支援/);
+  await assert.rejects(create(7, [1], 'https://attacker.test'), /不受信任/);
+  await assert.rejects(create(7, [-1], 'https://the-blue-wing.vercel.app'), /編號/);
+  const route = fs.readFileSync('app/api/generation-assets/[id]/route.ts', 'utf8');
+  assert.ok(route.includes('private, no-store'));
+  assert.ok(route.includes('nosniff'));
+  assert.ok(route.includes('user_id = ${userId}'));
+  console.log('PASS: signed own-image URLs, user/asset/expiry tampering, expiration, foreign asset isolation, raster allowlist and trusted origins. No real credentials or network.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

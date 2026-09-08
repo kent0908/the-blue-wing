@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { IconChat, IconClose, IconArrowRight, IconDiscord } from "./Icons";
 
 interface Msg {
@@ -14,6 +15,8 @@ const GREETING: Msg = {
 };
 
 export default function SupportChat() {
+  const pathname = usePathname();
+  const companionChat = /^\/companions\/\d+$/.test(pathname);
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -54,7 +57,7 @@ export default function SupportChat() {
       <button
         onClick={() => setOpen(true)}
         aria-label="客服"
-        className="fixed bottom-5 right-5 z-50 grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16] shadow-lg transition-transform hover:scale-105"
+        className={`fixed ${companionChat ? "bottom-28 right-4 sm:right-5" : "bottom-5 right-5"} z-50 grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16] shadow-lg transition-transform hover:scale-105`}
       >
         <IconChat className="h-5 w-5" />
       </button>
@@ -62,7 +65,7 @@ export default function SupportChat() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex h-[480px] w-[360px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[#2a2a2a] bg-[#111] shadow-2xl">
+    <div className="fixed bottom-5 right-5 z-50 flex h-[480px] max-h-[calc(100dvh-2.5rem)] w-[360px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[#2a2a2a] bg-[#111] shadow-2xl">
       <div className="flex items-center justify-between border-b border-[#1e1e1e] px-4 py-3">
         <div>
           <div className="text-[13.5px] font-semibold text-white">客服助手</div>

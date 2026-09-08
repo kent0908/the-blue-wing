@@ -1,10 +1,10 @@
 "use client";
 
 import Popover from "./Popover";
+import { videoResolutionsForModel, normalizeVideoResolution } from "@/lib/videoModels";
 import { IconRatio, IconReset } from "./Icons";
 import {
   ASPECT_RATIOS,
-  RESOLUTIONS,
   IMAGE_SIZES,
   DEFAULT_SETTINGS,
   type GenSettings,
@@ -41,10 +41,12 @@ function Choice({
 
 export default function SettingsPopover({
   mode,
+  modelId,
   settings,
   onChange,
 }: {
   mode: Mode;
+  modelId?: string | null;
   settings: GenSettings;
   onChange: (s: GenSettings) => void;
 }) {
@@ -80,7 +82,7 @@ export default function SettingsPopover({
             </span>
             <button
               type="button"
-              onClick={() => onChange({ ...DEFAULT_SETTINGS })}
+              onClick={() => onChange({ ...DEFAULT_SETTINGS, ...(mode === "video" ? { resolution: normalizeVideoResolution(modelId, DEFAULT_SETTINGS.resolution) } : {}) })}
               className="flex items-center gap-1 text-[12px] text-[#8a8a8a] transition-colors hover:text-white"
             >
               <IconReset className="h-[13px] w-[13px]" />
@@ -110,7 +112,7 @@ export default function SettingsPopover({
               <>
                 <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">解析度</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {RESOLUTIONS.map((r) => (
+                  {videoResolutionsForModel(modelId).map((r) => (
                     <Choice key={r} value={r} active={settings.resolution === r} onClick={() => set({ resolution: r })} />
                   ))}
                 </div>

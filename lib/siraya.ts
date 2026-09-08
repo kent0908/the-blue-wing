@@ -1,3 +1,5 @@
+import { applyWatermarkDefaults } from "./watermark";
+
 /**
  * SIRAYA Model Router client (server-side only).
  *
@@ -118,6 +120,8 @@ export async function listModels() {
 }
 
 export interface ImageGenerationRequest {
+  layer_decomposition?: boolean;
+  output_format?: "png" | "jpeg";
   model: string;
   prompt: string;
   /**
@@ -153,7 +157,7 @@ export interface ImageGenerationRequest {
 export async function createImage(body: ImageGenerationRequest) {
   const res = await sirayaFetch("/images/generations", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify(applyWatermarkDefaults(body, "image")),
   });
   return res.json();
 }
@@ -192,7 +196,7 @@ export interface ImageEditRequest {
 export async function createImageEdit(body: ImageEditRequest) {
   const res = await sirayaFetch("/images/edits", {
     method: "POST",
-    body: JSON.stringify({ ...body, output_format: "png" }),
+    body: JSON.stringify({ ...applyWatermarkDefaults(body, "imageEdit"), output_format: "png" }),
   });
   return res.json();
 }
@@ -206,7 +210,7 @@ export interface VideoGenerationRequest {
   model: string;
   prompt: string;
   seconds?: number;
-  resolution?: "480p" | "720p" | "1080p";
+  resolution?: "480p" | "720p" | "1080p" | "4k";
   aspect_ratio?: string;
   generate_audio?: boolean;
   negative_prompt?: string;
@@ -236,7 +240,7 @@ export interface VideoGenerationRequest {
 export async function createVideo(body: VideoGenerationRequest) {
   const res = await sirayaFetch("/videos/generations", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify(applyWatermarkDefaults(body, "video")),
   });
   return res.json();
 }

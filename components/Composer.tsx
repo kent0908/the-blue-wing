@@ -1,5 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import GenerationModePanel from "./GenerationModePanel";
+import { getGenerationModes } from "@/lib/generationModes";
+import { modelLabel } from "@/lib/modelLabel";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import Popover from "./Popover";
 import SettingsPopover from "./SettingsPopover";
@@ -23,15 +29,14 @@ import {
   IMAGE_MODELS,
   getImageModel,
   getImageModelForControls,
-  displayModelName,
   defaultValues,
   buildImagePayload,
   supportsRefImages,
-  supportsWatermarkControl,
   MAX_REF_IMAGES,
   type ImageControlValues,
 } from "@/lib/imageModels";
-import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
+import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
+import { supportsImageWatermark, supportsVideoWatermark } from "@/lib/watermark";
 import { AUDIO_MODELS } from "@/lib/audioModels";
 import { modelBadgeFor } from "@/lib/modelBadge";
 
@@ -70,7 +75,6 @@ const PLACEHOLDER: Record<Mode, string> = {
 
 /** Credits shown on the submit pill — 1 credit ≈ US$0.005, matching the
  *  order of magnitude of a short 480p clip. Purely a display convention. */
-const CREDITS_PER_USD = 200;
 
 export default function Composer({
   mode,
@@ -92,6 +96,8 @@ export default function Composer({
     imagePayload?: Record<string, unknown>;
     /** selected 素材 asset ids — video mode only (image mode folds these into imagePayload) */
     assetIds?: number[];
+    generationMode?: string;
+    providerAssetIds?: number[];
     /** model-specific passthrough — video mode only (e.g. { camera_fixed: true }) */
     extraBody?: Record<string, unknown>;
     /** a recorded 3D導演台 運鏡 clip's URL — video mode + Seedance 2.0/2.5 only */
@@ -109,14 +115,33 @@ export default function Composer({
   /** a recorded 3D導演台 運鏡 clip handed off from /canvas/director3d — video mode only */
   initialVideoRef?: { url: string; name?: string };
 }) {
+  const modeRouter = useRouter();
+  const modeParams = useSearchParams();
+  const [providerSelection,setProviderSelection] = useState<{model:string;operation:string;ids:number[]}>({model:"",operation:"",ids:[]});
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [settings, setSettings] = useState<GenSettings>(DEFAULT_SETTINGS);
-  const [imgEdits, setImgEdits] = useState<ImageControlValues>(initialImgValues ?? {});
+  const [imageEdits, setImageEdits] = useState<{source:string;model:string|undefined;values:ImageControlValues}>({source:`${mode}:${initialModel ?? ""}`,model:initialModel,values:initialImgValues ?? {}});
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(true);
   const [rates, setRates] = useState<RateCardEntry[]>([]);
-  const [model, setModel] = useState<string>("");
+  const selectionSource = `${mode}:${initialModel ?? ""}`;
+  const [selection, setSelection] = useState<{id:string;source:string}|null>(null);
+  const model = selection?.source === selectionSource ? selection.id : "";
+  const setModel = (id:string) => setSelection({id,source:selectionSource});
+  // A repeated sidebar pick can target the current URL after the user changed
+  // the dropdown. Treat that click as a fresh selection without clearing drafts.
+  useEffect(() => {
+    const selectFromSidebar = (event: Event) => {
+      const detail = (event as CustomEvent<{ mode: Mode; model: string }>).detail;
+      if (detail && detail.mode === mode && !/nsfw/i.test(detail.model)) {
+        setSelection({ id: detail.model, source: `${detail.mode}:${detail.model}` });
+      }
+    };
+    window.addEventListener("bluewing:model-select", selectFromSidebar);
+    return () => window.removeEventListener("bluewing:model-select", selectFromSidebar);
+  }, [mode]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -141,20 +166,19 @@ export default function Composer({
   const [moderation, setModeration] = useState("auto");
   // Default off (no "AI generated" badge) — matches the behaviour before this
   // was made user-controllable. true = keep the provider's watermark.
-  const [watermark, setWatermark] = useState(false);
+  const [watermarkChoice, setWatermarkChoice] = useState<{model:string;source:string;enabled:boolean}|null>(null);
 
   const modalityForMode = mode === "video" ? "video" : mode === "image" ? "image" : "text";
   const available = useMemo(() => {
-    const live = models.filter((m) => m.modality === modalityForMode);
+    const live = models.filter((m) => m.modality === modalityForMode && !/nsfw/i.test(m.id));
     // 語音生成 has no real audio modality on SIRAYA (see lib/audioModels.ts) —
     // it shares "text"'s ~80-model chat-completions list otherwise, which is
     // exactly the "太雜" the curation here fixes.
     if (mode === "audio") return live.filter((m) => AUDIO_MODELS.includes(m.id));
-    if (modalityForMode === "video") return live.filter(m => !/i2v/i.test(m.id));
     if (modalityForMode !== "image") return live;
     // Merge the curated image catalogue so links to a specific model resolve
     // even before /api/models has loaded (and so it's pickable in the dropdown).
-    const curated: ModelInfo[] = IMAGE_MODELS.map((m) => ({
+    const curated: ModelInfo[] = IMAGE_MODELS.filter((m) => !/nsfw/i.test(m.id)).map((m) => ({
       id: m.id,
       ownedBy: m.family,
       created: null,
@@ -178,10 +202,21 @@ export default function Composer({
     return (preferred ?? defaultVideo ?? available[0])?.id ?? "";
   }, [model, available, initialModel, mode]);
 
+  const operations = mode === "image" || mode === "video" ? getGenerationModes(resolvedModel,mode) : [];
+  const [layerSize,setLayerSize] = useState("2K");
+  const [layerConfirm,setLayerConfirm] = useState(false);
+  const requestedOperation = modeParams.get("operation");
+  const operation = operations.find(o=>o.id===requestedOperation && o.enabled)?.id ?? operations.find(o=>o.enabled)?.id ?? "";
+  const providerIds = providerSelection.model === resolvedModel && providerSelection.operation === operation ? providerSelection.ids : [];
+  const watermark = watermarkChoice?.model === resolvedModel && watermarkChoice.source === selectionSource ? watermarkChoice.enabled : false;
+  const setWatermark = (enabled:boolean) => setWatermarkChoice({model:resolvedModel,source:selectionSource,enabled});
+  const imgEdits = useMemo(() => imageEdits.source === selectionSource && (!imageEdits.model || imageEdits.model === resolvedModel) ? imageEdits.values : {}, [imageEdits, selectionSource, resolvedModel]);
+  const setImgEdits = (values:ImageControlValues) => setImageEdits({source:selectionSource,model:resolvedModel,values});
+
   // Image mode: fixed MAX_REF_IMAGES cap, gated by the model's family.
   // Video mode: only Seedance models support this on SIRAYA, and the cap
   // varies per model (Seedance 2.5 → 50; see lib/videoModels.ts).
-  const refCap = mode === "video" ? maxRefsForVideoModel(resolvedModel) : MAX_REF_IMAGES;
+  const refCap = operation === "layer-separation" ? 1 : operation === "first-last-frame" ? 2 : operation === "image-to-video" ? 1 : mode === "video" ? maxRefsForVideoModel(resolvedModel) : MAX_REF_IMAGES;
 
   const addRef = (a: RefAsset) =>
     setRefs((cur) => (cur.some((r) => r.id === a.id) || cur.length >= refCap ? cur : [...cur, a]));
@@ -231,6 +266,9 @@ export default function Composer({
 
   useEffect(() => {
     let alive = true;
+    const refreshRole = () => fetch("/api/auth/me", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(j => { if (alive) setIsAdmin(j?.user?.role === "admin"); }).catch(() => { if (alive) setIsAdmin(false); });
+    void refreshRole();
+    window.addEventListener("focus", refreshRole);
     fetch("/api/models")
       .then(async (r) => {
         const j = await r.json();
@@ -250,6 +288,7 @@ export default function Composer({
       .catch(() => {});
     return () => {
       alive = false;
+      window.removeEventListener("focus", refreshRole);
     };
   }, []);
 
@@ -263,7 +302,8 @@ export default function Composer({
     [activeImageModel, imgEdits]
   );
 
-  const imageCount = activeImageModel ? Number(imgValues.n ?? 1) : settings.imageCount;
+  const effectiveSettings = mode === "video" ? { ...settings, resolution: normalizeVideoResolution(resolvedModel, settings.resolution) } : settings;
+  const imageCount = operation === "layer-separation" ? 17 : activeImageModel ? Number(imgValues.n ?? 1) : settings.imageCount;
 
   const cost = useMemo(
     () =>
@@ -279,9 +319,9 @@ export default function Composer({
   );
 
   const credits =
-    creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: settings.seconds, maxTokens: settings.maxTokens }) ??
-    Math.max(1, Math.round(cost * CREDITS_PER_USD));
-  const canSubmit = !!prompt.trim() && !!resolvedModel && !busy;
+    creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: settings.seconds, maxTokens: settings.maxTokens, resolution: effectiveSettings.resolution });
+  const modeRefsValid = operation === "layer-separation" ? refs.length===1 : operation === "first-last-frame" ? refs.length === 2 && !providerIds.length : operation === "image-to-video" ? refs.length === 1 && !providerIds.length : operation === "subject-reference" ? refs.length+providerIds.length>0 : true;
+  const canSubmit = modeRefsValid && (operation === "layer-separation" || !!prompt.trim()) && !!resolvedModel && !busy && credits !== null && (mode !== "video" || !!effectiveSettings.resolution);
 
   // Image mode: seedream/gemini models. Video mode: Seedance models only.
   // When neither applies, stale refs are simply ignored (submit + render both gate on this).
@@ -297,7 +337,7 @@ export default function Composer({
   // `watermark` field — GPT Image 2 rejects it outright ("Unknown parameter:
   // 'watermark'") since it proxies straight to OpenAI's own API. Gate the
   // switch itself so users on unsupported models never hit that error.
-  const watermarkSupported = mode === "image" ? supportsWatermarkControl(activeImageModel) : mode === "video" && refCap > 0;
+  const watermarkSupported = mode === "image" ? supportsImageWatermark(resolvedModel) : mode === "video" && supportsVideoWatermark(resolvedModel);
 
   // @ is for TAGGING an already-added reference inline in the prompt — not
   // for browsing/adding from the asset library (that's what the 素材 button
@@ -367,22 +407,23 @@ export default function Composer({
     }
   };
 
-  const submit = () => {
+  const submit = (confirmed=false) => {
     if (!canSubmit) return;
+    if(operation==="layer-separation" && !confirmed){setLayerConfirm(true);return;}
     const assetIds = canUseRefs ? refs.map((r) => r.id) : [];
     // The image itself already carries the reference — strip the "@Name" tag
     // out of the text so the model isn't fed a literal filename token.
-    let finalPrompt = prompt.trim();
+    let finalPrompt = prompt.trim() || (operation==="layer-separation" ? "Decompose the main visual elements into independent layers." : "");
     if (canUseRefs) {
       for (const r of refs) {
         const tag = escapeRegExp(mentionTagFor(r.name));
         finalPrompt = finalPrompt.replace(new RegExp(`@${tag}(?=\\s|$)\\s*`, "g"), "").trim();
       }
     }
-    const imagePayload = activeImageModel
+    const imagePayload = operation === "layer-separation" ? {model:resolvedModel,prompt:finalPrompt,assetIds:refs.map(r=>r.id),n:1,size:layerSize,layer_decomposition:true,output_format:"png",response_format:"url",watermark:false,confirmedMaxCredits:credits} : activeImageModel
       ? buildImagePayload(activeImageModel, finalPrompt, imgValues, assetIds, resolvedModel)
       : undefined;
-    if (imagePayload) {
+    if (imagePayload && operation!=="layer-separation") {
       if (moderation !== "auto") imagePayload.moderation = moderation;
       if (watermarkSupported) imagePayload.watermark = watermark;
     }
@@ -390,12 +431,16 @@ export default function Composer({
     onSubmit({
       prompt: finalPrompt,
       model: resolvedModel,
-      settings,
+      settings: effectiveSettings,
       imagePayload,
-      assetIds: mode === "video" && canUseRefs ? assetIds : undefined,
+      assetIds: mode === "video" && canUseRefs && operation!=="text-to-video" ? assetIds : undefined,
+      generationMode: mode === "video" ? operation || undefined : undefined,
+      providerAssetIds: mode === "video" ? providerIds : undefined,
       extraBody: mode === "video" && watermarkSupported ? { watermark } : undefined,
       videoUrl: videoRefSupported && videoRef ? videoRef.url : undefined,
     });
+    setLayerConfirm(false);
+    setProviderSelection({model:"",operation:"",ids:[]});
     setPrompt("");
     setRefs([]);
     setRefPicker(false);
@@ -410,6 +455,9 @@ export default function Composer({
         expanded ? "min-h-[260px]" : "",
       ].join(" ")}
     >
+      {(mode==="image"||mode==="video") && operations.length>0 && <GenerationModePanel model={resolvedModel} kind={mode} operation={operation} selected={providerIds} onSelected={ids=>setProviderSelection({model:resolvedModel,operation,ids})} onOperation={value=>{const query=new URLSearchParams(modeParams.toString());query.set("mode",mode);query.set("model",resolvedModel);query.set("operation",value);modeRouter.replace(`/studio?${query}`,{scroll:false});setRefs([]);}} />}
+      {operation==="layer-separation" && <div className="px-4 py-3 text-xs text-[#b2c8c0]"><p>限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。</p><label className="mt-2 block">輸出解析度 <select aria-label="圖層解析度" value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">查看圖層紀錄</Link></div>}
+      {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label="確認圖層分離費用" className="mx-4 my-3 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>最高預扣 {credits} 點（底圖與最多 16 個圖層）。每張 {credits === null ? "—" : credits / 17} 點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>確認預扣並分離</button><button type="button" onClick={()=>setLayerConfirm(false)}>取消</button></div></div>}
       <div className="relative flex gap-3 px-4 pt-4">
         {canUseRefs && (
           <div className="relative flex shrink-0 items-start gap-2">
@@ -677,7 +725,7 @@ export default function Composer({
           trigger={(open) => (
             <>
               <IconModel className="h-[15px] w-[15px]" />
-              {loadingModels ? "載入模型…" : resolvedModel ? (available.find((m) => m.id === resolvedModel)?.displayName ?? getImageModel(resolvedModel)?.name ?? displayModelName(resolvedModel)) : "無可用模型"}
+              {loadingModels ? "載入模型…" : resolvedModel ? modelLabel(available.find((m) => m.id === resolvedModel)?.displayName ?? getImageModel(resolvedModel)?.name ?? resolvedModel) : "無可用模型"}
               <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
             </>
           )}
@@ -717,7 +765,7 @@ export default function Composer({
                     >
                       {badge.letter}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[13.5px]">{m.displayName ?? getImageModel(m.id)?.name ?? displayModelName(m.id)}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13.5px]">{modelLabel(m.displayName ?? getImageModel(m.id)?.name ?? m.id)}</span>
                     {m.id === resolvedModel && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
                   </button>
                 );
@@ -727,10 +775,10 @@ export default function Composer({
         </Popover>
 
         {/* generation settings — model-aware for catalogued image models */}
-        {activeImageModel ? (
+        {operation==="layer-separation" ? null : activeImageModel ? (
           <ImageParams model={activeImageModel} values={imgValues} onChange={setImgEdits} />
         ) : (
-          <SettingsPopover mode={mode} settings={settings} onChange={setSettings} />
+          <SettingsPopover mode={mode} modelId={resolvedModel} settings={effectiveSettings} onChange={setSettings} />
         )}
 
         <AdvancedParams
@@ -743,12 +791,12 @@ export default function Composer({
         />
 
         <div className="ml-auto flex items-center gap-3">
-          <span className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="依模型費率預估，實際費用以回應中的 usage 為準">
+          {isAdmin && <span data-testid="admin-provider-estimate" className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="服務商成本預估，僅管理員可見；站內扣點依既定費率">
             預估 {formatUSD(cost)}
-          </span>
+          </span>}
           <button
             type="button"
-            onClick={submit}
+            onClick={()=>submit()}
             disabled={!canSubmit}
             className={[
               "flex h-9 items-center gap-1.5 rounded-full px-4 text-[13.5px] font-medium transition-all",
@@ -758,11 +806,10 @@ export default function Composer({
             ].join(" ")}
           >
             <IconSparkle className="h-4 w-4" />
-            {busy ? "生成中…" : credits}
+            {busy ? "生成中…" : credits === null ? "費率未設定" : `${operation==="layer-separation"?"最高 ":""}${credits} 點`}
           </button>
         </div>
       </div>
     </div>
   );
 }
-

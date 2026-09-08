@@ -57,3 +57,31 @@ export function supportsVideoRefInput(modelId: string | null | undefined): boole
   const id = modelId.toLowerCase();
   return /seedance-2\.(0|5)(-|$)/.test(id);
 }
+
+export type VideoResolution = "480p" | "720p" | "1080p" | "4k";
+
+/** Output capabilities checked 2026-09-08. Router/NSFW aliases share the
+ * underlying model's limits; unknown models must be reviewed before use.
+ * https://docs.byteplus.com/en/docs/Byteplus_LAS/video_gen_enhanced
+ * https://docs.byteplus.com/docs/ModelArk/1099320
+ * https://www.alibabacloud.com/help/en/model-studio/video-generate-edit-model
+ * https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate
+ */
+export function videoResolutionsForModel(modelId: string | null | undefined): readonly VideoResolution[] {
+  const id = (modelId ?? "").toLowerCase().replace(/seedance-(\d)-(\d)/, "seedance-$1.$2");
+  if (/seedance-2\.0-(mini|fast)(?:-|$)/.test(id) || /seedance-2\.5(?:-|$)/.test(id)) return ["480p", "720p"];
+  if (/seedance-2\.0(?:-\d+)?$/.test(id)) return ["480p", "720p", "1080p", "4k"];
+  if (/seedance-1\.(0|5)-pro(?:-fast)?(?:-\d+)?$/.test(id)) return ["480p", "720p", "1080p"];
+  if (/happyhorse-1\.0-(t2v|i2v|r2v|video-edit)$/.test(id)) return ["720p", "1080p"];
+  if (/happyhorse-1\.1-(t2v|i2v|r2v)$/.test(id)) return ["480p", "720p", "1080p"];
+  if (id === "veo-3.1-generate-001") return ["720p", "1080p", "4k"];
+  return [];
+}
+
+/** Only used when a user changes model or resets settings; never silently
+ * downgrade an explicit API request (the server rejects that instead). */
+export function normalizeVideoResolution(modelId: string | null | undefined, resolution: string): VideoResolution | "" {
+  const choices = videoResolutionsForModel(modelId);
+  const normalized = resolution.toLowerCase();
+  return choices.find((r) => r === normalized) ?? (choices.includes("720p") ? "720p" : choices[0] ?? "");
+}

@@ -1,6 +1,12 @@
+import { resolveProviderAssetReferences } from "@/lib/providerAssets";
+import { createGenerationAssetUrls } from "@/lib/generationAssetUrls";
+import { buildVideoModePayload, getGenerationModes, type GenerationMode } from "@/lib/generationModes";
+import { SirayaApiError } from "@/lib/siraya";
+import { assertModelAccess } from "@/lib/companionGenerationAccess";
 import { validateGeneration } from "@/lib/generationValidation";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
+import { applyWatermarkDefaults } from "@/lib/watermark";
 import { createVideo } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
@@ -19,8 +25,8 @@ export const maxDuration = 60;
 // image and text charge-and-call inside one request/response (see
 // lib/creditTransactions.ts's paidCall), so there's nothing to be "in
 // flight" there. A charged video row counts as in-flight until either
-// recordGeneration (completed) or a video_refund (failed) shows up against
-// its ref; the frontend already caps concurrent jobs at the same number
+// history, companion terminal status, or the exact charge refund settles it.
+// The frontend already caps concurrent jobs at the same number
 // (MAX_CONCURRENT_JOBS in lib/jobsStore.tsx) but that's UI-only and doesn't
 // stop a direct API caller from firing far more submissions than that.
 const MAX_CONCURRENT_VIDEO_JOBS = 4;
@@ -36,7 +42,19 @@ async function countInFlightVideoJobs(userId: number): Promise<number> {
       and not exists (select 1 from generations g where g.user_id = cl.user_id and g.ref = cl.ref)
       and not exists (
         select 1 from credit_ledger r
-        where r.user_id = cl.user_id and r.reason = 'video_refund' and r.ref = cl.ref
+        where r.user_id = cl.user_id
+          and ((r.reason = 'video_refund' and r.ref = cl.ref)
+            or (r.reason = 'charge_refund' and r.ref = cl.id::text))
+      )
+      and not exists (
+        select 1 from character_idle_videos v
+        where v.user_id = cl.user_id and (v.job_id = cl.ref or v.charge_id = cl.id)
+          and v.status in ('completed','failed')
+      )
+      and not exists (
+        select 1 from character_scene_requests s
+        where s.user_id = cl.user_id and s.job_id = cl.ref
+          and s.status in ('completed','failed')
       )
   `;
   return rows[0]?.n ?? 0;
@@ -57,6 +75,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    assertModelAccess(req, body?.model);
     validateGeneration(body, "video");
     if (!body?.model || !body?.prompt) {
       return NextResponse.json(
@@ -64,6 +83,55 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // reference materials: can come from the user's own asset library
+    // (assetIds — resolved to base64 data URLs, since the blob store is
+    // private) and/or plain URLs (智慧畫布 node-chaining: a prior node's own
+    // generated-image output isn't in the asset library, so it can't go
+    // through assetIds — forward it straight through as a reference
+    // instead). Both can be present at once — combine them, capped at this
+    // model's reference limit. Only Seedance models are known to support
+    // this on SIRAYA.
+    const { assetIds, imageUrls, videoUrl, providerAssetIds, generationMode, ...videoBody } = body;
+    const allowedModes = getGenerationModes(String(body.model), "video");
+    const selectedMode = generationMode || allowedModes.find(m=>m.enabled)?.id;
+    if(generationMode && !allowedModes.some(m=>m.id===generationMode && m.enabled)) throw new SirayaApiError(400,"此模型尚未開放所選模式");
+    const frameMode = selectedMode === "first-last-frame" || selectedMode === "image-to-video";
+    const trusted = Array.isArray(providerAssetIds) && providerAssetIds.length ? await resolveProviderAssetReferences(user.id, providerAssetIds) : [];
+    if (trusted.length && (!allowedModes.some(m=>m.id==="subject-reference" && m.enabled) || frameMode)) throw new SirayaApiError(400,"此模式不接受已審核素材，請選擇主體參考。");
+    const refCap = maxRefsForVideoModel(String(body.model));
+    if (refCap > 0) {
+      const refs: { type: "image" | "video"; url: string }[] = [];
+      if (Array.isArray(assetIds) && assetIds.length) {
+        const urls = frameMode ? await createGenerationAssetUrls(user.id, assetIds.map(Number), req.nextUrl.origin) : await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
+        refs.push(...urls.map((url) => ({ type: "image" as const, url })));
+      }
+      if (Array.isArray(imageUrls)) {
+        for (const u of imageUrls) {
+          if (typeof u === "string" && u.trim()) {
+            if (/^asset:/i.test(u.trim())) throw new SirayaApiError(400,"請從已審核素材選擇參考圖片");
+            refs.push({ type: "image" as const, url: u.trim() });
+          }
+        }
+      }
+      // A recorded 3D導演台 運鏡 clip — reference-to-video (r2v) mode.
+      // Seedance 2.0/2.5 only (verified live — see supportsVideoRefInput's
+      // comment); silently dropped for other models the same way stale
+      // image refs already are, rather than erroring the whole submission.
+      if (typeof videoUrl === "string" && videoUrl.trim() && supportsVideoRefInput(String(body.model))) {
+        refs.push({ type: "video", url: videoUrl.trim() });
+      }
+      if(frameMode && refs.some(r=>r.type!=="image")) throw new SirayaApiError(400,"首尾幀僅接受圖片");
+      if (allowedModes.length) {
+        try {
+          Object.assign(videoBody, buildVideoModePayload({ model: String(body.model), mode: selectedMode as GenerationMode, prompt: String(body.prompt), seconds: body.seconds, aspectRatio: body.aspect_ratio, ...(frameMode ? {imageUrls: refs.map(r=>r.url)} : {references:[...refs,...trusted]}) }));
+        } catch(e) { throw new SirayaApiError(400,e instanceof Error ? e.message : "生成模式不正確"); }
+      } else {
+        if (generationMode || trusted.length) throw new SirayaApiError(400,"此模型尚未支援所選模式");
+        if (refs.length) videoBody.input_references = refs.slice(0, refCap);
+      }
+    }
+
 
     const inFlight = await countInFlightVideoJobs(user.id);
     if (inFlight >= MAX_CONCURRENT_VIDEO_JOBS) {
@@ -85,6 +153,10 @@ export async function POST(req: NextRequest) {
       resolution: String(body.resolution || "480p"),
     });
     const balance = await getBalance(user.id);
+    const confirmedCredits = req.headers.get("x-blue-wing-expected-credits");
+    if (confirmedCredits !== null && (!/^\d+$/.test(confirmedCredits) || Number(confirmedCredits) !== cost)) {
+      return NextResponse.json({ error: { message: "點數已變更，請重新預覽並確認", code: "stale_quote" } }, { status: 409 });
+    }
     if (balance < cost) {
       return NextResponse.json(
         {
@@ -100,56 +172,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // reference materials: can come from the user's own asset library
-    // (assetIds — resolved to base64 data URLs, since the blob store is
-    // private) and/or plain URLs (智慧畫布 node-chaining: a prior node's own
-    // generated-image output isn't in the asset library, so it can't go
-    // through assetIds — forward it straight through as a reference
-    // instead). Both can be present at once — combine them, capped at this
-    // model's reference limit. Only Seedance models are known to support
-    // this on SIRAYA.
-    const { assetIds, imageUrls, videoUrl, ...videoBody } = body;
-    const refCap = maxRefsForVideoModel(String(body.model));
-    if (refCap > 0) {
-      const refs: { type: "image" | "video"; url: string }[] = [];
-      if (Array.isArray(assetIds) && assetIds.length) {
-        const urls = await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
-        refs.push(...urls.map((url) => ({ type: "image" as const, url })));
-      }
-      if (Array.isArray(imageUrls)) {
-        for (const u of imageUrls) {
-          if (typeof u === "string" && u.trim()) refs.push({ type: "image" as const, url: u.trim() });
-        }
-      }
-      // A recorded 3D導演台 運鏡 clip — reference-to-video (r2v) mode.
-      // Seedance 2.0/2.5 only (verified live — see supportsVideoRefInput's
-      // comment); silently dropped for other models the same way stale
-      // image refs already are, rather than erroring the whole submission.
-      if (typeof videoUrl === "string" && videoUrl.trim() && supportsVideoRefInput(String(body.model))) {
-        refs.push({ type: "video", url: videoUrl.trim() });
-      }
-      if (refs.length) videoBody.input_references = refs.slice(0, refCap);
-    }
-
-    // Seedance also puts a visible "AI generated" badge on the output unless
-    // told otherwise — verified empirically (extra_body.watermark:false vs
-    // true, compared frame-by-frame). That's only confirmed for the Seedance
-    // family, though — other video providers routed through SIRAYA (Veo,
-    // Sora, ...) aren't, and the same lesson from /api/images applies: some
-    // providers reject an unrecognised param outright rather than ignoring
-    // it. `refCap > 0` doubles as "is this a Seedance model" (see
-    // lib/videoModels.ts) since only that family has any RULES entry at all.
-    if (refCap > 0) {
-      const clientExtra = (videoBody.extra_body as Record<string, unknown> | undefined) || {};
-      videoBody.extra_body = { ...clientExtra, watermark: clientExtra.watermark ?? false };
-    } else if (videoBody.extra_body && typeof videoBody.extra_body === "object") {
-      const rest = { ...(videoBody.extra_body as Record<string, unknown>) };
-      delete rest.watermark;
-      videoBody.extra_body = rest;
-    }
-
     const { result: json, chargeId } = await paidCall(user.id, cost, "video", String(body.model), () =>
-      createVideo({ ...videoBody, async: true })
+      createVideo(applyWatermarkDefaults({ ...videoBody, async: true }, "video"))
     );
 
     // Async submissions return { id, status: "processing" }; a provider that

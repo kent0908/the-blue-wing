@@ -1,3 +1,5 @@
+import { modelLabel } from "./modelLabel";
+import { canonicalBillingModel } from "./billingModel";
 /**
  * Image-generation model catalogue.
  *
@@ -271,12 +273,7 @@ export const IMAGE_MODELS: ImageModel[] = [
  * someone tell the two apart, so it stays visible.
  */
 export function displayModelName(id: string): string {
-  // NSFW- can come before the vendor prefix (NSFW-Dola-Seedream-5.0-pro) —
-  // strip it off, clean the rest, then put it back, rather than anchoring
-  // the vendor regex to the very start of the string.
-  const nsfw = id.match(/^NSFW-(.+)$/i);
-  const rest = (nsfw ? nsfw[1] : id).replace(/^(SIRAYA|ByteDance|Dola)-/i, "");
-  return nsfw ? `NSFW-${rest}` : rest;
+  return modelLabel(id);
 }
 
 /**
@@ -318,7 +315,7 @@ export function getImageModel(id: string | null | undefined): ImageModel | undef
  */
 export function getImageModelForControls(id: string | null | undefined): ImageModel | undefined {
   if (!id) return undefined;
-  return getImageModel(id.replace(/^NSFW-/i, ""));
+  return getImageModel(id.replace(/^NSFW-/i, "")) ?? getImageModel(canonicalBillingModel(id.replace(/^NSFW-/i, "")));
 }
 
 /** Families that accept a reference image (image-to-image) via the `image` field. */
