@@ -40,7 +40,8 @@ import {
 import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput, videoConstraintFor } from "@/lib/videoModels";
 import { supportsImageWatermark, supportsVideoWatermark } from "@/lib/watermark";
 import { AUDIO_MODELS } from "@/lib/audioModels";
-import ModelLogo from "@/components/ModelLogo";
+import ModelFunctionMenu from "./ModelFunctionMenu";
+import { modelFunctionSelection } from "@/lib/modelFunctionSelection";
 
 interface RefAsset {
   id: number;
@@ -130,19 +131,6 @@ export default function Composer({
   const selectionSource = `${mode}:${initialModel ?? ""}`;
   const [selection, setSelection] = useState<{id:string;source:string}|null>(null);
   const model = selection?.source === selectionSource ? selection.id : "";
-  const setModel = (id:string) => setSelection({id,source:selectionSource});
-  // A repeated sidebar pick can target the current URL after the user changed
-  // the dropdown. Treat that click as a fresh selection without clearing drafts.
-  useEffect(() => {
-    const selectFromSidebar = (event: Event) => {
-      const detail = (event as CustomEvent<{ mode: Mode; model: string }>).detail;
-      if (detail && detail.mode === mode && !/nsfw/i.test(detail.model)) {
-        setSelection({ id: detail.model, source: `${detail.mode}:${detail.model}` });
-      }
-    };
-    window.addEventListener("bluewing:model-select", selectFromSidebar);
-    return () => window.removeEventListener("bluewing:model-select", selectFromSidebar);
-  }, [mode]);
   const [isAdmin, setIsAdmin] = useState(false);
   // Long prompts expand automatically until the user explicitly chooses a size.
   const [manualExpand, setManualExpand] = useState<boolean | null>(null);
@@ -218,10 +206,25 @@ export default function Composer({
   const frameData: FrameSnapshot = frameSelection?.session === frameSession ? frameSelection.data : { slots: [null, null], uploading: [false, false] };
   const isFramePair = mode === "video" && operation === "first-last-frame";
   const refs = useMemo(() => isFramePair ? frameData.slots.filter((asset): asset is RefAsset => asset !== null) : regularRefs, [isFramePair, frameData.slots, regularRefs]);
-  const refSession = useMemo(() => ({ scope: `${mode}:${resolvedModel}:${operation}` }), [mode, resolvedModel, operation]);
+  const refSession = useMemo(() => ({ scope: `${mode}:${resolvedModel}:${operation}:${frameReset}` }), [mode, resolvedModel, operation, frameReset]);
   const activeRefSession = useRef<object | null>(null);
   const refBusy = refUpload?.session === refSession && refUpload.busy;
   useEffect(() => { activeRefSession.current = refSession; return () => { if (activeRefSession.current === refSession) activeRefSession.current = null; }; }, [refSession]);
+  // A repeated sidebar pick can target the current URL after the user changed
+  // the dropdown. Treat that click as a fresh selection without clearing drafts.
+  useEffect(() => {
+    const selectFromSidebar = (event: Event) => {
+      const detail = (event as CustomEvent<{ mode: Mode; model: string; operation?: string }>).detail;
+      if (detail && detail.mode === mode && !/nsfw/i.test(detail.model)) {
+        setSelection({ id: detail.model, source: `${detail.mode}:${detail.model}` });
+        setRefs([]); setFrameReset(value => value + 1); setProviderSelection({model:"",operation:"",ids:[]});
+        setVideoRef(null); setRefPicker(false); setLayerConfirm(false); activeRefSession.current = null; setRefUpload(null);
+      }
+    };
+    window.addEventListener("bluewing:model-select", selectFromSidebar);
+    return () => window.removeEventListener("bluewing:model-select", selectFromSidebar);
+  }, [mode]);
+
   const providerIds = providerSelection.model === resolvedModel && providerSelection.operation === operation ? providerSelection.ids : [];
   const watermark = watermarkChoice?.model === resolvedModel && watermarkChoice.source === selectionSource ? watermarkChoice.enabled : false;
   const setWatermark = (enabled:boolean) => setWatermarkChoice({model:resolvedModel,source:selectionSource,enabled});
@@ -426,6 +429,15 @@ export default function Composer({
     }
   };
 
+  const selectModelFunction = (id:string, requested?:string) => {
+    const next = modelFunctionSelection(modeParams.toString(), mode, id, requested);
+    setSelection({id:next.model,source:`${mode}:${next.model}`});
+    setImageEdits({source:`${mode}:${next.model}`,model:next.model,values:{}});
+    setRefs([]); setFrameReset(value => value + 1); setProviderSelection({model:"",operation:"",ids:[]});
+    setVideoRef(null); setRefPicker(false); setLayerConfirm(false); activeRefSession.current = null; setRefUpload(null);
+    modeRouter.replace(next.href,{scroll:false});
+  };
+
   const submit = (confirmed=false) => {
     if (!canSubmit) return;
     if(operation==="layer-separation" && !confirmed){setLayerConfirm(true);return;}
@@ -476,7 +488,6 @@ export default function Composer({
         isExpanded ? "min-h-[260px]" : "",
       ].join(" ")}
     >
-      {(mode==="image"||mode==="video") && operations.length>0 && <GenerationModePanel model={resolvedModel} kind={mode} operation={operation} selected={providerIds} onSelected={ids=>setProviderSelection({model:resolvedModel,operation,ids})} onOperation={value=>{const query=new URLSearchParams(modeParams.toString());query.set("mode",mode);query.set("model",resolvedModel);query.set("operation",value);modeRouter.replace(`/studio?${query}`,{scroll:false});setRefs([]);}} />}
       {operation==="layer-separation" && <div className="px-4 py-3 text-xs text-[#b2c8c0]"><p>限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。</p><label className="mt-2 block">輸出解析度 <select aria-label="圖層解析度" value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">查看圖層紀錄</Link></div>}
       {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label="確認圖層分離費用" className="mx-4 my-3 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>最高預扣 {credits} 點（底圖與最多 16 個圖層）。每張 {credits === null ? "—" : credits / 17} 點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>確認預扣並分離</button><button type="button" onClick={()=>setLayerConfirm(false)}>取消</button></div></div>}
       {isFramePair && <FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} />}
@@ -749,54 +760,18 @@ export default function Composer({
           )}
         </Popover>
 
-        {/* model */}
-        <Popover
-          widthClass="w-[330px]"
-          trigger={(open) => (
-            <>
-              <IconModel className="h-[15px] w-[15px]" />
-              {loadingModels ? "載入模型…" : resolvedModel ? modelLabel(available.find((m) => m.id === resolvedModel)?.displayName ?? getImageModel(resolvedModel)?.name ?? resolvedModel) : "無可用模型"}
-              <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
-            </>
-          )}
-        >
-          {(close) => (
-            <div className="max-h-[320px] overflow-y-auto">
-              {modelsError && (
-                <div className="px-3 py-3 text-[12.5px] leading-relaxed text-[#ff9b9b]">
-                  {modelsError}
-                </div>
-              )}
-              {!modelsError && available.length === 0 && (
-                <div className="px-3 py-3 text-[12.5px] text-[#8a8a8a]">
-                  {loadingModels ? "載入中…" : "此模式目前沒有可用模型"}
-                </div>
-              )}
-              {available.map((m) => {
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className="bw-menu-item"
-                    onClick={() => {
-                      setModel(m.id);
-                      setImgEdits({});
-                      if (!supportsRefImages(getImageModelForControls(m.id))) {
-                        setRefs([]);
-                        setRefPicker(false);
-                      }
-                      close();
-                    }}
-                  >
-                    <ModelLogo id={m.id} size={32} />
-                    <span className="min-w-0 flex-1 truncate text-[13.5px]">{modelLabel(m.displayName ?? getImageModel(m.id)?.name ?? m.id)}</span>
-                    {m.id === resolvedModel && <IconCheck className="h-3.5 w-3.5 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+        {/* Models and their functions share one bounded two-level menu. */}
+        <Popover label="選擇模型與功能" widthClass="w-[560px]" triggerClassName="max-w-[calc(100vw-84px)]" trigger={(open) => (
+          <>
+            <IconModel className="h-[15px] w-[15px] shrink-0" />
+            <span className="min-w-0 max-w-[155px] truncate">{loadingModels ? "載入模型…" : resolvedModel ? modelLabel(available.find((m) => m.id === resolvedModel)?.displayName ?? getImageModel(resolvedModel)?.name ?? resolvedModel) : "無可用模型"}</span>
+            {operations.find(item=>item.id===operation)?.label && <span className="min-w-0 max-w-[96px] truncate border-l border-white/15 pl-2 text-[11px] text-[#a8a8a8]">{operations.find(item=>item.id===operation)!.label}</span>}
+            <IconChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+          </>
+        )}>
+          {(close) => <ModelFunctionMenu models={available} mode={mode} selectedModel={resolvedModel} selectedOperation={operation} loading={loadingModels} error={modelsError} onSelect={(id,operation)=>{selectModelFunction(id,operation);close();}} />}
         </Popover>
+        {(mode==="image"||mode==="video") && <GenerationModePanel key={`${mode}:${resolvedModel}:${operation}`} model={resolvedModel} kind={mode} operation={operation} selected={providerIds} onSelected={ids=>setProviderSelection({model:resolvedModel,operation,ids})} />}
 
         {/* generation settings — model-aware for catalogued image models */}
         {operation==="layer-separation" ? null : activeImageModel ? (

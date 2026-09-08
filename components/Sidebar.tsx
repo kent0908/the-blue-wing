@@ -138,7 +138,7 @@ function ModelFlyoutPortal({
       })}
     </div>
     {sub && getGenerationModes(sub.id,state.modality).length>0 && <div aria-label="模型功能" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} className="bw-menu fixed z-[60] w-[210px] p-1.5" style={{top:Math.max(8,sub.top),left:Math.min(state.left+238,window.innerWidth-218)}}>
-      {getGenerationModes(sub.id,state.modality).map(item => item.enabled ? <Link key={item.id} className="bw-menu-item" href={`/studio?mode=${state.modality}&model=${encodeURIComponent(sub.id)}&operation=${item.id}`} onClick={() => window.dispatchEvent(new CustomEvent("bluewing:model-select",{detail:{mode:state.modality,model:sub.id}}))}>{item.label}</Link> : <div key={item.id} className="px-3 py-2 text-xs text-[#777]" aria-disabled="true">{item.label}<p className="mt-1 text-[10px] leading-4">{item.reason}</p></div>)}
+      {getGenerationModes(sub.id,state.modality).map(item => item.enabled ? <Link key={item.id} className="bw-menu-item" href={`/studio?mode=${state.modality}&model=${encodeURIComponent(sub.id)}&operation=${item.id}`} onClick={() => window.dispatchEvent(new CustomEvent("bluewing:model-select",{detail:{mode:state.modality,model:sub.id,operation:item.id}}))}>{item.label}</Link> : <div key={item.id} className="px-3 py-2 text-xs text-[#777]" aria-disabled="true">{item.label}<p className="mt-1 text-[10px] leading-4">{item.reason}</p></div>)}
     </div>}
     </>,
     document.body
