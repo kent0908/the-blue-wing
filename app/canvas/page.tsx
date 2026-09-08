@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { IconPlus, IconCanvas, IconTrash } from "@/components/Icons";
+import { IconPlus, IconCanvas, IconTrash, IconGlobe, IconApps } from "@/components/Icons";
 
 interface WorkflowSummary {
   id: string;
@@ -12,11 +12,78 @@ interface WorkflowSummary {
   updatedAt: string;
 }
 
+interface TemplateSummary {
+  id: number;
+  name: string;
+  description: string;
+  nodeCount: number;
+  createdAt: string;
+}
+
+interface PlazaPost {
+  id: number;
+  name: string;
+  description: string;
+  nodeCount: number;
+  copyCount: number;
+  authorName: string;
+  isOwn: boolean;
+  createdAt: string;
+}
+
+/** Small shared card shell — used by all three galleries (我的畫布 already
+ *  had its own markup; 官方模板/藍翼廣場 reuse the same visual language so
+ *  the page reads as one system, not three bolted-together lists). */
+function GalleryCard({
+  icon,
+  title,
+  subtitle,
+  badge,
+  onOpen,
+  onOpenLabel,
+  corner,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  badge?: string;
+  onOpen: () => void;
+  onOpenLabel: string;
+  corner?: React.ReactNode;
+}) {
+  return (
+    <div className="group relative flex h-[132px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]">
+      <div className="flex items-center gap-2">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">{icon}</span>
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{title}</span>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[11.5px] text-[#8a8a8a]">{subtitle}</p>
+        <div className="mt-2 flex items-center justify-between">
+          {badge ? <span className="text-[11px] text-[#7d7d7d]">{badge}</span> : <span />}
+          <button
+            type="button"
+            onClick={onOpen}
+            className="rounded-full bg-[#1f1f1f] px-3 py-1 text-[11px] text-[#c9c9c9] transition-colors hover:bg-[#272727] hover:text-white"
+          >
+            {onOpenLabel}
+          </button>
+        </div>
+      </div>
+      {corner && <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">{corner}</div>}
+    </div>
+  );
+}
+
 export default function CanvasHomePage() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<WorkflowSummary[] | null>(null);
+  const [templates, setTemplates] = useState<TemplateSummary[] | null>(null);
+  const [plaza, setPlaza] = useState<PlazaPost[] | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/canvas")
@@ -31,6 +98,21 @@ export default function CanvasHomePage() {
         if (j) setWorkflows(j.workflows);
       })
       .catch(() => setError("載入失敗，稍後再試"));
+
+    fetch("/api/canvas/templates")
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((j: { templates: TemplateSummary[] }) => setTemplates(j.templates ?? []))
+      .catch(() => setTemplates([]));
+
+    fetch("/api/canvas/plaza")
+      .then((r) => (r.ok ? r.json() : { posts: [] }))
+      .then((j: { posts: PlazaPost[] }) => setPlaza(j.posts ?? []))
+      .catch(() => setPlaza([]));
+
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : { user: null }))
+      .then((j: { user?: { role?: string } | null }) => setIsAdmin(j.user?.role === "admin"))
+      .catch(() => {});
   }, [router]);
 
   useEffect(() => {
@@ -61,6 +143,88 @@ export default function CanvasHomePage() {
     setWorkflows((cur) => cur?.filter((w) => w.id !== id) ?? cur);
   };
 
+  const publishTemplate = async (w: WorkflowSummary) => {
+    const name = prompt("官方模板名稱：", w.name);
+    if (!name?.trim()) return;
+    const description = prompt("簡短說明（可留空）：", "") ?? "";
+    setBusyId(w.id);
+    try {
+      const res = await fetch("/api/canvas/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), description: description.trim(), workflowId: w.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error?.message || "發布失敗");
+      alert("已發布為官方模板");
+      load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "發布失敗");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const shareToPlaza = async (w: WorkflowSummary) => {
+    const name = prompt("分享名稱：", w.name);
+    if (!name?.trim()) return;
+    const description = prompt("跟其他人說說這個工作流是做什麼的（可留空）：", "") ?? "";
+    setBusyId(w.id);
+    try {
+      const res = await fetch("/api/canvas/plaza", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), description: description.trim(), workflowId: w.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error?.message || "分享失敗");
+      alert("已分享到藍翼廣場");
+      load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "分享失敗");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const cloneTemplate = async (id: number) => {
+    setBusyId(`t${id}`);
+    try {
+      const res = await fetch(`/api/canvas/templates/${id}/clone`, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error?.message || "複製失敗");
+      router.push(`/canvas/${j.workflowId}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "複製失敗");
+      setBusyId(null);
+    }
+  };
+
+  const clonePlazaPost = async (id: number) => {
+    setBusyId(`p${id}`);
+    try {
+      const res = await fetch(`/api/canvas/plaza/${id}/clone`, { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error?.message || "複製失敗");
+      router.push(`/canvas/${j.workflowId}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "複製失敗");
+      setBusyId(null);
+    }
+  };
+
+  const deleteTemplate = async (id: number) => {
+    if (!confirm("刪除這個官方模板？")) return;
+    await fetch(`/api/canvas/templates/${id}`, { method: "DELETE" });
+    setTemplates((cur) => cur?.filter((t) => t.id !== id) ?? cur);
+  };
+
+  const deletePlazaPost = async (id: number) => {
+    if (!confirm("刪除這篇分享？")) return;
+    await fetch(`/api/canvas/plaza/${id}`, { method: "DELETE" });
+    setPlaza((cur) => cur?.filter((p) => p.id !== id) ?? cur);
+  };
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[1080px] px-6 py-8">
@@ -82,73 +246,183 @@ export default function CanvasHomePage() {
           </button>
         </div>
 
-        <div className="mt-4 rounded-xl border border-[#262626] bg-[#141414] px-4 py-3 text-[12px] leading-relaxed text-[#8a8a8a]">
-          目前支援五種節點：文字、圖片生成、影片生成、讀取素材、3D 導演台 — 都是接這個站已經在跑的真實 API（3D
-          導演台的截圖也是真的能接到生成節點當參考圖）。3D 導演台現在也有{" "}
-          <Link href="/canvas/director3d" className="text-[#7ff0cd] underline underline-offset-2">
-            獨立頁面
-          </Link>
-          ，不用先建一個畫布也能開來擺姿勢、截圖直接送去生成；角色可切換「精細模特兒」或「簡易關節人偶」兩種體型，另外有
-          一鍵運鏡按鈕（正面/側面/背面/俯視/仰視/特寫等常用鏡位）方便非專業人士取景，也可以錄製 15–30 秒的自由運鏡
-          （真的把畫面錄成影片檔，可下載）。錄好之後可以一鍵送去影片生成：這段錄製會直接當「運鏡影片參考」餵給
-          Seedance 2.0 / 2.5（這是真的驗證過的功能，不是文案——僅這兩個版本支援，其他模型會自動退回只用畫面），同時
-          附上抽出的幾張畫面當多重參考圖，加上自動判讀的運鏡文字提示，三者一起送到輸入框。目前仍只有單一自由視角相機、
-          純色背景；多相機同時運作、360° 全景背景還在後續開發中。圖層合成、字型、錄音配音、Agent 呼叫其他節點當工具這些
-          ByteDance Canvas 才有的功能，這裡還沒有對應的 API 可以接，所以先不做假的。
-        </div>
-
         {error && <p className="mt-4 text-[13px] text-[#ff9b9b]">{error}</p>}
 
-        {workflows === null && !error && (
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bw-shimmer h-[120px] rounded-xl" />
-            ))}
+        {/* 官方模板 */}
+        <section className="mt-8">
+          <div className="flex items-center gap-2">
+            <IconApps className="h-4 w-4 text-[#7ff0cd]" />
+            <h2 className="text-[15px] font-medium">官方模板</h2>
+            <span className="text-[11.5px] text-[#6d6d6d]">— 直接複製使用，開箱即用的工作流</span>
           </div>
-        )}
+          {templates === null ? (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
+              ))}
+            </div>
+          ) : templates.length === 0 ? (
+            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">目前還沒有官方模板</p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {templates.map((t) => (
+                <GalleryCard
+                  key={t.id}
+                  icon={<IconApps className="h-4 w-4" />}
+                  title={t.name}
+                  subtitle={t.description || `${t.nodeCount} 個節點`}
+                  badge={`${t.nodeCount} 個節點`}
+                  onOpen={() => cloneTemplate(t.id)}
+                  onOpenLabel={busyId === `t${t.id}` ? "複製中…" : "複製到我的畫布"}
+                  corner={
+                    isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => deleteTemplate(t.id)}
+                        aria-label="刪除範本"
+                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
+                      >
+                        <IconTrash className="h-3.5 w-3.5" />
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
-        {workflows?.length === 0 && (
-          <div className="mt-16 text-center text-[13px] text-[#5c5c5c]">
-            還沒有任何畫布
-            <br />
-            按右上角「建立新畫布」開始
+        {/* 藍翼廣場 */}
+        <section className="mt-8">
+          <div className="flex items-center gap-2">
+            <IconGlobe className="h-4 w-4 text-[#7ff0cd]" />
+            <h2 className="text-[15px] font-medium">藍翼廣場</h2>
+            <span className="text-[11.5px] text-[#6d6d6d]">— 大家分享出來的工作流，歡迎拿去用</span>
           </div>
-        )}
+          {plaza === null ? (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
+              ))}
+            </div>
+          ) : plaza.length === 0 ? (
+            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">還沒有人分享工作流，來當第一個吧</p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {plaza.map((p) => (
+                <GalleryCard
+                  key={p.id}
+                  icon={<IconGlobe className="h-4 w-4" />}
+                  title={p.name}
+                  subtitle={p.description || `by ${p.authorName}`}
+                  badge={`by ${p.authorName} · 複製 ${p.copyCount} 次`}
+                  onOpen={() => clonePlazaPost(p.id)}
+                  onOpenLabel={busyId === `p${p.id}` ? "複製中…" : "複製到我的畫布"}
+                  corner={
+                    p.isOwn || isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => deletePlazaPost(p.id)}
+                        aria-label="刪除分享"
+                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
+                      >
+                        <IconTrash className="h-3.5 w-3.5" />
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
-        {workflows && workflows.length > 0 && (
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {workflows.map((w) => (
-              <Link
-                key={w.id}
-                href={`/canvas/${w.id}`}
-                className="group relative flex h-[120px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">
-                    <IconCanvas className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{w.name}</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-[#7d7d7d]">
-                  <span>{w.nodeCount} 個節點</span>
-                  <span>{new Date(w.updatedAt).toLocaleDateString("zh-TW")}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    remove(w.id);
-                  }}
-                  aria-label="刪除"
-                  className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] opacity-0 transition-opacity hover:bg-[#241414] hover:text-[#ff8a8a] group-hover:opacity-100"
+        {/* 我的畫布 */}
+        <section className="mt-8">
+          <h2 className="text-[15px] font-medium">我的畫布</h2>
+
+          {workflows === null && !error && (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bw-shimmer h-[120px] rounded-xl" />
+              ))}
+            </div>
+          )}
+
+          {workflows?.length === 0 && (
+            <div className="mt-16 text-center text-[13px] text-[#5c5c5c]">
+              還沒有任何畫布
+              <br />
+              按右上角「建立新畫布」開始，或上面挑一個模板／廣場分享來改
+            </div>
+          )}
+
+          {workflows && workflows.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {workflows.map((w) => (
+                <Link
+                  key={w.id}
+                  href={`/canvas/${w.id}`}
+                  className="group relative flex h-[120px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]"
                 >
-                  <IconTrash className="h-3.5 w-3.5" />
-                </button>
-              </Link>
-            ))}
-          </div>
-        )}
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">
+                      <IconCanvas className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{w.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-[#7d7d7d]">
+                    <span>{w.nodeCount} 個節點</span>
+                    <span>{new Date(w.updatedAt).toLocaleDateString("zh-TW")}</span>
+                  </div>
+                  <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        shareToPlaza(w);
+                      }}
+                      disabled={busyId === w.id}
+                      aria-label="分享到廣場"
+                      title="分享到藍翼廣場"
+                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
+                    >
+                      <IconGlobe className="h-3.5 w-3.5" />
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          publishTemplate(w);
+                        }}
+                        disabled={busyId === w.id}
+                        aria-label="發布為官方模板"
+                        title="發布為官方模板"
+                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
+                      >
+                        <IconApps className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        remove(w.id);
+                      }}
+                      aria-label="刪除"
+                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
+                    >
+                      <IconTrash className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

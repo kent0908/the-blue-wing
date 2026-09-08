@@ -297,3 +297,37 @@ create index if not exists character_outfit_changes_char_idx on character_outfit
 
 alter table character_idle_videos add column if not exists outfit_key text;
 alter table character_idle_videos add column if not exists purchase_id bigint references character_outfit_changes(id) on delete set null;
+
+-- 智慧畫布的「官方模板」——admin 把自己畫布的目前 graph 拍一份快照發布給所有
+-- 使用者瀏覽/複製。快照而非即時連結：admin 之後繼續編輯自己的原始畫布不會
+-- 動到已發布的範本，範本被刪掉也不影響 admin 自己的畫布。見
+-- lib/canvasTemplates.ts。
+create table if not exists canvas_templates (
+  id          bigint generated always as identity primary key,
+  name        text not null,
+  description text not null default '',
+  graph       jsonb not null,
+  created_by  bigint references users(id) on delete set null,
+  sort_order  integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists canvas_templates_sort_idx on canvas_templates(sort_order, created_at desc);
+
+-- 藍翼廣場——任何使用者都可以把自己的畫布分享出來（同樣是快照，理由同上：
+-- 分享之後繼續編輯私人畫布，或刪掉私人畫布，都不影響已分享的貼文），讓其他
+-- 使用者瀏覽並複製成自己的畫布。status 讓 admin 可以下架不當內容，
+-- copy_count 只是單純的人氣參考數字。見 lib/canvasPlaza.ts。
+create table if not exists canvas_plaza_posts (
+  id          bigint generated always as identity primary key,
+  user_id     bigint not null references users(id) on delete cascade,
+  name        text not null,
+  description text not null default '',
+  graph       jsonb not null,
+  status      text not null default 'visible' check (status in ('visible','hidden')),
+  copy_count  integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists canvas_plaza_posts_status_idx on canvas_plaza_posts(status, created_at desc);
+create index if not exists canvas_plaza_posts_user_idx on canvas_plaza_posts(user_id, created_at desc);
