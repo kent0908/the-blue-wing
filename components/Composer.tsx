@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import GenerationModePanel from "./GenerationModePanel";
+import FrameUploadCards from "./FrameUploadCards";
+import { orderedFrameIds, type FrameSnapshot } from "@/lib/frameSlots";
 import { getGenerationModes } from "@/lib/generationModes";
 import { modelLabel } from "@/lib/modelLabel";
 
@@ -148,7 +150,9 @@ export default function Composer({
   const isExpanded = manualExpand ?? prompt.length > 200;
 
   /* ---- reference materials (image-to-image / Seedance multi-reference video) ---- */
-  const [refs, setRefs] = useState<RefAsset[]>(initialRefs ?? []);
+  const [regularRefs, setRefs] = useState<RefAsset[]>(initialRefs ?? []);
+  const [frameReset, setFrameReset] = useState(0);
+  const [frameSelection, setFrameSelection] = useState<{ session: object; data: FrameSnapshot } | null>(null);
   // A recorded 3D導演台 運鏡 clip, handed off separately from image refs above —
   // Seedance's r2v mode takes it as its own input_references entry (type
   // "video"), not something that fits the @mention/image-strip UI. See
@@ -156,7 +160,7 @@ export default function Composer({
   const [videoRef, setVideoRef] = useState<{ url: string; name?: string } | null>(initialVideoRef ?? null);
   const [refPicker, setRefPicker] = useState(false);
   const [library, setLibrary] = useState<RefAsset[] | null>(null);
-  const [refBusy, setRefBusy] = useState(false);
+  const [refUpload, setRefUpload] = useState<{ session: object; busy: boolean } | null>(null);
   const [refError, setRefError] = useState<string | null>(null);
   const refInputRef = useRef<HTMLInputElement>(null);
 
@@ -209,6 +213,15 @@ export default function Composer({
   const [layerConfirm,setLayerConfirm] = useState(false);
   const requestedOperation = modeParams.get("operation");
   const operation = operations.find(o=>o.id===requestedOperation && o.enabled)?.id ?? operations.find(o=>o.enabled)?.id ?? "";
+  const frameScope = `${mode}:${resolvedModel}:${operation}:${frameReset}`;
+  const frameSession = useMemo(() => ({ scope: frameScope }), [frameScope]);
+  const frameData: FrameSnapshot = frameSelection?.session === frameSession ? frameSelection.data : { slots: [null, null], uploading: [false, false] };
+  const isFramePair = mode === "video" && operation === "first-last-frame";
+  const refs = useMemo(() => isFramePair ? frameData.slots.filter((asset): asset is RefAsset => asset !== null) : regularRefs, [isFramePair, frameData.slots, regularRefs]);
+  const refSession = useMemo(() => ({ scope: `${mode}:${resolvedModel}:${operation}` }), [mode, resolvedModel, operation]);
+  const activeRefSession = useRef<object | null>(null);
+  const refBusy = refUpload?.session === refSession && refUpload.busy;
+  useEffect(() => { activeRefSession.current = refSession; return () => { if (activeRefSession.current === refSession) activeRefSession.current = null; }; }, [refSession]);
   const providerIds = providerSelection.model === resolvedModel && providerSelection.operation === operation ? providerSelection.ids : [];
   const watermark = watermarkChoice?.model === resolvedModel && watermarkChoice.source === selectionSource ? watermarkChoice.enabled : false;
   const setWatermark = (enabled:boolean) => setWatermarkChoice({model:resolvedModel,source:selectionSource,enabled});
@@ -246,14 +259,16 @@ export default function Composer({
   };
 
   const uploadRef = async (files: FileList) => {
-    setRefBusy(true);
+    setRefUpload({ session: refSession, busy: true });
     setRefError(null);
     try {
       for (const file of Array.from(files)) {
+        if (activeRefSession.current !== refSession) break;
         const fd = new FormData();
         fd.append("file", file);
         const res = await fetch("/api/assets", { method: "POST", body: fd });
         const j = await res.json().catch(() => ({}));
+        if (activeRefSession.current !== refSession) break;
         if (!res.ok) {
           setRefError(j?.error?.message || "上傳失敗");
           continue;
@@ -261,8 +276,10 @@ export default function Composer({
         setLibrary((cur) => (cur ? [j.asset, ...cur] : [j.asset]));
         addRef(j.asset);
       }
+    } catch {
+      if (activeRefSession.current === refSession) setRefError("圖片上傳失敗，請檢查連線後重試。");
     } finally {
-      setRefBusy(false);
+      setRefUpload(previous => previous?.session === refSession ? { session: refSession, busy: false } : previous);
     }
   };
 
@@ -322,8 +339,8 @@ export default function Composer({
 
   const credits =
     creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: effectiveSettings.seconds, maxTokens: settings.maxTokens, resolution: effectiveSettings.resolution });
-  const modeRefsValid = operation === "layer-separation" ? refs.length===1 : operation === "first-last-frame" ? refs.length === 2 && !providerIds.length : operation === "image-to-video" ? refs.length === 1 && !providerIds.length : operation === "subject-reference" ? refs.length+providerIds.length>0 : true;
-  const canSubmit = modeRefsValid && (operation === "layer-separation" || !!prompt.trim()) && !!resolvedModel && !busy && credits !== null && (mode !== "video" || !!effectiveSettings.resolution);
+  const modeRefsValid = operation === "layer-separation" ? refs.length===1 : operation === "first-last-frame" ? orderedFrameIds(frameData.slots) !== null && !frameData.uploading.some(Boolean) && !providerIds.length : operation === "image-to-video" ? refs.length === 1 && !providerIds.length : operation === "subject-reference" ? refs.length+providerIds.length>0 : true;
+  const canSubmit = modeRefsValid && !refBusy && (operation === "layer-separation" || !!prompt.trim()) && !!resolvedModel && !busy && credits !== null && (mode !== "video" || !!effectiveSettings.resolution);
 
   // Image mode: seedream/gemini models. Video mode: Seedance models only.
   // When neither applies, stale refs are simply ignored (submit + render both gate on this).
@@ -412,7 +429,7 @@ export default function Composer({
   const submit = (confirmed=false) => {
     if (!canSubmit) return;
     if(operation==="layer-separation" && !confirmed){setLayerConfirm(true);return;}
-    const assetIds = canUseRefs ? refs.map((r) => r.id) : [];
+    const assetIds = canUseRefs ? isFramePair ? orderedFrameIds(frameData.slots)! : refs.map((r) => r.id) : [];
     // The image itself already carries the reference — strip the "@Name" tag
     // out of the text so the model isn't fed a literal filename token.
     let finalPrompt = prompt.trim() || (operation==="layer-separation" ? "Decompose the main visual elements into independent layers." : "");
@@ -446,6 +463,7 @@ export default function Composer({
     setPrompt("");
     setManualExpand(null);
     setRefs([]);
+    setFrameReset(value => value + 1);
     setRefPicker(false);
     setMention(null);
     setVideoRef(null);
@@ -461,13 +479,14 @@ export default function Composer({
       {(mode==="image"||mode==="video") && operations.length>0 && <GenerationModePanel model={resolvedModel} kind={mode} operation={operation} selected={providerIds} onSelected={ids=>setProviderSelection({model:resolvedModel,operation,ids})} onOperation={value=>{const query=new URLSearchParams(modeParams.toString());query.set("mode",mode);query.set("model",resolvedModel);query.set("operation",value);modeRouter.replace(`/studio?${query}`,{scroll:false});setRefs([]);}} />}
       {operation==="layer-separation" && <div className="px-4 py-3 text-xs text-[#b2c8c0]"><p>限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。</p><label className="mt-2 block">輸出解析度 <select aria-label="圖層解析度" value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">查看圖層紀錄</Link></div>}
       {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label="確認圖層分離費用" className="mx-4 my-3 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>最高預扣 {credits} 點（底圖與最多 16 個圖層）。每張 {credits === null ? "—" : credits / 17} 點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>確認預扣並分離</button><button type="button" onClick={()=>setLayerConfirm(false)}>取消</button></div></div>}
-      <div className="relative flex gap-3 px-4 pt-4">
-        {canUseRefs && (
-          <div className="relative flex shrink-0 items-start gap-2">
+      {isFramePair && <FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} />}
+      <div className="relative flex flex-wrap gap-3 px-4 pt-4">
+        {canUseRefs && !isFramePair && (
+          <div className="relative flex w-full min-w-0 flex-wrap items-start gap-3 pb-1">
             {refs.map((r) => (
-              <div key={r.id} className="relative h-[74px] w-[74px] overflow-hidden rounded-xl border border-[#2f2f2f]">
+              <div key={r.id} className="relative h-[82px] w-[82px] -rotate-2 overflow-hidden rounded-xl border border-[#454545] shadow-md transition-transform hover:rotate-0 focus-within:rotate-0 motion-reduce:transition-none">
                 {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
-                <img src={r.src} alt="" className="h-full w-full object-cover" />
+                <img src={r.src} alt={r.name} className="h-full w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => setRefs((cur) => cur.filter((x) => x.id !== r.id))}
@@ -483,15 +502,16 @@ export default function Composer({
               <button
                 type="button"
                 onClick={() => (refPicker ? setRefPicker(false) : openPicker())}
-                className="group grid h-[74px] w-[74px] shrink-0 place-items-center rounded-xl border border-dashed border-[#3a3a3a] bg-[#1f1f1f] text-[#9a9a9a] transition-colors hover:border-[#555] hover:text-white"
+                className="group grid h-[82px] w-[106px] shrink-0 -rotate-2 place-items-center rounded-xl border border-dashed border-[#505050] bg-gradient-to-br from-[#2b2b2b] to-[#1c1c1c] px-2 py-2 text-[#d2d2d2] shadow-md transition-transform hover:rotate-0 hover:border-[#858585] focus-visible:rotate-0 focus-visible:outline-[#7ff0cd] motion-reduce:transition-none"
               >
                 <IconPlus className="h-4 w-4" />
-                <span className="mt-0.5 text-[11px]">素材</span>
+                <span className="text-[11px]">加入參考素材</span>
+                <span className="text-[9px] text-[#949494]">上傳 / 素材庫</span>
               </button>
             )}
 
             {refPicker && (
-              <div className="bw-menu absolute bottom-[calc(100%+8px)] left-0 z-40 w-[320px] p-3">
+              <div className="bw-menu absolute bottom-[calc(100%+8px)] left-0 z-40 w-[320px] max-w-[calc(100vw-64px)] p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] font-medium text-white">參考素材（最多 {refCap} 個）</span>
                   <button type="button" onClick={() => setRefPicker(false)} className="text-[11px] text-[#8a8a8a] hover:text-white">關閉</button>
@@ -794,7 +814,7 @@ export default function Composer({
           watermarkSupported={watermarkSupported}
         />
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto mr-12 flex items-center gap-3 sm:mr-0">
           {isAdmin && <span data-testid="admin-provider-estimate" className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="服務商成本預估，僅管理員可見；站內扣點依既定費率">
             預估 {formatUSD(cost)}
           </span>}

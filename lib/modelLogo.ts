@@ -12,9 +12,8 @@
  * The source PNGs were normalised before being committed (trimmed, opaque
  * light backgrounds knocked out to alpha, downscaled to 128px): the raw files
  * were a mix of transparent, white-backed and grey-backed, at 178–563px.
- * Render them on a light chip — `gpt` and `happyhorse` are solid black marks
- * that are invisible against this app's dark surfaces, verified by compositing
- * both ways before choosing.
+ * ModelLogo renders their alpha silhouettes in white on a black chip, keeping
+ * the supplied geometry while matching the monochrome interface.
  */
 export interface ModelLogo {
   src: string;

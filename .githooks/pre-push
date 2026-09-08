@@ -1,0 +1,4 @@
+#!/bin/sh
+# Git passes remote-name and remote-location as argv, ref updates on stdin.
+# Leave stdin intact: the Node gate verifies the exact commit being pushed.
+exec node "$(git rev-parse --show-toplevel)/scripts/check-worktree-sync.cjs" --pre-push "$1" "$2"

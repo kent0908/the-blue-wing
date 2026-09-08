@@ -32,7 +32,7 @@ export default function GenerationModePanel({ model, kind, operation, onOperatio
       {kind==="video" && modes.some(m=>m.id==="subject-reference"&&m.enabled) && operation!=="first-last-frame" && operation!=="text-to-video" && operation!=="image-to-video" && <button type="button" className="rounded-lg border border-[#36554d] px-3 py-2 text-[#9aead5]" onClick={()=>open?setOpen(false):load()}>已審核素材{selected.length?` · ${selected.length}`:""}</button>}
       <Link href="/assets" className="text-[#8eaaa4] underline">管理素材</Link>
     </div>
-    {operation==="first-last-frame" && <p className="mt-2 text-[#a2b4af]">請在下方依序加入兩張素材：第一張為首幀，第二張為尾幀。</p>}
+    {operation==="first-last-frame" && <p className="mt-2 text-[#a2b4af]">分別設定首幀與尾幀，讓影片從起始畫面自然銜接到結束畫面。</p>}
     {operation==="image-to-video" && <p className="mt-2 text-[#a2b4af]">請在下方加入一張起始圖片。</p>}
     {operation==="subject-reference" && <p className="mt-2 text-[#a2b4af]">真人素材請先在資產庫完成授權與審核，再從「已審核素材」選取。</p>}
     {open && <div className="mt-3 rounded-lg bg-[#101917] p-3">
