@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef } from "react";
+import { Suspense, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { IconPlus, IconTrash } from "../../Icons";
 import {
@@ -116,6 +116,16 @@ export default function Director3DStudioBody({
     v.play();
   };
 
+  // Real gap found on re-audit (2026-09-08): neither the 快速運鏡 (camera
+  // shot) nor the POSE 預設姿勢庫 (pose) preset buttons showed which one was
+  // last applied — clicking one gave no lasting visual confirmation at all.
+  // Purely a "last clicked" UI hint (not derived from scene data), so it can
+  // go stale once someone hand-tweaks a joint slider afterward — acceptable,
+  // same trade every preset-button UI like this makes.
+  const [lastShotId, setLastShotId] = useState<string | null>(null);
+  const [lastPoseByChar, setLastPoseByChar] = useState<Record<string, string>>({});
+  const activePoseName = selected ? lastPoseByChar[selected.id] : undefined;
+
   return (
     <div className="flex min-h-0 flex-1">
       {/* left: character list + scene settings + 運鏡 */}
@@ -160,8 +170,13 @@ export default function Director3DStudioBody({
               <button
                 key={p.id}
                 type="button"
-                onClick={() => applyShot(p.id)}
-                className="rounded-lg bg-[#1f1f1f] px-1.5 py-1.5 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]"
+                onClick={() => {
+                  applyShot(p.id);
+                  setLastShotId(p.id);
+                }}
+                className={`rounded-lg px-1.5 py-1.5 text-[10.5px] ${
+                  lastShotId === p.id ? "bg-[#233a34] text-[#7ff0cd] ring-1 ring-[#3a5a50]" : "bg-[#1f1f1f] text-[#c9c9c9] hover:bg-[#282828]"
+                }`}
               >
                 {p.label}
               </button>
@@ -170,13 +185,23 @@ export default function Director3DStudioBody({
           <div className="mt-1.5 grid grid-cols-2 gap-1.5">
             <button
               type="button"
-              onClick={applyGroupShot}
+              onClick={() => {
+                applyGroupShot();
+                setLastShotId(null);
+              }}
               disabled={!scene.characters.length}
               className="rounded-lg bg-[#1f1f1f] px-1.5 py-1.5 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828] disabled:opacity-40"
             >
               全員入鏡
             </button>
-            <button type="button" onClick={() => setShot(DEFAULT_SHOT)} className="rounded-lg bg-[#1f1f1f] px-1.5 py-1.5 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]">
+            <button
+              type="button"
+              onClick={() => {
+                setShot(DEFAULT_SHOT);
+                setLastShotId(null);
+              }}
+              className="rounded-lg bg-[#1f1f1f] px-1.5 py-1.5 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]"
+            >
               重置視角
             </button>
           </div>
@@ -412,8 +437,13 @@ export default function Director3DStudioBody({
                     <button
                       key={name}
                       type="button"
-                      onClick={() => applyPreset(name)}
-                      className="rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-[11px] text-[#c9c9c9] hover:bg-[#282828]"
+                      onClick={() => {
+                        applyPreset(name);
+                        setLastPoseByChar((cur) => ({ ...cur, [selected.id]: name }));
+                      }}
+                      className={`rounded-lg px-2 py-1.5 text-[11px] ${
+                        activePoseName === name ? "bg-[#233a34] text-[#7ff0cd] ring-1 ring-[#3a5a50]" : "bg-[#1f1f1f] text-[#c9c9c9] hover:bg-[#282828]"
+                      }`}
                     >
                       {name}
                     </button>

@@ -96,6 +96,19 @@ function PathVisual({ character, dragging, onMarkerDragStart }: { character: Cha
 
 type DragTarget = { kind: "character"; id: string } | { kind: "waypoint"; characterId: string; index: number };
 
+// Hoisted, not an inline literal in the JSX below — real bug found on
+// re-audit (2026-09-08): react-three-fiber reconciles a vector-like prop
+// (like OrbitControls' `target`) by calling .set(...) whenever the prop
+// VALUE it's handed is a new array reference, which `target={[0, 0.9, 0]}`
+// inline would be on every single re-render of this component. That fights
+// CameraRig's own controls.target.lerp() in its useFrame — most visibly
+// during 錄製運鏡／預覽路徑, which re-renders this component via setScene on
+// every animation frame (~60fps): the orbit target would get silently
+// yanked back to the origin mid-lerp, on top of a 運鏡 preset's intended
+// framing. A stable reference makes react-three-fiber skip re-applying it
+// after the first render.
+const CAMERA_ORBIT_TARGET: [number, number, number] = [0, 0.9, 0];
+
 /**
  * The actual WebGL viewport. `onReady` hands the parent panel the raw
  * canvas element (via preserveDrawingBuffer:true) so it can call
@@ -220,7 +233,7 @@ export default function Director3DScene({
       {dragging && <DragPlane y={draggingCharacter?.position[1] ?? 0} onMove={handleDragMove} />}
 
       <CameraRig shot={shot} controlsRef={controlsRef} />
-      <OrbitControls ref={controlsRef} makeDefault enabled={!dragging} target={[0, 0.9, 0]} enableDamping dampingFactor={0.15} onChange={reportPose} />
+      <OrbitControls ref={controlsRef} makeDefault enabled={!dragging} target={CAMERA_ORBIT_TARGET} enableDamping dampingFactor={0.15} onChange={reportPose} />
     </Canvas>
   );
 }
