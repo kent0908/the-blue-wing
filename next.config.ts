@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [{ source: '/:path*', headers: [{ key: 'Permissions-Policy', value: 'picture-in-picture=()' }] }];
+  },
 };
 
 export default nextConfig;

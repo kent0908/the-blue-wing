@@ -1,0 +1,54 @@
+[
+  {
+    "id": "canvas-keyframes",
+    "revision": 1788963825258,
+    "category": "畫布展示",
+    "title": "關鍵影格攝影機",
+    "technique": "Keyframe Camera",
+    "character": "白石澪",
+    "prompt": "Cinematic anime animation using the attached character sheet ONLY for identity and clothing. Exactly one character, consistent face and costume, natural restrained motion, stable anatomy, relaxed closed lips, no talking, no captions, no logos, no reference-sheet layout. A continuous eight-second demonstration of controlled camera travel around a stationary character in a stone pavilion. First two seconds hold a wide front view. Next four seconds smoothly dolly forward and arc to the right, revealing columns through parallax. Last two seconds settle into a stable medium profile view. No cuts, speed jumps, labels, or repeated character.",
+    "seconds": 8,
+    "resolution": "720p",
+    "aspectRatio": "16:9",
+    "model": "SIRAYA-Seedance-2.0-mini"
+  },
+  {
+    "id": "canvas-storyboard",
+    "revision": 1788963834473,
+    "category": "畫布展示",
+    "title": "故事板網格",
+    "technique": "Storyboard Sequence",
+    "character": "淺野美羽",
+    "prompt": "Cinematic anime animation using the attached character sheet ONLY for identity and clothing. Exactly one character, consistent face and costume, natural restrained motion, stable anatomy, relaxed closed lips, no talking, no captions, no logos, no reference-sheet layout. Eight-second cinematic three-shot storyboard sequence with clean hard cuts. Seconds zero to three: wide view of the character entering a sunlit workshop. Seconds three to five: medium view as the character pauses and looks toward the window, hands below frame. Seconds five to eight: close portrait of the face with sunlight in the eyes. Same costume and room throughout, no split screen or textual panels.",
+    "seconds": 8,
+    "resolution": "720p",
+    "aspectRatio": "16:9",
+    "model": "SIRAYA-Seedance-2.0-mini"
+  },
+  {
+    "id": "canvas-lenses",
+    "revision": 1788963920139,
+    "category": "畫布展示",
+    "title": "鏡頭設計師",
+    "technique": "Shot Design",
+    "character": "神崎葵",
+    "prompt": "Cinematic anime animation using the attached character sheet ONLY for identity and clothing. Exactly one character, consistent face and costume, natural restrained motion, stable anatomy, relaxed closed lips, no talking, no captions, no logos, no reference-sheet layout. Eight-second sequence demonstrating three distinct camera angles on a stationary character beside a futuristic arch. First three seconds wide eye-level view. Hard cut to a medium low-angle portrait for two seconds. Hard cut to a close three-quarter face portrait for the last three seconds. Preserve lighting and identity; no face morphing, text, or speech.",
+    "seconds": 8,
+    "resolution": "720p",
+    "aspectRatio": "16:9",
+    "model": "SIRAYA-Seedance-2.0-mini"
+  },
+  {
+    "id": "canvas-color",
+    "revision": 1788964008022,
+    "category": "畫布展示",
+    "title": "電影色彩",
+    "technique": "Cinematic Color",
+    "character": "橘千夏",
+    "prompt": "Cinematic anime animation using the attached character sheet ONLY for identity and clothing. Exactly one character, consistent face and costume, natural restrained motion, stable anatomy, relaxed closed lips, no talking, no captions, no logos, no reference-sheet layout. One locked medium portrait by a riverside at twilight. First two seconds neutral natural grading. Over the next four seconds smoothly evolve the color grade so the sky and water shadows become deep teal while the face and distant lamps become warm amber. Hold the finished coherent cinematic palette for the last two seconds. No cuts, costume changes, text or exaggerated saturation.",
+    "seconds": 8,
+    "resolution": "720p",
+    "aspectRatio": "16:9",
+    "model": "SIRAYA-Seedance-2.0-mini"
+  }
+]

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import TemplatePreview from '@/components/TemplatePreview';
+import { CANVAS_PREVIEWS } from '@/lib/officialTemplates';
 import OfficialTemplates from '@/components/OfficialTemplates';
 import HeroCarousel from "@/components/HeroCarousel";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
@@ -51,6 +53,7 @@ function hrefFor(b: Block): string {
 export default function HomePage() {
   const router = useRouter();
 
+  const [playingCanvas, setPlayingCanvas] = useState<string|null>(null);
   const [prompt, setPrompt] = useState("");
   const [showcase, setShowcase] = useState<Block[]>(DEFAULT_SHOWCASE);
   const [templates, setTemplates] = useState<Block[]>(DEFAULT_TEMPLATES);
@@ -137,12 +140,12 @@ export default function HomePage() {
           ))}
         </div>
 
-        <section className="mt-8 rounded-2xl bg-[#0e0e0e] p-6">
+        <section id="canvas-showcase" className="mt-8 rounded-2xl bg-[#0e0e0e] p-6">
           <h2 className="text-[26px] font-semibold tracking-tight">用畫布創造更多</h2>
           <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {templates.slice(0, 8).map((c, i) => (
-              <Link key={c.id} href={hrefFor(c)} className="group">
-                {c.imageUrl ? (
+            {templates.slice(0, 8).map((c, i) => { const preview=CANVAS_PREVIEWS.find(p=>p.title===c.title); return (
+              <div key={c.id} className="group">
+                {preview ? <TemplatePreview id={preview.id} revision={preview.revision} title={c.title} active={playingCanvas===preview.id} onToggle={()=>setPlayingCanvas(playingCanvas===preview.id?null:preview.id)}/> : c.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- public content proxy
                   <img
                     src={c.imageUrl}
@@ -155,10 +158,10 @@ export default function HomePage() {
                     style={{ background: `linear-gradient(160deg,${TINTS[i % TINTS.length]} 0%,#101010 100%)` }}
                   />
                 )}
-                <div className="mt-3 text-[14px] font-medium">{c.title}</div>
+                <Link href={preview&&c.id<0?`/studio?mode=video&operation=freestyle&official=${preview.id}`:hrefFor(c)} className="mt-3 block text-[14px] font-medium hover:text-[#76dfbf]">{c.title} ↗</Link>
                 <div className="text-[12.5px] text-[#7d7d7d]">{c.subtitle}</div>
-              </Link>
-            ))}
+              </div>
+            )})}
           </div>
         </section>
         <OfficialTemplates />

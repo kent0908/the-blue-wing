@@ -52,7 +52,7 @@
     "assetId": 38
   },
   "cut-in": {
-    "pathname": "generations/1/video-1788959686510-DU18B1ojE8TOk1rL8WWvaQcCCIOEt2.mp4",
+    "pathname": "generations/1/video-1788962853387-lqLWdUa6bUPqwHym0XLENaGAYaZQ87.mp4",
     "assetId": 40
   },
   "long-take": {
@@ -70,5 +70,89 @@
   "poetic-realism": {
     "pathname": "generations/1/video-1788959911678-jD2nv2OZVgHmaiUdknT5VVvoy58no5.mp4",
     "assetId": 39
+  },
+  "overhead": {
+    "pathname": "generations/1/video-1788962860282-4UW5vhD1MGdexWCWcpHY39TPZH0sIG.mp4",
+    "assetId": 39
+  },
+  "orbit": {
+    "pathname": "generations/1/video-1788962866136-DG2r8xiJFV9yrwLHReUfmuVrEndhiv.mp4",
+    "assetId": 37
+  },
+  "soft-light": {
+    "pathname": "generations/1/video-1788963046496-V9k7lSTmc0EdcTYq563xjKaSmxWZOt.mp4",
+    "assetId": 38
+  },
+  "dappled-light": {
+    "pathname": "generations/1/video-1788963054603-wmvoFGeGQR4xoyDWqwPUQUUyEyKrW6.mp4",
+    "assetId": 39
+  },
+  "frame-within": {
+    "pathname": "generations/1/video-1788963065980-qoajRAamYLlOMEYyNHskLsGTkdDPEn.mp4",
+    "assetId": 37
+  },
+  "thirds": {
+    "pathname": "generations/1/video-1788964362946-PrGmcX5mYOCQ7JkVUsC1WQdcY1WB0p.mp4",
+    "assetId": 38
+  },
+  "cutaway": {
+    "pathname": "generations/1/video-1788963305465-8wk7ucKuBtOcguL9olixFUpwxfLx1w.mp4",
+    "assetId": 41
+  },
+  "dissolve": {
+    "pathname": "generations/1/video-1788963248194-1ra1n8OWgowdr9TkmpR8AO9sapkoMK.mp4",
+    "assetId": 38
+  },
+  "motif": {
+    "pathname": "generations/1/video-1788963428615-5TKiJydgpQxzifwU14m6rgNjGWNi3P.mp4",
+    "assetId": 37
+  },
+  "symbolism": {
+    "pathname": "generations/1/video-1788963435964-8YdvZBdi2RKeI09Rw6vBpDeV5zG398.mp4",
+    "assetId": 41
+  },
+  "in-medias-res": {
+    "pathname": "generations/1/video-1788963494466-9ixWagUMqKX3JepFMK2HngRRuOEMRv.mp4",
+    "assetId": 43
+  },
+  "sepia": {
+    "pathname": "generations/1/video-1788964403738-PqctOXP7rxfUyYGP5z9gOFz5pRyw1J.mp4",
+    "assetId": 41
+  },
+  "film-grain": {
+    "pathname": "generations/1/video-1788963632473-ODIo9hmwmMUqc4AyF6CelAMgpIa9k9.mp4",
+    "assetId": 40
+  },
+  "color-grade": {
+    "pathname": "generations/1/video-1788963683812-RaecB7XoVgaOWFCVO1L04Qh6zu7QM5.mp4",
+    "assetId": 43
+  },
+  "film-noir": {
+    "pathname": "generations/1/video-1788963772934-CbCvoubWlBOWIGePFtVZ3jpaockTeU.mp4",
+    "assetId": 43
+  },
+  "surrealism": {
+    "pathname": "generations/1/video-1788963788748-WV6V0k9Auoi37onpnYWgxq6bydfDAH.mp4",
+    "assetId": 42
+  },
+  "slow-cinema": {
+    "pathname": "generations/1/video-1788963884415-GYc4WWUMNVZcFX1nsV9Hr85fpTqHLT.mp4",
+    "assetId": 39
+  },
+  "canvas-keyframes": {
+    "pathname": "generations/1/video-1788963971836-uLI7FW7NEvtuQVPZQdahpSL6egwFRS.mp4",
+    "assetId": 37
+  },
+  "canvas-storyboard": {
+    "pathname": "generations/1/video-1788964029932-d98NwaJHEv7uf9y8Opl3oKqw1E1WSM.mp4",
+    "assetId": 40
+  },
+  "canvas-lenses": {
+    "pathname": "generations/1/video-1788964079403-8brsc4PXALfMi1MnaAnVhbDHs81l6i.mp4",
+    "assetId": 43
+  },
+  "canvas-color": {
+    "pathname": "generations/1/video-1788964154719-lGZYVcxbWUxJces3W1v85q9wBJNYnK.mp4",
+    "assetId": 38
   }
 }

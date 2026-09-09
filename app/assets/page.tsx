@@ -193,7 +193,7 @@ export default function AssetsPage() {
             {assets.map((a) => (
               <div key={a.id} className="group relative overflow-hidden rounded-xl border border-[#262626] bg-[#111]">
                 {a.contentType.startsWith("video/") ? (
-                  <video src={a.src} aria-label={a.name} className="aspect-square w-full object-contain" controls playsInline preload="metadata" />
+                  <video disablePictureInPicture disableRemotePlayback src={a.src} aria-label={a.name} className="aspect-square w-full object-contain" controls playsInline preload="metadata" />
                 ) : a.contentType.startsWith("audio/") ? (
                   <div className="flex aspect-square flex-col items-center justify-center gap-4 px-2"><span className="text-sm text-[#9caaa5]">音訊素材</span><audio src={a.src} aria-label={a.name} className="w-full" controls preload="metadata" /></div>
                 ) : (
