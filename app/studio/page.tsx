@@ -1,5 +1,7 @@
 "use client";
 
+import OfficialTemplateComposer from '@/components/OfficialTemplateComposer';
+import { getOfficialTemplate } from '@/lib/officialTemplates';
 import LayerDecompositionResult from "@/components/LayerDecompositionResult";
 import { modelLabel } from "@/lib/modelLabel";
 
@@ -34,6 +36,7 @@ function StudioInner() {
   const urlModel = params.get("model") ?? undefined;
   const urlPrompt = params.get("q") ?? undefined;
   const preset = params.get("preset");
+  const official = getOfficialTemplate(params.get("official"));
 
   // A screenshot (or a recorded 運鏡's sampled frames) handed off from the
   // standalone 3D導演台 page (see app/canvas/director3d/page.tsx) — it
@@ -185,7 +188,7 @@ function StudioInner() {
                 同時最多 {MAX_CONCURRENT_JOBS} 個生成在跑（不限模式），等其中一個完成才能再送出
               </p>
             )}
-            {presetReady ? (
+            {official ? <OfficialTemplateComposer key={official.id} template={official} composerProps={{initialModel:urlModel,mode,onModeChange:setMode,onSubmit:handleSubmit,busy:atCapacity}} /> : presetReady ? (
               <Composer
                 mode={mode}
                 onModeChange={setMode}

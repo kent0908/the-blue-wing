@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import OfficialTemplates from '@/components/OfficialTemplates';
 import HeroCarousel from "@/components/HeroCarousel";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
 import ModelLogo from "@/components/ModelLogo";
@@ -160,6 +161,7 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+        <OfficialTemplates />
       </div>
 
       <div className="pointer-events-none sticky bottom-6 flex flex-col items-center justify-center gap-3 px-6 xl:flex-row">

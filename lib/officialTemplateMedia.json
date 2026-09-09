@@ -1,0 +1,74 @@
+{
+  "camera": {
+    "pathname": "generations/1/video-1788950690489-0Z3ZI9qb2u0kqssYFztpmCRbIzL4hG.mp4",
+    "assetId": 37
+  },
+  "lighting": {
+    "pathname": "generations/1/video-1788950697513-ussh1ZhLBnBgDM5NjrismsGfNl3lLe.mp4",
+    "assetId": 38
+  },
+  "composition": {
+    "pathname": "generations/1/video-1788950709144-aSNuJSBjcWNGxhWymoxuggf4TTe8Cz.mp4",
+    "assetId": 39
+  },
+  "editing": {
+    "pathname": "generations/1/video-1788950716549-u2KRwViDs3NI7amD8uNSXiFpOgCJrk.mp4",
+    "assetId": 40
+  },
+  "story": {
+    "pathname": "generations/1/video-1788950988304-Hd3M7hBsniC22dyuM45Czj2ypNFobd.mp4",
+    "assetId": 41
+  },
+  "effects": {
+    "pathname": "generations/1/video-1788950891470-Eq1V4LVwRPkHR8gz0O4Jl2jWc0NjDl.mp4",
+    "assetId": 42
+  },
+  "genre": {
+    "pathname": "generations/1/video-1788950996571-fQoka5wDeeoz3PgdY2zp644vTDkN9v.mp4",
+    "assetId": 43
+  },
+  "push-in": {
+    "pathname": "generations/1/video-1788959333037-BkvKNYLXve3p4LxBt5ksYurXtKV5rD.mp4",
+    "assetId": 37
+  },
+  "rack-focus": {
+    "pathname": "generations/1/video-1788959385414-LwHdsS4HjDBA6DUn6jNxtm5zU4MY5X.mp4",
+    "assetId": 41
+  },
+  "silhouette": {
+    "pathname": "generations/1/video-1788960229570-DTkuUc5rYHDQzzPcDXgn0UduRRgYea.mp4",
+    "assetId": 43
+  },
+  "cross-light": {
+    "pathname": "generations/1/video-1788959490443-a2mqpuQMzYYvpC3NBihpZt4ibL4T0v.mp4",
+    "assetId": 42
+  },
+  "symmetry": {
+    "pathname": "generations/1/video-1788959579490-WeIKMAhKImVhZoRHw5ehl82C0Ae5ta.mp4",
+    "assetId": 39
+  },
+  "negative-space": {
+    "pathname": "generations/1/video-1788959588989-poaWe9nKTjO4O1cXOymhO4SdNREy9j.mp4",
+    "assetId": 38
+  },
+  "cut-in": {
+    "pathname": "generations/1/video-1788959686510-DU18B1ojE8TOk1rL8WWvaQcCCIOEt2.mp4",
+    "assetId": 40
+  },
+  "long-take": {
+    "pathname": "generations/1/video-1788959739872-JfFdrpy0LJfQ4adZ0ukuIzQzvggpfM.mp4",
+    "assetId": 37
+  },
+  "cliffhanger": {
+    "pathname": "generations/1/video-1788959793936-3iFRT8CuliExsMil5bX0dyRphub9qH.mp4",
+    "assetId": 41
+  },
+  "desaturation": {
+    "pathname": "generations/1/video-1788960238421-sHrvQbY4l6t3uvFDDTjE9o0s7sDT83.mp4",
+    "assetId": 38
+  },
+  "poetic-realism": {
+    "pathname": "generations/1/video-1788959911678-jD2nv2OZVgHmaiUdknT5VVvoy58no5.mp4",
+    "assetId": 39
+  }
+}

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { get, put } from "@vercel/blob";
 import { requireUser } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
+import { getOfficialTemplate } from '@/lib/officialTemplates';
+import { getOfficialTemplateMedia } from '@/lib/officialTemplateMedia';
 import { getBlock } from "@/lib/homeBlocks";
 import { blobConfigured, toPublicAsset, type AssetRow } from "@/lib/assets";
 
@@ -20,7 +22,8 @@ export async function POST(req: NextRequest) {
   const { user } = r;
 
   const body = await req.json().catch(() => ({}));
-  const block = await getBlock(Number(body.blockId));
+  const official = typeof body.officialId==='string' ? getOfficialTemplate(body.officialId) : undefined;
+  const block = body.officialId ? (official ? {id:'official-'+official.id,title:official.title,asset_id:getOfficialTemplateMedia(official.id)?.assetId} : null) : await getBlock(Number(body.blockId));
   if (!block) {
     return NextResponse.json({ error: { message: "找不到模板", code: "not_found" } }, { status: 404 });
   }

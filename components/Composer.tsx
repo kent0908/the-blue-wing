@@ -87,6 +87,7 @@ export default function Composer({
   initialModel,
   initialPrompt,
   initialImgValues,
+  initialSettings,
   initialRefs,
   initialVideoRef,
 }: {
@@ -113,6 +114,7 @@ export default function Composer({
   initialPrompt?: string;
   /** image param overrides from a template preset */
   initialImgValues?: ImageControlValues;
+  initialSettings?: Partial<GenSettings>;
   /** reference images from a template preset (already cloned to the user) */
   initialRefs?: RefAsset[];
   /** a recorded 3D導演台 運鏡 clip handed off from /canvas/director3d — video mode only */
@@ -122,7 +124,7 @@ export default function Composer({
   const modeParams = useSearchParams();
   const [providerSelection,setProviderSelection] = useState<{model:string;operation:string;ids:number[]}>({model:"",operation:"",ids:[]});
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
-  const [settings, setSettings] = useState<GenSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<GenSettings>({...DEFAULT_SETTINGS,...initialSettings});
   const [imageEdits, setImageEdits] = useState<{source:string;model:string|undefined;values:ImageControlValues}>({source:`${mode}:${initialModel ?? ""}`,model:initialModel,values:initialImgValues ?? {}});
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
