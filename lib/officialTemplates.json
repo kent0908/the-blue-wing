@@ -1,12 +1,12 @@
 [
   {
     "id": "camera",
-    "revision": 1788950416176,
+    "revision": 1788972017600,
     "category": "運鏡",
     "title": "平行跟拍",
     "technique": "Tracking Shot",
     "character": "白石澪",
-    "prompt": "Create a single cinematic anime scene using the attached character sheet only as identity and costume reference. Show ONE instance of the character, never the reference sheet, panels, labels or turnaround views. Preserve hair, face, glasses if present, and clothing. Natural restrained movement, stable anatomy, closed relaxed mouth, no dialogue, no captions, no logos. In a covered stone arcade after rain, the character walks from left to right holding a closed book. The camera travels parallel at exactly the same pace, keeping a medium full-body view. Nearby columns slide past quickly while the distant courtyard drifts slowly, making parallax unmistakable. One continuous six-second shot; no zoom and no cuts.",
+    "prompt": "Six-second cinematic anime parallel tracking shot. Use the supplied character sheet ONLY for the identity, hair, glasses and clothing of ONE character. The character walks naturally from left to right along a broad empty coastal promenade. The camera travels to the right parallel to the character at the same slow speed, remaining three meters away on a separate clear lane. Maintain a medium-full side view with the character fixed near the center of the frame and the horizon level. A distant beach and ocean drift behind, while paving seams slide past below to demonstrate parallax. The camera path and the space between camera and character are COMPLETELY EMPTY: no columns, arches, poles, trees, railings, walls, furniture, foreground props or passing people. The character holds NOTHING, with natural restrained arm swing and stable hands at the sides. Show one solid opaque body with consistent clothing and anatomy. No body intersections, disappearing limbs, duplicated limbs, fabric clipping, occlusion, camera crossing through objects, cuts, zooms, speaking, text or logos.",
     "seconds": 6,
     "resolution": "720p",
     "aspectRatio": "16:9",

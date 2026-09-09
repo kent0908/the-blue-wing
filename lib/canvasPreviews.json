@@ -1,12 +1,12 @@
 [
   {
     "id": "canvas-keyframes",
-    "revision": 1788963825258,
+    "revision": 1788971758974,
     "category": "畫布展示",
     "title": "關鍵影格攝影機",
     "technique": "Keyframe Camera",
     "character": "白石澪",
-    "prompt": "Cinematic anime animation using the attached character sheet ONLY for identity and clothing. Exactly one character, consistent face and costume, natural restrained motion, stable anatomy, relaxed closed lips, no talking, no captions, no logos, no reference-sheet layout. A continuous eight-second demonstration of controlled camera travel around a stationary character in a stone pavilion. First two seconds hold a wide front view. Next four seconds smoothly dolly forward and arc to the right, revealing columns through parallax. Last two seconds settle into a stable medium profile view. No cuts, speed jumps, labels, or repeated character.",
+    "prompt": "Eight-second cinematic anime camera-movement demonstration. Use the attached character sheet only to preserve the character identity, hairstyle, glasses and costume; show exactly ONE character, never a reference sheet. The character stands STILL on a broad EMPTY seaside terrace with open sky and distant ocean. Keep both arms relaxed naturally at the sides. There are NO columns, arches, trees, walls, railings, furniture or foreground objects anywhere near the character or camera path. First two seconds hold a full-body frontal view from four meters away. During the next four seconds slowly move the camera one meter forward and half a meter to the right, keeping at least three meters from the character at all times. Last two seconds hold the resulting medium-full three-quarter view. Maintain the whole head and torso, constant natural body proportions, stable clothing geometry, solid opaque body, and gentle breeze. The camera never crosses through the character or any object. No orbit behind the character, no foreground occlusion, no disappearing limbs, no fabric clipping, no cuts, no morphing, no talking, no open mouth, no text or logos.",
     "seconds": 8,
     "resolution": "720p",
     "aspectRatio": "16:9",
