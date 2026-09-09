@@ -156,17 +156,8 @@ const SEED: ImageControl = {
   placeholder: "留空為隨機",
 };
 
-/**
- * GPT Image 2 proxies straight to OpenAI's own images API (see
- * supportsWatermarkControl's comment on the same proxy behavior rejecting
- * `watermark`), and OpenAI's real gpt-image-1-family `size` enum is
- * 1024x1024 / 1536x1024 / 1024x1536 (+ "auto") — NOT the 1792x1024 /
- * 1024x1792 pair above, which are DALL·E 3's sizes. Found in a
- * data-accuracy audit (2026-09-07): this file previously reused the plain
- * `SIZE` control (Seedream/DALL·E-style) for GPT Image 2 too, which would
- * send a size OpenAI's own backend doesn't accept for this model family.
- * Based on OpenAI's documented API contract, not an independent SIRAYA
- * probe — worth a single real spot-check before relying on it further.
+/** GPT Image 2 supports flexible dimensions, including portrait 4K.
+ * Keep these curated choices within the model's 3840px edge / 8,294,400px limits.
  */
 const SIZE_GPT_IMAGE: ImageControl = {
   key: "size",
@@ -177,6 +168,10 @@ const SIZE_GPT_IMAGE: ImageControl = {
     { value: "1024x1024", label: "1:1 · 1024×1024" },
     { value: "1536x1024", label: "3:2 · 1536×1024" },
     { value: "1024x1536", label: "2:3 · 1024×1536" },
+    { value: "2048x1152", label: "16:9 · 2K" },
+    { value: "1152x2048", label: "9:16 · 2K" },
+    { value: "3840x2160", label: "16:9 · 4K" },
+    { value: "2160x3840", label: "9:16 · 4K" },
   ],
 };
 
@@ -368,7 +363,7 @@ export function sizeOptionsFor(modelId: string | null | undefined): string[] {
 }
 
 /** Families that accept a reference image (image-to-image) via the `image` field. */
-const REF_IMAGE_FAMILIES: ImageFamily[] = ["seedream", "gemini"];
+const REF_IMAGE_FAMILIES: ImageFamily[] = ["seedream", "gemini", "gpt-image"];
 export function supportsRefImages(model: ImageModel | undefined): boolean {
   return !!model && REF_IMAGE_FAMILIES.includes(model.family);
 }

@@ -155,6 +155,15 @@ export interface ImageGenerationRequest {
 
 /** POST /images/generations */
 export async function createImage(body: ImageGenerationRequest) {
+  // GPT reference inputs use edits; generations does not accept image inputs.
+  if (/^(?:(?:SIRAYA|NSFW)-)*gpt-image-/i.test(body.model) && body.image) {
+    const { image, ...settings } = body;
+    delete settings.response_format;
+    return createImageEdit({
+      ...settings,
+      image_urls: Array.isArray(image) ? image : [image],
+    });
+  }
   const res = await sirayaFetch("/images/generations", {
     method: "POST",
     body: JSON.stringify(applyWatermarkDefaults(body, "image")),
@@ -178,6 +187,11 @@ export interface ImageEditRequest {
   /** URL or base64 data URL — transparent/white marks the region to edit, per SIRAYA's own docs */
   mask_url?: string;
   n?: number;
+  size?: string;
+  quality?: string;
+  background?: string;
+  output_compression?: number;
+  moderation?: string;
   /**
    * Same Seedream "AI generated" watermark quirk as /images/generations
    * (see ImageGenerationRequest) — but for THIS endpoint specifically, the
