@@ -10,13 +10,14 @@
  * downloaded rigged mesh: matches the plain grey-dummy look the reference
  * product itself uses, and sidesteps needing to source/license a 3D asset.
  *
- * v1 scope: one free-orbit camera, ground + solid-color background, pose
- * presets + per-joint rig sliders, screenshot capture, 15-30s camera-move
- * recording (see cameraShots.ts), and a minimal movement-path system (see
- * Waypoint below — position + a picked pose per point, linearly blended;
- * not a real walk cycle). Multi-camera and panorama backgrounds are still
- * follow-ups — see the module comment in Director3DPanel.tsx for what's
- * deliberately not here yet.
+ * Scope: one free-orbit camera, ground + solid-color background, pose
+ * presets + per-joint rig sliders, screenshot capture, 1-30s camera-move
+ * recording, a movement-path system (see Waypoint below — position + a
+ * picked pose per point, smoothly blended; not a real walk cycle) and a
+ * keyframed camera track with one-click 運鏡 templates (see CameraTrack
+ * below and lib/canvas/cameraShots.ts). Multi-camera and panorama
+ * backgrounds are still follow-ups — see the module comment in
+ * Director3DPanel.tsx for what's deliberately not here yet.
  */
 
 export interface JointRotation {
@@ -94,12 +95,67 @@ export interface CharacterState {
   bodyStyle: BodyStyle;
   /** movement path — see Waypoint. Undefined/short (<2 points) = character stays put. */
   path?: Waypoint[];
+  /**
+   * Turn to face the direction of travel while moving along `path`
+   * (default true — a figure sliding sideways/backwards along its route
+   * reads as broken). The body-facing `rotation` is overwritten during
+   * playback when this is on; off keeps whatever `rotation` was set by hand.
+   */
+  faceAlongPath?: boolean;
+  /**
+   * Round corners with a Catmull-Rom spline through the waypoints instead
+   * of straight segments (default true). Off = the old hard-cornered
+   * polyline, which is still what you want for e.g. a march in a square.
+   */
+  pathSmooth?: boolean;
+}
+
+/**
+ * One camera pose on the scene's camera track (see CameraTrack): at `t`
+ * seconds the camera sits at `position` looking at `target`. Between two
+ * keyframes the camera doesn't lerp position in straight XYZ — it
+ * interpolates in spherical coordinates around the (lerped) target
+ * (see interpolateCameraTrack in cameraShots.ts), so two keyframes that
+ * differ only in azimuth produce a real arc around the subject, not a cut
+ * through it. `ease` controls the timing curve into the NEXT keyframe.
+ */
+export type CameraEase = "smooth" | "linear";
+
+export interface CameraKeyframe {
+  t: number;
+  position: [number, number, number];
+  target: [number, number, number];
+  ease?: CameraEase;
+}
+
+/**
+ * The scene's one camera's motion over time — plays during 預覽 and 錄製運鏡
+ * (see useDirector3DEditor.ts). Empty keyframes + no follow = the camera
+ * is left entirely to free orbit, which is how a scene starts.
+ *
+ * `follow` keeps the camera pinned to a moving character on top of (or
+ * instead of) keyframes: "aim" holds the camera's position but keeps the
+ * look-at on the character (定點跟蹤); "chase" keeps the camera's offset
+ * from the character constant so it travels with them (跟拍).
+ */
+export interface CameraFollow {
+  characterId: string;
+  mode: "aim" | "chase";
+}
+
+export interface CameraTrack {
+  keyframes: CameraKeyframe[];
+  follow?: CameraFollow | null;
+  /** id of the last 運鏡 template applied (see CAMERA_MOVE_TEMPLATES) — only used to word the prompt hint */
+  templateId?: string | null;
 }
 
 export interface Director3DSceneData {
   characters: CharacterState[];
   ground: { show: boolean; opacity: number; height: number };
   background: { color: string };
+  /** camera keyframes / follow — see CameraTrack. Optional for scenes saved before it existed. */
+  camera?: CameraTrack;
   /** last screenshot taken — this IS the node's output once captured */
   capturedImage?: string | null;
 }
@@ -281,32 +337,104 @@ export function pathDuration(path: Waypoint[] | undefined): number {
   return path.reduce((m, w) => Math.max(m, w.t), 0);
 }
 
+type Vec3 = [number, number, number];
+
+/**
+ * Uniform Catmull-Rom between p1 and p2 (p0/p3 are the neighbours, duplicated
+ * at the ends of the path). Also returns the tangent, which is what the
+ * auto-facing heading is read from — the derivative of the same curve, so
+ * the figure turns exactly as the route bends rather than snapping at
+ * each waypoint.
+ */
+function catmullRom(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, f: number): { point: Vec3; tangent: Vec3 } {
+  const f2 = f * f;
+  const f3 = f2 * f;
+  const point: Vec3 = [0, 0, 0];
+  const tangent: Vec3 = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    const a = p0[i];
+    const b = p1[i];
+    const c = p2[i];
+    const d = p3[i];
+    point[i] = 0.5 * (2 * b + (-a + c) * f + (2 * a - 5 * b + 4 * c - d) * f2 + (-a + 3 * b - 3 * c + d) * f3);
+    tangent[i] = 0.5 * (-a + c + 2 * (2 * a - 5 * b + 4 * c - d) * f + 3 * (-a + 3 * b - 3 * c + d) * f2);
+  }
+  return { point, tangent };
+}
+
+export interface PathSample {
+  position: Vec3;
+  pose: Pose;
+  /** body yaw (radians, around Y) pointing along the direction of travel — undefined when not moving at this instant */
+  heading?: number;
+}
+
+/** yaw that makes a figure whose front is +Z face along `tangent` (ignoring its vertical component) */
+function headingOf(tangent: Vec3): number | undefined {
+  const [x, , z] = tangent;
+  if (Math.hypot(x, z) < 1e-4) return undefined;
+  return Math.atan2(x, z);
+}
+
 /**
  * Where a character following `path` should be at time `t` (seconds since
- * the path started) — lerped position, blended pose. Holds at the first/last
- * waypoint outside the path's own time range. Returns null for an
- * unusably-short path (0-1 points — nothing to interpolate between).
+ * the path started) — position along the route (Catmull-Rom curve unless
+ * `smooth` is false, then straight segments), blended pose, and the
+ * direction-of-travel heading. Holds at the first/last waypoint outside the
+ * path's own time range. Returns null for an unusably-short path (0-1
+ * points — nothing to interpolate between).
  */
-export function interpolatePath(path: Waypoint[] | undefined, t: number): { position: [number, number, number]; pose: Pose } | null {
+export function interpolatePath(path: Waypoint[] | undefined, t: number, smooth = true): PathSample | null {
   if (!path || path.length < 2) return null;
   const sorted = [...path].sort((a, b) => a.t - b.t);
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
-  if (t <= first.t) return { position: first.position, pose: POSE_PRESETS[first.poseName] ?? {} };
-  if (t >= last.t) return { position: last.position, pose: POSE_PRESETS[last.poseName] ?? {} };
+  const endHeading = (i: number) => {
+    // face the way we'll leave (at the start) / arrived (at the end)
+    const a = sorted[Math.max(0, i - 1)];
+    const b = sorted[Math.min(sorted.length - 1, i + 1)];
+    return headingOf([b.position[0] - a.position[0], 0, b.position[2] - a.position[2]]);
+  };
+  if (t <= first.t) return { position: first.position, pose: POSE_PRESETS[first.poseName] ?? {}, heading: endHeading(0) };
+  if (t >= last.t) return { position: last.position, pose: POSE_PRESETS[last.poseName] ?? {}, heading: endHeading(sorted.length - 1) };
   for (let i = 0; i < sorted.length - 1; i++) {
     const a = sorted[i];
     const b = sorted[i + 1];
     if (t >= a.t && t <= b.t) {
       const f = (t - a.t) / (b.t - a.t || 1);
-      const position: [number, number, number] = [
+      const pose = lerpPose(POSE_PRESETS[a.poseName] ?? {}, POSE_PRESETS[b.poseName] ?? {}, f);
+      if (smooth) {
+        const p0 = sorted[Math.max(0, i - 1)].position;
+        const p3 = sorted[Math.min(sorted.length - 1, i + 2)].position;
+        const { point, tangent } = catmullRom(p0, a.position, b.position, p3, f);
+        return { position: point, pose, heading: headingOf(tangent) };
+      }
+      const position: Vec3 = [
         lerp(a.position[0], b.position[0], f),
         lerp(a.position[1], b.position[1], f),
         lerp(a.position[2], b.position[2], f),
       ];
-      const pose = lerpPose(POSE_PRESETS[a.poseName] ?? {}, POSE_PRESETS[b.poseName] ?? {}, f);
-      return { position, pose };
+      return { position, pose, heading: headingOf([b.position[0] - a.position[0], 0, b.position[2] - a.position[2]]) };
     }
   }
-  return { position: last.position, pose: POSE_PRESETS[last.poseName] ?? {} };
+  return { position: last.position, pose: POSE_PRESETS[last.poseName] ?? {}, heading: endHeading(sorted.length - 1) };
+}
+
+/**
+ * Dense polyline of a path for drawing it in the viewport — samples the
+ * same curve playback uses, so what you see is exactly where the figure
+ * will go. Straight-segment paths just return the waypoints themselves.
+ */
+export function samplePathPolyline(path: Waypoint[] | undefined, smooth = true, perSegment = 12): Vec3[] {
+  if (!path || path.length < 2) return [];
+  const sorted = [...path].sort((a, b) => a.t - b.t);
+  if (!smooth) return sorted.map((w) => w.position);
+  const out: Vec3[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const p0 = sorted[Math.max(0, i - 1)].position;
+    const p3 = sorted[Math.min(sorted.length - 1, i + 2)].position;
+    for (let k = 0; k < perSegment; k++) out.push(catmullRom(p0, sorted[i].position, sorted[i + 1].position, p3, k / perSegment).point);
+  }
+  out.push(sorted[sorted.length - 1].position);
+  return out;
 }
