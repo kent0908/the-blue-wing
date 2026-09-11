@@ -46,6 +46,7 @@ function GalleryCard({
   onOpenLabel,
   corner,
   cover,
+  previewHref,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -55,6 +56,7 @@ function GalleryCard({
   onOpenLabel: string;
   corner?: React.ReactNode;
   cover?: string;
+  previewHref?: string;
 }) {
   return (
     <div className="group relative flex min-h-[160px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]">
@@ -66,6 +68,7 @@ function GalleryCard({
       <div className="min-w-0">
         <p className="line-clamp-3 text-[11.5px] text-[#8a8a8a]">{subtitle}</p>
         <div className="mt-2 flex items-center justify-between">
+          {previewHref && <Link href={previewHref} className="text-xs text-emerald-300 hover:underline">預覽節點</Link>}
           {badge ? <span className="text-[11px] text-[#7d7d7d]">{badge}</span> : <span />}
           <button
             type="button"
@@ -346,6 +349,7 @@ export default function CanvasHomePage() {
                 <GalleryCard
                   key={t.id}
                   cover={t.cover}
+                  previewHref={t.id < 0 ? `/canvas/templates/${t.id}` : undefined}
                   icon={<IconApps className="h-4 w-4" />}
                   title={t.name}
                   subtitle={t.description || `${t.nodeCount} 個節點`}

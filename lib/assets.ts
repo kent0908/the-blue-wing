@@ -40,7 +40,7 @@ export interface PublicAsset {
 
 export function toPublicAsset(a: AssetRow): PublicAsset {
   return {
-    id: a.id,
+    id: Number(a.id),
     src: `/api/assets/${a.id}/raw`,
     name: a.filename || `素材${a.id}`,
     contentType: a.content_type,

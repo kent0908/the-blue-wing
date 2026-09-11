@@ -14,7 +14,21 @@ export function validateName(value: unknown): string {
   if (typeof value !== "string" || !value.trim() || value.trim().length > 120) fail("名稱需為 1 至 120 字");
   return value.trim();
 }
+function normalizeReference(item: unknown): unknown {
+  if (!object(item) || typeof item.assetId !== "string" || !/^[1-9]\d*$/.test(item.assetId)) return item;
+  const id = Number(item.assetId);
+  return Number.isSafeInteger(id) ? { ...item, assetId: id } : item;
+}
 export function validateGraph(value: unknown): CanvasGraph {
+  // PostgreSQL bigint IDs can arrive as strings, including in older saved drafts.
+  if (object(value) && Array.isArray(value.nodes)) value = { ...value, nodes: value.nodes.map(n => {
+    if (!object(n)) return n;
+    return { ...n,
+      ...(object(n.data) && Array.isArray(n.data.items) ? { data: { ...n.data, items: n.data.items.map(normalizeReference) } } : {}),
+      ...(object(n.output) && Array.isArray(n.output.items) ? { output: { ...n.output, items: n.output.items.map(normalizeReference) } } : {})
+    };
+  }) };
+
   if (!object(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) fail("需包含 nodes 與 edges 陣列");
   if (value.nodes.length > 200 || value.edges.length > 1000) fail("節點或連線數量超過上限");
   // Bound nested scene data and reject non-JSON values before persistence.
