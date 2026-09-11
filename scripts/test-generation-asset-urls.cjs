@@ -3,10 +3,13 @@ process.env.GENERATION_ASSET_SECRET = 'local-test-only-not-a-production-secret';
 const assets = new Map([[1, { user: 7, content_type: 'image/png' }], [2, { user: 8, content_type: 'image/png' }], [3, { user: 7, content_type: 'image/svg+xml' }]]);
 const db = { sql: async (_strings, id, user) => ({ rows: assets.get(id)?.user === user ? [{ id, ...assets.get(id) }] : [] }) };
 const mod = { exports: {} };
-new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync('lib/generationAssetUrls.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(id => id === './db' ? db : require(id), mod, mod.exports);
+new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync('lib/generationAssetUrls.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(id => id === './db' ? db : id === './siraya' ? { SirayaApiError: class extends Error { constructor(status,message){super(message);this.status=status;} } } : require(id), mod, mod.exports);
 const { createGenerationAssetUrls: create, verifyGenerationAssetToken: verify } = mod.exports;
 (async () => {
   const [link] = await create(7, [1], 'https://the-blue-wing.vercel.app');
+  const [stringLink] = await create('7', [1], 'https://the-blue-wing.vercel.app');
+  assert.equal(new URL(stringLink).searchParams.get('user'),'7');
+  for(const invalid of ['07','7x','7.0','9007199254740993',0,-1]) await assert.rejects(create(invalid,[1],'https://the-blue-wing.vercel.app'),e=>e.status===400);
   const url = new URL(link), expiry = Number(url.searchParams.get('expires')), token = url.searchParams.get('token');
   assert.equal(url.pathname, '/api/generation-assets/1');
   assert.ok(verify(7, 1, expiry, token));

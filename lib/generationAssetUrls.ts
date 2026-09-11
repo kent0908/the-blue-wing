@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { sql } from "./db";
+import { SirayaApiError } from "./siraya";
 
 export const GENERATION_ASSET_TTL_SECONDS = 3600;
 export const GENERATION_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -26,15 +27,17 @@ export function trustedOrigin(origin: string): string {
 }
 /** Caller authenticates first. Each URL grants only one owned raster image for
  * one hour; never log these URLs or return them as permanent asset locations. */
-export async function createGenerationAssetUrls(userId: number, assetIds: number[], origin: string): Promise<string[]> {
-  if (!positiveInt(userId) || !Array.isArray(assetIds) || assetIds.length > 50 || assetIds.some(id => !positiveInt(id))) throw new Error("素材編號不正確");
+export async function createGenerationAssetUrls(userId: number | string, assetIds: number[], origin: string): Promise<string[]> {
+  // PostgreSQL bigint IDs are returned as canonical decimal strings.
+  const ownerId = typeof userId === "string" && /^[1-9]\d*$/.test(userId) ? Number(userId) : userId;
+  if (typeof ownerId !== "number" || !positiveInt(ownerId) || !Array.isArray(assetIds) || assetIds.length > 50 || assetIds.some(id => !positiveInt(id))) throw new SirayaApiError(400, "素材編號不正確，請重新選擇素材");
   const base = trustedOrigin(origin);
   const expires = Math.floor(Date.now() / 1000) + GENERATION_ASSET_TTL_SECONDS;
   const urls: string[] = [];
   for (const assetId of assetIds) {
-    const { rows } = await sql<{ id: number; content_type: string }>`select id, content_type from assets where id = ${assetId} and user_id = ${userId} limit 1`;
-    if (!rows[0] || !GENERATION_IMAGE_TYPES.has(rows[0].content_type)) throw new Error("素材不存在或不支援此圖片格式");
-    const query = new URLSearchParams({ user: String(userId), expires: String(expires), token: signature(userId, assetId, expires) });
+    const { rows } = await sql<{ id: number; content_type: string }>`select id, content_type from assets where id = ${assetId} and user_id = ${ownerId} limit 1`;
+    if (!rows[0] || !GENERATION_IMAGE_TYPES.has(rows[0].content_type)) throw new SirayaApiError(400, "素材不存在或不支援此圖片格式，請重新選擇 PNG、JPEG、WebP 或 GIF 圖片");
+    const query = new URLSearchParams({ user: String(ownerId), expires: String(expires), token: signature(ownerId, assetId, expires) });
     urls.push(`${base}/api/generation-assets/${assetId}?${query}`);
   }
   return urls;
