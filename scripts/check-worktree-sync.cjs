@@ -4,8 +4,16 @@ const cp = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
+// git exports GIT_DIR (and friends) to hooks, pointing at the PUSHING
+// worktree's own gitdir. Inherited by these child git calls, `git -C
+// <other worktree> status` would then be evaluated against the wrong
+// index/HEAD — real failure seen 2026-09-11: the pre-push run reported
+// blue-wing's CLAUDE.md as modified (a CRLF/LF mismatch against the other
+// worktree's index) while a plain `git status` there was clean. Strip the
+// per-repo env so each -C call resolves its own worktree.
+const gitEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX)$/.test(k)));
 function git(cwd, args, options = {}) {
-  return cp.execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  return cp.execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: gitEnv, ...options });
 }
 function stop(message) { throw new Error(message); }
 function isReport(file) {

@@ -10,11 +10,13 @@
  * same "close enough, not physically simulated" spirit as the pose presets
  * in director3d.ts.
  */
-import type { CharacterState } from "./director3d";
+import type { CameraKeyframe, CameraTrack, CharacterState } from "./director3d";
 
 export interface ShotRequest {
   position: [number, number, number];
   target: [number, number, number];
+  /** snap the camera there this frame instead of easing over a few — used by timeline scrubbing, where a lagging camera would feel broken */
+  immediate?: boolean;
 }
 
 type Angle = "front" | "back" | "left" | "right" | "45" | "top" | "low";
@@ -139,4 +141,229 @@ export function computeGroupShot(characters: CharacterState[]): ShotRequest {
     target: [cx, 0.9, cz],
     position: [cx + dx * distance, 0.9 + dy * distance, cz + dz * distance],
   };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Camera track — keyframed 運鏡 (see CameraTrack in director3d.ts)          */
+/* ------------------------------------------------------------------------ */
+
+type Vec3 = [number, number, number];
+
+/** Camera pose relative to what it's looking at: where around the subject, how high, how far. */
+interface Spherical {
+  azimuth: number;
+  elevation: number;
+  distance: number;
+}
+
+function toSpherical(position: Vec3, target: Vec3): Spherical {
+  const dx = position[0] - target[0];
+  const dy = position[1] - target[1];
+  const dz = position[2] - target[2];
+  const distance = Math.hypot(dx, dy, dz) || 0.001;
+  return { azimuth: Math.atan2(dx, dz), elevation: Math.asin(Math.max(-1, Math.min(1, dy / distance))), distance };
+}
+
+function fromSpherical(s: Spherical, target: Vec3): Vec3 {
+  const horizontal = Math.cos(s.elevation) * s.distance;
+  return [target[0] + Math.sin(s.azimuth) * horizontal, target[1] + Math.sin(s.elevation) * s.distance, target[2] + Math.cos(s.azimuth) * horizontal];
+}
+
+const lerp = (a: number, b: number, f: number) => a + (b - a) * f;
+const lerp3 = (a: Vec3, b: Vec3, f: number): Vec3 => [lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
+const smoothstep = (f: number) => f * f * (3 - 2 * f);
+
+/** shortest-way angular lerp — so a keyframe at 170° → -170° swings 20°, not 340° */
+function lerpAngle(a: number, b: number, f: number): number {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * f;
+}
+
+export function cameraTrackDuration(track: CameraTrack | undefined): number {
+  if (!track?.keyframes.length) return 0;
+  return track.keyframes.reduce((m, k) => Math.max(m, k.t), 0);
+}
+
+/**
+ * The keyframed camera pose at `t` — target lerps straight, the camera's
+ * offset from it interpolates in spherical coordinates (so a change in
+ * azimuth is an arc around the subject and a change in distance is a
+ * push/pull along the line of sight — the two things every classic camera
+ * move is built from). Holds the first/last keyframe outside the track's
+ * range; null with no keyframes at all.
+ */
+export function interpolateCameraTrack(track: CameraTrack | undefined, t: number): ShotRequest | null {
+  const kfs = track?.keyframes;
+  if (!kfs?.length) return null;
+  const sorted = [...kfs].sort((a, b) => a.t - b.t);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  if (t <= first.t || sorted.length === 1) return { position: first.position, target: first.target };
+  if (t >= last.t) return { position: last.position, target: last.target };
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    if (t < a.t || t > b.t) continue;
+    const raw = (t - a.t) / (b.t - a.t || 1);
+    const f = (a.ease ?? "smooth") === "linear" ? raw : smoothstep(raw);
+    const target = lerp3(a.target, b.target, f);
+    const sa = toSpherical(a.position, a.target);
+    const sb = toSpherical(b.position, b.target);
+    const position = fromSpherical(
+      { azimuth: lerpAngle(sa.azimuth, sb.azimuth, f), elevation: lerp(sa.elevation, sb.elevation, f), distance: lerp(sa.distance, sb.distance, f) },
+      target
+    );
+    return { position, target };
+  }
+  return { position: last.position, target: last.target };
+}
+
+/** Where the camera looks on a character — chest height, scaled with the figure. */
+export function characterAimPoint(character: Pick<CharacterState, "position" | "scale">): Vec3 {
+  return [character.position[0], character.position[1] + 1.1 * character.scale, character.position[2]];
+}
+
+/**
+ * The camera pose the scene's track wants at time `t`, combining keyframes
+ * with `follow` (see CameraFollow). `characters` are used for follow —
+ * whatever positions they hold at that moment (during playback the caller
+ * has already moved them along their paths). `fallback` is the pose to
+ * build on when the track has no keyframes (the live camera, so a bare
+ * "跟拍" with no keyframes keeps the framing you set by hand).
+ * Returns null when the track drives nothing — leave the camera to free orbit.
+ */
+export function computeCameraAt(track: CameraTrack | undefined, t: number, characters: CharacterState[], fallback: ShotRequest): ShotRequest | null {
+  const keyed = interpolateCameraTrack(track, t);
+  const follow = track?.follow ?? null;
+  const subject = follow ? characters.find((c) => c.id === follow.characterId) : undefined;
+  if (!keyed && !subject) return null;
+  if (!subject) return keyed;
+  const base = keyed ?? fallback;
+  const aim = characterAimPoint(subject);
+  if (follow!.mode === "aim") return { position: base.position, target: aim };
+  const offset: Vec3 = [base.position[0] - base.target[0], base.position[1] - base.target[1], base.position[2] - base.target[2]];
+  return { position: [aim[0] + offset[0], aim[1] + offset[1], aim[2] + offset[2]], target: aim };
+}
+
+/* ---- one-click 運鏡 templates ------------------------------------------ */
+
+export interface CameraMoveTemplate {
+  id: string;
+  label: string;
+  /** one-line description shown under the button */
+  hint: string;
+  /** wording for the video-generation prompt hint (see describeCameraTrack) */
+  prompt: string;
+  /** whether this template is a keyframe move (rebuilds keyframes) or a follow mode (sets follow, keeps keyframes) */
+  kind: "keyframes" | "follow";
+}
+
+export const CAMERA_MOVE_TEMPLATES: CameraMoveTemplate[] = [
+  { id: "dolly-in", label: "推鏡", hint: "從目前視角慢慢推近主體", prompt: "鏡頭緩慢推近主體（推鏡）", kind: "keyframes" },
+  { id: "dolly-out", label: "拉鏡", hint: "從目前視角慢慢拉遠", prompt: "鏡頭緩慢拉遠、逐漸帶出環境（拉鏡）", kind: "keyframes" },
+  { id: "orbit-left", label: "左環繞 180°", hint: "繞著主體向左轉半圈", prompt: "鏡頭以主體為中心向左環繞半圈", kind: "keyframes" },
+  { id: "orbit-right", label: "右環繞 180°", hint: "繞著主體向右轉半圈", prompt: "鏡頭以主體為中心向右環繞半圈", kind: "keyframes" },
+  { id: "orbit-360", label: "環繞一圈 360°", hint: "繞著主體轉整整一圈", prompt: "鏡頭以主體為中心環繞一整圈", kind: "keyframes" },
+  { id: "crane-up", label: "升起", hint: "從目前高度升到俯視", prompt: "鏡頭逐漸升高、轉為俯視主體（升降鏡頭向上）", kind: "keyframes" },
+  { id: "crane-down", label: "下降", hint: "從俯視降到目前高度", prompt: "鏡頭由高處逐漸下降到與主體平視（升降鏡頭向下）", kind: "keyframes" },
+  { id: "pan", label: "搖鏡", hint: "鏡頭不動、視線由左掃到右", prompt: "鏡頭定點由左向右搖鏡掃過場景", kind: "keyframes" },
+  { id: "truck", label: "橫移", hint: "鏡頭與視線一起向右平移", prompt: "鏡頭沿水平方向向右平移（橫移）", kind: "keyframes" },
+  { id: "arc-in", label: "弧形推近", hint: "邊環繞邊推近，最有電影感", prompt: "鏡頭沿弧線環繞並逐漸推近主體", kind: "keyframes" },
+  { id: "follow-chase", label: "跟拍", hint: "鏡頭跟著角色一起移動", prompt: "鏡頭跟隨主體移動、保持相同距離（跟拍）", kind: "follow" },
+  { id: "follow-aim", label: "定點跟蹤", hint: "鏡頭不動、視線一直對著角色", prompt: "鏡頭定點不動，視線持續跟蹤主體（跟蹤搖鏡）", kind: "follow" },
+];
+
+/** `right` vector on the ground plane for a camera looking from `position` at `target`. */
+function rightOf(position: Vec3, target: Vec3): Vec3 {
+  const fx = target[0] - position[0];
+  const fz = target[2] - position[2];
+  const len = Math.hypot(fx, fz) || 1;
+  // forward × up (0,1,0) → right
+  return [fz / len, 0, -fx / len];
+}
+
+/**
+ * Builds the keyframes for a 運鏡 template, starting from the camera's
+ * current pose (`from`) and lasting `duration` seconds — so every template
+ * begins exactly at the framing you set up by hand, then moves from there.
+ * `focus` (the selected character's aim point) is what orbits/pushes centre
+ * on; the pan/truck templates keep the current target instead.
+ */
+export function buildCameraMove(templateId: string, from: ShotRequest, focus: Vec3 | null, duration: number): CameraKeyframe[] {
+  const target = focus ?? from.target;
+  const start = toSpherical(from.position, target);
+  const at = (t: number, s: Spherical, tgt: Vec3 = target): CameraKeyframe => ({ t, position: fromSpherical(s, tgt), target: tgt, ease: "smooth" });
+  const D = Math.max(1, duration);
+  const orbit = (totalDeg: number) => {
+    // split into ≤90° legs so shortest-way angle lerp can't take a shortcut
+    const legs = Math.max(2, Math.ceil(Math.abs(totalDeg) / 90));
+    const kfs: CameraKeyframe[] = [];
+    for (let i = 0; i <= legs; i++) {
+      const s = { ...start, azimuth: start.azimuth + ((totalDeg * Math.PI) / 180) * (i / legs) };
+      kfs.push({ ...at((D * i) / legs, s), ease: "linear" });
+    }
+    // ease only the very start/end so the middle legs join at constant speed
+    kfs[0].ease = "smooth";
+    if (kfs.length >= 2) kfs[kfs.length - 2].ease = "smooth";
+    return kfs;
+  };
+  switch (templateId) {
+    case "dolly-in":
+      return [at(0, start), at(D, { ...start, distance: Math.max(0.6, start.distance * 0.42) })];
+    case "dolly-out":
+      return [at(0, start), at(D, { ...start, distance: start.distance * 2.2 })];
+    case "orbit-left":
+      return orbit(-180);
+    case "orbit-right":
+      return orbit(180);
+    case "orbit-360":
+      return orbit(360);
+    case "crane-up":
+      return [at(0, start), at(D, { ...start, elevation: Math.max(start.elevation, 0.95) })];
+    case "crane-down":
+      return [at(0, { ...start, elevation: Math.max(start.elevation, 0.95) }), at(D, start)];
+    case "pan": {
+      const r = rightOf(from.position, from.target);
+      const sweep = Math.max(1, start.distance * 0.6);
+      const left: Vec3 = [from.target[0] - r[0] * sweep, from.target[1], from.target[2] - r[2] * sweep];
+      const right: Vec3 = [from.target[0] + r[0] * sweep, from.target[1], from.target[2] + r[2] * sweep];
+      return [
+        { t: 0, position: from.position, target: left, ease: "smooth" },
+        { t: D, position: from.position, target: right, ease: "smooth" },
+      ];
+    }
+    case "truck": {
+      const r = rightOf(from.position, from.target);
+      const d = Math.max(1, start.distance * 0.5);
+      const shift = (v: Vec3, k: number): Vec3 => [v[0] + r[0] * d * k, v[1], v[2] + r[2] * d * k];
+      return [
+        { t: 0, position: shift(from.position, -1), target: shift(from.target, -1), ease: "smooth" },
+        { t: D, position: shift(from.position, 1), target: shift(from.target, 1), ease: "smooth" },
+      ];
+    }
+    case "arc-in":
+      return [at(0, start), at(D, { azimuth: start.azimuth + Math.PI / 3, elevation: start.elevation, distance: Math.max(0.6, start.distance * 0.5) })];
+    default:
+      return [];
+  }
+}
+
+/**
+ * Prompt wording for a camera track — the template's own text when one
+ * was applied, else a best-effort read of first→last keyframe, else null
+ * (free-hand recording falls back to describeCameraMove on sampled frames).
+ */
+export function describeCameraTrack(track: CameraTrack | undefined): string | null {
+  if (!track) return null;
+  const parts: string[] = [];
+  const template = track.templateId ? CAMERA_MOVE_TEMPLATES.find((tpl) => tpl.id === track.templateId) : undefined;
+  if (template && template.kind === "keyframes" && track.keyframes.length >= 2) parts.push(template.prompt);
+  else if (track.keyframes.length >= 2) {
+    const sorted = [...track.keyframes].sort((a, b) => a.t - b.t);
+    parts.push(describeCameraMove(sorted[0], sorted[sorted.length - 1]));
+  }
+  if (track.follow) parts.push(CAMERA_MOVE_TEMPLATES.find((tpl) => tpl.id === `follow-${track.follow!.mode === "aim" ? "aim" : "chase"}`)!.prompt);
+  return parts.length ? parts.join("，") : null;
 }
