@@ -37,4 +37,4 @@ export const OFFICIAL_CANVAS_TEMPLATES:OfficialCanvasTemplate[]=[
   {title:"02 · 角色登場",prompt:"16:9電影畫面，單一角色站在空曠的清晨海岸觀景平台中央，以正面全身中遠景呈現。双手自然垂下，角色注視稍偏鏡頭的位置。遠方只有海面、天空和淡淡雲層，柔和晨光，人物周圍不安排任何柱子或近景遮擋物。",seconds:8,video:"以輸入圖作為起始畫面，8秒單一連續鏡頭。0至2秒角色保持自然站姿與呼吸；2至6秒相機沿直線非常緩慢向前推近，從全身中遠景移至胸口以上中景，角色慢慢把目光轉向鏡頭；6至8秒停穩，表情從平靜轉為輕微自信。角色保持原地，雙手自然垂下；相機不穿越人物或任何物體。不切鏡、不突然變焦、不新增人物，不改变脸部服裝與動漫畫風。"}]),
 ];
 export function builtinCanvasTemplate(id:number){return OFFICIAL_CANVAS_TEMPLATES.find(t=>t.id===id);}
-export function builtinCanvasSummary(t:OfficialCanvasTemplate){return {id:t.id,name:t.name,description:t.description,nodeCount:t.graph.nodes.length,createdAt:"2026-09-11T00:00:00Z",category:t.category,stages:t.stages,cover:`/official-canvas-previews/${Math.abs(t.id)}.jpg`};}
+export function builtinCanvasSummary(t:OfficialCanvasTemplate){return {id:t.id,name:t.name,description:t.description,nodeCount:t.graph.nodes.length,createdAt:"2026-09-11T00:00:00Z",category:t.category,stages:t.stages,cover:`/official-canvas-previews/${Math.abs(t.id)}.jpg`,previewVideo:t.graph.nodes.some(n=>n.type==="video")?`/official-canvas-previews/${Math.abs(t.id)}.mp4`:undefined};}

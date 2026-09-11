@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import CanvasVideoPreview from "@/components/canvas/CanvasVideoPreview";
 
 import { useCallback, useEffect, useState } from "react";
 import ShareWorkflowDialog from "@/components/canvas/ShareWorkflowDialog";
@@ -21,6 +22,7 @@ interface TemplateSummary {
   nodeCount: number;
   createdAt: string;
   cover?: string;
+  previewVideo?: string;
 }
 
 interface PlazaPost {
@@ -46,6 +48,7 @@ function GalleryCard({
   onOpenLabel,
   corner,
   cover,
+  previewVideo,
   previewHref,
 }: {
   icon: React.ReactNode;
@@ -56,11 +59,12 @@ function GalleryCard({
   onOpenLabel: string;
   corner?: React.ReactNode;
   cover?: string;
+  previewVideo?: string;
   previewHref?: string;
 }) {
   return (
     <div className="group relative flex min-h-[160px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]">
-      {cover && <Image width={3840} height={2160} src={cover} alt={title} className="mb-3 aspect-video w-full rounded-lg bg-white object-contain" />}
+      {previewVideo ? <CanvasVideoPreview src={previewVideo} poster={cover} title={title} /> : cover && <Image width={3840} height={2160} src={cover} alt={title} className="mb-3 aspect-video w-full rounded-lg bg-white object-contain" />}
       <div className="flex items-center gap-2">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">{icon}</span>
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{title}</span>
@@ -349,6 +353,7 @@ export default function CanvasHomePage() {
                 <GalleryCard
                   key={t.id}
                   cover={t.cover}
+                  previewVideo={t.previewVideo}
                   previewHref={t.id < 0 ? `/canvas/templates/${t.id}` : undefined}
                   icon={<IconApps className="h-4 w-4" />}
                   title={t.name}
