@@ -7,6 +7,9 @@ new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync(
 const { createGenerationAssetUrls: create, verifyGenerationAssetToken: verify } = mod.exports;
 (async () => {
   const [link] = await create(7, [1], 'https://the-blue-wing.vercel.app');
+  const [aliasLink] = await create('7', [1], 'https://blue-wing-beta.vercel.app');
+  assert.equal(new URL(aliasLink).origin,'https://blue-wing-beta.vercel.app');
+  await assert.rejects(create(7,[1],'https://blue-wing-beta.vercel.app.attacker.test'), /不受信任/);
   const [stringLink] = await create('7', [1], 'https://the-blue-wing.vercel.app');
   assert.equal(new URL(stringLink).searchParams.get('user'),'7');
   for(const invalid of ['07','7x','7.0','9007199254740993',0,-1]) await assert.rejects(create(invalid,[1],'https://the-blue-wing.vercel.app'),e=>e.status===400);

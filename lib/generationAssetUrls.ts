@@ -19,7 +19,7 @@ export function verifyGenerationAssetToken(userId: number, assetId: number, expi
 }
 export function trustedOrigin(origin: string): string {
   const parsed = new URL(origin);
-  const configured = [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXT_PUBLIC_SITE_URL, process.env.APP_URL, "https://the-blue-wing.vercel.app", ...[process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL].filter(Boolean).map(host => `https://${host}`)];
+  const configured = [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXT_PUBLIC_SITE_URL, process.env.APP_URL, "https://the-blue-wing.vercel.app", "https://blue-wing-beta.vercel.app", ...[process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL].filter(Boolean).map(host => `https://${host}`)];
   const allowed = configured.filter(Boolean).some(value => { try { return new URL(value!).origin === parsed.origin; } catch { return false; } });
   const local = process.env.NODE_ENV !== "production" && parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
   if ((!allowed || parsed.protocol !== "https:") && !local) throw new Error("素材分享來源不受信任");
