@@ -1,3 +1,4 @@
+import { shareableGraph } from "@/lib/canvas/sharing";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const { rows } = await sql`
     insert into canvas_workflows (user_id, name, graph)
-    values (${auth.user.id}, ${post.name}, ${JSON.stringify(post.graph)}::jsonb)
+    values (${auth.user.id}, ${post.name}, ${JSON.stringify(shareableGraph(post.graph))}::jsonb)
     returning id
   `;
   await incrementCopyCount(id);

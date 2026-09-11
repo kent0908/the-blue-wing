@@ -1,3 +1,4 @@
+import { resolveGenerationImage } from "@/lib/resolveGenerationImage";
 import { LAYER_DECOMPOSITION_AVAILABLE, LAYER_DECOMPOSITION_UNAVAILABLE_REASON } from "@/lib/layerCapability";
 import { MAX_LAYER_OUTPUTS, validateLayerInput, parseLayerResponse } from "@/lib/layerDecomposition";
 import { saveLayerSet } from "@/lib/layerSets";
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
     } else if (Array.isArray(body.image)) {
       refs.push(...body.image.filter((u: unknown): u is string => typeof u === "string" && u.trim().length > 0).map((u: string) => u.trim()));
     }
-    const cappedRefs = refs.slice(0, MAX_REF_IMAGES);
+    const cappedRefs = await Promise.all(refs.slice(0, MAX_REF_IMAGES).map(url => resolveGenerationImage(user.id, url, req.nextUrl.origin)));
     if (cappedRefs.length === 1) payload.image = cappedRefs[0];
     else if (cappedRefs.length > 1) payload.image = cappedRefs;
 

@@ -1,4 +1,6 @@
 "use client";
+import Image from "next/image";
+import { OFFICIAL_CHARACTERS, officialCharacter } from "@/lib/canvas/officialCharacters";
 
 import { modelLabel } from "@/lib/modelLabel";
 
@@ -617,7 +619,7 @@ function NodeCard({
         className="flex h-10 cursor-grab items-center gap-1.5 rounded-t-xl border-b border-[#232323] px-2.5 active:cursor-grabbing"
       >
         <Icon className="h-3.5 w-3.5 shrink-0 text-[#9a9a9a]" />
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-white">{spec.label}</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-white">{String(node.data.title || spec.label)}</span>
         <StatusDot status={node.status} />
         <button
           type="button"
@@ -681,10 +683,12 @@ function NodeCard({
           const toggle = (a: AssetLite) => {
             const on = selectedIds.has(a.id);
             const next = on ? items.filter((it) => it.assetId !== a.id) : [...items, { assetId: a.id, src: a.src, name: a.name }];
-            onDataChange({ items: next });
+            onDataChange({ items: next, officialCharacter: "" });
           };
           return (
             <div className="relative">
+              <label className="mb-2 block text-xs text-neutral-400">官方角色三視圖<select aria-label="官方角色三視圖" className="mt-1 w-full rounded bg-neutral-800 p-2 text-white" value={String(node.data.officialCharacter || "")} onChange={e => onDataChange({ officialCharacter: e.target.value, items: [] })}><option value="">使用自己的素材</option>{OFFICIAL_CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+              {officialCharacter(node.data.officialCharacter) && <Image width={3840} height={2160} alt="角色三視圖參考" src={officialCharacter(node.data.officialCharacter)!.src} className="mb-2 w-full rounded bg-white" />}
               {items.length > 0 && (
                 <div className="grid grid-cols-4 gap-1">
                   {items.map((it) => (

@@ -1,3 +1,5 @@
+import { shareableGraph } from "@/lib/canvas/sharing";
+import { OFFICIAL_CANVAS_TEMPLATES, builtinCanvasSummary } from "@/lib/canvas/officialTemplates";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, requireAdmin } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
@@ -13,7 +15,7 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return auth.error;
 
   const rows = await listTemplates();
-  return NextResponse.json({ templates: rows.map(toPublicTemplate) });
+  return NextResponse.json({ templates: [...OFFICIAL_CANVAS_TEMPLATES.map(builtinCanvasSummary), ...rows.map(toPublicTemplate)] });
 }
 
 /**
@@ -39,6 +41,6 @@ export async function POST(req: NextRequest) {
   `;
   if (!rows[0]) return NextResponse.json({ error: { message: "找不到這個畫布", code: "not_found" } }, { status: 404 });
 
-  const template = await createTemplate({ name, description, graph: rows[0].graph, createdBy: auth.user.id });
+  const template = await createTemplate({ name, description, graph: shareableGraph(rows[0].graph), createdBy: auth.user.id });
   return NextResponse.json({ template: toPublicTemplate(template) }, { status: 201 });
 }

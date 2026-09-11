@@ -1,3 +1,4 @@
+import { officialCharacter } from "./officialCharacters";
 /**
  * Canvas execution engine — pure functions, no React. Runs entirely
  * client-side by calling the same /api/images, /api/videos routes the
@@ -83,7 +84,7 @@ export async function runNode(
 
   if (node.type === "loadImage") {
     const items = (node.data.items as LoadImageItem[] | undefined) ?? [];
-    if (!items.length) throw new Error("請先選擇素材");
+    if (!items.length) { const character = officialCharacter(node.data.officialCharacter); if (character) return { kind: "image", items: [{ url: new URL(character.src, window.location.origin).href }] }; throw new Error("請先選擇素材"); }
     return { kind: "image", items: items.map((it) => ({ url: it.src, assetId: it.assetId })) };
   }
 
@@ -113,6 +114,7 @@ export async function runNode(
       n: 1,
       size: validSizes.includes(requestedSize) ? requestedSize : validSizes[0],
       response_format: "url",
+      quality: node.data.quality || "high",
     };
     if (refAssetIds.length) body.assetIds = refAssetIds;
     if (refUrls.length) body.image = refUrls;
@@ -138,6 +140,7 @@ export async function runNode(
     const body: Record<string, unknown> = {
       model: node.data.model,
       prompt,
+      aspect_ratio: node.data.aspect_ratio || "16:9",
       seconds: Math.min(Number(node.data.seconds) || 5, constraint.maxSeconds),
       resolution: constraint.resolutions.includes(requestedResolution) ? requestedResolution : constraint.resolutions[0],
     };

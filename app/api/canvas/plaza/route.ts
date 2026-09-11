@@ -1,3 +1,4 @@
+import { shareableGraph } from "@/lib/canvas/sharing";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
@@ -29,16 +30,20 @@ export async function POST(req: NextRequest) {
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
   const description = typeof body?.description === "string" ? body.description.trim().slice(0, 500) : "";
   const workflowId = parseInt(body?.workflowId, 10);
-  if (!name || !Number.isInteger(workflowId)) {
+  if (!name || (!body.graph && !Number.isInteger(workflowId))) {
     return NextResponse.json({ error: { message: "缺少名稱或畫布 id", code: "bad_request" } }, { status: 400 });
   }
 
-  const { rows } = await sql<{ graph: CanvasGraph }>`
-    select graph from canvas_workflows where id = ${workflowId} and user_id = ${auth.user.id}
-  `;
-  if (!rows[0]) return NextResponse.json({ error: { message: "找不到這個畫布", code: "not_found" } }, { status: 404 });
-
-  const post = await createPlazaPost({ userId: auth.user.id, name, description, graph: rows[0].graph });
+  let graph: CanvasGraph;
+  try {
+    if (body.graph) graph = shareableGraph(body.graph);
+    else {
+      const { rows } = await sql<{ graph: CanvasGraph }>`select graph from canvas_workflows where id = ${workflowId} and user_id = ${auth.user.id}`;
+      if (!rows[0]) return NextResponse.json({ error: {message: "找不到這個畫布"} }, {status:404});
+      graph = shareableGraph(rows[0].graph);
+    }
+  } catch (e) { return NextResponse.json({error:{message:e instanceof Error ? e.message : "工作流格式錯誤",code:"invalid_graph"}}, {status:400}); }
+  const post = await createPlazaPost({ userId: auth.user.id, name, description, graph });
   return NextResponse.json(
     { post: toPublicPlazaPost(post, "我", auth.user.id) },
     { status: 201 }

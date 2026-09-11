@@ -1,6 +1,8 @@
 "use client";
+import Image from "next/image";
 
 import { useCallback, useEffect, useState } from "react";
+import ShareWorkflowDialog from "@/components/canvas/ShareWorkflowDialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconPlus, IconCanvas, IconTrash, IconGlobe, IconApps } from "@/components/Icons";
@@ -18,6 +20,7 @@ interface TemplateSummary {
   description: string;
   nodeCount: number;
   createdAt: string;
+  cover?: string;
 }
 
 interface PlazaPost {
@@ -42,6 +45,7 @@ function GalleryCard({
   onOpen,
   onOpenLabel,
   corner,
+  cover,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -50,15 +54,17 @@ function GalleryCard({
   onOpen: () => void;
   onOpenLabel: string;
   corner?: React.ReactNode;
+  cover?: string;
 }) {
   return (
-    <div className="group relative flex h-[132px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]">
+    <div className="group relative flex min-h-[160px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]">
+      {cover && <Image width={3840} height={2160} src={cover} alt={title} className="mb-3 aspect-video w-full rounded-lg bg-white object-contain" />}
       <div className="flex items-center gap-2">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">{icon}</span>
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{title}</span>
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[11.5px] text-[#8a8a8a]">{subtitle}</p>
+        <p className="line-clamp-3 text-[11.5px] text-[#8a8a8a]">{subtitle}</p>
         <div className="mt-2 flex items-center justify-between">
           {badge ? <span className="text-[11px] text-[#7d7d7d]">{badge}</span> : <span />}
           <button
@@ -77,6 +83,7 @@ function GalleryCard({
 
 export default function CanvasHomePage() {
   const router = useRouter();
+  const [shareId, setShareId] = useState<string | null>(null);
   const [workflows, setWorkflows] = useState<WorkflowSummary[] | null>(null);
   const [templates, setTemplates] = useState<TemplateSummary[] | null>(null);
   const [plaza, setPlaza] = useState<PlazaPost[] | null>(null);
@@ -166,27 +173,7 @@ export default function CanvasHomePage() {
     }
   };
 
-  const shareToPlaza = async (w: WorkflowSummary) => {
-    const name = prompt("分享名稱：", w.name);
-    if (!name?.trim()) return;
-    const description = prompt("跟其他人說說這個工作流是做什麼的（可留空）：", "") ?? "";
-    setBusyId(w.id);
-    try {
-      const res = await fetch("/api/canvas/plaza", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim(), workflowId: w.id }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "分享失敗");
-      alert("已分享到藍翼廣場");
-      load();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "分享失敗");
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const shareToPlaza = (w: WorkflowSummary) => setShareId(w.id);
 
   const cloneTemplate = async (id: number) => {
     setBusyId(`t${id}`);
@@ -228,6 +215,7 @@ export default function CanvasHomePage() {
 
   return (
     <div className="h-full overflow-y-auto">
+      {shareId !== null && <ShareWorkflowDialog workflows={workflows || []} initialId={shareId} onClose={() => setShareId(null)} onPublished={() => { setShareId(null); load(); }} />}
       <div className="mx-auto max-w-[1080px] px-6 py-8">
         <div className="flex items-center justify-between">
           <div>
@@ -254,7 +242,7 @@ export default function CanvasHomePage() {
           <h2 className="text-[15px] font-medium">我的畫布</h2>
 
           {workflows === null && !error && (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="bw-shimmer h-[120px] rounded-xl" />
               ))}
@@ -270,7 +258,7 @@ export default function CanvasHomePage() {
           )}
 
           {workflows && workflows.length > 0 && (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {workflows.map((w) => (
                 <Link
                   key={w.id}
@@ -345,7 +333,7 @@ export default function CanvasHomePage() {
             <span className="text-[11.5px] text-[#6d6d6d]">— 直接複製使用，開箱即用的工作流</span>
           </div>
           {templates === null ? (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
               ))}
@@ -353,10 +341,11 @@ export default function CanvasHomePage() {
           ) : templates.length === 0 ? (
             <p className="mt-3 text-[12.5px] text-[#5c5c5c]">目前還沒有官方模板</p>
           ) : (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {templates.map((t) => (
                 <GalleryCard
                   key={t.id}
+                  cover={t.cover}
                   icon={<IconApps className="h-4 w-4" />}
                   title={t.name}
                   subtitle={t.description || `${t.nodeCount} 個節點`}
@@ -364,7 +353,7 @@ export default function CanvasHomePage() {
                   onOpen={() => cloneTemplate(t.id)}
                   onOpenLabel={busyId === `t${t.id}` ? "複製中…" : "複製到我的畫布"}
                   corner={
-                    isAdmin ? (
+                    isAdmin && t.id > 0 ? (
                       <button
                         type="button"
                         onClick={() => deleteTemplate(t.id)}
@@ -385,11 +374,11 @@ export default function CanvasHomePage() {
         <section className="mt-8">
           <div className="flex items-center gap-2">
             <IconGlobe className="h-4 w-4 text-[#7ff0cd]" />
-            <h2 className="text-[15px] font-medium">藍翼廣場</h2>
+            <h2 className="text-[15px] font-medium">藍翼廣場</h2><button type="button" onClick={() => setShareId("")} className="rounded-full bg-[#7ff0cd] px-3 py-2 text-xs text-black">＋ 上傳工作流</button>
             <span className="text-[11.5px] text-[#6d6d6d]">— 大家分享出來的工作流，歡迎拿去用</span>
           </div>
           {plaza === null ? (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
               ))}
@@ -397,7 +386,7 @@ export default function CanvasHomePage() {
           ) : plaza.length === 0 ? (
             <p className="mt-3 text-[12.5px] text-[#5c5c5c]">還沒有人分享工作流，來當第一個吧</p>
           ) : (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {plaza.map((p) => (
                 <GalleryCard
                   key={p.id}
