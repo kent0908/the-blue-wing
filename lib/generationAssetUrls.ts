@@ -16,7 +16,7 @@ export function verifyGenerationAssetToken(userId: number, assetId: number, expi
   if (!positiveInt(userId) || !positiveInt(assetId) || !positiveInt(expires) || expires <= now || expires > now + GENERATION_ASSET_TTL_SECONDS || !/^[a-f0-9]{64}$/.test(token)) return false;
   return timingSafeEqual(Buffer.from(signature(userId, assetId, expires), "hex"), Buffer.from(token, "hex"));
 }
-function trustedOrigin(origin: string): string {
+export function trustedOrigin(origin: string): string {
   const parsed = new URL(origin);
   const configured = [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXT_PUBLIC_SITE_URL, process.env.APP_URL, "https://the-blue-wing.vercel.app", ...[process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL].filter(Boolean).map(host => `https://${host}`)];
   const allowed = configured.filter(Boolean).some(value => { try { return new URL(value!).origin === parsed.origin; } catch { return false; } });

@@ -13,7 +13,6 @@ import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, creditCost } from "@/lib/credits";
 import { recordGeneration } from "@/lib/generations";
-import { assetsToDataUrls } from "@/lib/assetData";
 import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 import { sql } from "@/lib/db";
@@ -86,7 +85,7 @@ export async function POST(req: NextRequest) {
     }
 
     // reference materials: can come from the user's own asset library
-    // (assetIds — resolved to base64 data URLs, since the blob store is
+    // (assetIds — resolved to short-lived signed URLs, since the blob store is
     // private) and/or plain URLs (智慧畫布 node-chaining: a prior node's own
     // generated-image output isn't in the asset library, so it can't go
     // through assetIds — forward it straight through as a reference
@@ -104,7 +103,7 @@ export async function POST(req: NextRequest) {
     if (refCap > 0) {
       const refs: { type: "image" | "video"; url: string }[] = [];
       if (Array.isArray(assetIds) && assetIds.length) {
-        const urls = frameMode ? await createGenerationAssetUrls(user.id, assetIds.map(Number), req.nextUrl.origin) : await assetsToDataUrls(user.id, assetIds.map(Number), refCap);
+        const urls = await createGenerationAssetUrls(user.id, assetIds.slice(0, refCap).map(Number), req.nextUrl.origin);
         refs.push(...urls.map((url) => ({ type: "image" as const, url })));
       }
       if (Array.isArray(imageUrls)) {
