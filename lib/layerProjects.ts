@@ -51,9 +51,9 @@ export function summarize(row: LayerProjectRow): LayerProjectSummary {
 /** Shape + size gate for a document coming from the client. Throws a 400 SirayaApiError (errorResponse maps it). */
 export function assertDoc(doc: unknown): asserts doc is { canvas: object; layers: unknown[] } {
   const d = doc as { canvas?: unknown; layers?: unknown } | null;
-  if (!d || typeof d !== "object" || !d.canvas || typeof d.canvas !== "object" || !Array.isArray(d.layers)) throw new SirayaApiError(400, "專案資料格式不正確", "bad_doc");
-  if (d.layers.length > 200) throw new SirayaApiError(400, "圖層數量超過上限（200）", "bad_doc");
-  if (JSON.stringify(doc).length > MAX_PROJECT_DOC_BYTES) throw new SirayaApiError(400, `專案資料超過 ${MAX_PROJECT_DOC_BYTES / 1024 / 1024} MB — 圖片請先存進資產庫再加入，不要直接貼入`, "too_large");
+  if (!d || typeof d !== "object" || !d.canvas || typeof d.canvas !== "object" || !Array.isArray(d.layers)) throw new SirayaApiError(400, "專案資料格式不正確", "invalid_request_error", "bad_doc");
+  if (d.layers.length > 200) throw new SirayaApiError(400, "圖層數量超過上限（200）", "invalid_request_error", "bad_doc");
+  if (JSON.stringify(doc).length > MAX_PROJECT_DOC_BYTES) throw new SirayaApiError(400, `專案資料超過 ${MAX_PROJECT_DOC_BYTES / 1024 / 1024} MB — 圖片請先存進資產庫再加入，不要直接貼入`, "invalid_request_error", "too_large");
 }
 
 export function cleanName(value: unknown, fallback = "未命名專案"): string {
@@ -71,7 +71,7 @@ export async function listProjects(userId: number): Promise<LayerProjectSummary[
 
 export async function createProject(userId: number, name: string, doc: unknown): Promise<LayerProjectRow> {
   const { rows: count } = await sql<{ n: number }>`select count(*)::int as n from layer_projects where user_id = ${userId}`;
-  if ((count[0]?.n ?? 0) >= MAX_PROJECTS_PER_USER) throw new SirayaApiError(400, `專案數量已達上限（${MAX_PROJECTS_PER_USER}），請先刪除一些`, "too_many");
+  if ((count[0]?.n ?? 0) >= MAX_PROJECTS_PER_USER) throw new SirayaApiError(400, `專案數量已達上限（${MAX_PROJECTS_PER_USER}），請先刪除一些`, "invalid_request_error", "too_many");
   const { rows } = await sql<LayerProjectRow>`
     insert into layer_projects (user_id, name, doc) values (${userId}, ${name}, ${JSON.stringify(doc)}::jsonb)
     returning id, user_id, name, doc, created_at, updated_at
