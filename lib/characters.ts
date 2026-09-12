@@ -222,8 +222,10 @@ export async function recordTurn(id: number, gain: number): Promise<{ affection:
   return { affection: rows[0].affection, turnCount: rows[0].turn_count };
 }
 
-export async function updateMemorySummary(id: number, summary: string): Promise<void> {
-  await sql`update characters set memory_summary = ${summary} where id = ${id}`;
+/** Compare-and-set: an older background completion must not overwrite a newer summary. */
+export async function updateMemorySummary(id: number, summary: string, previousSummary: string): Promise<void> {
+  await sql`update characters set memory_summary = ${summary}
+    where id = ${id} and memory_summary = ${previousSummary}`;
 }
 
 /* ---- 解鎖場景（高階方案專屬）---- */

@@ -1,5 +1,5 @@
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
-import { NextRequest, NextResponse } from "next/server";
+import { after as afterResponse, NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { createChatCompletion } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
@@ -119,21 +119,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     // Long-term memory: every MEMORY_REFRESH_EVERY turns, compress the recent
     // conversation into the rolling summary. Never let this block or fail the
-    // reply the user is waiting on — it's maintenance, not the main request.
+    // reply the user is waiting on. after() shares maxDuration and is best-effort,
+    // not a durable queue; failed refreshes retain the previous summary.
     if (turnCount % MEMORY_REFRESH_EVERY === 0) {
-      try {
-        const recent = await listMessages(id, MEMORY_REFRESH_EVERY * 2);
-        const memPrompt = buildMemoryUpdatePrompt(character, recent);
-        const memJson = await createChatCompletion({
-          model: character.model,
-          messages: [{ role: "user", content: memPrompt }],
-          max_tokens: 400,
-        });
-        const summary = memJson?.choices?.[0]?.message?.content;
-        if (summary) await updateMemorySummary(id, String(summary));
-      } catch (err) {
-        console.error("character memory summary refresh failed:", err);
-      }
+      afterResponse(async () => {
+        try {
+          const recent = await listMessages(id, MEMORY_REFRESH_EVERY * 2);
+          const memPrompt = buildMemoryUpdatePrompt(character, recent);
+          const memJson = await createChatCompletion({
+            model: character.model,
+            messages: [{ role: "user", content: memPrompt }],
+            max_tokens: 400,
+          });
+          const summary = memJson?.choices?.[0]?.message?.content;
+          if (summary) await updateMemorySummary(id, String(summary), character.memory_summary);
+        } catch (err) {
+          console.error("character memory summary refresh failed:", err);
+        }
+      });
     }
 
     return NextResponse.json({

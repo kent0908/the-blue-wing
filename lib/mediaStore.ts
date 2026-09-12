@@ -30,23 +30,28 @@ export async function persistGeneratedMedia(
   if (!blobConfigured()) return sourceUrl;
 
   try {
-    let buf: Buffer;
+    let body: Buffer | ReadableStream<Uint8Array>;
     let contentType: string;
 
     const dataMatch = sourceUrl.match(DATA_URL_RE);
     if (dataMatch) {
       contentType = dataMatch[1];
-      buf = Buffer.from(dataMatch[2], "base64");
+      body = Buffer.from(dataMatch[2], "base64");
     } else {
-      const res = await fetch(sourceUrl);
-      if (!res.ok) return sourceUrl;
+      const res = await fetch(sourceUrl, { signal: AbortSignal.timeout(120_000) });
+      if (!res.ok || !res.body) {
+        await res.body?.cancel();
+        return sourceUrl;
+      }
       contentType = res.headers.get("content-type") || (opts.kind === "video" ? "video/mp4" : "image/png");
-      buf = Buffer.from(await res.arrayBuffer());
+      // Backpressure lets Blob consume progressively instead of buffering the whole movie.
+      body = res.body;
     }
 
     const ext = contentType.split("/")[1]?.split(";")[0] || (opts.kind === "video" ? "mp4" : "png");
-    const blob = await put(`generations/${opts.pathPrefix ?? String(opts.userId)}/${opts.kind}-${Date.now()}.${ext}`, buf, {
+    const blob = await put(`generations/${opts.pathPrefix ?? String(opts.userId)}/${opts.kind}-${Date.now()}.${ext}`, body, {
       access: "private",
+      multipart: !dataMatch,
       contentType,
       addRandomSuffix: true,
     });
