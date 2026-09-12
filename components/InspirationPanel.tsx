@@ -5,6 +5,7 @@ import { IconSearch, IconChevronDown, IconCollapse, IconCheck, IconDownload } fr
 import { downloadResult } from "@/lib/download";
 import ExpiringMedia from "./ExpiringMedia";
 import type { ResultItem } from "@/lib/types";
+import { formatDateTime, formatDuration, generationTimeLabel } from "@/lib/formatTime";
 
 type KindFilter = "all" | "image" | "video" | "text";
 type TimeFilter = "all" | "today" | "7d" | "30d";
@@ -240,7 +241,12 @@ export default function InspirationPanel({
                     <IconDownload className="h-3.5 w-3.5" />
                   </span>
                 )}
-                <div className="truncate px-2.5 py-2 text-[11px] text-[#7d7d7d]">{h.prompt}</div>
+                <div className="px-2.5 py-2">
+                  <div className="truncate text-[11px] text-[#7d7d7d]">{h.prompt}</div>
+                  <div className="mt-0.5 truncate text-[10px] text-[#555]" title={generationTimeLabel(h.createdAt, h.durationMs)}>
+                    {formatDateTime(h.createdAt)}{h.durationMs ? ` · ${formatDuration(h.durationMs)}` : ""}
+                  </div>
+                </div>
               </button>
             ))}
           </div>

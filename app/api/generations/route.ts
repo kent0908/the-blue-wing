@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
       prompt: r.prompt,
       model: r.model,
       createdAt: new Date(r.created_at).getTime(),
+      durationMs: r.duration_ms ?? undefined,
     })),
   });
 }

@@ -3,6 +3,7 @@ import { limitRequest } from "./rateLimit";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "./auth";
 import type { UserRow } from "./db";
+import { touchActivity } from "./crm";
 
 type Guarded = { user: UserRow } | { error: NextResponse };
 
@@ -24,6 +25,7 @@ export async function requireUser(req: NextRequest): Promise<Guarded> {
     const write = !["GET","HEAD","OPTIONS"].includes(req.method);
     if(!await limitRequest("user:"+user.id+":"+(write?"write":"read"),write?30:240,60)) return fail(429,"操作太頻繁，請稍後再試","rate_limited");
   } catch {return fail(503,"服務暫時無法使用","unavailable");}
+  void touchActivity(user.id); // DAU/WAU/MAU source — fire-and-forget, deduped per day
   return { user };
 }
 

@@ -8,6 +8,8 @@ export default function AppFrame({children}:{children:React.ReactNode}) {
   const path=usePathname();
   const drawer=useRef<HTMLDialogElement>(null);
   if(path==="/landing") return <main className="h-full overflow-y-auto scroll-smooth motion-reduce:scroll-auto">{children}</main>;
+  // the CRM back office has its own shell (app/crm/layout.tsx) — keep the product sidebar out of it
+  if(path==="/crm"||path.startsWith("/crm/")) return <>{children}</>;
   return <><div className="flex h-full">
     <div className="hidden md:block"><Sidebar/></div>
     <dialog ref={drawer} aria-label="主要導覽" className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none border-0 bg-black p-0 text-white backdrop:bg-black/70" onClick={e=>{if((e.target as HTMLElement).closest("a"))drawer.current?.close();}}>

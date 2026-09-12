@@ -37,6 +37,8 @@ export interface UserRow {
   plan_code: string;
   plan_renews_at: string | null;
   created_at: string;
+  uid: string | null;
+  last_seen_at?: string | null;
 }
 
 /** Public shape sent to the client — never includes password_hash / tokens. */
@@ -49,6 +51,8 @@ export interface PublicUser {
   planCode: string;
   planRenewsAt: string | null;
   createdAt: string;
+  /** public support id, two letters + eight digits (lib/uid.ts) */
+  uid: string | null;
 }
 
 export function toPublicUser(u: UserRow): PublicUser {
@@ -61,6 +65,7 @@ export function toPublicUser(u: UserRow): PublicUser {
     planCode: u.plan_code,
     planRenewsAt: u.plan_renews_at,
     createdAt: u.created_at,
+    uid: u.uid ?? null,
   };
 }
 

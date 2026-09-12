@@ -66,7 +66,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       const model = req.nextUrl.searchParams.get("model");
       const prompt = req.nextUrl.searchParams.get("prompt");
       if (model && prompt) {
-        await recordGeneration(user.id, { kind: "video", model, prompt, url, ref: id });
+        // elapsed = from the moment the job was charged (its ledger row) to now
+        const charged = await sql<{ created_at: string }>`select created_at from credit_ledger where user_id = ${user.id} and ref = ${id} and delta < 0 order by created_at asc limit 1`;
+        const durationMs = charged.rows[0] ? Math.max(0, Date.now() - new Date(charged.rows[0].created_at).getTime()) : null;
+        await recordGeneration(user.id, { kind: "video", model, prompt, url, ref: id, durationMs });
       }
     }
 

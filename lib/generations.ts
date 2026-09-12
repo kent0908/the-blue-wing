@@ -16,6 +16,7 @@ export interface GenerationRow {
   url: string | null;
   text_content: string | null;
   created_at: string;
+  duration_ms: number | null;
 }
 
 export interface NewGeneration {
@@ -26,14 +27,16 @@ export interface NewGeneration {
   text?: string | null;
   /** video job id — dedupes repeated poll-driven writes for the same job */
   ref?: string | null;
+  /** request → result, for the 生成紀錄 timing display */
+  durationMs?: number | null;
 }
 
 /** Never throws — a logging failure should never fail the user's generation. */
 export async function recordGeneration(userId: number, g: NewGeneration): Promise<void> {
   try {
     await sql`
-      insert into generations (user_id, kind, model, prompt, url, text_content, ref)
-      values (${userId}, ${g.kind}, ${g.model}, ${g.prompt}, ${g.url ?? null}, ${g.text ?? null}, ${g.ref ?? null})
+      insert into generations (user_id, kind, model, prompt, url, text_content, ref, duration_ms)
+      values (${userId}, ${g.kind}, ${g.model}, ${g.prompt}, ${g.url ?? null}, ${g.text ?? null}, ${g.ref ?? null}, ${g.durationMs ?? null})
       on conflict (user_id, ref) where ref is not null do nothing
     `;
   } catch (err) {
@@ -54,7 +57,7 @@ export async function generationExistsForUrl(userId: number, url: string): Promi
 
 export async function listGenerations(userId: number, limit = 60): Promise<GenerationRow[]> {
   const { rows } = await sql<GenerationRow>`
-    select id, kind, model, prompt, url, text_content, created_at
+    select id, kind, model, prompt, url, text_content, created_at, duration_ms
     from generations
     where user_id = ${userId}
     order by created_at desc

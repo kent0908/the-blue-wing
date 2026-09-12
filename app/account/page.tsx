@@ -20,7 +20,7 @@ interface LedgerRow {
   created_at: string;
 }
 interface AccountData {
-  user: { email: string; role: string; planCode: string; planRenewsAt: string | null };
+  user: { email: string; role: string; planCode: string; planRenewsAt: string | null; uid?: string | null };
   credits: number;
   plan: Plan;
   plans: Plan[];
@@ -159,12 +159,20 @@ export default function AccountPage() {
           <h1 className="text-[22px] font-semibold tracking-tight">帳號</h1>
           <div className="flex items-center gap-3 text-[12.5px]">
             {data.user.role === "admin" && (
-              <Link href="/admin" className="text-[#7ff0cd] hover:underline">後台管理</Link>
+              <>
+                <Link href="/crm" className="text-[#7ff0cd] hover:underline">CRM 後台</Link>
+                <Link href="/admin" className="text-[#7ff0cd] hover:underline">內容管理</Link>
+              </>
             )}
             <button onClick={logout} className="text-[#8a8a8a] hover:text-white">登出</button>
           </div>
         </div>
-        <p className="mt-1 text-[13px] text-[#8a8a8a]">{data.user.email}</p>
+        <p className="mt-1 text-[13px] text-[#8a8a8a]">
+          {data.user.email}
+          {data.user.uid && (
+            <span className="ml-2 rounded-md bg-[#1c1c1c] px-1.5 py-0.5 font-mono text-[11px] text-[#c9c9c9]" title="你的使用者編號，聯絡客服時提供這組即可">UID {data.user.uid}</span>
+          )}
+        </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-[#262626] bg-[#141414] p-5">

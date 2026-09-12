@@ -4,6 +4,9 @@ import { sql, toPublicUser, type UserRow } from "@/lib/db";
 import { addCredits, getBalance } from "@/lib/credits";
 import { getPlan } from "@/lib/plans";
 import { getCreditPack, CREDIT_PACK_EXPIRY_DAYS } from "@/lib/creditPacks";
+import { audit } from "@/lib/crm";
+import { newToken } from "@/lib/auth";
+import { sendResetEmail, sendVerifyEmail } from "@/lib/mail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +19,10 @@ export const dynamic = "force-dynamic";
  *   { action: "set_status", status: "active" | "banned" }
  *   { action: "set_plan",   plan_code: string }   // grants that plan's monthly credits now
  *   { action: "grant_pack", pack_code: string }   // grants a credit pack (lib/creditPacks.ts), 2-year expiry
+ *   { action: "send_reset_email" }                 // emails the user a password-reset link (admins never see or set passwords)
+ *   { action: "resend_verify" }                    // re-sends the email-verification link
+ *   { action: "sign_out_everywhere" }              // revokes every session of the user
+ * Every action is written to admin_audit_log (lib/crm.ts).
  */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const r = await requireAdmin(req);
@@ -36,6 +43,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   const body = await req.json();
   const action = String(body?.action || "");
+  const ip = req.headers.get("x-forwarded-for");
+  let extra: Record<string, unknown> = {};
 
   try {
     if (action === "grant_credits") {
@@ -79,9 +88,41 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       }
       const expiresAt = new Date(Date.now() + CREDIT_PACK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
       await addCredits(userId, pack.credits, "credit_pack", `${pack.code} by:${admin.email}`, expiresAt);
+    } else if (action === "send_reset_email") {
+      // Same flow the public 忘記密碼 form uses: a one-hour token in the
+      // user's row and a link by email. The admin only ever sees whether
+      // the mail went out — never the token, never a password.
+      if (target.status === "banned") return NextResponse.json({ error: { message: "已停權的帳號無法重設密碼", code: "banned" } }, { status: 400 });
+      const token = newToken(24);
+      const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      await sql`update users set reset_token = ${token}, reset_expires = ${expires} where id = ${userId}`;
+      const url = `${new URL(req.url).origin}/reset-password?token=${token}`;
+      let sent = false;
+      try { ({ sent } = await sendResetEmail(target.email, url)); } catch (e) { console.error("admin reset mail failed:", e); }
+      extra = { sent };
+      if (!sent) {
+        await audit(admin.id, "user.send_reset_email", userId, { sent: false }, ip);
+        return NextResponse.json({ error: { message: "重設連結已建立，但寄信服務尚未設定（RESEND_API_KEY），信件沒有送出", code: "mail_unconfigured" } }, { status: 503 });
+      }
+    } else if (action === "resend_verify") {
+      if (target.email_verified) return NextResponse.json({ error: { message: "這個帳號已經驗證過了", code: "already_verified" } }, { status: 400 });
+      const token = newToken(24);
+      const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      await sql`update users set verify_token = ${token}, verify_expires = ${expires} where id = ${userId}`;
+      const url = `${new URL(req.url).origin}/verify?token=${token}`;
+      let sent = false;
+      try { ({ sent } = await sendVerifyEmail(target.email, url)); } catch (e) { console.error("admin verify mail failed:", e); }
+      extra = { sent };
+      if (!sent) {
+        await audit(admin.id, "user.resend_verify", userId, { sent: false }, ip);
+        return NextResponse.json({ error: { message: "驗證連結已建立，但寄信服務尚未設定（RESEND_API_KEY），信件沒有送出", code: "mail_unconfigured" } }, { status: 503 });
+      }
+    } else if (action === "sign_out_everywhere") {
+      await sql`delete from sessions where user_id = ${userId}`;
     } else {
       return NextResponse.json({ error: { message: "未知的操作", code: "bad_action" } }, { status: 400 });
     }
+    await audit(admin.id, `user.${action}`, userId, { ...(body && typeof body === "object" ? Object.fromEntries(Object.entries(body).filter(([k]) => k !== "action")) : {}), ...extra }, ip);
 
     const { rows: after } = await sql<UserRow>`select * from users where id = ${userId} limit 1`;
     const balance = await getBalance(userId);

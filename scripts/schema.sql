@@ -403,3 +403,77 @@ create table if not exists official_characters (
 alter table characters add column if not exists official_key text references official_characters(key) on delete set null;
 alter table characters add column if not exists content_rating text not null default 'adult';
 create unique index if not exists characters_official_uidx on characters(user_id, official_key) where official_key is not null;
+
+-- ---------------------------------------------------------------------------
+-- CRM (app/crm, lib/crm*.ts)
+-- ---------------------------------------------------------------------------
+-- Public user id shown in support / audit contexts instead of the numeric
+-- primary key: two uppercase letters + eight digits (lib/uid.ts). Assigned at
+-- registration; existing rows are backfilled by scripts/backfill-uids.mjs.
+alter table users add column if not exists uid text unique;
+alter table users add column if not exists last_seen_at timestamptz;
+
+-- One row per (user, calendar day) with any authenticated API activity —
+-- what DAU / WAU / MAU are counted from (lib/activity.ts).
+create table if not exists user_activity_days (
+  user_id bigint not null references users(id) on delete cascade,
+  day     date   not null,
+  primary key (user_id, day)
+);
+create index if not exists user_activity_days_day_idx on user_activity_days(day);
+
+-- Vendor cost card: what the provider charges per unit (USD per image /
+-- per second of 480p video / per 1k output tokens) and the discount this
+-- account actually gets. discount_pct NULL = use the global default in
+-- crm_settings. Edited from /crm/costs.
+create table if not exists model_costs (
+  model_id       text primary key,
+  list_price_usd numeric(12,6) not null default 0,
+  discount_pct   numeric(5,2),
+  notes          text not null default '',
+  updated_at     timestamptz not null default now()
+);
+
+create table if not exists crm_settings (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+-- Every paid provider call, with the cost snapshot taken at the time
+-- (list price × units × resolution multiplier, and the discounted actual).
+-- Written by paidCall (lib/creditTransactions.ts); status flips to
+-- 'refunded' when the charge is refunded so cost/revenue reports exclude it.
+create table if not exists usage_events (
+  id              bigint generated always as identity primary key,
+  user_id         bigint not null references users(id) on delete cascade,
+  charge_id       bigint,
+  kind            text not null,
+  model           text not null,
+  credits         integer not null,
+  units           numeric(12,4) not null default 1,
+  unit            text not null default 'call',
+  resolution      text,
+  list_cost_usd   numeric(12,6) not null default 0,
+  actual_cost_usd numeric(12,6) not null default 0,
+  status          text not null default 'charged' check (status in ('charged','refunded')),
+  created_at      timestamptz not null default now()
+);
+create index if not exists usage_events_created_idx on usage_events(created_at desc);
+create index if not exists usage_events_user_idx on usage_events(user_id, created_at desc);
+create index if not exists usage_events_charge_idx on usage_events(charge_id);
+
+-- Who did what in the back office. Never stores secrets.
+create table if not exists admin_audit_log (
+  id             bigint generated always as identity primary key,
+  admin_id       bigint references users(id) on delete set null,
+  action         text not null,
+  target_user_id bigint references users(id) on delete set null,
+  detail         jsonb not null default '{}'::jsonb,
+  ip             text,
+  created_at     timestamptz not null default now()
+);
+create index if not exists admin_audit_log_created_idx on admin_audit_log(created_at desc);
+
+-- How long a generation took (request → result), shown to the user in 生成紀錄.
+alter table generations add column if not exists duration_ms integer;

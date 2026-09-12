@@ -41,8 +41,11 @@ export async function GET(req: NextRequest) {
   const where: string[] = [];
   const params: unknown[] = [];
   if (q) {
+    // email substring, or an exact public uid (lib/uid.ts) — support tickets quote uids
     params.push(`%${q}%`);
-    where.push(`lower(u.email) like $${params.length}`);
+    const emailIdx = params.length;
+    params.push(q.toUpperCase());
+    where.push(`(lower(u.email) like $${emailIdx} or u.uid = $${params.length})`);
   }
   if (status === "active" || status === "banned") {
     params.push(status);
@@ -65,8 +68,9 @@ export async function GET(req: NextRequest) {
 
   const text = `
     select
-      u.id, u.email, u.role, u.status, u.email_verified, u.plan_code, u.plan_renews_at, u.created_at,
+      u.id, u.email, u.role, u.status, u.email_verified, u.plan_code, u.plan_renews_at, u.created_at, u.uid, u.last_seen_at,
       coalesce((select sum(delta) from credit_ledger l where l.user_id = u.id), 0)::int as balance,
+      (select count(*) from generations g where g.user_id = u.id)::int as generations,
       count(*) over()::int as total
     from users u
     ${whereSql}
@@ -83,7 +87,10 @@ export async function GET(req: NextRequest) {
     plan_code: string;
     plan_renews_at: string | null;
     created_at: string;
+    uid: string | null;
+    last_seen_at: string | null;
     balance: number;
+    generations: number;
     total: number;
   }>(text, params);
 
@@ -98,7 +105,10 @@ export async function GET(req: NextRequest) {
       plan_code: u.plan_code,
       plan_renews_at: u.plan_renews_at,
       created_at: u.created_at,
+      uid: u.uid,
+      last_seen_at: u.last_seen_at,
       balance: u.balance,
+      generations: u.generations,
     })),
     page,
     pageSize: PAGE_SIZE,
