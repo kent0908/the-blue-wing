@@ -8,6 +8,7 @@ import { getBalance, creditCost } from "@/lib/credits";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 import { recordGeneration } from "@/lib/generations";
 import { sniffImageMimeFromBase64 } from "@/lib/imageMime";
+import { normalizeReferenceDataUrlDetailed, resizeMaskDataUrl } from "@/lib/referenceImage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,12 +60,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Size-normalise the source (see lib/referenceImage.ts) BEFORE charging,
+    // and keep the mask pinned to the source's final dimensions — /images/edits
+    // needs them to match, so a resized source with an untouched mask would
+    // fail (or worse, paint the wrong region).
+    const source = await normalizeReferenceDataUrlDetailed(String(body.image));
+    const mask = body.mask ? (source.changed && source.width && source.height ? await resizeMaskDataUrl(String(body.mask), source.width, source.height) : String(body.mask)) : undefined;
+
     const { result: json, chargeId } = await paidCall(user.id, cost, "image", EDIT_MODEL, () =>
       createImageEdit({
         model: EDIT_MODEL,
         prompt: String(body.prompt),
-        image_urls: [String(body.image)],
-        mask_url: body.mask ? String(body.mask) : undefined,
+        image_urls: [source.value],
+        mask_url: mask,
         // Not client-configurable here (this tool has no advanced-settings
         // panel) — always off, matching the "no watermark by default"
         // behaviour everywhere else. Found missing entirely in a real bug

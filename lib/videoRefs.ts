@@ -13,11 +13,16 @@
  * auto-deletes these blobs yet.
  */
 
-// Raw multipart upload, not base64/JSON — so this is the real file-size cap,
-// not inflated by base64 the way an embedded data URL would be. Kept under
-// Vercel's ~4.5MB serverless request body limit (see lib/assets.ts for the
-// same reasoning on image uploads).
+// Legacy multipart POST /api/video-refs cap — the bytes pass through a
+// serverless function body, so this stays under Vercel's ~4.5MB request
+// limit (see lib/assets.ts for the same reasoning on image uploads). The
+// browser now uploads straight to Blob (app/api/video-refs/upload) with the
+// DIRECT cap and only falls back to this when that isn't available.
 export const MAX_VIDEO_REF_BYTES = 4 * 1024 * 1024;
+export const MAX_VIDEO_REF_BYTES_DIRECT = 48 * 1024 * 1024;
+
+/** Blob pathname a direct upload must use: the random 128-bit token IS the access control (see app/api/video-refs/[file]). */
+export const VIDEO_REF_PATHNAME_RE = /^video-refs\/[0-9a-f]{32}\.(webm|mp4)$/;
 
 export const ALLOWED_VIDEO_REF_TYPES: Record<string, string> = {
   "video/webm": "webm",

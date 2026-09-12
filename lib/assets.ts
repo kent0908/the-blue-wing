@@ -1,6 +1,24 @@
 /** Shared config + shape for user-uploaded assets (資產庫). */
 
-export const MAX_ASSET_BYTES = 4 * 1024 * 1024; // 4 MB — stays under Vercel's serverless body limit
+/**
+ * Cap for the legacy multipart POST /api/assets path, which routes the file
+ * through a serverless function body and so must stay under Vercel's ~4.5MB
+ * request limit. New uploads go browser → Blob directly (see
+ * app/api/assets/upload + lib/uploadAsset.ts) and use MAX_ASSET_BYTES_DIRECT
+ * instead; the old route is kept only as a fallback for tiny files.
+ */
+export const MAX_ASSET_BYTES = 4 * 1024 * 1024;
+/** Direct browser → Blob uploads never touch a function body, so the ceiling is just storage sanity. */
+export const MAX_ASSET_BYTES_DIRECT = 64 * 1024 * 1024;
+
+/** Where a user's uploads live in the store — the token issuer and the register step both pin to this prefix. */
+export function assetPathPrefix(userId: number | string): string {
+  return `assets/${userId}/`;
+}
+export function assetPathname(userId: number | string, filename: string): string {
+  const safe = (filename || "asset").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
+  return `${assetPathPrefix(userId)}${Date.now()}-${safe}`;
+}
 
 export const ALLOWED_ASSET_TYPES: Record<string, string> = {
   "image/png": "png",

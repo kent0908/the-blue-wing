@@ -72,7 +72,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Flattens every visible layer (in z-order, first = bottom) onto a white canvasW×canvasH background, returns a PNG data URL. */
+/**
+ * Flattens every visible layer (in z-order, first = bottom) onto a white
+ * canvasW×canvasH background. Returns a JPEG (q0.92) data URL, not PNG —
+ * same 413 class of bug toDataUrl below already fixed for 局部重繪 (2026-09-06)
+ * but that was still live here for "AI 生成/融合" (found 2026-09-12): a
+ * 1280×1280 lossless PNG of detailed artwork can run several MB, and as a
+ * JSON POST body to /api/images that hits Vercel's ~4.5MB request limit
+ * before our route ever runs. The background is already filled white, so
+ * dropping alpha loses nothing.
+ */
 export async function flattenLayers(layers: EditorLayer[], canvasW: number, canvasH: number): Promise<string> {
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
@@ -90,7 +99,7 @@ export async function flattenLayers(layers: EditorLayer[], canvasW: number, canv
     ctx.drawImage(img, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
     ctx.restore();
   }
-  return canvas.toDataURL("image/png");
+  return canvas.toDataURL("image/jpeg", 0.92);
 }
 
 /**

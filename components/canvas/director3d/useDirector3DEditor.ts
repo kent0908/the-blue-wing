@@ -37,11 +37,42 @@ const deg2rad = (d: number) => (d * Math.PI) / 180;
 /** How many still frames a 運鏡錄製 samples across its duration — handed to video generation as multi-reference images. */
 const RECORDING_FRAME_SAMPLES = 6;
 
-// Keep a 15-30s recording's file size under the ~4MB upload cap (see
-// lib/videoRefs.ts) — this is just a previz/reference clip, not a final
-// deliverable, so a lower bitrate is an acceptable trade for reliably
-// fitting under Vercel's request body limit.
-const RECORDING_BITS_PER_SECOND = 900_000;
+// Reference clips now upload browser → Blob directly (lib/videoRefs.ts's
+// DIRECT cap, 48MB), so the bitrate no longer has to squeeze a 30s clip
+// under 4MB the way the old 900kbps setting did — 2.5Mbps keeps the figure
+// edges clean for SIRAYA to read (30s ≈ 9MB) while still far under the cap.
+const RECORDING_BITS_PER_SECOND = 2_500_000;
+
+/**
+ * Re-samples the WebGL canvas into a bounded JPEG data URL. A raw
+ * `canvas.toDataURL("image/png")` was unbounded: at devicePixelRatio 2 on a
+ * large monitor the viewport is ~3000px wide and the PNG runs 3-6MB, which
+ * (a) can't be saved inside a Canvas node (the graph document is capped at
+ * 3MB), (b) blows the ~4.5MB request limit as an inline reference to
+ * /api/images or /api/videos, and (c) exceeded the old asset upload cap on
+ * the standalone page. The opposite edge — a tiny viewport under SIRAYA's
+ * ~300px reference minimum — is also handled by upscaling. Solid background,
+ * flat-shaded figures: JPEG q0.92 at ≤1600px is a few hundred KB and
+ * indistinguishable as a reference.
+ */
+const CAPTURE_MAX_SIDE = 1600;
+const CAPTURE_MIN_SIDE = 320;
+function captureBounded(canvas: HTMLCanvasElement, quality: number): string {
+  const w = canvas.width;
+  const h = canvas.height;
+  let scale = 1;
+  if (Math.min(w, h) < CAPTURE_MIN_SIDE) scale = CAPTURE_MIN_SIDE / Math.min(w, h);
+  if (Math.max(w, h) * scale > CAPTURE_MAX_SIDE) scale = CAPTURE_MAX_SIDE / Math.max(w, h);
+  if (scale === 1) return canvas.toDataURL("image/jpeg", quality);
+  const off = document.createElement("canvas");
+  off.width = Math.max(1, Math.round(w * scale));
+  off.height = Math.max(1, Math.round(h * scale));
+  const ctx = off.getContext("2d");
+  if (!ctx) return canvas.toDataURL("image/jpeg", quality);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(canvas, 0, 0, off.width, off.height);
+  return off.toDataURL("image/jpeg", quality);
+}
 
 export interface RecordedFrame {
   url: string;
@@ -401,7 +432,7 @@ export function useDirector3DEditor(initial: Director3DSceneData, remotePersist?
 
   const takeScreenshot = (): string | null => {
     if (!canvasRef.current) return null;
-    const url = canvasRef.current.toDataURL("image/png");
+    const url = captureBounded(canvasRef.current, 0.92);
     setCaptured(url);
     return url;
   };
@@ -446,7 +477,7 @@ export function useDirector3DEditor(initial: Director3DSceneData, remotePersist?
 
   const captureFrameSample = () => {
     if (!canvasRef.current) return;
-    const url = canvasRef.current.toDataURL("image/jpeg", 0.82);
+    const url = captureBounded(canvasRef.current, 0.82);
     setRecordedFrames((cur) => [...cur, { url, pose: poseRef.current }]);
   };
 

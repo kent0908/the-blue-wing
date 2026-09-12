@@ -1,6 +1,7 @@
 "use client";
 
 import { modelLabel } from "@/lib/modelLabel";
+import { uploadAsset } from "@/lib/uploadAsset";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -94,15 +95,10 @@ export default function AdminHomeContentPage() {
   const uploadImage = async (id: number, file: File) => {
     setUploadingId(id);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/assets", { method: "POST", body: fd });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(j?.error?.message || "上傳失敗");
-        return;
-      }
-      patch(id, { asset_id: j.asset.id });
+      const asset = await uploadAsset(file);
+      patch(id, { asset_id: asset.id });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "上傳失敗");
     } finally {
       setUploadingId(null);
     }

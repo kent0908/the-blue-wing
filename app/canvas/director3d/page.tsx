@@ -7,22 +7,39 @@ import { IconChevronLeft, IconImage, IconVideo } from "@/components/Icons";
 import Director3DStudioBody from "@/components/canvas/director3d/Director3DStudioBody";
 import { useDirector3DEditor, type RecordedClip, type RecordedFrame } from "@/components/canvas/director3d/useDirector3DEditor";
 import { DIRECTOR3D_HANDOFF_KEY, defaultDirector3DData, type Director3DSceneData } from "@/lib/canvas/director3d";
+import { uploadDataUrlAsset } from "@/lib/uploadAsset";
+import { upload } from "@vercel/blob/client";
+import { MAX_VIDEO_REF_BYTES, MAX_VIDEO_REF_BYTES_DIRECT } from "@/lib/videoRefs";
 
 async function uploadImage(dataUrl: string, filename: string): Promise<{ id: number; src: string; name: string }> {
-  const blob = await fetch(dataUrl).then((r) => r.blob());
-  const form = new FormData();
-  form.append("file", blob, filename);
-  const res = await fetch("/api/assets", { method: "POST", body: form });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j?.error?.message || "上傳失敗");
-  return j.asset;
+  return uploadDataUrlAsset(dataUrl, filename);
 }
 
-/** Uploads a recorded 運鏡 clip to the token-gated public route SIRAYA's
- *  servers fetch directly — see app/api/video-refs/route.ts. */
+/**
+ * Uploads a recorded 運鏡 clip to the token-gated public route SIRAYA's
+ * servers fetch directly — see app/api/video-refs/[file]. Goes browser →
+ * Blob directly (token from /api/video-refs/upload) so a 30s clip at a
+ * usable bitrate isn't squeezed through the ~4.5MB serverless request
+ * limit; falls back to the legacy ≤4MB multipart POST only where direct
+ * upload isn't available.
+ */
 async function uploadVideoRef(clip: RecordedClip): Promise<{ url: string }> {
-  const form = new FormData();
   const ext = clip.blob.type.includes("mp4") ? "mp4" : "webm";
+  const type = ext === "mp4" ? "video/mp4" : "video/webm";
+  const probe = await fetch("/api/video-refs/upload", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (probe?.available) {
+    if (clip.blob.size > MAX_VIDEO_REF_BYTES_DIRECT) throw new Error(`影片檔太大，單檔上限 ${Math.floor(MAX_VIDEO_REF_BYTES_DIRECT / 1024 / 1024)} MB — 錄短一點再試`);
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+    const filename = `${token}.${ext}`;
+    try {
+      await upload(`video-refs/${filename}`, clip.blob, { access: "private", handleUploadUrl: "/api/video-refs/upload", contentType: type, multipart: clip.blob.size > 8 * 1024 * 1024 });
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message.replace(/^Vercel Blob:\s*/, "") : "運鏡影片上傳失敗");
+    }
+    return { url: `${window.location.origin}/api/video-refs/${filename}` };
+  }
+  if (clip.blob.size > MAX_VIDEO_REF_BYTES) throw new Error(`這個環境的運鏡影片上限是 ${Math.floor(MAX_VIDEO_REF_BYTES / 1024 / 1024)} MB — 錄短一點再試`);
+  const form = new FormData();
   form.append("file", clip.blob, `director3d-camera-move.${ext}`);
   const res = await fetch("/api/video-refs", { method: "POST", body: form });
   const j = await res.json().catch(() => ({}));
@@ -106,7 +123,7 @@ function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData 
     try {
       const dataUrl = editor.captured ?? editor.takeScreenshot();
       if (!dataUrl) throw new Error("請先截圖");
-      const asset = await uploadImage(dataUrl, "director3d.png");
+      const asset = await uploadImage(dataUrl, "director3d.jpg");
       handoff([asset], mode);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "傳送失敗，請稍後再試");

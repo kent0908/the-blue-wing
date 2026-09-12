@@ -1,4 +1,5 @@
 import { resolveGenerationImage } from "@/lib/resolveGenerationImage";
+import { normalizeReferenceDataUrl } from "@/lib/referenceImage";
 import { resolveProviderAssetReferences } from "@/lib/providerAssets";
 import { createGenerationAssetUrls } from "@/lib/generationAssetUrls";
 import { buildVideoModePayload, getGenerationModes, type GenerationMode } from "@/lib/generationModes";
@@ -110,7 +111,8 @@ export async function POST(req: NextRequest) {
         for (const u of imageUrls) {
           if (typeof u === "string" && u.trim()) {
             if (/^asset:/i.test(u.trim())) throw new SirayaApiError(400,"請從已審核素材選擇參考圖片");
-            refs.push({ type: "image" as const, url: await resolveGenerationImage(user.id, u.trim(), req.nextUrl.origin) });
+            // data URLs (3D導演台 screenshot / sampled frames) are size-normalised here; signed URLs are normalised by the route that serves them
+            refs.push({ type: "image" as const, url: await normalizeReferenceDataUrl(await resolveGenerationImage(user.id, u.trim(), req.nextUrl.origin)) });
           }
         }
       }

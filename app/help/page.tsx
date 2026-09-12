@@ -158,7 +158,7 @@ export default function HelpPage() {
                   每次生成能附的張數依模型而定：圖片最多 4 張；影片只有 Seedance 家族支援，Seedance 2.5 最多 50
                   張，其他 Seedance 版本先保守開放 6 張，非 Seedance 模型（Veo、Sora 等）目前不支援。
                 </li>
-                <li>參考圖至少要 300×300px，太小會被伺服器拒絕並顯示錯誤訊息。</li>
+                <li>參考圖會自動調整到適合的尺寸（短邊不足 320px 會放大、長邊超過 2048px 會縮小），不用自己裁切。</li>
               </ul>
             </Card>
           </section>
@@ -310,8 +310,9 @@ export default function HelpPage() {
                 <div>
                   <dt className="font-medium text-white">送出的參考圖為什麼被拒絕？</dt>
                   <dd className="mt-1 text-[#8a8a8a]">
-                    影片參考素材的圖片邊長至少要 300px；圖片模式最多附 4 張、影片模式依模型上限（Seedance 2.5 最多
-                    50 張），超過會被自動截斷。
+                    尺寸不會是原因——參考圖送出前會自動調整到生成服務接受的範圍（短邊至少 320px、長邊最多 2048px）。
+                    數量才有上限：圖片模式最多附 4 張、影片模式依模型上限（Seedance 2.5 最多 50 張），超過會被自動截斷；
+                    另外 Seedance 1.0-pro / 1.0-pro-fast / 1.5-pro 不接受參考圖。
                   </dd>
                 </div>
                 <div>

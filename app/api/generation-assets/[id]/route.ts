@@ -3,6 +3,7 @@ import { get } from "@vercel/blob";
 import { sql } from "@/lib/db";
 import type { AssetRow } from "@/lib/assets";
 import { GENERATION_IMAGE_TYPES, verifyGenerationAssetToken } from "@/lib/generationAssetUrls";
+import { normalizeReferenceImage } from "@/lib/referenceImage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (!asset || !GENERATION_IMAGE_TYPES.has(asset.content_type)) return NextResponse.json({ error: "找不到素材" }, { status: 404, headers });
     const blob = await get(asset.pathname, { access: "private" });
     if (!blob || blob.statusCode !== 200) return NextResponse.json({ error: "找不到素材" }, { status: 404, headers });
-    return new Response(blob.stream, { headers: { ...headers, "Content-Type": asset.content_type } });
+    // SIRAYA fetches this URL itself and validates dimensions (rejects
+    // under ~300px) — normalise here the same way data-URL references are.
+    const raw = Buffer.from(await new Response(blob.stream).arrayBuffer());
+    const img = await normalizeReferenceImage(raw, asset.content_type);
+    return new Response(new Uint8Array(img.buffer), { headers: { ...headers, "Content-Type": img.contentType, "Content-Length": String(img.buffer.length) } });
   } catch {
     return NextResponse.json({ error: "素材暫時無法讀取" }, { status: 503, headers });
   }

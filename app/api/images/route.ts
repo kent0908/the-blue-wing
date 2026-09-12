@@ -1,4 +1,5 @@
 import { resolveGenerationImage } from "@/lib/resolveGenerationImage";
+import { normalizeReferenceDataUrl } from "@/lib/referenceImage";
 import { LAYER_DECOMPOSITION_AVAILABLE, LAYER_DECOMPOSITION_UNAVAILABLE_REASON } from "@/lib/layerCapability";
 import { MAX_LAYER_OUTPUTS, validateLayerInput, parseLayerResponse } from "@/lib/layerDecomposition";
 import { saveLayerSet } from "@/lib/layerSets";
@@ -118,7 +119,10 @@ export async function POST(req: NextRequest) {
     } else if (Array.isArray(body.image)) {
       refs.push(...body.image.filter((u: unknown): u is string => typeof u === "string" && u.trim().length > 0).map((u: string) => u.trim()));
     }
-    const cappedRefs = await Promise.all(refs.slice(0, MAX_REF_IMAGES).map(url => resolveGenerationImage(user.id, url, req.nextUrl.origin)));
+    // Inline data URLs (a 3D導演台 screenshot, the layer editor's composite)
+    // get their size fixed here too; asset-library refs were already
+    // normalised inside assetsToDataUrls, so this is a no-op for those.
+    const cappedRefs = await Promise.all(refs.slice(0, MAX_REF_IMAGES).map(async url => normalizeReferenceDataUrl(await resolveGenerationImage(user.id, url, req.nextUrl.origin))));
     if (cappedRefs.length === 1) payload.image = cappedRefs[0];
     else if (cappedRefs.length > 1) payload.image = cappedRefs;
 

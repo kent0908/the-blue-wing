@@ -7,6 +7,7 @@
 import { get } from "@vercel/blob";
 import { sql } from "./db";
 import type { AssetRow } from "./assets";
+import { normalizeReferenceImage } from "./referenceImage";
 
 /**
  * @param limit caller-supplied cap (image generation passes MAX_REF_IMAGES,
@@ -33,7 +34,10 @@ export async function assetsToDataUrls(userId: number, ids: number[], limit = 50
     const blob = await get(asset.pathname, { access: "private" });
     if (!blob || blob.statusCode !== 200) continue;
     const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
-    out.push(`data:${asset.content_type};base64,${buf.toString("base64")}`);
+    // Fix the size on the way through (too small → rejected upstream, too
+    // big → multi-MB base64 per reference) — see lib/referenceImage.ts.
+    const img = await normalizeReferenceImage(buf, asset.content_type);
+    out.push(`data:${img.contentType};base64,${img.buffer.toString("base64")}`);
   }
   return out;
 }

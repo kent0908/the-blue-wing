@@ -5,6 +5,7 @@ import { sql } from "@/lib/db";
 import {
   ALLOWED_ASSET_TYPES,
   MAX_ASSET_BYTES,
+  assetPathname,
   blobConfigured,
   toPublicAsset,
   type AssetRow,
@@ -29,7 +30,13 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ assets: rows.map(toPublicAsset), configured: blobConfigured() });
 }
 
-/** POST /api/assets — multipart form with a `file` field. Stores it in Vercel Blob. */
+/**
+ * POST /api/assets — multipart form with a `file` field. Stores it in Vercel
+ * Blob. Legacy path, capped at MAX_ASSET_BYTES because the bytes pass
+ * through this function's request body; the browser now uploads straight to
+ * Blob (app/api/assets/upload + /register, via lib/uploadAsset.ts) and only
+ * falls back here when that flow is unavailable.
+ */
 export async function POST(req: NextRequest) {
   const r = await requireUser(req);
   if ("error" in r) return r.error;
@@ -68,8 +75,7 @@ export async function POST(req: NextRequest) {
   }
 
   const originalName = (file.name || "asset").slice(0, 120);
-  const safe = originalName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
-  const pathname = `assets/${r.user.id}/${Date.now()}-${safe}`;
+  const pathname = assetPathname(r.user.id, originalName);
 
   let uploaded;
   try {

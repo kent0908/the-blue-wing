@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { uploadAsset } from "@/lib/uploadAsset";
 import { useRouter, useSearchParams } from "next/navigation";
 import GenerationModePanel from "./GenerationModePanel";
 import FrameUploadCards from "./FrameUploadCards";
@@ -269,17 +270,16 @@ export default function Composer({
     try {
       for (const file of Array.from(files)) {
         if (activeRefSession.current !== refSession) break;
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/assets", { method: "POST", body: fd });
-        const j = await res.json().catch(() => ({}));
-        if (activeRefSession.current !== refSession) break;
-        if (!res.ok) {
-          setRefError(j?.error?.message || "上傳失敗");
+        let asset: RefAsset;
+        try {
+          asset = await uploadAsset(file);
+        } catch (e) {
+          if (activeRefSession.current === refSession) setRefError(e instanceof Error ? e.message : "上傳失敗");
           continue;
         }
-        setLibrary((cur) => (cur ? [j.asset, ...cur] : [j.asset]));
-        addRef(j.asset);
+        if (activeRefSession.current !== refSession) break;
+        setLibrary((cur) => (cur ? [asset, ...cur] : [asset]));
+        addRef(asset);
       }
     } catch {
       if (activeRefSession.current === refSession) setRefError("圖片上傳失敗，請檢查連線後重試。");

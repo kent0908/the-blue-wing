@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MAX_ASSET_BYTES_DIRECT } from "@/lib/assets";
+import { uploadAsset } from "@/lib/uploadAsset";
 import { useRouter } from "next/navigation";
 import ProviderAssetLibrary from "@/components/ProviderAssetLibrary";
 
@@ -14,7 +16,7 @@ interface Asset {
 }
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/webm,audio/mpeg,audio/wav,audio/x-wav,audio/mp4";
-const MAX_MB = 4;
+const MAX_MB = Math.floor(MAX_ASSET_BYTES_DIRECT / 1024 / 1024);
 
 function fmtSize(n: number) {
   if (n < 1024) return `${n} B`;
@@ -28,7 +30,7 @@ export default function AssetsPage() {
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<{ name: string; state: "pending" | "error"; msg?: string }[]>([]);
+  const [uploads, setUploads] = useState<{ name: string; state: "pending" | "error"; msg?: string; progress?: number }[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,18 +62,14 @@ export default function AssetsPage() {
     const fail = (msg: string) =>
       setUploads((u) => u.map((x) => (x.name === file.name && x.state === "pending" ? { ...x, state: "error", msg } : x)));
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/assets", { method: "POST", body: fd });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        fail(json?.error?.message || "上傳失敗");
-        return;
-      }
-      setAssets((a) => [json.asset, ...a]);
+      const asset = await uploadAsset(file, {
+        onProgress: (fraction) =>
+          setUploads((u) => u.map((x) => (x.name === file.name && x.state === "pending" ? { ...x, progress: fraction } : x))),
+      });
+      setAssets((a) => [asset, ...a]);
       setUploads((u) => u.filter((x) => !(x.name === file.name && x.state === "pending")));
-    } catch {
-      fail("連線失敗");
+    } catch (e) {
+      fail(e instanceof Error ? e.message : "連線失敗");
     }
   }, []);
 
@@ -140,7 +138,7 @@ export default function AssetsPage() {
           }`}
         >
           <span className="text-[13px] text-white">拖曳素材到這裡，或點擊選擇檔案</span>
-          <span className="mt-1 text-[11.5px] text-[#6d6d6d]">PNG · JPG · WebP · GIF · SVG · MP4 · WebM · MP3 · WAV · M4A（每個檔案最多 4 MB）</span>
+          <span className="mt-1 text-[11.5px] text-[#6d6d6d]">PNG · JPG · WebP · GIF · SVG · MP4 · WebM · MP3 · WAV · M4A（每個檔案最多 {MAX_MB} MB，直接上傳到儲存空間）</span>
         </button>
         <input
           ref={inputRef}
@@ -163,7 +161,7 @@ export default function AssetsPage() {
                 </span>
                 <span className="truncate text-[#c9c9c9]">{u.name}</span>
                 <span className={u.state === "error" ? "text-[#ff9b9b]" : "text-[#6d6d6d]"}>
-                  {u.state === "error" ? u.msg : "上傳中…"}
+                  {u.state === "error" ? u.msg : u.progress ? `上傳中… ${Math.round(u.progress * 100)}%` : "上傳中…"}
                 </span>
                 {u.state === "error" && (
                   <button
