@@ -1,10 +1,8 @@
 /**
  * One-time credit top-up packs. Same $0.01/credit retail peg as the
- * subscription plans (lib/plans.ts), with a bulk discount curve that never
- * goes deep enough to threaten the ≥3x margin built into the model rate
- * card (worst case, the 100,000-credit pack, is a 20% discount — combined
- * with the ~4x nominal margin most model rates carry, realized margin stays
- * ≥3x even if every credit spent came from this pack).
+ * subscription plans (lib/plans.ts), with a bulk discount curve. The lowest
+ * catalog value is $0.008/credit. This does not guarantee a model margin;
+ * audit actual provider usage, resolution, input costs and payment fees.
  *
  * Unlike subscription credits (reset on renewal — see ensureDailyFreeCredits
  * / the plan_grant expiry in the admin route), a purchased pack is valid for

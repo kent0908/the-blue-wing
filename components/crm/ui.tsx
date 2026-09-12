@@ -42,7 +42,7 @@ export function Kpi({ label, value, sub, tone = "default" }: { label: string; va
 
 export function RangePicker({ value, onChange, options = [7, 30, 90, 180, 365] }: { value: number; onChange: (d: number) => void; options?: number[] }) {
   return (
-    <div className="flex gap-1 rounded-lg bg-[#1a1a1a] p-0.5">
+    <div className="flex flex-wrap gap-1 rounded-lg bg-[#1a1a1a] p-0.5">
       {options.map((d) => (
         <button key={d} type="button" onClick={() => onChange(d)} className={`rounded-md px-2.5 py-1 text-[12px] ${value === d ? "bg-[#2a2a2a] text-white" : "text-[#8a8a8a] hover:text-white"}`}>
           {d} 天
@@ -191,7 +191,7 @@ export function useApi<T>(url: string | null): { data: T | null; error: string |
     if (!url) return;
     let alive = true;
     // deferred so the effect body itself doesn't set state synchronously
-    queueMicrotask(() => alive && setLoading(true));
+    queueMicrotask(() => { if (alive) { setLoading(true); setData(null); setError(null); } });
     fetch(url, { cache: "no-store" })
       .then(async (r) => {
         const j = await r.json().catch(() => ({}));
@@ -210,4 +210,16 @@ export function useApi<T>(url: string | null): { data: T | null; error: string |
     };
   }, [url, tick]);
   return { data, error, loading, reload: () => setTick((t) => t + 1) };
+}
+
+/** Date endpoints are inclusive Taiwan calendar dates. Server validates again. */
+export function DateRangePicker({days,onDays,onRange}:{days:number;onDays:(n:number)=>void;onRange:(from:string,to:string)=>void}) {
+ const [from,setFrom]=useState(""); const [to,setTo]=useState("");
+ return <div className="flex flex-wrap items-center gap-2">
+  <RangePicker value={days} onChange={n=>{setFrom("");setTo("");onDays(n);}} />
+  <label className="text-xs text-[#aaa]">起日 <input aria-label="起始日期" type="date" value={from} onChange={e=>setFrom(e.target.value)} className={fieldCls}/></label>
+  <label className="text-xs text-[#aaa]">迄日 <input aria-label="結束日期" type="date" min={from} value={to} onChange={e=>setTo(e.target.value)} className={fieldCls}/></label>
+  <button className={btnCls} disabled={!from||!to||from>to} onClick={()=>onRange(from,to)}>套用區間</button>
+  <span className="text-xs text-[#777]">台灣時間，含起訖日</span>
+ </div>;
 }

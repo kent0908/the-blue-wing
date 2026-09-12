@@ -62,24 +62,24 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 bg-[#0a0a0a] text-[#e6e6e6]">
-      <aside className="flex w-[220px] shrink-0 flex-col border-r border-[#1c1c1c] bg-[#0d0d0d]">
-        <div className="border-b border-[#1c1c1c] px-4 py-4">
+    <div className="flex h-full min-h-0 flex-col md:flex-row bg-[#0a0a0a] text-[#e6e6e6]">
+      <aside className="flex w-full md:w-[220px] shrink-0 flex-col border-b md:border-r border-[#1c1c1c] bg-[#0d0d0d]">
+        <div className="border-b border-[#1c1c1c] px-4 py-2 md:py-4">
           <div className="text-[11px] uppercase tracking-widest text-[#6d6d6d]">The Blue Wing</div>
           <div className="mt-0.5 text-[15px] font-semibold text-white">CRM 後台</div>
         </div>
-        <nav className="flex-1 space-y-0.5 p-2">
+        <nav className="flex gap-1 overflow-x-auto p-2 md:block md:flex-1 md:space-y-0.5">
           {NAV.map((n) => {
             const active = n.href === "/crm" ? path === "/crm" : path.startsWith(n.href);
             return (
-              <Link key={n.href} href={n.href} className={`block rounded-lg px-3 py-2 ${active ? "bg-[#1c1c1c] text-white" : "text-[#9a9a9a] hover:bg-[#151515] hover:text-white"}`}>
+              <Link key={n.href} href={n.href} className={`block shrink-0 rounded-lg px-3 py-2 ${active ? "bg-[#1c1c1c] text-white" : "text-[#9a9a9a] hover:bg-[#151515] hover:text-white"}`}>
                 <div className="text-[13px]">{n.label}</div>
-                <div className="text-[10.5px] text-[#6d6d6d]">{n.hint}</div>
+                <div className="hidden md:block text-[10.5px] text-[#6d6d6d]">{n.hint}</div>
               </Link>
             );
           })}
         </nav>
-        <div className="border-t border-[#1c1c1c] p-3 text-[11px] text-[#6d6d6d]">
+        <div className="hidden md:block border-t border-[#1c1c1c] p-3 text-[11px] text-[#6d6d6d]">
           <div className="truncate text-[#9a9a9a]" title={me.email}>{me.email}</div>
           {me.uid && <div className="font-mono">UID {me.uid}</div>}
           <div className="mt-2 flex gap-2">
@@ -89,8 +89,8 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1280px] px-6 py-6">{children}</div>
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[1280px] px-4 py-4 md:px-6 md:py-6">{children}</div>
       </main>
     </div>
   );

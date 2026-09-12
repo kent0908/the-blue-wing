@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Notice, RangePicker, Table, num, pct, td, tdNum, usd, useApi } from "@/components/crm/ui";
+import { Card, Notice, DateRangePicker, Table, num, pct, td, tdNum, usd, useApi } from "@/components/crm/ui";
 import { modelLabel } from "@/lib/modelLabel";
 
 interface Overview {
   settings: { credit_value_usd: number; usd_to_twd: number };
-  totals: { creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number | null; marginPct: number | null; generations: number };
-  series: { date: string; activeUsers: number; generations: number; creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number }[];
+  totals: { creditsSpent: number; adminCreditsSpent: number; customerCreditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number | null; marginPct: number | null; generations: number };
+  series: { date: string; activeUsers: number; generations: number; creditsSpent: number; adminCreditsSpent: number; customerCreditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number | null }[];
 }
 interface Models {
   models: { model: string; kind: string; calls: number; units: number; unit: string; credits: number; revenueEstUsd: number; listCostUsd: number | null; costUsd: number | null; profitUsd: number | null; marginPct: number | null; listPriceUsd: number; discountPct: number | null; rateCredits: number | null }[];
@@ -17,8 +17,10 @@ const UNIT_LABEL: Record<string, string> = { image: "張", second: "秒", ktoken
 
 export default function CrmFinancePage() {
   const [days, setDays] = useState(30);
-  const ov = useApi<Overview>(`/api/crm/overview?days=${days}`);
-  const md = useApi<Models>(`/api/crm/models?days=${days}`);
+  const [custom,setCustom] = useState("");
+  const query = custom || `days=${days}`;
+  const ov = useApi<Overview>(`/api/crm/overview?${query}`);
+  const md = useApi<Models>(`/api/crm/models?${query}`);
   const rows = ov.data ? [...ov.data.series].reverse() : [];
 
   return (
@@ -27,26 +29,27 @@ export default function CrmFinancePage() {
         <div>
           <h1 className="text-[20px] font-semibold text-white">收入與利潤</h1>
           <p className="text-[12.5px] text-[#8a8a8a]">
-            營收＝消耗點數 × 點數價值（每點 {usd(ov.data?.settings.credit_value_usd, 4)}）；成本＝供應商牌價 × 實際計費用量 × (1 − 折扣)，每次呼叫當下快照。
+            會員消耗面額＝非管理員消耗點數 × 點數價值（每點 {usd(ov.data?.settings.credit_value_usd, 4)}）；成本＝供應商牌價 × 實際計費用量 × (1 − 折扣)，每次呼叫當下快照。
           </p>
         </div>
-        <RangePicker value={days} onChange={setDays} />
+        <DateRangePicker days={custom ? 0 : days} onDays={n=>{setDays(n);setCustom("");}} onRange={(from,to)=>setCustom(`from=${from}&to=${to}`)} />
       </div>
       {(ov.error || md.error) && <Notice kind="err">{ov.error || md.error}</Notice>}
 
-      {ov.data?.totals.costUsd === null && <Notice kind="info">本區間有缺少用量或牌價的紀錄，成本與毛利顯示「—」，不代表零成本。舊紀錄不以新牌價回填。</Notice>}
+      {ov.data?.totals.costUsd === null && <Notice kind="info">本區間有缺少用量、牌價或退款後供應商結算的紀錄，成本與毛利顯示「—」，不代表零成本。舊紀錄不以新牌價回填。</Notice>}
+      {ov.data && <Notice kind="info">管理員消耗 {num(ov.data.totals.adminCreditsSpent)} 點僅列成本；會員消耗 {num(ov.data.totals.customerCreditsSpent)} 點。消耗面額不等於實收，發放方案／點數包也不代表已付款。歷史管理員依目前帳號角色辨識。</Notice>}
       {ov.data && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="營收（點數價值）" value={usd(ov.data.totals.revenueEstUsd)} />
+          <Stat label="會員消耗面額（非實收）" value={usd(ov.data.totals.revenueEstUsd)} />
           <Stat label="供應商牌價成本" value={usd(ov.data.totals.listCostUsd)} sub="未折扣" />
           <Stat label="折後估算成本" value={usd(ov.data.totals.costUsd)} sub={ov.data.totals.costUsd === null ? "缺少完整用量／成本快照" : "依牌價與折扣估算"} />
-          <Stat label="毛利 / 毛利率" value={`${usd(ov.data.totals.profitUsd)} · ${pct(ov.data.totals.marginPct)}`} tone={(ov.data.totals.profitUsd ?? 0) < 0 ? "bad" : "good"} />
+          <Stat label="估算差額 / 比率" value={`${usd(ov.data.totals.profitUsd)} · ${pct(ov.data.totals.marginPct)}`} tone={(ov.data.totals.profitUsd ?? 0) < 0 ? "bad" : "good"} />
         </div>
       )}
 
-      <Card title="每個模型的利潤" sub="依點數消耗排序；牌價與折扣在「成本設定」調整">
+      <Card title="每個模型的消耗與成本" sub="依點數消耗排序；牌價來源與折扣見「成本設定」">
         {md.data && (
-          <Table minWidth={980} head={["模型", "類型", "呼叫", "用量", "點數", "營收", "牌價成本", "實際成本", "毛利", "毛利率", "牌價/單位", "折扣"]}>
+          <Table minWidth={980} head={["模型", "類型", "呼叫", "用量", "點數", "會員消耗面額", "牌價成本", "折後估算成本", "估算差額", "估算比率", "牌價/單位", "折扣"]}>
             {md.data.models.map((m) => (
               <tr key={m.model + m.kind} className="hover:bg-[#151515]">
                 <td className={td}>
@@ -69,7 +72,7 @@ export default function CrmFinancePage() {
             {md.data.models.length === 0 && (
               <tr>
                 <td className={td} colSpan={12}>
-                  這段期間沒有付費呼叫紀錄。用量事件從本版本上線起開始記錄。
+                  這段期間沒有用量事件紀錄。用量事件從本版本上線起開始記錄。
                 </td>
               </tr>
             )}
@@ -78,13 +81,14 @@ export default function CrmFinancePage() {
       </Card>
 
       <Card title="每日明細" sub="由新到舊">
-        <Table minWidth={900} head={["日期", "活躍", "生成", "點數消耗", "營收", "實收", "牌價成本", "實際成本", "毛利"]}>
+        <Table minWidth={900} head={["日期", "活躍", "生成", "總消耗", "管理員消耗", "會員消耗面額", "發放面額", "牌價成本", "折後估算成本", "估算差額"]}>
           {rows.map((p) => (
             <tr key={p.date} className="hover:bg-[#151515]">
               <td className={`${td} font-mono`}>{p.date}</td>
               <td className={tdNum}>{num(p.activeUsers)}</td>
               <td className={tdNum}>{num(p.generations)}</td>
               <td className={tdNum}>{num(p.creditsSpent)}</td>
+              <td className={tdNum}>{num(p.adminCreditsSpent)}</td>
               <td className={tdNum}>{usd(p.revenueEstUsd)}</td>
               <td className={tdNum}>{usd(p.revenueCashUsd)}</td>
               <td className={tdNum}>{usd(p.listCostUsd, 4)}</td>

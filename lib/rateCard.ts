@@ -14,18 +14,7 @@ export { creditCostFromRate, resolutionMultiplier, VIDEO_RESOLUTION_MULTIPLIER }
 
 export type Modality = "image" | "video" | "text";
 
-/**
- * Real BytePlus per-second cost does NOT scale linearly with resolution — it
- * roughly doubles+ at each step (verified against BytePlus's own published
- * per-model pricing tables for the Seedance family, both the 2.0 and 2.5
- * lines land on close to the same ratios: 480p→720p→1080p→4K costs scale by
- * roughly ×1, ×2.25, ×5.5, ×11). A single flat credits-per-second rate can't
- * hold the same margin at every resolution — at 1080p specifically, a rate
- * sized for 480p would charge LESS than BytePlus actually bills for it. This
- * multiplier is applied on top of the model's base (480p) rate so the
- * margin built into that base rate holds at every resolution, not just the
- * default one.
- */
+/** Retail resolution multipliers are pricing policy, not a provider cost guarantee. */
 export interface ModelRate {
   modelId: string;
   modality: Modality;
@@ -48,7 +37,7 @@ const rowToRate = (r: Row): ModelRate => ({
 });
 
 /** Final charge for one generation, given its per-unit rate and the request shape. */
-/** Active rate for a model, or null when there's no (active) row — caller falls back. */
+/** Active rate for a model, or null when there is no active row; callers must reject unavailable pricing. */
 export async function getRate(modelId: string): Promise<ModelRate | null> {
   try {
     const { rows } = await sql<Row>`
@@ -58,7 +47,7 @@ export async function getRate(modelId: string): Promise<ModelRate | null> {
     const r = rows[0];
     return r && r.active ? rowToRate(r) : null;
   } catch {
-    // table missing / DB down — let the caller use its legacy formula
+    // Table missing / DB down: no verified rate is available.
     return null;
   }
 }
