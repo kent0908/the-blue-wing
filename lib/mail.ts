@@ -63,3 +63,12 @@ export function sendResetEmail(to: string, resetUrl: string): Promise<MailResult
     )
   );
 }
+
+/** Back-office check that the provider is really wired — see app/api/crm/mail-test. */
+export function sendTestEmail(to: string): Promise<MailResult> {
+  return send(
+    to,
+    "The Blue Wing 寄信測試",
+    `<div style="font-family:system-ui,sans-serif;line-height:1.6"><h2>寄信功能正常</h2><p>這是從後台 CRM 發出的測試信。收到就代表忘記密碼與帳號驗證信都能正常寄達。</p><p style="color:#666;font-size:13px">${new Date().toISOString()}</p></div>`
+  );
+}

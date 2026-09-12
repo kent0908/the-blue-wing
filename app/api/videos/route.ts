@@ -174,8 +174,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { result: json, chargeId } = await paidCall(user.id, cost, "video", String(body.model), () =>
-      createVideo(applyWatermarkDefaults({ ...videoBody, async: true }, "video"))
+    const submittedAt = Date.now();
+    const { result: json, chargeId } = await paidCall(
+      user.id, cost, "video", String(body.model),
+      () => createVideo(applyWatermarkDefaults({ ...videoBody, async: true }, "video")),
+      { units: Number(videoBody.seconds) || undefined, resolution: typeof videoBody.resolution === "string" ? videoBody.resolution : null }
     );
 
     // Async submissions return { id, status: "processing" }; a provider that
@@ -218,6 +221,7 @@ export async function POST(req: NextRequest) {
           model: String(body.model),
           prompt: String(body.prompt),
           url: persistedUrl,
+          durationMs: Date.now() - submittedAt,
           ref: jobId ? String(jobId) : null,
         });
       } catch (err) {

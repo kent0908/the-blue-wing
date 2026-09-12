@@ -57,9 +57,14 @@ export default function TopBar() {
             {(me.credits ?? 0).toLocaleString()}
           </Link>
           {me.user.role === "admin" && (
-            <Link href="/admin" className="rounded-lg px-2 py-1.5 text-[13px] sm:px-3 text-[#d4d4d4] transition-colors hover:text-white">
-              後台
-            </Link>
+            <>
+              <Link href="/crm" className="rounded-lg px-2 py-1.5 text-[13px] sm:px-3 text-[#d4d4d4] transition-colors hover:text-white">
+                CRM
+              </Link>
+              <Link href="/admin" className="rounded-lg px-2 py-1.5 text-[13px] sm:px-3 text-[#d4d4d4] transition-colors hover:text-white">
+                後台
+              </Link>
+            </>
           )}
           <Link
             href="/account"

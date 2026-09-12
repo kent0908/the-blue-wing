@@ -216,7 +216,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
   }, []);
 
   const pollVideoJob = useCallback(
-    async (jobId: string, videoId: string, prompt: string, model: string) => {
+    async (jobId: string, videoId: string, prompt: string, model: string, startedAt: number = Date.now()) => {
       // Recorded so a reload mid-poll can resume this exact job instead of
       // orphaning it — see the module comment on PendingVideoRecord. Every
       // exit path below (success / failure / timeout / thrown error) removes
@@ -253,7 +253,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           }
           consecutiveErrors = 0;
           if (json.status === "completed" && json.url) {
-            pushResult({ id: `${videoId}`, kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
+            pushResult({ id: `${videoId}`, kind: "video", url: json.url, prompt, model, createdAt: Date.now(), durationMs: Date.now() - startedAt });
             pushToast({ ok: true, mode: "video", title: "影片生成完成", detail: prompt });
             dismissJob(jobId);
             return;
@@ -290,6 +290,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
    *  none of them depend on any page still being mounted to finish. */
   const runJob = useCallback(
     async (jobId: string, jobMode: Mode, { prompt, model, settings, imagePayload, assetIds, extraBody, videoUrl, generationMode, providerAssetIds }: SubmitArgs) => {
+      const startedAt = Date.now();
       try {
         updateJob(jobId, { stage: 1 });
 
@@ -330,11 +331,11 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
             return;
           }
           if (json.status === "completed" && json.url) {
-            pushResult({ id: json.id ?? String(Date.now()), kind: "video", url: json.url, prompt, model, createdAt: Date.now() });
+            pushResult({ id: json.id ?? String(Date.now()), kind: "video", url: json.url, prompt, model, createdAt: Date.now(), durationMs: Date.now() - startedAt });
             pushToast({ ok: true, mode: "video", title: "影片生成完成", detail: prompt });
             dismissJob(jobId);
           } else if (json.id) {
-            await pollVideoJob(jobId, json.id, prompt, model);
+            await pollVideoJob(jobId, json.id, prompt, model, startedAt);
           } else {
             updateJob(jobId, { error: "API 沒有回傳影片 id 或網址" });
           }
@@ -372,7 +373,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           }
           (json.images ?? []).forEach((img: { url: string | null }, i: number) => {
             if (img.url) {
-              pushResult({ id: `${Date.now()}-${i}`, kind: "image", url: img.url, prompt, model, createdAt: Date.now() });
+              pushResult({ id: `${Date.now()}-${i}`, kind: "image", url: img.url, prompt, model, createdAt: Date.now(), durationMs: Date.now() - startedAt });
               any = true;
             }
           });
@@ -396,7 +397,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
         }
         updateJob(jobId, { stage: 3 });
         const text = json?.choices?.[0]?.message?.content ?? "";
-        pushResult({ id: String(Date.now()), kind: "text", text, prompt, model, createdAt: Date.now() });
+        pushResult({ id: String(Date.now()), kind: "text", text, prompt, model, createdAt: Date.now(), durationMs: Date.now() - startedAt });
         pushToast({ ok: true, mode: jobMode, title: "生成完成", detail: prompt });
         dismissJob(jobId);
       } catch (e) {

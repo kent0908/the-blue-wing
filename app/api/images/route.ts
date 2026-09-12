@@ -146,8 +146,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({...result,images:result.layers.map(l=>({url:l.url})),reservedCredits:cost,creditsBalance:await getBalance(user.id)});
     }
 
-    const { result: json, chargeId } = await paidCall(user.id, cost, "image", String(body.model), () =>
-      createImage(applyWatermarkDefaults(payload as unknown as ImageGenerationRequest, "image"))
+    const startedAt = Date.now();
+    const { result: json, chargeId } = await paidCall(
+      user.id, cost, "image", String(body.model),
+      () => createImage(applyWatermarkDefaults(payload as unknown as ImageGenerationRequest, "image")),
+      { units: Number(body.n) || 1 }
     );
     const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({
       url: d.url ? String(d.url) : d.b64_json ? `data:${sniffImageMimeFromBase64(String(d.b64_json))};base64,${d.b64_json}` : null,
@@ -182,7 +185,7 @@ export async function POST(req: NextRequest) {
           // URLs — either way, persist once here so 生成紀錄 doesn't quietly
           // turn into a broken image later (or bloat every history payload).
           im.url = await persistGeneratedMedia(im.url, { userId: user.id, kind: "image" });
-          await recordGeneration(user.id, { kind: "image", model: String(body.model), prompt: String(body.prompt), url: im.url });
+          await recordGeneration(user.id, { kind: "image", model: String(body.model), prompt: String(body.prompt), url: im.url, durationMs: Date.now() - startedAt });
         }
       }
     } catch (err) {

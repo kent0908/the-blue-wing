@@ -55,6 +55,8 @@ export interface ResultItem {
   prompt: string;
   model: string;
   createdAt: number;
+  /** how long the generation took (request → result), when known */
+  durationMs?: number;
 }
 
 /**

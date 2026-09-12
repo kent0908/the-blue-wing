@@ -1,6 +1,7 @@
 import { authLimit } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { sql, toPublicUser, type UserRow } from "@/lib/db";
+import { generateUid } from "@/lib/uid";
 import { hashPassword, newToken } from "@/lib/auth";
 import { sendVerifyEmail } from "@/lib/mail";
 
@@ -33,14 +34,15 @@ export async function POST(req: NextRequest) {
     const expires = new Date(Date.now() + VERIFY_TTL_MS).toISOString();
 
     const { rows } = await sql<UserRow>`
-      insert into users (email, password_hash, role, email_verified, verify_token, verify_expires)
+      insert into users (email, password_hash, role, email_verified, verify_token, verify_expires, uid)
       values (
         ${mail},
         ${hashPassword(password)},
         ${admin ? "admin" : "user"},
         ${admin},
         ${admin ? null : token},
-        ${admin ? null : expires}
+        ${admin ? null : expires},
+        ${generateUid()}
       )
       returning *
     `;

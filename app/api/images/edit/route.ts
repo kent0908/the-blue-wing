@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     const source = await normalizeReferenceDataUrlDetailed(String(body.image));
     const mask = body.mask ? (source.changed && source.width && source.height ? await resizeMaskDataUrl(String(body.mask), source.width, source.height) : String(body.mask)) : undefined;
 
+    const startedAt = Date.now();
     const { result: json, chargeId } = await paidCall(user.id, cost, "image", EDIT_MODEL, () =>
       createImageEdit({
         model: EDIT_MODEL,
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
     let url: string;
     try {
       url = await persistGeneratedMedia(rawUrl, { userId: user.id, kind: "image" });
-      await recordGeneration(user.id, { kind: "image", model: EDIT_MODEL, prompt: String(body.prompt), url });
+      await recordGeneration(user.id, { kind: "image", model: EDIT_MODEL, prompt: String(body.prompt), url, durationMs: Date.now() - startedAt });
     } catch (err) {
       await refundCharge(user.id, chargeId);
       throw err;

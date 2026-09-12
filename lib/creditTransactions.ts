@@ -3,6 +3,7 @@ import { sql } from "./db";
 import { replayCredits, type CreditEvent } from "./creditReplay";
 import { SirayaApiError } from "./siraya";
 import { randomUUID } from "node:crypto";
+import { markUsageRefunded, recordUsageEvent } from "./crm";
 
 export async function creditTransaction<T>(userId:number, fn:(c:VercelPoolClient)=>Promise<T>):Promise<T> {
   const c=await sql.connect();
@@ -28,6 +29,7 @@ export async function refundCharge(userId:number, chargeId:string) {
     const partial=await c.query("SELECT COALESCE(SUM(delta),0) AS total FROM credit_ledger WHERE user_id=$1 AND ref=$2 AND reason='charge_partial_refund'",[userId,chargeId]);
     const remaining=-Number(charge.delta)-Number(partial.rows[0]?.total??0);
     if(remaining>0)await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref) VALUES($1,$2,'charge_refund',$3)",[userId,remaining,chargeId]);
+    await markUsageRefunded(chargeId);
   });
 }
 /**
@@ -57,7 +59,13 @@ export async function refundCharge(userId:number, chargeId:string) {
  * paidCall can't know what "usable" means for every kind, so that decision
  * stays with the caller.
  */
-export async function paidCall<T>(userId:number,cost:number,kind:string,ref:string,call:(chargeId:string)=>Promise<T>):Promise<{result:T,chargeId:string}> {
+/**
+ * Reserve `cost` credits, run the provider call, refund on failure. `ref` is
+ * the model id. `usage` (optional) describes the units for the CRM cost
+ * report — images: count, video: seconds + resolution, text: 1k-token
+ * blocks; omitted, units are derived from the credits (see lib/crm.ts).
+ */
+export async function paidCall<T>(userId:number,cost:number,kind:string,ref:string,call:(chargeId:string)=>Promise<T>,usage?:{units?:number;resolution?:string|null}):Promise<{result:T,chargeId:string}> {
   if(!Number.isSafeInteger(cost)||cost<=0)throw new SirayaApiError(400,"無效的計費數量");
   const chargeId=await creditTransaction(userId,async c=>{
     if(await ledgerBalance(c,userId)<cost)throw new SirayaApiError(402,"點數不足，其他生成可能已預扣點數");
@@ -69,6 +77,7 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
     await refundCharge(userId,chargeId);
     throw e;
   }
+  await recordUsageEvent({userId,chargeId,kind,model:ref,credits:cost,units:usage?.units,resolution:usage?.resolution});
   if(kind==="video") {
     const id=(result as {id?:unknown})?.id;
     if(id) {

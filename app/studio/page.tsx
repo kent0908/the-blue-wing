@@ -18,6 +18,7 @@ import { useGenerationJobs, MAX_CONCURRENT_JOBS } from "@/lib/jobsStore";
 import { mainViewerJob, runningJobCount } from "@/lib/jobVisibility";
 import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
+import { generationTimeLabel } from "@/lib/formatTime";
 
 /**
  * Which 生成紀錄 kind belongs on-screen for a given composer mode. The main
@@ -315,6 +316,7 @@ function MainViewerItem({ item }: { item: ResultItem }) {
       <p className="mt-4 text-center text-[12.5px] text-[#6d6d6d]">
         {modelLabel(item.model)} · {item.prompt}
       </p>
+      <p className="mt-1 text-center text-[11px] text-[#555]">{generationTimeLabel(item.createdAt, item.durationMs)}</p>
     </div>
   );
 }
