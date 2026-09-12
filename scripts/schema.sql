@@ -372,3 +372,34 @@ create table if not exists layer_project_versions (
 );
 
 create index if not exists layer_project_versions_project_idx on layer_project_versions(project_id, created_at desc);
+
+-- 官方陪聊角色 templates (lib/companionOfficialSeed.ts, synced by the admin
+-- route). Users don't chat with the template itself: opening one clones it
+-- into their own `characters` row (official_key below) so affection, memory,
+-- messages and the idle video stay per-user with all existing code paths.
+-- content_rating: every character under 18 is 'all_ages' — friendship-only
+-- ladder, no 解鎖場景 / 衣櫃 / NSFW routing (lib/characters.ts contentRules).
+create table if not exists official_characters (
+  key                text primary key,
+  name               text not null,
+  role_title         text not null default '',
+  age                integer not null,
+  content_rating     text not null default 'all_ages' check (content_rating in ('all_ages','adult')),
+  sort               integer not null default 0,
+  personality        text not null default '',
+  likes              text not null default '',
+  profile            jsonb not null default '{}'::jsonb,
+  avatar_path        text not null,
+  idle_prompt        text not null default '',
+  idle_video_url     text,
+  idle_video_job_id  text,
+  idle_video_status  text not null default 'none' check (idle_video_status in ('none','pending','completed','failed')),
+  idle_video_model   text,
+  published          boolean not null default true,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+alter table characters add column if not exists official_key text references official_characters(key) on delete set null;
+alter table characters add column if not exists content_rating text not null default 'adult';
+create unique index if not exists characters_official_uidx on characters(user_id, official_key) where official_key is not null;

@@ -13,6 +13,8 @@ interface Character {
   personality: string;
   updatedAt: string;
   level: { name: string; progressPct: number };
+  /** copies of 官方角色 live on the official shelf, not here */
+  officialKey?: string | null;
 }
 
 
@@ -35,7 +37,7 @@ export default function CharacterGrid() {
         if(!r.ok)throw new Error("載入角色失敗，請稍後重試");
         return r.json();
       })
-      .then((j) => setCharacters(j.characters ?? []))
+      .then((j) => setCharacters((j.characters ?? []).filter((c: Character) => !c.officialKey)))
       .catch((e) => setError(e.message));
 
   useEffect(() => {

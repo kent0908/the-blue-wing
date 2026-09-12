@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
-import { getCharacter } from "@/lib/characters";
+import { getCharacter, contentRules } from "@/lib/characters";
 import { toPublicIdleVideo, hasPendingIdleVideo } from "@/lib/characterIdleVideo";
 import { listOutfitChanges, retryOutfitChange } from "@/lib/characterOutfits";
 
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const character = await getCharacter(r.user.id, id);
     if (!character) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
+    if (!contentRules(character).wardrobe) return NextResponse.json({ error: { message: "這是全年齡官方角色，不提供換裝衣櫃", code: "content_rating" } }, { status: 403 });
 
     const changes = await listOutfitChanges(id, r.user.id);
     // c.id comes back from Postgres as a string (bigint column) — compare

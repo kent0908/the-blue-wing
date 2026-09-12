@@ -18,6 +18,8 @@ interface IdleData {
   videos: IdleVideo[];
   freeAvailable: boolean;
   paidCost: number;
+  /** false for 官方角色 copies — the loop is the platform-generated one, no per-user regeneration */
+  regenAllowed?: boolean;
   hasAvatar: boolean;
 }
 
@@ -195,15 +197,21 @@ export default function CompanionIdleStage({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => regenerate(false)}
-          disabled={busy || pending || !data?.hasAvatar}
-          className="h-8 w-full rounded-full border border-[#3a3a3a] text-[12px] text-[#c9c9c9] transition-colors hover:border-[#555] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {buttonLabel}
-        </button>
-        {data && !data.hasAvatar && <p className="mt-2 text-xs text-[#a0aaa6]">請先在編輯角色選定參考素材</p>}
+        {data?.regenAllowed === false ? (
+          <p className="mt-1 text-center text-[11px] text-[#7d7d7d]">官方角色的待機影片由官方提供</p>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => regenerate(false)}
+              disabled={busy || pending || !data?.hasAvatar}
+              className="h-8 w-full rounded-full border border-[#3a3a3a] text-[12px] text-[#c9c9c9] transition-colors hover:border-[#555] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {buttonLabel}
+            </button>
+            {data && !data.hasAvatar && <p className="mt-2 text-xs text-[#a0aaa6]">請先在編輯角色選定參考素材</p>}
+          </>
+        )}
         {needsReview && <p role="status" className="mt-2 text-xs leading-relaxed text-[#e6c88f]">{needsReview.message || "任務提交結果待確認，請聯絡管理員；不會自動再次扣點。"}</p>}
         {error && <p className="mt-1.5 text-[11px] leading-relaxed text-[#ff9b9b]">{error}</p>}
       </div>

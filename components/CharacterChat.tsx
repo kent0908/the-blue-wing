@@ -30,6 +30,10 @@ export interface CharacterData {
   model?: string;
   affection?: number;
   level?: CharacterLevel;
+  contentRating?: "all_ages" | "adult";
+  officialKey?: string | null;
+  /** what this character can do — see lib/characters.ts contentRules */
+  rules?: { ladder: "romance" | "trust"; scenes: boolean; wardrobe: boolean; idleRegen: boolean; editable: boolean };
 }
 
 interface Message {
@@ -64,6 +68,10 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const [scenesOpen, setScenesOpen] = useState(false);
   const [toast, setToast] = useState<AffectionToast | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rules = character.rules ?? { ladder: "romance" as const, scenes: true, wardrobe: true, idleRegen: true, editable: true };
+  const isOfficial = !!character.officialKey;
+  // all_ages characters measure 信賴度, not 好感度 — same counter, different meaning
+  const meter = rules.ladder === "trust" ? "信賴度" : "好感度";
 
   useEffect(() => {
     fetch(`/api/characters/${character.id}/messages`)
@@ -157,6 +165,8 @@ export default function CharacterChat({ character: initial }: { character: Chara
           <div className="min-w-0 flex-1 basis-[calc(100%-100px)] sm:basis-0">
             <div className="flex items-center gap-2">
               <span className="truncate text-[14.5px] font-medium">{character.name}</span>
+              {isOfficial && <span className="shrink-0 rounded-full bg-[#1e2a3d] px-2 py-0.5 text-[10.5px] text-[#8ab4ff]">官方</span>}
+              {character.contentRating === "all_ages" && <span className="shrink-0 rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10.5px] text-[#c9c9c9]" title="全年齡角色：只有友誼與夥伴互動">全年齡</span>}
               {character.level && (
                 <span className="shrink-0 rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10.5px] text-[#7ff0cd]" title={character.level.unlock}>
                   {character.level.name}
@@ -172,12 +182,13 @@ export default function CharacterChat({ character: initial }: { character: Chara
                   />
                 </div>
                 <span className="text-[10px] text-[#6d6d6d]">
-                  {character.level.nextMin === null ? "已達最高階段" : `好感度 ${character.affection ?? 0}`}
+                  {character.level.nextMin === null ? "已達最高階段" : `${meter} ${character.affection ?? 0}`}
                 </span>
               </div>
             )}
           </div>
           <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+          {rules.editable && (
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -188,6 +199,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
               <path d="M15.5 4.5 19.5 8.5 8 20H4v-4z" strokeLinejoin="round" />
             </svg>
           </button>
+          )}
           <button
             type="button"
             onClick={remove}
@@ -199,10 +211,10 @@ export default function CharacterChat({ character: initial }: { character: Chara
           </div>
         </header>
         <nav className={styles.mobileTabs} aria-label="陪聊設定">
-          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(true); setWardrobeOpen(false); }}>關係階段</button>
-          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(false); }}>解鎖場景</button>
+          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(true); setWardrobeOpen(false); }}>{rules.ladder === "trust" ? "信賴階段" : "關係階段"}</button>
+          {rules.scenes && <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(false); }}>解鎖場景</button>}
           <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(true); setRelationshipOpen(false); setWardrobeOpen(false); }}>我的身分</button>
-          <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(true); }}>換裝衣櫃</button>
+          {rules.wardrobe && <button type="button" onClick={() => { setScenesOpen(true); setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(true); }}>換裝衣櫃</button>}
         </nav>
 
       {toast && (
@@ -212,7 +224,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
             toast.leveledUp ? "bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16]" : "bg-[#1c1c1c] text-[#7ff0cd]",
           ].join(" ")}
         >
-          {toast.leveledUp ? `🎉 好感度提升：${toast.levelName}！解鎖：${toast.unlock}` : `好感度 +${toast.gain}`}
+          {toast.leveledUp ? `🎉 ${meter}提升：${toast.levelName}！${toast.unlock}` : `${meter} +${toast.gain}`}
         </div>
       )}
 
@@ -306,16 +318,16 @@ export default function CharacterChat({ character: initial }: { character: Chara
         </section>
         <aside className={styles.details + " " + ((scenesOpen || personaOpen) ? styles.detailsOpen : "")} aria-label="場景與身分設定">
           <div className={styles.tabs}>
-            <button type="button" aria-pressed={relationshipOpen} onClick={() => { setRelationshipOpen(true); setPersonaOpen(false); setWardrobeOpen(false); }}>關係階段</button>
-            <button type="button" aria-pressed={!personaOpen && !relationshipOpen && !wardrobeOpen} onClick={() => { setRelationshipOpen(false); setPersonaOpen(false); setWardrobeOpen(false); }}>解鎖場景</button>
+            <button type="button" aria-pressed={relationshipOpen} onClick={() => { setRelationshipOpen(true); setPersonaOpen(false); setWardrobeOpen(false); }}>{rules.ladder === "trust" ? "信賴階段" : "關係階段"}</button>
+            {rules.scenes && <button type="button" aria-pressed={!personaOpen && !relationshipOpen && !wardrobeOpen} onClick={() => { setRelationshipOpen(false); setPersonaOpen(false); setWardrobeOpen(false); }}>解鎖場景</button>}
             <button type="button" aria-pressed={personaOpen} onClick={() => { setPersonaOpen(true); setRelationshipOpen(false); setWardrobeOpen(false); }}>我的身分</button>
-            <button type="button" aria-pressed={wardrobeOpen} onClick={() => { setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(true); }}>換裝衣櫃</button>
+            {rules.wardrobe && <button type="button" aria-pressed={wardrobeOpen} onClick={() => { setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(true); }}>換裝衣櫃</button>}
           </div>
           <button type="button" className="shrink-0 border-b border-white/10 px-4 py-2 text-left text-xs text-[#a2bcb2]" onClick={() => setEditing(true)}>編輯角色設定</button>
-          {relationshipOpen && <div className="min-h-0 flex-1 overflow-y-auto"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label="關閉設定">關閉</button></div><RelationshipStages affection={character.affection ?? 0} /></div>}
+          {relationshipOpen && <div className="min-h-0 flex-1 overflow-y-auto"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label="關閉設定">關閉</button></div><RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} /></div>}
           {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
-          <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen}><CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} /></div>
-          {wardrobeOpen && <div className="flex min-h-0 flex-1 flex-col"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => { setScenesOpen(false); setWardrobeOpen(false); setRelationshipOpen(true); }} aria-label="關閉衣櫃">關閉</button></div><div className="flex min-h-0 flex-1 overflow-y-auto [&>div]:w-full"><CompanionWardrobe key={`${character.id}:${character.affection ?? 0}`} characterId={character.id} /></div></div>}
+          <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen || !rules.scenes}>{rules.scenes && <CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} />}</div>
+          {wardrobeOpen && rules.wardrobe && <div className="flex min-h-0 flex-1 flex-col"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => { setScenesOpen(false); setWardrobeOpen(false); setRelationshipOpen(true); }} aria-label="關閉衣櫃">關閉</button></div><div className="flex min-h-0 flex-1 overflow-y-auto [&>div]:w-full"><CompanionWardrobe key={`${character.id}:${character.affection ?? 0}`} characterId={character.id} /></div></div>}
         </aside>
       </div>
       {editing && (

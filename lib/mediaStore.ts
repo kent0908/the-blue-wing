@@ -25,7 +25,7 @@ const DATA_URL_RE = /^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([\s\S]+)$/;
 
 export async function persistGeneratedMedia(
   sourceUrl: string,
-  opts: { userId: number; kind: "image" | "video" }
+  opts: { userId: number; kind: "image" | "video"; /** store under generations/<pathPrefix>/ instead of the user's own folder (官方 assets) */ pathPrefix?: string }
 ): Promise<string> {
   if (!blobConfigured()) return sourceUrl;
 
@@ -45,7 +45,7 @@ export async function persistGeneratedMedia(
     }
 
     const ext = contentType.split("/")[1]?.split(";")[0] || (opts.kind === "video" ? "mp4" : "png");
-    const blob = await put(`generations/${opts.userId}/${opts.kind}-${Date.now()}.${ext}`, buf, {
+    const blob = await put(`generations/${opts.pathPrefix ?? String(opts.userId)}/${opts.kind}-${Date.now()}.${ext}`, buf, {
       access: "private",
       contentType,
       addRandomSuffix: true,

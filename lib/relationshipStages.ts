@@ -14,6 +14,26 @@ export const AFFECTION_LEVELS: AffectionLevel[] = [
   { min: 100, name: "靈魂伴侶", unlock: "深厚信任與真誠陪伴，仍保有同意與界線" },
 ];
 
+/**
+ * The all_ages ladder — same thresholds, but it measures trust between
+ * squad-mates, never romance. Used for every character whose content_rating
+ * is all_ages (the under-18 官方角色); see lib/characters.ts contentRules.
+ */
+export const TRUST_LEVELS: AffectionLevel[] = [
+  { min: 0, name: "初次相遇", unlock: "剛認識的同學，禮貌但有點生疏" },
+  { min: 20, name: "同隊夥伴", unlock: "願意一起行動，開始分享自己的想法" },
+  { min: 40, name: "信賴的隊友", unlock: "會把重要的判斷交給你，聊得更放鬆" },
+  { min: 60, name: "並肩作戰", unlock: "彼此掩護的默契，願意說出害怕的事" },
+  { min: 80, name: "生死之交", unlock: "毫無保留的信任，會為你冒險" },
+  { min: 100, name: "摯友", unlock: "回到現實世界也想繼續當朋友的人" },
+];
+
+export type LadderKind = "romance" | "trust";
+
+export function ladderFor(kind: LadderKind): AffectionLevel[] {
+  return kind === "trust" ? TRUST_LEVELS : AFFECTION_LEVELS;
+}
+
 export interface LevelInfo {
   index: number;
   name: string;
@@ -24,13 +44,14 @@ export interface LevelInfo {
   progressPct: number;
 }
 
-export function levelInfo(affection: number): LevelInfo {
+export function levelInfo(affection: number, kind: LadderKind = "romance"): LevelInfo {
+  const levels = ladderFor(kind);
   let idx = 0;
-  for (let i = 0; i < AFFECTION_LEVELS.length; i++) {
-    if (affection >= AFFECTION_LEVELS[i].min) idx = i;
+  for (let i = 0; i < levels.length; i++) {
+    if (affection >= levels[i].min) idx = i;
   }
-  const cur = AFFECTION_LEVELS[idx];
-  const next = AFFECTION_LEVELS[idx + 1] ?? null;
+  const cur = levels[idx];
+  const next = levels[idx + 1] ?? null;
   const progressPct = next
     ? Math.max(0, Math.min(100, Math.round(((affection - cur.min) / (next.min - cur.min)) * 100)))
     : 100;

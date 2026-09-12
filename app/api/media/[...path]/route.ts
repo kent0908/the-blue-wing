@@ -22,7 +22,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
     return NextResponse.json({ error: { message: "無效的檔案路徑" } }, { status: 400 });
   }
   const pathname = path.join("/");
-  if (!pathname.startsWith(`generations/${auth.user.id}/`)) {
+  // generations/official/* = the platform's own 官方角色 idle loops (lib/officialCharacters.ts) — readable by any signed-in user
+  if (!pathname.startsWith(`generations/${auth.user.id}/`) && !pathname.startsWith("generations/official/")) {
     return NextResponse.json({ error: { message: "無權限存取", code: "forbidden" } }, { status: 403 });
   }
 

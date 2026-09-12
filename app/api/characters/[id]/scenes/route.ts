@@ -5,7 +5,7 @@ import { canUnlockScenes } from "@/lib/plans";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { sql } from "@/lib/db";
 import { errorResponse } from "@/lib/errors";
-import { getCharacter, listScenes, listMessages, levelInfo, toPublicScene } from "@/lib/characters";
+import { getCharacter, listScenes, listMessages, levelInfo, toPublicScene, contentRules } from "@/lib/characters";
 import { buildSceneQuote } from "@/lib/characterSceneQuote";
 import { claimSceneQuote, createSceneQuote, completeSceneRequest, failSceneRequest, getSceneRequest, isSceneRequestId, parseCharacterId, pendingSceneRequests, setSceneRequestResult, type SceneRequest } from "@/lib/characterSceneRequests";
 import { POST as generateImage } from "@/app/api/images/route";
@@ -72,6 +72,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
       return pendingResponse(request);
     }
+    if (!contentRules(character).scenes) {
+      return NextResponse.json({ scenes: [], unlocked: false, eligible: false, disabled: true, avatarAssetId: character.avatar_asset_id, avatarReady: false, reason: "這是全年齡官方角色，不提供解鎖場景", pending: [] });
+    }
     const [scenes, pending, avatarReady] = await Promise.all([listScenes(id), pendingSceneRequests(auth.user.id, id), ownedAvatar(auth.user.id, character.avatar_asset_id)]);
     return NextResponse.json({ scenes: scenes.map(toPublicScene), unlocked: canUnlockScenes(auth.user.plan_code), eligible: levelInfo(character.affection).index >= 1,
       avatarAssetId: character.avatar_asset_id, avatarReady, reason: avatarReady ? null : "請先選擇資產庫中的角色圖片，才能生成專屬場景",
@@ -89,6 +92,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (id === null) return failure(400, "角色 id 不正確", "bad_id");
     const character = await getCharacter(auth.user.id, id);
     if (!character) return failure(404, "找不到這個角色", "not_found");
+    if (!contentRules(character).scenes) return failure(403, "這是全年齡官方角色，不提供解鎖場景", "content_rating");
     if (!canUnlockScenes(auth.user.plan_code)) return failure(403, "解鎖角色專屬場景需要高階方案", "plan_required");
     if (levelInfo(character.affection).index < 1) return failure(403, "尚未解鎖關係階段，請先提升好感度", "not_eligible");
     const body = await req.json().catch(() => null);

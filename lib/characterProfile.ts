@@ -24,12 +24,22 @@ export const EMPTY_PROFILE: CharacterProfile = {
   version: 1, age: 25, gender: "", style: "", species: "", skin: "", hair: "", eyes: "", build: "", outfit: "",
   temperament: "", speaking: "", occupation: "", relationship: "", greeting: "", scenario: "", background: "", boundaries: "", tags: "",
 };
-export function validateProfile(value: unknown): CharacterProfile {
+/**
+ * `minAge` is 18 for everything a user creates or edits (the API routes and
+ * CharacterBuilder both pin it). The only lower value in the codebase is
+ * OFFICIAL_MIN_AGE, used for the platform's own 官方角色 whose canonical ages
+ * are 16–18 — and those rows are content-rated all_ages below 18 (see
+ * lib/companionOfficialSeed.ts / lib/characters.ts contentRules), so the
+ * relaxed age never reaches the romantic ladder or any NSFW path.
+ */
+export const OFFICIAL_MIN_AGE = 16;
+
+export function validateProfile(value: unknown, minAge = 18): CharacterProfile {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("角色設定格式不正確");
   const input = value as Record<string, unknown>;
   if (input.version !== undefined && input.version !== 1) throw new Error("角色設定版本不支援");
   const age = input.age ?? 25;
-  if (typeof age !== "number" || !Number.isInteger(age) || age < 18 || age > 120) throw new Error("角色年齡請填寫 18 至 120 歲");
+  if (typeof age !== "number" || !Number.isInteger(age) || age < minAge || age > 120) throw new Error(`角色年齡請填寫 ${minAge} 至 120 歲`);
   const result = { ...EMPTY_PROFILE, age };
   for (const key of Object.keys(PROFILE_FIELDS) as ProfileKey[]) {
     const text = input[key] ?? "";
@@ -38,13 +48,15 @@ export function validateProfile(value: unknown): CharacterProfile {
   }
   return result;
 }
+/** Storage → display: tolerant of the official rows' canonical ages (see OFFICIAL_MIN_AGE). Never used to accept user input. */
 export function readProfile(value: unknown): CharacterProfile {
-  try { return validateProfile(value); } catch { return { ...EMPTY_PROFILE }; }
+  try { return validateProfile(value, OFFICIAL_MIN_AGE); } catch { return { ...EMPTY_PROFILE }; }
 }
 export function profilePrompt(value: unknown, appearanceOnly = false): string {
   const p = readProfile(value);
   const keys: ProfileKey[] = appearanceOnly
     ? ["gender", "style", "species", "skin", "hair", "eyes", "build", "outfit", "scenario"]
     : (Object.keys(PROFILE_FIELDS) as ProfileKey[]).filter(k => k !== "tags");
-  return [`成年角色，${p.age} 歲`, ...keys.filter(k => p[k]).map(k => `${PROFILE_FIELDS[k].label}：${p[k]}`)].join("\n");
+  const ageLine = p.age >= 18 ? `成年角色，${p.age} 歲` : `${p.age} 歲的學生角色（全年齡設定：只有友誼與夥伴互動）`;
+  return [ageLine, ...keys.filter(k => p[k]).map(k => `${PROFILE_FIELDS[k].label}：${p[k]}`)].join("\n");
 }

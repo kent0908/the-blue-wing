@@ -14,7 +14,7 @@ import {
   matchesLikes,
   recordTurn,
   updateMemorySummary,
-  levelInfo,
+  characterLevel,
   MEMORY_REFRESH_EVERY,
 } from "@/lib/characters";
 
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // same 2026-09-07 re-audit) — a DB failure here, after the charge above
     // already succeeded, previously had no refund path.
     const gain = 1 + (matchesLikes(content, character.likes) ? 4 : 0);
-    const before = levelInfo(character.affection);
+    const before = characterLevel(character);
     let saved: Awaited<ReturnType<typeof addMessage>>;
     let affection: number;
     let turnCount: number;
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       await refundCharge(r.user.id, chargeId);
       throw err;
     }
-    const after = levelInfo(affection);
+    const after = characterLevel({ ...character, affection });
 
     // Long-term memory: every MEMORY_REFRESH_EVERY turns, compress the recent
     // conversation into the rolling summary. Never let this block or fail the

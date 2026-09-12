@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
-import { getCharacter } from "@/lib/characters";
+import { getCharacter, contentRules } from "@/lib/characters";
 import { listIdleVideos, pollIdleVideoJob, hasPendingIdleVideo, toPublicIdleVideo } from "@/lib/characterIdleVideo";
 import { OUTFIT_CATALOG, OUTFIT_CHANGE_COST, isOutfitUnlocked, listOutfitChanges, purchaseOutfitChange } from "@/lib/characterOutfits";
 
@@ -29,6 +29,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
     const character = await getCharacter(r.user.id, id);
     if (!character) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
+    if (!contentRules(character).wardrobe) return NextResponse.json({ disabled: true, reason: "這是全年齡官方角色，不提供換裝衣櫃", outfits: [], changes: [], unlocked: false });
 
     const [changes, videosRaw] = await Promise.all([listOutfitChanges(id, r.user.id), listIdleVideos(id, r.user.id)]);
     const pending = videosRaw.filter((v) => (v.status === "pending" || (v.status === "failed" && !v.refund_done)) && v.purchase_id !== null);
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const character = await getCharacter(r.user.id, id);
     if (!character) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
+    if (!contentRules(character).wardrobe) return NextResponse.json({ error: { message: "這是全年齡官方角色，不提供換裝衣櫃", code: "content_rating" } }, { status: 403 });
 
     const body = await req.json().catch(() => null);
     if(!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key=>key!=="outfitKey")) {

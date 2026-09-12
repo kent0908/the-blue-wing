@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
-import { getCharacter } from "@/lib/characters";
+import { getCharacter, contentRules } from "@/lib/characters";
 import {
   listIdleVideos,
   hasFreeIdleQuota,
@@ -50,6 +50,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       freeAvailable,
       paidCost,
       hasAvatar: !!character.avatar_asset_id,
+      // official clones keep the platform-generated loop; no per-user regeneration
+      regenAllowed: contentRules(character).idleRegen,
     });
   } catch (err) {
     return errorResponse(err);
@@ -72,6 +74,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const character = await getCharacter(r.user.id, id);
     if (!character) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
+
+    if (!contentRules(character).idleRegen) {
+      return NextResponse.json({ error: { message: "官方角色的待機影片由官方提供，不需要重新生成", code: "official_locked" } }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => key !== "confirmPaid") || (body.confirmPaid !== undefined && typeof body.confirmPaid !== "boolean")) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { validateProfile, type CharacterProfile } from "@/lib/characterProfile";
-import { getCharacter, updateCharacter, deleteCharacter, ownedAssetId, toPublicCharacter } from "@/lib/characters";
+import { getCharacter, updateCharacter, deleteCharacter, ownedAssetId, toPublicCharacter, contentRules } from "@/lib/characters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +34,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   const existing = await getCharacter(r.user.id, id);
   if (!existing) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
+  if (!contentRules(existing).editable) return NextResponse.json({ error: { message: "官方角色的設定由官方維護，不能修改", code: "official_locked" } }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
   const patch: { name?: string; avatarAssetId?: number | null; personality?: string; likes?: string; profile?: CharacterProfile } = {};
