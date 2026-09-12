@@ -119,7 +119,7 @@ export default function CrmCostsPage() {
                 <td className={td}>
                   <div>{usd(r.listPriceUsd, 4)}</div>
                   {r.inputPriceUsd !== null && <div className="text-xs text-[#aaa]">輸入：{usd(r.inputPriceUsd, 4)} / 百萬 Token</div>}
-                  {r.source && <a href={r.source} target="_blank" rel="noreferrer" className="text-xs text-[#7ff0cd]">SIRAYA · {r.checkedAt}</a>}
+                  {r.source && <a href={r.source} target="_blank" rel="noreferrer" className="text-xs text-[#7ff0cd]">{r.source.includes("byteplus") ? "BytePlus" : r.source.includes("google") ? "Google" : r.source.includes("alibabacloud") ? "Alibaba Cloud" : "SIRAYA"} · {r.checkedAt}</a>}
                   <div className="max-w-52 text-xs text-[#f0c27f]">{r.priceNote || (!r.source ? "公開目錄尚未確認此模型" : "")}</div>
                 </td>
                 <td className={td}>

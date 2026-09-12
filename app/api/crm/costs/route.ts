@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         priceUnit: priceUnitLabel(tariff),
         inputPriceUsd: tariff?.inputPrice ?? null,
         priceNote: tariff?.note ?? "",
-        source: tariff ? PRICE_SOURCE : null,
+        source: tariff ? (tariff.source ?? PRICE_SOURCE) : null,
         checkedAt: tariff ? PRICE_CHECKED : null,
         marginPct: null, // Retail and vendor units differ; require actual usage.
         notes: c?.notes ?? "",

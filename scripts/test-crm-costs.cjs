@@ -17,11 +17,14 @@ const crm=load('lib/crm.ts',{'./db':{sql},'./rateCard':{getRate:async()=>({modal
  assert.equal(q.listCostUsd,.06);assert.equal(q.actualCostUsd,.054);assert.equal(q.costKnown,true);
  discount=25;q=await crm.quoteCost('ByteDance-Seedream-4.0',120,{units:2});assert.equal(q.actualCostUsd,.045);
  discount=100;q=await crm.quoteCost('ByteDance-Seedream-4.0',120,{units:2});assert.equal(q.actualCostUsd,0);assert.equal(q.costKnown,true);
- for(const model of ['gpt-image-2','Seedance-2.0-mini','NSFW-Seedream-4.0','missing','Dola-Seedream-5.0-pro'])assert.equal((await crm.quoteCost(model,120,{units:2})).costKnown,false,model);
+ for(const model of ['gpt-image-2','Seedance-2.0-mini','missing','Dola-Seedream-5.0-pro'])assert.equal((await crm.quoteCost(model,120,{units:2})).costKnown,false,model);
  assert.equal((await crm.quoteCost('ByteDance-Seedream-4.0',120)).costKnown,false);
  assert.equal(prices.publicPrice('Seedance-2.0-mini').price,2.1);
  assert.equal(prices.publicPrice('SIRAYA-Seedance-2.0-mini').price,2.1);
- assert.equal(prices.publicPrice('NSFW-Seedance-2.0-mini'),undefined);
+ assert.equal(prices.publicPrice('NSFW-Seedance-2.0-mini'),prices.publicPrice('SIRAYA-Seedance-2.0-mini'));
+ for(const [nsfw,standard] of [['NSFW-Seedream-4.0','ByteDance-Seedream-4.0'],['NSFW-Seedream-4.5','ByteDance-Seedream-4.5'],['NSFW-Seedream-5.0-lite','Dola-Seedream-5.0-lite'],['NSFW-Dola-Seedream-5.0-pro','Dola-Seedream-5.0-pro']])assert.equal(prices.publicPrice(nsfw),prices.publicPrice(standard));
+ assert.equal(prices.publicPrice('Dola-Seedream-5.0-lite').price,.035);
+ assert.equal((await crm.quoteCost('NSFW-Seedream-4.0',60,{units:1})).costKnown,true);
  assert.equal(prices.publicPrice('gpt-image-2').inputPrice,5);
  let user=null;
  const guard=load('lib/apiauth.ts',{'./rateLimit':{limitRequest:async()=>true},'next/server':require('next/server'),'./auth':{getSessionUser:async()=>user},'./crm':{touchActivity:async()=>{}}});
