@@ -1,4 +1,5 @@
 "use client";
+import { modelLabel } from "@/lib/modelLabel";
 
 import { useEffect, useState } from "react";
 import { formatDuration } from "@/lib/formatTime";
@@ -213,7 +214,7 @@ export default function AccountDetails() {
 
         <h2 className="mt-8 text-lg font-semibold">最近生成・耗時</h2>
         <p className="mt-2 text-xs leading-6 text-neutral-400">從提交至取得結果的時間，包含排隊與輪詢等待；不是影片本身的長度。舊紀錄未量測時顯示「未記錄」。</p>
-        <div className="mt-4 divide-y divide-neutral-800 rounded-2xl border border-neutral-800 px-4">{data.generations?.length?data.generations.map(g=><div key={g.id} className="flex items-start justify-between gap-4 py-4"><div className="min-w-0"><p className="break-words text-sm">{g.model}</p><p className="mt-1 text-xs text-neutral-500">{new Date(g.created_at).toLocaleString("zh-TW",{hour12:false})}</p></div><span className="shrink-0 text-sm text-[#7ff0cd]">{g.duration_ms == null?"未記錄":formatDuration(g.duration_ms)}</span></div>):<p className="py-5 text-sm text-neutral-500">還沒有生成紀錄</p>}</div>
+        <div className="mt-4 divide-y divide-neutral-800 rounded-2xl border border-neutral-800 px-4">{data.generations?.length?data.generations.map(g=><div key={g.id} className="flex items-start justify-between gap-4 py-4"><div className="min-w-0"><p className="break-words text-sm">{modelLabel(g.model)}</p><p className="mt-1 text-xs text-neutral-500">{new Date(g.created_at).toLocaleString("zh-TW",{hour12:false})}</p></div><span className="shrink-0 text-sm text-[#7ff0cd]">{g.duration_ms == null?"未記錄":formatDuration(g.duration_ms)}</span></div>):<p className="py-5 text-sm text-neutral-500">還沒有生成紀錄</p>}</div>
 
         <h2 className="mt-8 text-[15px] font-semibold">點數紀錄</h2>
         <div className="mt-3 overflow-hidden rounded-xl border border-[#262626]">

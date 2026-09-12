@@ -23,8 +23,8 @@ interface Block {
 
 const DEFAULT_SHOWCASE: Block[] = [
   { id: -1, title: "Seedance 2.0", subtitle: "電影級影片生成", badge: "熱門", imageUrl: null, targetMode: "video", modelId: "SIRAYA-Seedance-2.0", prompt: null },
-  { id: -2, title: "GPT-Image-2", subtitle: "更清晰的圖像創作", badge: null, imageUrl: null, targetMode: "image", modelId: "gpt-image-2", prompt: null },
-  { id: -3, title: "Seedream 5.0 Pro", subtitle: "生產級視覺創作", badge: null, imageUrl: null, targetMode: "image", modelId: "Dola-Seedream-5.0-pro", prompt: null },
+  { id: -2, title: "GPT image 2", subtitle: "更清晰的圖像創作", badge: null, imageUrl: null, targetMode: "image", modelId: "gpt-image-2", prompt: null },
+  { id: -3, title: "Seedream 5.0 pro", subtitle: "生產級視覺創作", badge: null, imageUrl: null, targetMode: "image", modelId: "Dola-Seedream-5.0-pro", prompt: null },
   { id: -4, title: "Veo 3.1", subtitle: "原生音軌、電影級畫面", badge: "新", imageUrl: null, targetMode: "video", modelId: "veo-3.1-generate-001", prompt: null },
 ];
 

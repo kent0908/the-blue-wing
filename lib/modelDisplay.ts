@@ -171,7 +171,9 @@ export function resolveModelDisplay(
 ): { displayName: string; sortOrder: number | null } {
   const override = overrides.get(id);
   return {
-    displayName: modelLabel(override?.displayName ?? catalogName ?? id),
+    // a hand-written name keeps its casing; only a raw id gets the family casing rules
+    // one spelling rule for everything — raw ids, catalogue names and admin overrides alike
+    displayName: modelLabel(override?.displayName || catalogName || id),
     sortOrder: override?.sortOrder ?? null,
   };
 }

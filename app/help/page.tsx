@@ -102,17 +102,17 @@ export default function HelpPage() {
             <H2 id="image">圖片生成</H2>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                目前收錄 Seedream（4.0 / 4.5 / Dola 5.0 lite / pro）、Gemini（2.5 / 3.1 Flash / 3.1 Flash Lite / 3
-                Pro）、GPT Image 2 三個家族。每個模型只會顯示它實際支援的參數：
+                目前收錄 Seedream（4.0 / 4.5 / Dola 5.0 lite / pro）、Gemini（2.5 / 3.1 flash / 3.1 flash lite / 3
+                Pro）、GPT image 2 三個家族。每個模型只會顯示它實際支援的參數：
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
                 <li><span className="text-white">尺寸</span>：依模型提供 1:1 / 16:9 / 9:16 等比例；Seedream 4.5 與 Dola 5.0 系列只支援 2K 以上解析度。</li>
                 <li><span className="text-white">生成張數</span>：1–10 張，一次請求同時出多張。</li>
-                <li><span className="text-white">品質 / 背景 / 壓縮率</span>：GPT Image 2 專屬，可以出透明背景 PNG/WebP。</li>
+                <li><span className="text-white">品質 / 背景 / 壓縮率</span>：GPT image 2 專屬，可以出透明背景 PNG/WebP。</li>
                 <li><span className="text-white">負向提示詞 / 隨機種子</span>：Seedream 專屬，種子留空就是隨機。</li>
               </ul>
               <p className="mt-3 rounded-lg border border-[#3a2e18] bg-[#241d10] px-3 py-2 text-[12px] leading-relaxed text-[#f0c27f]">
-                GPT Image 2 和 Gemini 3 Pro Image 生成常超過 60 秒，在 Vercel 免費方案的函式時限內可能會逾時失敗 —
+                GPT image 2 和 Gemini 3 pro image 生成常超過 60 秒，在 Vercel 免費方案的函式時限內可能會逾時失敗 —
                 建議先用 Seedream 系列或 Gemini Flash 出快稿。
               </p>
             </Card>
@@ -291,7 +291,7 @@ export default function HelpPage() {
                 <div>
                   <dt className="font-medium text-white">為什麼生成一直失敗顯示逾時？</dt>
                   <dd className="mt-1 text-[#8a8a8a]">
-                    少數較慢的模型（GPT Image 2、Gemini 3 Pro Image）常需要超過 60 秒，Vercel 免費方案的函式上限就是
+                    少數較慢的模型（GPT image 2、Gemini 3 pro image）常需要超過 60 秒，Vercel 免費方案的函式上限就是
                     60 秒。換成 Seedream 系列或 Gemini Flash 通常幾秒內就會完成。
                   </dd>
                 </div>
