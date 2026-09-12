@@ -347,3 +347,28 @@ create index if not exists canvas_plaza_posts_status_idx on canvas_plaza_posts(s
 create index if not exists canvas_plaza_posts_user_idx on canvas_plaza_posts(user_id, created_at desc);
 alter table character_idle_videos add column if not exists outfit_key text;
 alter table character_idle_videos add column if not exists purchase_id bigint references character_outfit_changes(id) on delete set null;
+
+-- 圖層編輯 projects (app/editor): one document per project — canvas size /
+-- background + the layer list (image layers reference asset or generated-media
+-- URLs, never inline bytes, so a document stays small). Versions are
+-- snapshots taken around each AI step and on demand — see lib/layerProjects.ts.
+create table if not exists layer_projects (
+  id          bigint generated always as identity primary key,
+  user_id     bigint not null references users(id) on delete cascade,
+  name        text not null,
+  doc         jsonb not null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists layer_projects_user_idx on layer_projects(user_id, updated_at desc);
+
+create table if not exists layer_project_versions (
+  id          bigint generated always as identity primary key,
+  project_id  bigint not null references layer_projects(id) on delete cascade,
+  label       text not null default '',
+  doc         jsonb not null,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists layer_project_versions_project_idx on layer_project_versions(project_id, created_at desc);
