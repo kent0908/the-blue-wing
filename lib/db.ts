@@ -38,11 +38,13 @@ export interface UserRow {
   plan_renews_at: string | null;
   created_at: string;
   uid: string | null;
+  nickname?: string | null;
   last_seen_at?: string | null;
 }
 
 /** Public shape sent to the client — never includes password_hash / tokens. */
 export interface PublicUser {
+  nickname: string | null;
   id: number;
   email: string;
   role: "user" | "admin";
@@ -57,6 +59,7 @@ export interface PublicUser {
 
 export function toPublicUser(u: UserRow): PublicUser {
   return {
+    nickname: u.nickname ?? null,
     id: u.id,
     email: u.email,
     role: u.role,

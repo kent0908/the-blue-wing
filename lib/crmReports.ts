@@ -85,6 +85,12 @@ export async function overview(days: number, selected?: CrmRange) {
   ]);
   const activeByDay = await sql<{ date: string; n: number }>`select to_char(day, 'YYYY-MM-DD') as date, count(*)::int as n from user_activity_days where day >= ${period.from}::date and day <= ${period.to}::date group by 1`;
 
+  const timing = await sql<{kind:string;total:number;measured:number;average_ms:number|null;p95_ms:number|null}>`
+    select kind, count(*)::int as total, count(duration_ms)::int as measured,
+    avg(duration_ms)::float8 as average_ms, percentile_cont(0.95) within group (order by duration_ms)::float8 as p95_ms
+    from generations where created_at >= ${since} and created_at < ${until} group by kind
+  `;
+
   const map = <T extends { date: string }>(rows: T[]) => new Map(rows.map((r) => [r.date, r]));
   const mNew = map(newUsers.rows), mGen = map(gens.rows), mSpend = map(spends.rows), mUse = map(usage.rows), mAct = map(activeByDay.rows), mRef = map(refunds.rows);
   const cashByDay = new Map<string, number>();
@@ -129,7 +135,7 @@ export async function overview(days: number, selected?: CrmRange) {
     generations: sum("generations"),
     newUsers: sum("newUsers"),
   };
-  return { range: period.dates.length, period: {from:period.from,to:period.to,timeZone:"Asia/Taipei"}, settings, users: { ...userTotals.rows[0], ...activity.rows[0] }, totals, series };
+  return { timing: timing.rows, range: period.dates.length, period: {from:period.from,to:period.to,timeZone:"Asia/Taipei"}, settings, users: { ...userTotals.rows[0], ...activity.rows[0] }, totals, series };
 }
 
 export async function modelBreakdown(days: number, selected?: CrmRange): Promise<ModelLine[]> {

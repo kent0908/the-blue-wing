@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import AccountDialog from "./AccountDialog";
 import { IconHelp, IconSparkle } from "./Icons";
 
 interface Me {
-  user: { email: string; role: string } | null;
+  user: { email: string; role: string; nickname: string | null } | null;
   credits?: number;
   plan?: { code: string; name: string };
 }
 
 export default function TopBar() {
   const router = useRouter();
+  const search=useSearchParams();
+  const requestedAccount=search.get("account")==="1";
+  const [accountOpen,setAccountOpen]=useState(false);
   const [me, setMe] = useState<Me | null>(null);
 
   const refresh = () =>
@@ -23,10 +27,14 @@ export default function TopBar() {
 
   useEffect(() => {
     refresh();
+
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    window.addEventListener("profile-updated",onFocus);
+    return () => { window.removeEventListener("focus", onFocus);window.removeEventListener("profile-updated",onFocus); };
   }, []);
+
+  useEffect(()=>{if(requestedAccount)queueMicrotask(()=>setAccountOpen(true));},[requestedAccount]);
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -36,7 +44,7 @@ export default function TopBar() {
   };
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-end gap-1 whitespace-nowrap bg-black pr-2 sm:pr-6 [&>a]:shrink-0 [&>button]:shrink-0">
+    <><header className="flex h-14 shrink-0 items-center justify-end gap-1 whitespace-nowrap bg-black pr-2 sm:pr-6 [&>a]:shrink-0 [&>button]:shrink-0">
       <Link
         href="/help"
         aria-label="說明"
@@ -48,31 +56,27 @@ export default function TopBar() {
 
       {me?.user ? (
         <>
-          <Link
-            href="/account"
+          <button
+            onClick={()=>setAccountOpen(true)}
             className="flex items-center gap-1.5 rounded-full border border-[#3a3a3a] px-3 py-1.5 text-[13px] text-white transition-colors hover:border-[#555]"
             title="點數"
           >
             <IconSparkle className="h-3.5 w-3.5 text-[#7ff0cd]" />
             {(me.credits ?? 0).toLocaleString()}
-          </Link>
+          </button>
           {me.user.role === "admin" && (
             <>
-              <Link href="/crm" className="rounded-lg px-2 py-1.5 text-[13px] sm:px-3 text-[#d4d4d4] transition-colors hover:text-white">
-                CRM
-              </Link>
-              <Link href="/admin" className="rounded-lg px-2 py-1.5 text-[13px] sm:px-3 text-[#d4d4d4] transition-colors hover:text-white">
-                後台
-              </Link>
+              <Link href="/crm" className="rounded-lg px-2 py-1.5 text-[13px] text-[#d4d4d4] hover:text-white">管理後台</Link>
             </>
           )}
-          <Link
-            href="/account"
+          <button
+            onClick={()=>setAccountOpen(true)}
             className="max-w-[80px] sm:max-w-[160px] truncate rounded-lg px-2 py-1.5 text-[13px] text-[#d4d4d4] transition-colors hover:text-white"
-            title={me.user.email}
+            aria-label="開啟個人資訊"
+            title={me.user.nickname||"個人資訊"}
           >
-            <span className="sm:hidden">帳號</span><span className="hidden sm:inline">{me.user.email}</span>
-          </Link>
+            {me.user.nickname||"個人資訊"}
+          </button>
           <button
             onClick={logout}
             className="rounded-lg px-2 py-1.5 text-[13px] text-[#8a8a8a] transition-colors hover:text-white"
@@ -97,7 +101,7 @@ export default function TopBar() {
           </Link>
         </>
       )}
-    </header>
+    </header><AccountDialog open={accountOpen && !!me?.user} onClose={()=>setAccountOpen(false)}/></>
   );
 }
 

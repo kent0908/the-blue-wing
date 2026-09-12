@@ -1,6 +1,6 @@
 "use client";
 import { usePathname } from "next/navigation";
-import { useRef } from "react";
+import { useRef, Suspense } from "react";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import SupportChat from "./SupportChat";
@@ -9,7 +9,7 @@ export default function AppFrame({children}:{children:React.ReactNode}) {
   const drawer=useRef<HTMLDialogElement>(null);
   if(path==="/landing") return <main className="h-full overflow-y-auto scroll-smooth motion-reduce:scroll-auto">{children}</main>;
   // the CRM back office has its own shell (app/crm/layout.tsx) — keep the product sidebar out of it
-  if(path==="/crm"||path.startsWith("/crm/")) return <>{children}</>;
+  if(path==="/crm"||path.startsWith("/crm/")||path==="/admin"||path.startsWith("/admin/")) return <>{children}</>;
   return <><div className="flex h-full">
     <div className="hidden md:block"><Sidebar/></div>
     <dialog ref={drawer} aria-label="主要導覽" className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none border-0 bg-black p-0 text-white backdrop:bg-black/70" onClick={e=>{if((e.target as HTMLElement).closest("a"))drawer.current?.close();}}>
@@ -17,7 +17,7 @@ export default function AppFrame({children}:{children:React.ReactNode}) {
       <div className="h-[calc(100%_-_48px)]"><Sidebar/></div>
     </dialog>
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex items-center bg-black"><button type="button" aria-label="開啟導覽" onClick={()=>drawer.current?.showModal()} className="shrink-0 p-3 text-xl md:hidden">☰</button><div className="min-w-0 flex-1"><TopBar/></div></div>
+      <div className="flex items-center bg-black"><button type="button" aria-label="開啟導覽" onClick={()=>drawer.current?.showModal()} className="shrink-0 p-3 text-xl md:hidden">☰</button><div className="min-w-0 flex-1"><Suspense fallback={<div className="h-14"/>}><TopBar/></Suspense></div></div>
       <main className="min-h-0 flex-1">{children}</main>
     </div>
   </div><SupportChat/></>;

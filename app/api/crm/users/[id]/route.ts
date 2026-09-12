@@ -29,8 +29,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     const [balance, ledger, usage, gens, activity, auditRows, sessions, characters] = await Promise.all([
       getBalance(uid),
       recentLedger(uid, 100),
-      sql<{ id: number; kind: string; model: string; credits: number; units: number; unit: string; resolution: string | null; list_cost_usd: number; actual_cost_usd: number; status: string; created_at: string }>`
-        select id, kind, model, credits, units::float8 as units, unit, resolution, list_cost_usd::float8 as list_cost_usd, actual_cost_usd::float8 as actual_cost_usd, status, created_at
+      sql<{ id: number; kind: string; model: string; credits: number; units: number; unit: string; resolution: string | null; list_cost_usd: number; actual_cost_usd: number; status: string; cost_known: boolean; created_at: string }>`
+        select id, kind, model, credits, units::float8 as units, unit, resolution, list_cost_usd::float8 as list_cost_usd, actual_cost_usd::float8 as actual_cost_usd, status, cost_known, created_at
         from usage_events where user_id = ${uid} order by created_at desc limit 100
       `,
       sql<{ kind: string; n: number; avg_ms: number | null; last: string | null }>`
@@ -51,11 +51,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       user: { ...toPublicUser(user), lastSeenAt: user.last_seen_at ?? null },
       balance,
       ledger,
-      usage: usage.rows.map((u) => ({ ...u, id: Number(u.id) })),
+      usage: usage.rows.map((u) => ({ ...u, id: Number(u.id), list_cost_usd: u.cost_known && u.status === "charged" ? u.list_cost_usd : null, actual_cost_usd: u.cost_known && u.status === "charged" ? u.actual_cost_usd : null })),
       usageTotals: {
         calls: spend.length,
         credits: spend.reduce((a, u) => a + u.credits, 0),
-        costUsd: Math.round(spend.reduce((a, u) => a + u.actual_cost_usd, 0) * 10000) / 10000,
+        costUsd: usage.rows.every(u=>u.cost_known && u.status === "charged") ? Math.round(spend.reduce((a, u) => a + u.actual_cost_usd, 0) * 10000) / 10000 : null,
       },
       generations: gens.rows,
       activity: activity.rows[0],

@@ -44,19 +44,18 @@ export function toPublicPlazaPost(r: CanvasPlazaRow, authorName: string, viewerI
   };
 }
 
-/** Visible posts, newest first, joined with the author's display name (email
- *  local-part — this app has no separate display-name field on users). */
+/** Public attribution uses the chosen nickname, never the private email. */
 export async function listVisiblePlazaPosts(): Promise<{ row: CanvasPlazaRow; authorName: string }[]> {
-  const { rows } = await sql<CanvasPlazaRow & { author_email: string }>`
+  const { rows } = await sql<CanvasPlazaRow & { author_nickname: string | null }>`
     select p.id, p.user_id, p.name, p.description, p.graph, p.status, p.copy_count, p.created_at, p.updated_at,
-           u.email as author_email
+           u.nickname as author_nickname
     from canvas_plaza_posts p
     join users u on u.id = p.user_id
     where p.status = 'visible'
     order by p.created_at desc
     limit 120
   `;
-  return rows.map((r) => ({ row: r, authorName: r.author_email.split("@")[0] }));
+  return rows.map((r) => ({ row: r, authorName: r.author_nickname || "創作者" }));
 }
 
 export async function getPlazaPost(id: number): Promise<CanvasPlazaRow | null> {

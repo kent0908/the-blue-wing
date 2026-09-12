@@ -27,7 +27,7 @@ export async function PUT(req: NextRequest) {
     for (const k of ["credit_value_usd", "default_discount_pct", "usd_to_twd"]) {
       if (body[k] === undefined) continue;
       const v = Number(body[k]);
-      if (!Number.isFinite(v) || v < 0 || (k === "default_discount_pct" && v > 100)) return NextResponse.json({ error: { message: `${k} 數值不正確` } }, { status: 400 });
+      if (typeof body[k] !== "number" || !Number.isFinite(v) || v < 0 || (k !== "default_discount_pct" && v === 0) || (k === "default_discount_pct" && v > 100)) return NextResponse.json({ error: { message: `${k} 數值不正確` } }, { status: 400 });
       patch[k] = v;
     }
     const settings = await saveSettings(patch);

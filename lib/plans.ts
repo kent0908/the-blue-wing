@@ -1,12 +1,8 @@
 /**
  * Subscription plans.
  *
- * Pricing redesign (this pass): plain English tier names (no Chinese
- * prefix — Free/Basic/Standard/Premium), and every number below is derived
- * from real BytePlus per-model costs (see lib/rateCard.ts and
- * scripts/apply-rate-card.mjs) at a fixed retail peg of $0.01/credit, sized
- * so realized margin holds at ≥3x even after a plan's own bulk discount —
- * see the comment on each plan for its effective $/credit.
+ * Public plan catalog; actual profitability depends on provider usage and
+ * the effective paid value of each credit. No guaranteed margin is implied.
  *
  * No payment processor is wired yet — an admin activates a plan from
  * /admin, which grants that period's credits immediately (monthlyCredits on

@@ -12,8 +12,8 @@ interface Detail {
   user: { id: number; uid: string | null; email: string; role: "user" | "admin"; status: "active" | "banned"; emailVerified: boolean; planCode: string; planRenewsAt: string | null; createdAt: string; lastSeenAt: string | null };
   balance: number;
   ledger: { id: number; delta: number; reason: string; ref: string | null; created_at: string }[];
-  usage: { id: number; kind: string; model: string; credits: number; units: number; unit: string; resolution: string | null; list_cost_usd: number; actual_cost_usd: number; status: string; created_at: string }[];
-  usageTotals: { calls: number; credits: number; costUsd: number };
+  usage: { id: number; kind: string; model: string; credits: number; units: number; unit: string; resolution: string | null; list_cost_usd: number | null; actual_cost_usd: number | null; status: string; created_at: string }[];
+  usageTotals: { calls: number; credits: number; costUsd: number | null };
   generations: { kind: string; n: number; avg_ms: number | null; last: string | null }[];
   activity: { days: number; first: string | null; last: string | null };
   sessions: number;

@@ -19,7 +19,7 @@ export function Card({ title, sub, right, children, className = "" }: { title?: 
         <header className="flex items-start justify-between gap-3 border-b border-[#1e1e1e] px-5 py-3.5">
           <div>
             {title && <h2 className="text-[13.5px] font-medium text-white">{title}</h2>}
-            {sub && <p className="mt-0.5 text-[11.5px] text-[#7d7d7d]">{sub}</p>}
+            {sub && <p className="mt-1 text-[12px] leading-6 text-[#7d7d7d]">{sub}</p>}
           </div>
           {right}
         </header>
@@ -179,7 +179,7 @@ export function LineChart({ labels, series, height = 200, independent = false }:
 
 export function Notice({ kind, children }: { kind: "ok" | "err" | "info"; children: ReactNode }) {
   const cls = kind === "ok" ? "border-[#25473f] bg-[#11251f] text-[#9af2da]" : kind === "err" ? "border-[#4a2020] bg-[#1a1010] text-[#ffb4b4]" : "border-[#2a3550] bg-[#101624] text-[#a9c1ff]";
-  return <div className={`rounded-lg border px-3 py-2 text-[12.5px] ${cls}`}>{children}</div>;
+  return <div className={`rounded-lg border px-4 py-3 text-[12.5px] leading-7 ${cls}`}>{children}</div>;
 }
 
 export function useApi<T>(url: string | null): { data: T | null; error: string | null; loading: boolean; reload: () => void } {
@@ -217,9 +217,15 @@ export function DateRangePicker({days,onDays,onRange}:{days:number;onDays:(n:num
  const [from,setFrom]=useState(""); const [to,setTo]=useState("");
  return <div className="flex flex-wrap items-center gap-2">
   <RangePicker value={days} onChange={n=>{setFrom("");setTo("");onDays(n);}} />
-  <label className="text-xs text-[#aaa]">起日 <input aria-label="起始日期" type="date" value={from} onChange={e=>setFrom(e.target.value)} className={fieldCls}/></label>
-  <label className="text-xs text-[#aaa]">迄日 <input aria-label="結束日期" type="date" min={from} value={to} onChange={e=>setTo(e.target.value)} className={fieldCls}/></label>
+  <DateField label="起始日期" value={from} onChange={setFrom}/>
+  <DateField label="結束日期" value={to} min={from} onChange={setTo}/>
   <button className={btnCls} disabled={!from||!to||from>to} onClick={()=>onRange(from,to)}>套用區間</button>
   <span className="text-xs text-[#777]">台灣時間，含起訖日</span>
  </div>;
+}
+
+function DateField({label,value,min,onChange}:{label:string;value:string;min?:string;onChange:(v:string)=>void}) {
+ const input=useRef<HTMLInputElement>(null);
+ const open=()=>{try{if(input.current?.showPicker)input.current.showPicker();else input.current?.focus();}catch{input.current?.focus();}};
+ return <div className="flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2"><label className="text-xs text-neutral-400"><span className="mb-1 block">{label}</span><input ref={input} aria-label={label} type="date" min={min} value={value} onChange={e=>onChange(e.target.value)} onClick={open} style={{colorScheme:"dark"}} className="block w-36 bg-transparent text-sm text-white outline-none"/></label><button type="button" aria-label={`開啟${label}日曆`} onClick={open} className="rounded-lg border border-neutral-600 px-2 py-2 text-sm text-white hover:bg-neutral-700">▦</button></div>;
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { formatDuration } from "@/lib/formatTime";
 import Link from "next/link";
 import { Card, Kpi, LineChart, Notice, DateRangePicker, num, pct, usd, useApi } from "@/components/crm/ui";
 
 interface Overview {
   range: number;
+  timing: {kind:string;total:number;measured:number;average_ms:number|null;p95_ms:number|null}[];
   settings: { credit_value_usd: number; default_discount_pct: number; usd_to_twd: number };
   users: { total: number; verified: number; banned: number; paid: number; today: number; d7: number; d30: number; dau: number; wau: number; mau: number };
   totals: { creditsSpent: number; adminCreditsSpent: number; customerCreditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number | null; marginPct: number | null; generations: number; newUsers: number };
@@ -36,10 +38,15 @@ export default function CrmOverviewPage() {
         <Kpi label="今日活躍 DAU" value={num(data?.users.dau)} sub={`WAU ${num(data?.users.wau)} · MAU ${num(data?.users.mau)}`} tone="accent" />
         <Kpi label="註冊總數" value={num(data?.users.total)} sub={`今日 +${num(data?.users.today)} · 7 天 +${num(data?.users.d7)} · 30 天 +${num(data?.users.d30)}`} />
         <Kpi label="付費方案帳號" value={num(data?.users.paid)} sub={`已驗證 ${num(data?.users.verified)} · 停權 ${num(data?.users.banned)}`} />
-        <Kpi label={`點數消耗（${days} 天）`} value={num(data?.totals.creditsSpent)} sub={`${num(data?.totals.generations)} 次生成`} />
+        <Kpi label={`點數消耗（${data?.range ?? days} 天）`} value={num(data?.totals.creditsSpent)} sub={`${num(data?.totals.generations)} 次生成`} />
         <Kpi label="會員消耗面額（非實收）" value={usd(data?.totals.revenueEstUsd)} sub={data ? `${twd(data.totals.revenueEstUsd)} · 發放面額 ${usd(data.totals.revenueCashUsd)}` : undefined} tone="good" />
         <Kpi label="估算差額（非會計毛利）" value={usd(data?.totals.profitUsd)} sub={data ? `成本 ${usd(data.totals.costUsd)} · 估算比率 ${pct(data.totals.marginPct)}` : undefined} tone={data && (data.totals.profitUsd ?? 0) < 0 ? "bad" : "good"} />
       </div>
+
+      <Card title="生成耗時" sub="提交至取得結果，含排隊／輪詢等待。只統計已記錄耗時的成功結果；舊資料不以零補值。">
+        <div className="grid gap-4 md:grid-cols-3">{data?.timing?.map(t=><div key={t.kind} className="rounded-2xl border border-neutral-800 bg-neutral-950 p-5"><h3 className="text-sm text-neutral-300">{t.kind==="image"?"圖片":t.kind==="video"?"影片":"文字"}</h3><p className="mt-3 text-2xl text-[#7ff0cd]">{formatDuration(t.average_ms)||"未記錄"}</p><p className="mt-2 text-xs leading-6 text-neutral-500">平均耗時 · P95 {formatDuration(t.p95_ms)||"未記錄"}<br/>已量測 {t.measured} / {t.total} 筆</p></div>)}</div>
+        {data?.timing?.length===0&&<p className="text-sm text-neutral-500">本區間沒有生成結果。</p>}
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="每日活躍與新註冊" sub="活躍＝當天有登入操作的帳號">

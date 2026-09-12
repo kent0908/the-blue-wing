@@ -480,3 +480,6 @@ alter table generations add column if not exists duration_ms integer;
 
 -- Cost completeness is explicit; existing events predate verified tariffs.
 alter table usage_events add column if not exists cost_known boolean not null default false;
+
+-- Public creator attribution; email remains private.
+alter table users add column if not exists nickname varchar(96);

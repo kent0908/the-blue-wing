@@ -63,9 +63,9 @@ export default function CrmSettingsPage() {
         <Card title="計價參數" sub="改動只影響之後的試算與報表顯示；歷史成本事件維持當時的快照">
           <div className="space-y-3 text-[12.5px]">
             <label className="block">
-              <div className="mb-1 text-[11.5px] text-[#8a8a8a]">每點的價值（USD）— 營收＝消耗點數 × 這個值</div>
-              <input type="number" step="0.0001" min={0} value={form.credit_value_usd} onChange={(e) => setForm({ ...form, credit_value_usd: e.target.value })} className={`${fieldCls} w-[160px]`} />
-              <div className="mt-1 text-[11px] text-[#6d6d6d]">點數包定價：500 點 $5（$0.01/點）… 100,000 點 $800（$0.008/點）。填你的平均實際售價。</div>
+              <div className="mb-1 text-[11.5px] text-[#8a8a8a]">消耗面額估算單價（USD／點）</div>
+              <input type="number" step="0.0001" min={0.0001} value={form.credit_value_usd} onChange={(e) => setForm({ ...form, credit_value_usd: e.target.value })} className={`${fieldCls} w-[160px]`} />
+              <div className="mt-1 text-[11px] text-[#6d6d6d]">只影響管理報表的面額估算，不會修改方案售價或用戶扣點。消耗面額不等於實收營收；點數包有效單價為 $0.008–$0.01／點。</div>
             </label>
             <label className="block">
               <div className="mb-1 text-[11.5px] text-[#8a8a8a]">預設折扣 %（沒有個別設定折扣的模型都套用）</div>
@@ -73,7 +73,7 @@ export default function CrmSettingsPage() {
             </label>
             <label className="block">
               <div className="mb-1 text-[11.5px] text-[#8a8a8a]">USD → TWD 匯率（只用於顯示）</div>
-              <input type="number" step="0.01" min={0} value={form.usd_to_twd} onChange={(e) => setForm({ ...form, usd_to_twd: e.target.value })} className={`${fieldCls} w-[160px]`} />
+              <input type="number" step="0.01" min={0.01} value={form.usd_to_twd} onChange={(e) => setForm({ ...form, usd_to_twd: e.target.value })} className={`${fieldCls} w-[160px]`} />
             </label>
             <button type="button" disabled={busy === "save"} onClick={() => void save()} className={primaryBtnCls}>
               {busy === "save" ? "儲存中…" : "儲存"}

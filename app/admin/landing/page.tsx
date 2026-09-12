@@ -95,8 +95,8 @@ export default function AdminLandingPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1000px] px-6 py-8">
+    <div className="min-w-0">
+      <div className="w-full py-2">
         <div className="mb-1 flex items-center justify-between">
           <h1 className="text-[22px] font-semibold tracking-tight">啟程展示媒體</h1>
           <Link href="/account" className="text-[12.5px] text-[#8a8a8a] hover:text-white">回帳號</Link>

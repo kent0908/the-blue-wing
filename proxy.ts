@@ -14,7 +14,10 @@ export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     const origin = req.headers.get("origin");
-    if (req.headers.get("sec-fetch-site") === "cross-site" || (origin && origin !== req.nextUrl.origin)) {
+    // Next can canonicalize a loopback IP to localhost in nextUrl. The
+    // browser-facing Host preserves the actual origin (including its port).
+    const requestOrigin = `${req.nextUrl.protocol}//${req.headers.get("host") || req.nextUrl.host}`;
+    if (req.headers.get("sec-fetch-site") === "cross-site" || (origin && origin !== requestOrigin)) {
       return NextResponse.json({ error: { message: "不允許跨站操作", code: "cross_origin" } }, { status: 403 });
     }
   }
