@@ -323,7 +323,11 @@ export default function CharacterChat({ character: initial }: { character: Chara
             <button type="button" aria-pressed={personaOpen} onClick={() => { setPersonaOpen(true); setRelationshipOpen(false); setWardrobeOpen(false); }}>我的身分</button>
             {rules.wardrobe && <button type="button" aria-pressed={wardrobeOpen} onClick={() => { setPersonaOpen(false); setRelationshipOpen(false); setWardrobeOpen(true); }}>換裝衣櫃</button>}
           </div>
-          <button type="button" className="shrink-0 border-b border-white/10 px-4 py-2 text-left text-xs text-[#a2bcb2]" onClick={() => setEditing(true)}>編輯角色設定</button>
+          {rules.editable ? (
+            <button type="button" className="shrink-0 border-b border-white/10 px-4 py-2 text-left text-xs text-[#a2bcb2]" onClick={() => setEditing(true)}>編輯角色設定</button>
+          ) : (
+            <p className="shrink-0 border-b border-white/10 px-4 py-2 text-xs text-[#6d6d6d]">官方角色的設定由官方維護{character.contentRating === "all_ages" ? "・全年齡：只有友誼與夥伴互動" : ""}</p>
+          )}
           {relationshipOpen && <div className="min-h-0 flex-1 overflow-y-auto"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label="關閉設定">關閉</button></div><RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} /></div>}
           {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
           <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen || !rules.scenes}>{rules.scenes && <CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} />}</div>
