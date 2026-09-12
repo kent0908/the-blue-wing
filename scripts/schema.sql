@@ -477,3 +477,6 @@ create index if not exists admin_audit_log_created_idx on admin_audit_log(create
 
 -- How long a generation took (request → result), shown to the user in 生成紀錄.
 alter table generations add column if not exists duration_ms integer;
+
+-- Cost completeness is explicit; existing events predate verified tariffs.
+alter table usage_events add column if not exists cost_known boolean not null default false;

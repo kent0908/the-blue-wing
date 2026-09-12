@@ -1,6 +1,6 @@
 import { sql } from "./db";
 import { getRate } from "./rateCard";
-import { resolutionMultiplier } from "./creditFormula";
+import { publicPrice } from "./sirayaPublicPrices";
 
 /**
  * Back-office (CRM) data layer — settings, the vendor cost card, per-call
@@ -79,27 +79,24 @@ export interface CostQuote {
   listCostUsd: number;
   actualCostUsd: number;
   discountPct: number;
+  costKnown: boolean;
 }
 
-/**
- * Cost of one call. `units` come from the caller when it knows them
- * (images: count; video: seconds; text: 1k-token blocks); otherwise they're
- * derived from credits ÷ the rate card's per-unit credits, which is exact
- * for images/text and exact for video once the resolution multiplier is
- * divided back out.
- */
-export async function quoteCost(model: string, credits: number, meta: { units?: number; resolution?: string | null } = {}): Promise<CostQuote> {
-  const [rate, cost, settings] = await Promise.all([getRate(model), sql<ModelCostRow>`select model_id, list_price_usd::float8 as list_price_usd, discount_pct::float8 as discount_pct, notes, updated_at from model_costs where model_id = ${model}`.then((r) => r.rows[0] ?? null), getSettings()]);
+/** Quote only independently known vendor units; missing receipts stay unknown. */
+export async function quoteCost(model: string, _credits: number, meta: { units?: number; resolution?: string | null } = {}): Promise<CostQuote> {
+  const [rate, cost, settings] = await Promise.all([getRate(model), sql<ModelCostRow>`select model_id, list_price_usd::float8 as list_price_usd, discount_pct::float8 as discount_pct, notes, updated_at from model_costs where lower(model_id) = ${model.toLowerCase()}`.then((r) => r.rows[0] ?? null), getSettings()]);
   const unit: CostQuote["unit"] = rate?.modality === "image" ? "image" : rate?.modality === "video" ? "second" : rate?.modality === "text" ? "ktoken" : "call";
-  const resolution = rate?.modality === "video" ? (meta.resolution ?? "480p") : null;
-  const mult = resolution ? resolutionMultiplier(resolution) : 1;
-  let units = meta.units ?? 1;
-  if (meta.units === undefined && rate && rate.credits > 0) units = credits / rate.credits / mult;
-  units = Math.max(0, Math.round(units * 10000) / 10000);
+  const resolution = meta.resolution ?? null;
+  const tariff = publicPrice(model);
+  // Credits are a retail policy, not evidence of vendor usage. Unknown costs
+  // remain explicitly unknown until a provider usage/cost receipt is available.
+  const units = meta.units ?? 0;
+  const costKnown = !!tariff && !tariff.note && tariff.unit !== "million_output_tokens"
+    && meta.units !== undefined && Number.isFinite(units) && units >= 0;
   const discountPct = cost?.discount_pct ?? settings.default_discount_pct;
-  const listCostUsd = (cost?.list_price_usd ?? 0) * units * mult;
+  const listCostUsd = costKnown ? tariff!.price * units : 0;
   const actualCostUsd = listCostUsd * (1 - Math.min(100, Math.max(0, discountPct)) / 100);
-  return { units, unit, resolution, listCostUsd: round6(listCostUsd), actualCostUsd: round6(actualCostUsd), discountPct };
+  return { units, unit, resolution, listCostUsd: round6(listCostUsd), actualCostUsd: round6(actualCostUsd), discountPct, costKnown };
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
@@ -110,8 +107,8 @@ export async function recordUsageEvent(input: { userId: number; chargeId: string
   try {
     const q = await quoteCost(input.model, input.credits, { units: input.units, resolution: input.resolution });
     await sql`
-      insert into usage_events (user_id, charge_id, kind, model, credits, units, unit, resolution, list_cost_usd, actual_cost_usd)
-      values (${input.userId}, ${input.chargeId ? Number(input.chargeId) : null}, ${input.kind}, ${input.model}, ${input.credits}, ${q.units}, ${q.unit}, ${q.resolution}, ${q.listCostUsd}, ${q.actualCostUsd})
+      insert into usage_events (user_id, charge_id, kind, model, credits, units, unit, resolution, list_cost_usd, actual_cost_usd, cost_known)
+      values (${input.userId}, ${input.chargeId ? Number(input.chargeId) : null}, ${input.kind}, ${input.model}, ${input.credits}, ${q.units}, ${q.unit}, ${q.resolution}, ${q.listCostUsd}, ${q.actualCostUsd}, ${q.costKnown})
     `;
   } catch (err) {
     // reporting must never break a paid call

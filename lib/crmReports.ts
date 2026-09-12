@@ -3,6 +3,7 @@ import { getSettings, listModelCosts } from "./crm";
 import { CREDIT_PACKS } from "./creditPacks";
 import { PLANS } from "./plans";
 import { listRates } from "./rateCard";
+import { publicPrice } from "./sirayaPublicPrices";
 
 /**
  * Report queries behind /api/crm/overview and /api/crm/finance. Everything
@@ -40,9 +41,9 @@ export interface DayPoint {
   creditsSpent: number;
   revenueEstUsd: number;
   revenueCashUsd: number;
-  costUsd: number;
-  listCostUsd: number;
-  profitUsd: number;
+  costUsd: number | null;
+  listCostUsd: number | null;
+  profitUsd: number | null;
 }
 
 export interface ModelLine {
@@ -53,9 +54,9 @@ export interface ModelLine {
   unit: string;
   credits: number;
   revenueEstUsd: number;
-  listCostUsd: number;
-  costUsd: number;
-  profitUsd: number;
+  listCostUsd: number | null;
+  costUsd: number | null;
+  profitUsd: number | null;
   marginPct: number | null;
   listPriceUsd: number;
   discountPct: number | null;
@@ -86,7 +87,7 @@ export async function overview(days: number) {
     sql<{ date: string; n: number }>`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, count(*)::int as n from generations where created_at >= ${since} group by 1`,
     sql<{ date: string; spent: number }>`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, coalesce(-sum(delta), 0)::int as spent from credit_ledger where created_at >= ${since} and delta < 0 and reason not in ('idle_video_free') group by 1`,
     sql<{ date: string; reason: string; ref: string | null }>`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, reason, ref from credit_ledger where created_at >= ${since} and reason in ('credit_pack','plan_grant')`,
-    sql<{ date: string; list_cost: number; cost: number }>`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, coalesce(sum(list_cost_usd), 0)::float8 as list_cost, coalesce(sum(actual_cost_usd), 0)::float8 as cost from usage_events where created_at >= ${since} and status = 'charged' group by 1`,
+    sql<{ date: string; list_cost: number; cost: number; known: boolean; credits: number }>`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, coalesce(sum(list_cost_usd), 0)::float8 as list_cost, coalesce(sum(actual_cost_usd), 0)::float8 as cost, bool_and(cost_known) as known, sum(credits)::int as credits from usage_events where created_at >= ${since} and status = 'charged' group by 1`,
     sql<{ date: string; refunded: number }>`select to_char(date_trunc('day', created_at), 'YYYY-MM-DD') as date, coalesce(sum(delta), 0)::int as refunded from credit_ledger where created_at >= ${since} and reason in ('charge_refund','video_refund','charge_partial_refund') group by 1`,
   ]);
   const activeByDay = await sql<{ date: string; n: number }>`select to_char(day, 'YYYY-MM-DD') as date, count(*)::int as n from user_activity_days where day >= ${dayKeys(days)[0]}::date group by 1`;
@@ -98,7 +99,9 @@ export async function overview(days: number) {
 
   const series: DayPoint[] = dayKeys(days).map((date) => {
     const spent = Math.max(0, (mSpend.get(date)?.spent ?? 0) - (mRef.get(date)?.refunded ?? 0));
-    const cost = mUse.get(date)?.cost ?? 0;
+    const u = mUse.get(date);
+    const complete = (spent === 0 && !u) || (!!u?.known && u.credits === spent);
+    const cost = u?.cost ?? 0;
     const revenueEst = spent * settings.credit_value_usd;
     return {
       date,
@@ -108,20 +111,22 @@ export async function overview(days: number) {
       creditsSpent: spent,
       revenueEstUsd: r2(revenueEst),
       revenueCashUsd: r2(cashByDay.get(date) ?? 0),
-      costUsd: r4(cost),
-      listCostUsd: r4(mUse.get(date)?.list_cost ?? 0),
-      profitUsd: r2(revenueEst - cost),
+      costUsd: complete ? r4(cost) : null,
+      listCostUsd: complete ? r4(u?.list_cost ?? 0) : null,
+      profitUsd: complete ? r2(revenueEst - cost) : null,
     };
   });
   const sum = (k: keyof DayPoint) => series.reduce((a, p) => a + (p[k] as number), 0);
+  const costComplete = series.every(p => p.costUsd !== null);
   const totals = {
+    costComplete,
     creditsSpent: sum("creditsSpent"),
     revenueEstUsd: r2(sum("revenueEstUsd")),
     revenueCashUsd: r2(sum("revenueCashUsd")),
-    costUsd: r4(sum("costUsd")),
-    listCostUsd: r4(sum("listCostUsd")),
-    profitUsd: r2(sum("revenueEstUsd") - sum("costUsd")),
-    marginPct: sum("revenueEstUsd") > 0 ? r2(((sum("revenueEstUsd") - sum("costUsd")) / sum("revenueEstUsd")) * 100) : null,
+    costUsd: costComplete ? r4(sum("costUsd")) : null,
+    listCostUsd: costComplete ? r4(sum("listCostUsd")) : null,
+    profitUsd: costComplete ? r2(sum("revenueEstUsd") - sum("costUsd")) : null,
+    marginPct: costComplete && sum("revenueEstUsd") > 0 ? r2(((sum("revenueEstUsd") - sum("costUsd")) / sum("revenueEstUsd")) * 100) : null,
     generations: sum("generations"),
     newUsers: sum("newUsers"),
   };
@@ -134,9 +139,9 @@ export async function modelBreakdown(days: number): Promise<ModelLine[]> {
     getSettings(),
     listModelCosts(),
     listRates(),
-    sql<{ model: string; kind: string; calls: number; units: number; unit: string; credits: number; list_cost: number; cost: number }>`
+    sql<{ model: string; kind: string; calls: number; units: number; unit: string; credits: number; list_cost: number; cost: number; known: boolean }>`
       select model, kind, count(*)::int as calls, coalesce(sum(units), 0)::float8 as units, max(unit) as unit, coalesce(sum(credits), 0)::int as credits,
-        coalesce(sum(list_cost_usd), 0)::float8 as list_cost, coalesce(sum(actual_cost_usd), 0)::float8 as cost
+        coalesce(sum(list_cost_usd), 0)::float8 as list_cost, coalesce(sum(actual_cost_usd), 0)::float8 as cost, bool_and(cost_known) as known
       from usage_events where created_at >= ${since} and status = 'charged' group by model, kind order by credits desc
     `,
   ]);
@@ -153,11 +158,11 @@ export async function modelBreakdown(days: number): Promise<ModelLine[]> {
       unit: r.unit,
       credits: r.credits,
       revenueEstUsd: r2(revenue),
-      listCostUsd: r4(r.list_cost),
-      costUsd: r4(r.cost),
-      profitUsd: r2(revenue - r.cost),
-      marginPct: revenue > 0 ? r2(((revenue - r.cost) / revenue) * 100) : null,
-      listPriceUsd: c?.list_price_usd ?? 0,
+      listCostUsd: r.known ? r4(r.list_cost) : null,
+      costUsd: r.known ? r4(r.cost) : null,
+      profitUsd: r.known ? r2(revenue - r.cost) : null,
+      marginPct: r.known && revenue > 0 ? r2(((revenue - r.cost) / revenue) * 100) : null,
+      listPriceUsd: publicPrice(r.model)?.price ?? 0,
       discountPct: c?.discount_pct ?? null,
       rateCredits: rateMap.get(r.model)?.credits ?? null,
     };

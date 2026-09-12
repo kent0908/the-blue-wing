@@ -20,7 +20,7 @@ export function proxy(req: NextRequest) {
   }
   const hasSession = req.cookies.has(SESSION_COOKIE);
 
-  if (!hasSession && (pathname.startsWith("/admin") || pathname.startsWith("/account"))) {
+  if (!hasSession && (pathname.startsWith("/admin") || pathname.startsWith("/account") || pathname.startsWith("/crm"))) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
@@ -30,5 +30,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/admin/:path*", "/account/:path*"],
+  matcher: ["/api/:path*", "/admin/:path*", "/account/:path*", "/crm/:path*"],
 };

@@ -6,11 +6,11 @@ import { modelLabel } from "@/lib/modelLabel";
 
 interface Overview {
   settings: { credit_value_usd: number; usd_to_twd: number };
-  totals: { creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number; listCostUsd: number; profitUsd: number; marginPct: number | null; generations: number };
-  series: { date: string; activeUsers: number; generations: number; creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number; listCostUsd: number; profitUsd: number }[];
+  totals: { creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number | null; marginPct: number | null; generations: number };
+  series: { date: string; activeUsers: number; generations: number; creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number }[];
 }
 interface Models {
-  models: { model: string; kind: string; calls: number; units: number; unit: string; credits: number; revenueEstUsd: number; listCostUsd: number; costUsd: number; profitUsd: number; marginPct: number | null; listPriceUsd: number; discountPct: number | null; rateCredits: number | null }[];
+  models: { model: string; kind: string; calls: number; units: number; unit: string; credits: number; revenueEstUsd: number; listCostUsd: number | null; costUsd: number | null; profitUsd: number | null; marginPct: number | null; listPriceUsd: number; discountPct: number | null; rateCredits: number | null }[];
 }
 
 const UNIT_LABEL: Record<string, string> = { image: "張", second: "秒", ktoken: "千 tokens", call: "次" };
@@ -27,19 +27,20 @@ export default function CrmFinancePage() {
         <div>
           <h1 className="text-[20px] font-semibold text-white">收入與利潤</h1>
           <p className="text-[12.5px] text-[#8a8a8a]">
-            營收＝消耗點數 × 點數價值（每點 {usd(ov.data?.settings.credit_value_usd, 4)}）；成本＝牌價 × 用量 × 解析度倍率 × (1 − 折扣)，每次呼叫當下快照。
+            營收＝消耗點數 × 點數價值（每點 {usd(ov.data?.settings.credit_value_usd, 4)}）；成本＝供應商牌價 × 實際計費用量 × (1 − 折扣)，每次呼叫當下快照。
           </p>
         </div>
         <RangePicker value={days} onChange={setDays} />
       </div>
       {(ov.error || md.error) && <Notice kind="err">{ov.error || md.error}</Notice>}
 
+      {ov.data?.totals.costUsd === null && <Notice kind="info">本區間有缺少用量或牌價的紀錄，成本與毛利顯示「—」，不代表零成本。舊紀錄不以新牌價回填。</Notice>}
       {ov.data && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="營收（點數價值）" value={usd(ov.data.totals.revenueEstUsd)} />
           <Stat label="供應商牌價成本" value={usd(ov.data.totals.listCostUsd)} sub="未折扣" />
-          <Stat label="實際成本" value={usd(ov.data.totals.costUsd)} sub={`省下 ${usd(ov.data.totals.listCostUsd - ov.data.totals.costUsd)}`} />
-          <Stat label="毛利 / 毛利率" value={`${usd(ov.data.totals.profitUsd)} · ${pct(ov.data.totals.marginPct)}`} tone={ov.data.totals.profitUsd < 0 ? "bad" : "good"} />
+          <Stat label="折後估算成本" value={usd(ov.data.totals.costUsd)} sub={ov.data.totals.costUsd === null ? "缺少完整用量／成本快照" : "依牌價與折扣估算"} />
+          <Stat label="毛利 / 毛利率" value={`${usd(ov.data.totals.profitUsd)} · ${pct(ov.data.totals.marginPct)}`} tone={(ov.data.totals.profitUsd ?? 0) < 0 ? "bad" : "good"} />
         </div>
       )}
 
@@ -59,7 +60,7 @@ export default function CrmFinancePage() {
                 <td className={tdNum}>{usd(m.revenueEstUsd)}</td>
                 <td className={tdNum}>{usd(m.listCostUsd, 4)}</td>
                 <td className={tdNum}>{usd(m.costUsd, 4)}</td>
-                <td className={`${tdNum} ${m.profitUsd < 0 ? "text-[#ff9b9b]" : "text-[#7ff0cd]"}`}>{usd(m.profitUsd)}</td>
+                <td className={`${tdNum} ${(m.profitUsd ?? 0) < 0 ? "text-[#ff9b9b]" : "text-[#7ff0cd]"}`}>{usd(m.profitUsd)}</td>
                 <td className={tdNum}>{pct(m.marginPct)}</td>
                 <td className={tdNum}>{m.listPriceUsd ? usd(m.listPriceUsd, 4) : <span className="text-[#f0c27f]">未設定</span>}</td>
                 <td className={tdNum}>{m.discountPct === null ? "預設" : pct(m.discountPct)}</td>
@@ -88,7 +89,7 @@ export default function CrmFinancePage() {
               <td className={tdNum}>{usd(p.revenueCashUsd)}</td>
               <td className={tdNum}>{usd(p.listCostUsd, 4)}</td>
               <td className={tdNum}>{usd(p.costUsd, 4)}</td>
-              <td className={`${tdNum} ${p.profitUsd < 0 ? "text-[#ff9b9b]" : "text-[#7ff0cd]"}`}>{usd(p.profitUsd)}</td>
+              <td className={`${tdNum} ${(p.profitUsd ?? 0) < 0 ? "text-[#ff9b9b]" : "text-[#7ff0cd]"}`}>{usd(p.profitUsd)}</td>
             </tr>
           ))}
         </Table>

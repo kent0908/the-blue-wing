@@ -10,7 +10,12 @@ interface CostRow {
   active: boolean;
   credits: number;
   sellUsd: number;
-  listPriceUsd: number;
+  listPriceUsd: number | null;
+  priceUnit: string;
+  inputPriceUsd: number | null;
+  priceNote: string;
+  source: string | null;
+  checkedAt: string | null;
   discountPct: number | null;
   effectiveDiscountPct: number;
   actualCostUsd: number;
@@ -23,7 +28,7 @@ interface Costs {
   rows: CostRow[];
 }
 
-const UNIT: Record<CostRow["modality"], string> = { image: "每張", video: "每秒（480p）", text: "每千 output tokens" };
+
 
 /**
  * 成本設定 — one row per model in the rate card: the vendor list price we
@@ -50,7 +55,7 @@ export default function CrmCostsPage() {
     setSaving(r.modelId);
     setMsg(null);
     try {
-      const res = await fetch("/api/crm/costs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelId: r.modelId, listPriceUsd: Number(d.listPriceUsd) || 0, discountPct: d.discountPct === "" ? null : Number(d.discountPct), notes: d.notes }) });
+      const res = await fetch("/api/crm/costs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelId: r.modelId, discountPct: d.discountPct === "" ? null : Number(d.discountPct), notes: d.notes }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error?.message || "儲存失敗");
       setMsg({ kind: "ok", text: `${modelLabel(r.modelId)} 已更新` });
@@ -66,8 +71,8 @@ export default function CrmCostsPage() {
     const d = drafts[r.modelId];
     const list = Number(d?.listPriceUsd) || 0;
     const disc = d?.discountPct === "" || d?.discountPct === undefined ? (data?.settings.default_discount_pct ?? 0) : Number(d.discountPct) || 0;
-    const actual = list * (1 - disc / 100);
-    const margin = r.sellUsd > 0 ? ((r.sellUsd - actual) / r.sellUsd) * 100 : null;
+    const actual = r.listPriceUsd === null ? null : list * (1 - disc / 100);
+    const margin: number | null = null;
     return { actual, margin, disc };
   };
 
@@ -78,9 +83,8 @@ export default function CrmCostsPage() {
       <div>
         <h1 className="text-[20px] font-semibold text-white">成本設定</h1>
         <p className="text-[12.5px] text-[#8a8a8a]">
-          填入每個模型的供應商牌價，再填你實際拿到的折扣（留空＝用預設折扣 {pct(data?.settings.default_discount_pct)}）。
-          右側「售價」是我們向用戶收的點數換算成 USD（每點 {usd(data?.settings.credit_value_usd, 4)}），毛利率即時試算。影片成本會再乘上解析度倍率：
-          {data && Object.entries(data.resolutionMultiplier).map(([k, v]) => ` ${k}×${v}`).join("、")}。
+          牌價依 SIRAYA 公開模型目錄設定（USD）；折扣留空沿用預設值 {pct(data?.settings.default_discount_pct)}。
+          輸入與輸出 Token 分別計價，不能直接和每次扣點比較毛利。待核對的價格不會視為零成本。
         </p>
       </div>
       {error && <Notice kind="err">{error}</Notice>}
@@ -98,7 +102,7 @@ export default function CrmCostsPage() {
           </div>
         }
       >
-        <Table minWidth={1060} head={["模型", "計價單位", "售價（點數 → USD）", "供應商牌價 USD", "折扣 %", "實際成本", "毛利率", "備註", ""]}>
+        <Table minWidth={1060} head={["模型", "計價單位", "售價（點數 → USD）", "供應商牌價 USD", "折扣 %", "折後牌價／單位", "毛利率", "備註", ""]}>
           {rows.map((r) => {
             const d = drafts[r.modelId] ?? { listPriceUsd: "", discountPct: "", notes: "" };
             const p = preview(r);
@@ -108,12 +112,15 @@ export default function CrmCostsPage() {
                   <div className="text-white">{modelLabel(r.modelId)}</div>
                   <div className="font-mono text-[10.5px] text-[#6d6d6d]">{r.modelId}{r.active ? "" : "（已停用）"}</div>
                 </td>
-                <td className={td}>{UNIT[r.modality]}</td>
+                <td className={td}>{r.priceUnit}</td>
                 <td className={tdNum}>
                   {r.credits} 點 → {usd(r.sellUsd, 4)}
                 </td>
                 <td className={td}>
-                  <input type="number" step="0.0001" min={0} value={d.listPriceUsd} placeholder="0.00" onChange={(e) => setDrafts((cur) => ({ ...cur, [r.modelId]: { ...d, listPriceUsd: e.target.value } }))} className={`${fieldCls} w-[110px] text-right`} />
+                  <div>{usd(r.listPriceUsd, 4)}</div>
+                  {r.inputPriceUsd !== null && <div className="text-xs text-[#aaa]">輸入：{usd(r.inputPriceUsd, 4)} / 百萬 Token</div>}
+                  {r.source && <a href={r.source} target="_blank" rel="noreferrer" className="text-xs text-[#7ff0cd]">SIRAYA · {r.checkedAt}</a>}
+                  <div className="max-w-52 text-xs text-[#f0c27f]">{r.priceNote || (!r.source ? "公開目錄尚未確認此模型" : "")}</div>
                 </td>
                 <td className={td}>
                   <input type="number" step="0.5" min={0} max={100} value={d.discountPct} placeholder={`預設 ${data?.settings.default_discount_pct ?? 0}`} onChange={(e) => setDrafts((cur) => ({ ...cur, [r.modelId]: { ...d, discountPct: e.target.value } }))} className={`${fieldCls} w-[96px] text-right`} />

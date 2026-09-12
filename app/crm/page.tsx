@@ -8,8 +8,8 @@ interface Overview {
   range: number;
   settings: { credit_value_usd: number; default_discount_pct: number; usd_to_twd: number };
   users: { total: number; verified: number; banned: number; paid: number; today: number; d7: number; d30: number; dau: number; wau: number; mau: number };
-  totals: { creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number; listCostUsd: number; profitUsd: number; marginPct: number | null; generations: number; newUsers: number };
-  series: { date: string; activeUsers: number; newUsers: number; generations: number; creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number; listCostUsd: number; profitUsd: number }[];
+  totals: { creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number | null; marginPct: number | null; generations: number; newUsers: number };
+  series: { date: string; activeUsers: number; newUsers: number; generations: number; creditsSpent: number; revenueEstUsd: number; revenueCashUsd: number; costUsd: number | null; listCostUsd: number | null; profitUsd: number }[];
 }
 
 export default function CrmOverviewPage() {
@@ -35,7 +35,7 @@ export default function CrmOverviewPage() {
         <Kpi label="付費方案帳號" value={num(data?.users.paid)} sub={`已驗證 ${num(data?.users.verified)} · 停權 ${num(data?.users.banned)}`} />
         <Kpi label={`點數消耗（${days} 天）`} value={num(data?.totals.creditsSpent)} sub={`${num(data?.totals.generations)} 次生成`} />
         <Kpi label="營收（點數價值）" value={usd(data?.totals.revenueEstUsd)} sub={data ? `${twd(data.totals.revenueEstUsd)} · 實收 ${usd(data.totals.revenueCashUsd)}` : undefined} tone="good" />
-        <Kpi label="毛利" value={usd(data?.totals.profitUsd)} sub={data ? `成本 ${usd(data.totals.costUsd)} · 毛利率 ${pct(data.totals.marginPct)}` : undefined} tone={data && data.totals.profitUsd < 0 ? "bad" : "good"} />
+        <Kpi label="毛利" value={usd(data?.totals.profitUsd)} sub={data ? `成本 ${usd(data.totals.costUsd)} · 毛利率 ${pct(data.totals.marginPct)}` : undefined} tone={data && (data.totals.profitUsd ?? 0) < 0 ? "bad" : "good"} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -43,7 +43,8 @@ export default function CrmOverviewPage() {
           {data && <LineChart labels={labels} series={[{ name: "活躍", color: "#8ab4ff", values: data.series.map((p) => p.activeUsers) }, { name: "新註冊", color: "#7ff0cd", values: data.series.map((p) => p.newUsers), bars: true }]} />}
         </Card>
         <Card title="每日營收 vs 成本" sub="營收＝消耗點數 × 點數價值；成本＝供應商實際成本（含折扣）">
-          {data && <LineChart labels={labels} series={[{ name: "營收 (USD)", color: "#7ff0cd", values: data.series.map((p) => p.revenueEstUsd), format: (v) => usd(v) }, { name: "成本 (USD)", color: "#ff9b9b", values: data.series.map((p) => p.costUsd), format: (v) => usd(v, 4) }, { name: "毛利 (USD)", color: "#f0c27f", values: data.series.map((p) => p.profitUsd), format: (v) => usd(v) }]} />}
+          {data && data.totals.costUsd === null && <Notice kind="info">成本用量紀錄不完整，暫不繪製成本與毛利圖。</Notice>}
+          {data && data.totals.costUsd !== null && <LineChart labels={labels} series={[{ name: "營收 (USD)", color: "#7ff0cd", values: data.series.map((p) => p.revenueEstUsd), format: (v) => usd(v) }, { name: "成本 (USD)", color: "#ff9b9b", values: data.series.map((p) => p.costUsd ?? 0), format: (v) => usd(v, 4) }, { name: "毛利 (USD)", color: "#f0c27f", values: data.series.map((p) => p.profitUsd ?? 0), format: (v) => usd(v) }]} />}
         </Card>
         <Card title="每日生成次數與點數消耗">
           {data && <LineChart labels={labels} independent series={[{ name: "生成次數", color: "#8ab4ff", values: data.series.map((p) => p.generations), bars: true }, { name: "點數消耗", color: "#f0c27f", values: data.series.map((p) => p.creditsSpent) }]} />}

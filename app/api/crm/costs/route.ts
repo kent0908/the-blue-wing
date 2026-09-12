@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { audit, getSettings, listModelCosts, upsertModelCost } from "@/lib/crm";
 import { listRates } from "@/lib/rateCard";
-import { VIDEO_RESOLUTION_MULTIPLIER } from "@/lib/creditFormula";
+import { publicPrice, priceUnitLabel, PRICE_SOURCE, PRICE_CHECKED } from "@/lib/sirayaPublicPrices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,8 +22,9 @@ export async function GET(req: NextRequest) {
     const rows = rates.map((rate) => {
       const c = costMap.get(rate.modelId);
       const discount = c?.discount_pct ?? settings.default_discount_pct;
-      const list = c?.list_price_usd ?? 0;
-      const actual = list * (1 - discount / 100);
+      const tariff = publicPrice(rate.modelId);
+      const list = tariff?.price ?? null;
+      const actual = list === null ? null : list * (1 - discount / 100);
       const sellUsd = rate.credits * settings.credit_value_usd;
       return {
         modelId: rate.modelId,
@@ -34,13 +35,18 @@ export async function GET(req: NextRequest) {
         listPriceUsd: list,
         discountPct: c?.discount_pct ?? null,
         effectiveDiscountPct: discount,
-        actualCostUsd: Math.round(actual * 1e6) / 1e6,
-        marginPct: sellUsd > 0 ? Math.round(((sellUsd - actual) / sellUsd) * 10000) / 100 : null,
+        actualCostUsd: actual === null ? null : Math.round(actual * 1e6) / 1e6,
+        priceUnit: priceUnitLabel(tariff),
+        inputPriceUsd: tariff?.inputPrice ?? null,
+        priceNote: tariff?.note ?? "",
+        source: tariff ? PRICE_SOURCE : null,
+        checkedAt: tariff ? PRICE_CHECKED : null,
+        marginPct: null, // Retail and vendor units differ; require actual usage.
         notes: c?.notes ?? "",
         updatedAt: c?.updated_at ?? null,
       };
     });
-    return NextResponse.json({ settings, resolutionMultiplier: VIDEO_RESOLUTION_MULTIPLIER, rows });
+    return NextResponse.json({ settings, resolutionMultiplier: {}, rows });
   } catch (err) {
     return errorResponse(err);
   }
@@ -55,11 +61,7 @@ export async function PUT(req: NextRequest) {
     const modelId = typeof body?.modelId === "string" ? body.modelId.trim() : "";
     if (!modelId || modelId.length > 120) return NextResponse.json({ error: { message: "模型代碼不正確" } }, { status: 400 });
     const patch: { listPriceUsd?: number; discountPct?: number | null; notes?: string } = {};
-    if (body?.listPriceUsd !== undefined) {
-      const v = Number(body.listPriceUsd);
-      if (!Number.isFinite(v) || v < 0 || v > 10000) return NextResponse.json({ error: { message: "牌價必須是 0 以上的數字" } }, { status: 400 });
-      patch.listPriceUsd = v;
-    }
+    if (body?.listPriceUsd !== undefined) return NextResponse.json({ error: { message: "牌價由 SIRAYA 公開目錄維護；此處僅設定折扣與備註" } }, { status: 400 });
     if (body?.discountPct !== undefined) {
       if (body.discountPct === null || body.discountPct === "") patch.discountPct = null;
       else {
