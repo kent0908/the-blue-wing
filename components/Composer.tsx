@@ -196,7 +196,8 @@ export default function Composer({
       ? available.find((m) => m.id === initialModel || m.id.toLowerCase() === initialModel.toLowerCase())
       : undefined;
     const defaultVideo = mode === "video" ? available.find(m => m.id === "SIRAYA-Seedance-2.0-mini") ?? available.find(m => /seedance/i.test(m.id) && !/nsfw/i.test(m.id)) : undefined;
-    return (preferred ?? defaultVideo ?? available[0])?.id ?? "";
+    const defaultImage = mode === "image" ? available.find(m => m.id === "gpt-image-2.5-sunburst") ?? available.find(m => /^gpt-image-/i.test(m.id)) : undefined;
+    return (preferred ?? defaultVideo ?? defaultImage ?? available[0])?.id ?? "";
   }, [model, available, initialModel, mode]);
 
   const operations = mode === "image" || mode === "video" ? getGenerationModes(resolvedModel,mode) : [];

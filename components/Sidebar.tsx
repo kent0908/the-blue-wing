@@ -2,6 +2,7 @@
 
 import { getGenerationModes } from "@/lib/generationModes";
 import { modelLabel } from "@/lib/modelLabel";
+import { isNewModel } from "@/lib/modelNew";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -132,7 +133,7 @@ function ModelFlyoutPortal({
               window.dispatchEvent(new CustomEvent("bluewing:model-select", { detail: { mode: state.modality, model: m.id } }));
             }}>
             <ModelLogo id={m.id} size={28} />
-            <span className="min-w-0 flex-1 truncate text-[13px]">{modelLabel(m.displayName)}</span><span aria-hidden="true">›</span>
+            <span className="min-w-0 flex-1 truncate text-[13px]">{modelLabel(m.displayName)}</span>{isNewModel(m.id) && <BadgeTag badge={{ text: "NEW", tone: "new" }} />}<span aria-hidden="true">›</span>
           </Link>
         );
       })}

@@ -9,7 +9,7 @@ function workflow(id:number,name:string,description:string,category:string,chara
  branches.forEach((branch,i)=>{
   const y=40+i*600,p="prompt-"+i,img="image-"+i;
   nodes.push({id:p,type:"text",x:440,y,width:340,textHeight:260,data:{title:branch.title+" · 提示詞",text:identity+branch.prompt+clean}},
-   {id:img,type:"image",x:880,y,width:320,data:{title:branch.title+" · 圖片",model:"gpt-image-2",prompt:"",size:branch.size||"3840x2160",quality:"high"}});
+   {id:img,type:"image",x:880,y,width:320,data:{title:branch.title+" · 圖片",model:"gpt-image-2.5-sunburst",prompt:"",size:branch.size||"3840x2160",quality:"high"}});
   wire("reference",img,"image");wire(p,img,"prompt");
   if(branch.video){const vp="motion-"+i,v="video-"+i;nodes.push({id:vp,type:"text",x:1280,y,width:340,textHeight:250,data:{title:branch.title+" · 動態提示詞",text:branch.video+clean}}, {id:v,type:"video",x:1720,y,width:320,data:{title:branch.title+" · 影片",model:"SIRAYA-Seedance-2.0-mini",prompt:"",seconds:branch.seconds||6,resolution:"720p",aspect_ratio:"16:9"}});wire(img,v,"image");wire(vp,v,"prompt");}
  });

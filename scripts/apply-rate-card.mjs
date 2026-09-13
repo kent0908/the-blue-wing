@@ -87,6 +87,7 @@ const IMAGE_RATES = {
   // NOT BytePlus — OpenAI/Google's own pricing, estimated conservatively
   // (not verified against a current, exact published rate the way the
   // Seedream numbers above are) — revisit if OpenAI/Google pricing changes
+  "gpt-image-2.5-sunburst": 60, // same OpenAI per-image tier as gpt-image-2 (site default image model)
   "gpt-image-2": 60, // assumed up to ~$0.15/image at this app's default "high" quality
   "gemini-2.5-flash-image": 16, // assumed ~$0.04/image
   "gemini-3.1-flash-image": 32, // assumed ~$0.08/image

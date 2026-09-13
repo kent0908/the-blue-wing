@@ -38,6 +38,8 @@ const RATES: Array<[string, RateCard]> = [
   ["seedance-2.0", { perSecond: 0.12 }],
   ["seedance", { perSecond: 0.1 }],
   // ---- image ----
+  ["gpt-image-2.5-sunburst", { perImage: 0.04 }],
+  ["gpt-image-2.5-flare", { perImage: 0.04 }],
   ["gpt-image-2", { perImage: 0.04 }],
   ["imagen-4", { perImage: 0.04 }],
   ["nano-banana", { perImage: 0.03 }],

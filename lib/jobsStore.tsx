@@ -27,7 +27,7 @@ async function readJson(res: Response): Promise<any> {
       /timeout|timed out|FUNCTION_INVOCATION|error occurred/i.test(text);
     throw new Error(
       timedOut
-        ? "生成逾時：這個模型在伺服器 60 秒函式上限內跑不完（gpt-image-2、gemini-3-pro-image 等較慢）。請改用較快的模型（Seedream 系列、Gemini Flash），或將 Vercel 專案升級為 Pro（函式上限 300 秒）。"
+        ? "生成逾時：這個模型在伺服器 60 秒函式上限內跑不完（GPT image 系列、Gemini 3 pro image 等較慢）。請改用較快的模型（Seedream 系列、Gemini Flash），或將 Vercel 專案升級為 Pro（函式上限 300 秒）。"
         : `伺服器回傳非 JSON 內容（HTTP ${res.status}）：${text.trim().slice(0, 160) || "（空白）"}`
     );
   }

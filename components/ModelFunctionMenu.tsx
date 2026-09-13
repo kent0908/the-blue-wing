@@ -4,6 +4,7 @@ import ModelLogo from './ModelLogo';
 import { getGenerationModes } from '@/lib/generationModes';
 import { modelLabel } from '@/lib/modelLabel';
 import { getImageModel } from '@/lib/imageModels';
+import { isNewModel } from '@/lib/modelNew';
 import type { Mode } from '@/lib/types';
 import styles from './ModelFunctionMenu.module.css';
 
@@ -24,7 +25,7 @@ export default function ModelFunctionMenu({ models, mode, selectedModel, selecte
       {models.map(model => {
         const hasFunctions = (mode === 'image' || mode === 'video') && getGenerationModes(model.id, mode).length > 0;
         return <button key={model.id} type="button" className={styles.model} aria-expanded={visible?.id === model.id} onMouseEnter={() => setPreview(model.id)} onFocus={() => setPreview(model.id)} onClick={() => { setPreview(model.id); if (!hasFunctions) onSelect(model.id); }} onKeyDown={event => { if (event.key === 'ArrowRight' && hasFunctions) { event.preventDefault(); functionPanel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); } }}>
-          <ModelLogo id={model.id} size={27} /><span>{modelLabel(model.displayName || getImageModel(model.id)?.name || model.id)}</span><small>{model.id === selectedModel ? '✓' : hasFunctions ? '›' : ''}</small>
+          <ModelLogo id={model.id} size={27} /><span>{modelLabel(model.displayName || getImageModel(model.id)?.name || model.id)}</span>{isNewModel(model.id) && <em className={styles.newTag}>NEW</em>}<small>{model.id === selectedModel ? '✓' : hasFunctions ? '›' : ''}</small>
         </button>;
       })}
     </div>

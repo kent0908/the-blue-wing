@@ -156,7 +156,7 @@ const SEED: ImageControl = {
   placeholder: "留空為隨機",
 };
 
-/** GPT Image 2 supports flexible dimensions, including portrait 4K.
+/** GPT image 2 / 2.5 support flexible dimensions, including portrait 4K.
  * Keep these curated choices within the model's 3840px edge / 8,294,400px limits.
  */
 const SIZE_GPT_IMAGE: ImageControl = {
@@ -258,8 +258,18 @@ export const IMAGE_MODELS: ImageModel[] = [
     slow: true,
   },
   {
+    id: "gpt-image-2.5-sunburst",
+    name: "GPT image 2.5 sunburst",
+    family: "gpt-image",
+    price: "$0.04 / 張",
+    blurb: "OpenAI 最新一代生圖，品質檔位、透明背景與參考圖編修都支援。生成較慢（常超過 60 秒）。",
+    tags: ["VISION", "IMAGE GENERATION"],
+    controls: GPT_IMAGE_CONTROLS,
+    slow: true,
+  },
+  {
     id: "gpt-image-2",
-    name: "GPT Image 2",
+    name: "GPT image 2",
     family: "gpt-image",
     price: "$0.04 / 張",
     blurb: "OpenAI 生圖，支援品質檔位與透明背景輸出。生成較慢（常超過 60 秒）。",

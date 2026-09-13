@@ -34,6 +34,7 @@ import { validateGraph } from "@/lib/canvas/validation";
 import { canvasNodeCredits, canvasRunCredits } from "@/lib/canvas/cost";
 import type { RateCardEntry } from "@/lib/pricing";
 import { IMAGE_MODELS, sizeOptionsFor } from "@/lib/imageModels";
+import { isNewModel } from "@/lib/modelNew";
 import { videoResolutionsForModel, normalizeVideoResolution, videoConstraintFor } from "@/lib/videoModels";
 
 const PORT_COLOR: Record<PortType, string> = {
@@ -792,7 +793,7 @@ function NodeCard({
               {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>請重新選擇模型</option>}
               {IMAGE_MODELS.filter((m) => !/nsfw/i.test(m.id)).map((m) => (
                 <option key={m.id} value={m.id}>
-                  {modelLabel(m.name)}
+                  {modelLabel(m.name)}{isNewModel(m.id) ? " · NEW" : ""}
                 </option>
               ))}
             </select>
