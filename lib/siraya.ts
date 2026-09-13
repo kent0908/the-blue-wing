@@ -37,49 +37,52 @@ export class SirayaApiError extends Error {
   }
 }
 
-function getApiKey(): string {
-  const key = process.env.SIRAYA_API_KEY;
-  if (!key) {
-    throw new SirayaConfigError(
-      "SIRAYA_API_KEY is not set. Add it to .env.local (see .env.example) and restart the dev server."
-    );
-  }
-  return key;
+/** Only explicit billing rejections may replay a paid POST on the backup key. */
+function isCreditExhausted(error: SirayaApiError): boolean {
+  if (![400, 402, 403, 429].includes(error.status)) return false;
+  if (error.status === 402) return true;
+  const identifiers = [error.code, error.type].map(value => String(value ?? "").toLowerCase());
+  if (identifiers.some(value => /^(insufficient_quota|insufficient_balance|insufficient_credits|credit_balance_too_low|quota_exceeded|quota_exhausted|balance_not_enough|account_balance_insufficient)$/.test(value))) return true;
+  return /(?:insufficient|not enough) (?:account )?(?:balance|credits?|funds)|(?:balance|credits?) (?:is |are )?(?:insufficient|exhausted|too low)|(?:余额|餘額|额度|額度|点数|點數)不足/i.test(error.message);
 }
 
-/**
- * Low-level fetch wrapper. Throws SirayaApiError using the documented
- * { error: { message, type, code } } shape on non-2xx responses.
- */
-async function sirayaFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const apiKey = getApiKey();
-  const res = await fetch(`${SIRAYA_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
-
-  if (!res.ok) {
-    let message = `SIRAYA request failed with status ${res.status}`;
-    let type: string | undefined;
-    let code: string | number | undefined;
-    try {
-      const body = await res.json();
-      if (body?.error) {
-        message = body.error.message || message;
-        type = body.error.type;
-        code = body.error.code;
-      }
-    } catch {
-      // response wasn't JSON — fall back to the generic message above
+async function responseError(res: Response): Promise<SirayaApiError> {
+  let message = `SIRAYA request failed with status ${res.status}`;
+  let type: string | undefined;
+  let code: string | number | undefined;
+  try {
+    const body = await res.json();
+    if (body?.error) {
+      message = typeof body.error.message === "string" ? body.error.message : message;
+      type = body.error.type;
+      code = body.error.code;
     }
-    throw new SirayaApiError(res.status, message, type, code);
-  }
+  } catch { /* Preserve the HTTP status for non-JSON errors. */ }
+  return new SirayaApiError(res.status, message, type, code);
+}
 
-  return res;
+/** Each request starts with Key 1; no shared mutable credential selection. */
+async function sirayaFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const keys = [...new Set([process.env.SIRAYA_API_KEY, process.env.SIRAYA_API_KEY_2]
+    .map(key => key?.trim()).filter((key): key is string => Boolean(key)))];
+  if (!keys.length) throw new SirayaConfigError("SIRAYA API key is not configured.");
+  const isVideoLookup = init.method === "GET" && path.startsWith("/videos/");
+  for (let index = 0; index < keys.length; index++) {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${keys[index]}`);
+    headers.set("Content-Type", "application/json");
+    // Network errors and accepted streaming responses are never replayed.
+    const res = await fetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers });
+    if (res.ok) return res;
+    const error = await responseError(res);
+    const canReplay = init.body == null || typeof init.body === "string";
+    // Jobs may belong to the other API key. Read-only lookup can try that key
+    // when the primary cannot access the job; this never creates another job.
+    const lookupDenied = isVideoLookup && [401, 403, 404].includes(error.status);
+    if (index + 1 < keys.length && canReplay && (isCreditExhausted(error) || lookupDenied)) continue;
+    throw error;
+  }
+  throw new SirayaConfigError("SIRAYA API key is not configured.");
 }
 
 export interface ChatMessage {
