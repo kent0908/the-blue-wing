@@ -6,6 +6,7 @@ const sql={query:async(q,p)=>{
  if(q.startsWith('insert into provider_assets')){if(rows.some(r=>r.user_id===p[0]&&r.source_asset_id===p[1]))return{rows:[]};const r={id:1,user_id:p[0],source_asset_id:p[1],name:p[2],asset_type:p[3],status:'uploading',provider_asset_id:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};rows.push(r);return{rows:[r]};}
  if(q.startsWith('select * from provider_assets'))return{rows:rows.filter(r=>r.user_id===p[0]&&(q.includes('source_asset_id')?r.source_asset_id:r.id)===p[1])};
  if(q.startsWith('update provider_assets set provider_asset_id')){const r=rows.find(r=>r.id===p[2]&&r.user_id===p[3]);Object.assign(r,{provider_asset_id:p[0],status:p[1]});return{rows:[r]};}
+ if(q.startsWith("update provider_assets set status='uploading'")){const r=rows.find(r=>r.id===p[0]&&r.user_id===p[1]&&r.status==='failed'&&!r.provider_asset_id);if(!r)return{rows:[]};Object.assign(r,{status:'uploading',name:p[2]});return{rows:[r]};}
  if(q.startsWith('update provider_assets set status=$1')){const r=rows.find(r=>r.id===p[1]&&r.user_id===p[2]);Object.assign(r,{status:p[0]});return{rows:[r]};}
  throw Error('Unhandled test query '+q);
 }};
@@ -26,5 +27,9 @@ global.fetch=async(url,init)=>{calls++;assert.equal(init.headers.Authorization,'
  await assert.rejects(()=>api.deleteProviderAsset(7,1),/尚未確認/);
  rows=[];global.fetch=async()=>new Response('<!DOCTYPE html><title>Gateway error</title>',{status:502,headers:{'content-type':'text/html'}});
  await assert.rejects(()=>api.createProviderAsset(7,9,true),e=>e.code==='asset_invalid_response'&&!e.message.includes('<'));assert.equal(rows[0].status,'needs_review');
+ // 2026-09-13 outage shape: the provider answers 502 with a parsed JSON rejection for video intake — definite, nothing stored → failed, retryable, deletable; not needs_review.
+ rows=[];let outage=true;global.fetch=async(url,init)=>{if(init?.method==='POST'&&outage)return new Response(JSON.stringify({isSuccess:false,error:{code:'UPSTREAM_UNAVAILABLE',message:'upstream service error'}}),{status:502,headers:{'content-type':'application/json'}});return new Response(JSON.stringify({isSuccess:true,data:{assetId:'asset-retry',status:'processing'}}),{status:202,headers:{'content-type':'application/json'}});};
+ await assert.rejects(()=>api.createProviderAsset(7,9,true),e=>e.code==='asset_upstream_error'&&/沒有登錄成功/.test(e.message));assert.equal(rows[0].status,'failed');assert.equal(rows[0].provider_asset_id,null);
+ outage=false;const retried=await api.createProviderAsset(7,9,true);assert.equal(retried.status,'processing');assert.equal(rows[0].provider_asset_id,'asset-retry');assert.equal(rows.length,1);
  console.log('PASS provider assets: consent, ownership, upload contract, retry deduplication, active references, uncertain-result protection; no live calls.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

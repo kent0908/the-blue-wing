@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useState} from 'react';
 import {providerAssetPage,readProviderAssetResponse,type RegisteredProviderAsset} from '@/lib/providerAssetResponse';
 interface Source {id:number;name:string;contentType:string;src:string}
-const statuses:Record<string,string>={uploading:'登錄中',processing:'審核處理中',active:'可使用',failed:'未通過',needs_review:'結果待確認，請聯絡管理員'};
+const statuses:Record<string,string>={uploading:'登錄中',processing:'審核處理中',active:'可使用',failed:'登錄失敗（未通過或服務暫時無法接收），可重新登錄',needs_review:'結果待確認，請聯絡管理員'};
 export default function ProviderAssetLibrary({sources}:{sources:Source[]}) {
  const [items,setItems]=useState<RegisteredProviderAsset[]>([]),[page,setPage]=useState(1),[pages,setPages]=useState(1),[source,setSource]=useState(''),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const load=useCallback(async()=>{try {const r=await fetch(`/api/provider-assets?page=${page}`);const j=providerAssetPage(await readProviderAssetResponse(r));setItems(j.assets);setPages(j.totalPages);setError('');}catch(e){setError(e instanceof TypeError?'連線失敗，請檢查網路後重新整理。':e instanceof Error?e.message:'載入失敗');}},[page]);
@@ -23,6 +23,7 @@ export default function ProviderAssetLibrary({sources}:{sources:Source[]}) {
   <div className="mt-4 space-y-2">{items.map(item=><div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-[#17231e] p-3">
    <div className="min-w-0 flex-1"><p className="break-words text-sm">{item.name}</p><p className={`text-xs ${item.status==='active'?'text-[#7fe5cc]':'text-[#aaa]'}`}>{statuses[item.status]||'狀態待確認'}</p></div>
    <button disabled={busy} className="text-xs underline" onClick={()=>void action(`/api/provider-assets/${item.id}`,'GET')}>更新狀態</button>
+   {item.status==='failed'&&item.sourceAssetId!==null&&<button disabled={busy} className="text-xs text-[#7fe5cc] underline" onClick={()=>void action('/api/provider-assets','POST',{assetId:item.sourceAssetId,consent:true,name:item.name})}>重新登錄</button>}
    <button disabled={busy} className="text-xs underline" onClick={()=>{const name=prompt('修改素材顯示名稱',item.name);if(name?.trim())void action(`/api/provider-assets/${item.id}`,'PATCH',{name});}}>改名</button>
    <button disabled={busy||item.status==='uploading'||item.status==='needs_review'} className="text-xs text-red-300 underline disabled:opacity-40" onClick={()=>{if(confirm('刪除這個已登錄素材？原始資產庫檔案會保留。'))void action(`/api/provider-assets/${item.id}`,'DELETE');}}>刪除</button>
   </div>)}</div>

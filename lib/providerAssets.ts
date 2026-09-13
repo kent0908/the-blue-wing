@@ -38,7 +38,11 @@ async function request(path:string,init:RequestInit={}) {
  }
  if(!res.ok || body?.isSuccess!==true) {
   const inactive=res.status===403;
-  throw new ProviderAssetError(inactive?'素材服務尚未啟用或沒有使用權限，請聯絡管理員':'素材服務暫時無法完成操作，請稍後重試',inactive?503:502,inactive?'asset_feature_inactive':'asset_upstream_error');
+  // A parsed error body is a definite answer from the provider (nothing was
+  // created), unlike the timeout above — callers rely on this code split.
+  const upstream=(body as {error?:{code?:unknown}}).error?.code;
+  const unavailable=upstream==='UPSTREAM_UNAVAILABLE';
+  throw new ProviderAssetError(inactive?'素材服務尚未啟用或沒有使用權限，請聯絡管理員':unavailable?'素材服務目前無法接收這類檔案，這次沒有登錄成功，請稍後重試':'素材服務暫時無法完成操作，請稍後重試',inactive?503:502,inactive?'asset_feature_inactive':'asset_upstream_error');
  }
  return body.data as Record<string,unknown>;
 }
@@ -72,7 +76,13 @@ export async function createProviderAsset(userId:number,assetId:unknown,consent:
  if(!claimed[0]) {
   const existing=await sql.query<Row>('select * from provider_assets where user_id=$1 and source_asset_id=$2',[userId,id]);
   if(!existing.rows[0])throw new ProviderAssetError('素材狀態已變更，請重新整理',409);
-  return publicProviderAsset(existing.rows[0]);
+  // A rejected registration (no provider id) is retried in place; anything
+  // else (uploading / processing / active / needs_review) is returned as-is.
+  const retry=existing.rows[0].status==='failed'&&!existing.rows[0].provider_asset_id
+   ?await sql.query<Row>("update provider_assets set status='uploading',name=$3,consent_at=now(),updated_at=now() where id=$1 and user_id=$2 and status='failed' and provider_asset_id is null returning *",[existing.rows[0].id,userId,label])
+   :null;
+  if(!retry?.rows[0])return publicProviderAsset(existing.rows[0]);
+  claimed.push(retry.rows[0]);
  }
  const row=claimed[0];
  let submitted=false;
@@ -90,8 +100,14 @@ export async function createProviderAsset(userId:number,assetId:unknown,consent:
   const {rows:saved}=await sql.query<Row>('update provider_assets set provider_asset_id=$1,status=$2,updated_at=now() where id=$3 and user_id=$4 returning *',[data.assetId,status,row.id,userId]);
   return publicProviderAsset(saved[0]);
  } catch(error) {
-  // Once submitted, timeout / interrupted persistence is ambiguous. Never automatically upload twice.
-  await sql.query('update provider_assets set status=$1,updated_at=now() where id=$2 and user_id=$3',[submitted?'needs_review':'failed',row.id,userId]);
+  // Once submitted, a timeout / unreadable reply is ambiguous (the provider
+  // may have stored the file) — never automatically upload twice. A parsed
+  // rejection from the provider (asset_upstream_error / feature_inactive,
+  // e.g. the 2026-09-13 video-intake outage returning 502
+  // UPSTREAM_UNAVAILABLE) is definite: nothing was created, so the row is
+  // marked failed and the user can retry or delete it themselves.
+  const definite=error instanceof ProviderAssetError&&(error.code==='asset_upstream_error'||error.code==='asset_feature_inactive');
+  await sql.query('update provider_assets set status=$1,updated_at=now() where id=$2 and user_id=$3',[submitted&&!definite?'needs_review':'failed',row.id,userId]);
   if(error instanceof ProviderAssetError)throw error;
   throw new ProviderAssetError(submitted?'素材登錄結果待確認，請勿重複上傳，請聯絡管理員':'讀取素材失敗，請稍後重試',502,'asset_upload_uncertain');
  }
