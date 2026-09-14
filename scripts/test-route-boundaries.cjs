@@ -9,7 +9,7 @@ for (const component of ['WingExperience', 'LandingMedia', 'ClosingGlow']) asser
 assert.ok(landing.includes('id:"companions"') && landing.includes('landingGallerySlots(f.id)'));
 const sidebar = read('components/Sidebar.tsx');
 assert.match(sidebar, /href:\s*"\/",\s*label:\s*"首頁"/);
-assert.match(sidebar, /href:\s*"\/landing",\s*label:\s*"啟程"/);
+assert.match(sidebar, /href:\s*"\/landing",\s*label:\s*"(返回)?啟程"/);
 assert.match(read('components/AppFrame.tsx'), /if\(path==="\/landing"\)/);
 assert.ok(!read('components/AppFrame.tsx').includes('if(path==="/")'));
 assert.match(read('app/explore/page.tsx'), /redirect\("\/"\)/);

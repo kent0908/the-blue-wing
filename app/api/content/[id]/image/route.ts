@@ -15,7 +15,7 @@ export const revalidate = 300;
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const blockId = parseInt(id, 10);
-  if (!Number.isInteger(blockId)) {
+  if (!Number.isSafeInteger(blockId)) {
     return NextResponse.json({ error: { message: "bad id" } }, { status: 400 });
   }
 

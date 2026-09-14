@@ -12,7 +12,7 @@ function load(file, imports = {}) {
   return mod.exports;
 }
 const profile = load('lib/characterProfile.ts');
-const characters = load('lib/characters.ts', { './characterProfile': profile, './db': { sql: () => { throw new Error('Unit tests must not access a database'); } } });
+const characters = load('lib/characters.ts', { './characterProfile': profile, './sceneInteractionPolicy': load('lib/sceneInteractionPolicy.ts', { './relationshipStages': load('lib/relationshipStages.ts') }), './promptSafety': load('lib/promptSafety.ts'), './relationshipStages': load('lib/relationshipStages.ts'), './companionOfficialSeed': load('lib/companionOfficialSeed.ts'), './db': { sql: () => { throw new Error('Unit tests must not access a database'); } } });
 for (const invalid of [null, [], 'profile', { age: 17 }, { age: 121 }, { age: 25.5 }, { age: '25' }, { greeting: 'x'.repeat(601) }, { skin: [] }, { version: 2 }]) {
   assert.throws(() => profile.validateProfile(invalid));
 }

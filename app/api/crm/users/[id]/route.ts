@@ -19,6 +19,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   try {
     const { id } = await ctx.params;
     const byUid = /^[A-Z]{2}\d{8}$/.test(id.toUpperCase());
+    if (!byUid && !(/^\d{1,15}$/.test(id))) return NextResponse.json({ error: { message: "找不到這個使用者", code: "not_found" } }, { status: 404 });
     const { rows } = byUid
       ? await sql<UserRow>`select * from users where uid = ${id.toUpperCase()} limit 1`
       : await sql<UserRow>`select * from users where id = ${parseInt(id, 10) || 0} limit 1`;

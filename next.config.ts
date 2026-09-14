@@ -7,7 +7,15 @@ const nextConfig: NextConfig = {
   // doesn't try to resolve onnxruntime-node / sharp through it.
   serverExternalPackages: ["@huggingface/transformers", "onnxruntime-node", "sharp"],
   async headers() {
-    return [{ source: '/:path*', headers: [{ key: 'Permissions-Policy', value: 'picture-in-picture=()' }] }];
+    // Baseline hardening for every response. No CSP yet: the layer editor
+    // pulls browser ML models from the Hugging Face CDN and runs blob: workers,
+    // so a policy needs its own allow-list work before it can be turned on.
+    return [{ source: '/:path*', headers: [
+      { key: 'Permissions-Policy', value: 'picture-in-picture=()' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+    ] }];
   },
 };
 

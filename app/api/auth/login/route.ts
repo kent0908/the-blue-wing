@@ -1,4 +1,4 @@
-import { authLimit } from "@/lib/rateLimit";
+import { authLimit, limitRequest } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { sql, toPublicUser, type UserRow } from "@/lib/db";
 import { verifyPassword, createSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
@@ -14,6 +14,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: "email 或密碼錯誤", code: "bad_credentials" } }, { status: 401 });
     }
     const mail = String(email || "").trim().toLowerCase();
+
+    // Per-account brake on top of the per-IP one: 10 attempts per 15 minutes
+    // against one email, so a distributed guess still can't run through a
+    // password list. Counted before the lookup so a miss and a wrong
+    // password cost the same.
+    if (mail && !(await limitRequest("login:" + mail, 10, 900))) {
+      return NextResponse.json({ error: { message: "這個帳號嘗試登入次數過多，請 15 分鐘後再試", code: "too_many_attempts" } }, { status: 429, headers: { "Retry-After": "900" } });
+    }
 
     const { rows } = await sql<UserRow>`select * from users where email = ${mail} limit 1`;
     const user = rows[0];

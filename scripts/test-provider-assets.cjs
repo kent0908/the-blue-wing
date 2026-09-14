@@ -11,7 +11,7 @@ const sql={query:async(q,p)=>{
  throw Error('Unhandled test query '+q);
 }};
 const moduleMock={exports:{}};
-new Function('require','module','exports',ts.transpileModule(fs.readFileSync('lib/providerAssets.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(id=>id==='./db'?{sql}:id==='@vercel/blob'?{get:async()=>({statusCode:200,stream:new Blob(['abc']).stream()})}:require(id),moduleMock,moduleMock.exports);
+new Function('require','module','exports',ts.transpileModule(fs.readFileSync('lib/providerAssets.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(id=>id==='./db'?{sql}:id==='./alerts'?{raiseAlert:async()=>({sent:false,suppressed:false})}:id==='@vercel/blob'?{get:async()=>({statusCode:200,stream:new Blob(['abc']).stream()})}:require(id),moduleMock,moduleMock.exports);
 const api=moduleMock.exports;process.env.SIRAYA_ASSET_API_KEY='mock-only';
 global.fetch=async(url,init)=>{calls++;assert.equal(init.headers.Authorization,'Bearer mock-only');assert.ok(url.startsWith('https://console-api.siraya.ai/extapi/v1/assets'));if(uploadFails)throw Error('timeout');if(init.method==='POST'){assert.equal(init.body.get('assetType'),'image');assert.equal(init.body.get('file').size,3);return Response.json({isSuccess:true,data:{assetId:returnedAssetId,status:'processing'}});}return Response.json({isSuccess:true,data:{assetId:returnedAssetId,type:'image',status:'active'}});};
 (async()=>{

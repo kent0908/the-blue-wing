@@ -5,10 +5,15 @@ import { listGenerations } from "@/lib/generations";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET /api/generations — the signed-in user's persisted 生成紀錄, newest first. */
+/**
+ * GET /api/generations — the signed-in user's persisted 生成紀錄, newest first.
+ * The jobs store asks for this on every page load, signed in or not; a
+ * visitor simply has no history, so they get an empty list rather than a
+ * 401 that shows up as a console error on the login page itself.
+ */
 export async function GET(req: NextRequest) {
   const auth = await requireUser(req);
-  if ("error" in auth) return auth.error;
+  if ("error" in auth) return NextResponse.json({ generations: [] });
 
   const rows = await listGenerations(auth.user.id, 60);
   return NextResponse.json({

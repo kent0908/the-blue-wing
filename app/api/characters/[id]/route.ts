@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 function parseId(id: string) {
   const n = parseInt(id, 10);
-  return Number.isInteger(n) ? n : null;
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
 /** GET /api/characters/:id */

@@ -1,4 +1,4 @@
-import { authLimit } from "@/lib/rateLimit";
+import { authLimit, limitRequest } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { sql, type UserRow } from "@/lib/db";
 import { newToken } from "@/lib/auth";
@@ -27,6 +27,10 @@ export async function POST(req: NextRequest) {
 
   const generic = { ok: true as const };
   if (!mail) return NextResponse.json(generic);
+  // At most 3 reset mails per address per 15 minutes — a stranger can't use
+  // this form to flood someone's inbox (or burn the mail quota). Silently
+  // returns the same "ok" so it reveals nothing about the account.
+  if (!(await limitRequest("reset:" + mail, 3, 900))) return NextResponse.json(generic);
 
   const { rows } = await sql<UserRow>`select * from users where email = ${mail} limit 1`;
   const user = rows[0];

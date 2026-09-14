@@ -21,9 +21,13 @@ export async function POST(req: NextRequest) {
   if ("error" in r) return r.error;
   const { user } = r;
 
-  const body = await req.json().catch(() => ({}));
+  const body = (await req.json().catch(() => null)) as { officialId?: unknown; blockId?: unknown } | null;
+  const blockId = Number(body?.blockId);
+  if (!body || (typeof body.officialId !== "string" && !Number.isSafeInteger(blockId))) {
+    return NextResponse.json({ error: { message: "請指定模板（officialId 或 blockId）", code: "invalid_request" } }, { status: 400 });
+  }
   const official = typeof body.officialId==='string' ? getOfficialTemplate(body.officialId) : undefined;
-  const block = body.officialId ? (official ? {id:'official-'+official.id,title:official.title,asset_id:getOfficialTemplateMedia(official.id)?.assetId} : null) : await getBlock(Number(body.blockId));
+  const block = typeof body.officialId === "string" ? (official ? {id:'official-'+official.id,title:official.title,asset_id:getOfficialTemplateMedia(official.id)?.assetId} : null) : await getBlock(blockId);
   if (!block) {
     return NextResponse.json({ error: { message: "找不到模板", code: "not_found" } }, { status: 404 });
   }

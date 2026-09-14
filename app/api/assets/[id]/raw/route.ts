@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const { id } = await ctx.params;
   const assetId = parseInt(id, 10);
-  if (!Number.isInteger(assetId)) {
+  if (!Number.isSafeInteger(assetId)) {
     return NextResponse.json({ error: { message: "素材 id 不正確", code: "bad_id" } }, { status: 400 });
   }
 

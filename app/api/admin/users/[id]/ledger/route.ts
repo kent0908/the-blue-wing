@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const { id } = await ctx.params;
   const userId = parseInt(id, 10);
-  if (!Number.isInteger(userId)) {
+  if (!Number.isSafeInteger(userId)) {
     return NextResponse.json({ error: { message: "使用者 id 不正確", code: "bad_id" } }, { status: 400 });
   }
 
