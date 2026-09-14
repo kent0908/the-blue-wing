@@ -60,7 +60,6 @@ const GROUP_B: Item[] = [
 const GROUP_C: Item[] = [
   { href: "/assets", label: "資產庫", icon: IconAssets },
   { href: "/companions", label: "陪聊角色", icon: IconChat, badge: { text: "NEW", tone: "new" } },
-  { href: "/models", label: "模型一覽", icon: IconVideo },
 ];
 
 function BadgeTag({ badge }: { badge: Badge }) {
@@ -264,6 +263,7 @@ function SidebarInner() {
       </nav>
 
       <div className="px-3 pb-4">
+        <NavLink item={{ href: "/models", label: "模型一覽", icon: IconVideo }} active={isActive("/models")} collapsed={collapsed} />
         <NavLink item={{ href: "/landing", label: "返回啟程", icon: IconWing }} active={isActive("/landing")} collapsed={collapsed} />
         {!collapsed && (
           <div className="mb-2 flex items-center gap-1.5 border-t border-[#1e1e1e] px-1 pt-3">
