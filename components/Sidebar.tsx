@@ -60,6 +60,7 @@ const GROUP_B: Item[] = [
 const GROUP_C: Item[] = [
   { href: "/assets", label: "資產庫", icon: IconAssets },
   { href: "/companions", label: "陪聊角色", icon: IconChat, badge: { text: "NEW", tone: "new" } },
+  { href: "/models", label: "模型一覽", icon: IconVideo },
 ];
 
 function BadgeTag({ badge }: { badge: Badge }) {

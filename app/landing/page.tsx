@@ -1,4 +1,11 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "啟程：用一句話生成 AI 影片與圖片",
+  description: "The Blue Wing 的入口頁：認識影片生成、圖片生成、智慧畫布、3D 導演台、圖層編輯與 AI 陪聊角色，免費每日 10 點立即開始。",
+  alternates: { canonical: "/landing" },
+};
 import WingExperience from "@/components/WingExperience";
 import LandingMedia from "@/components/LandingMedia";
 import ClosingGlow from "@/components/ClosingGlow";

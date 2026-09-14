@@ -1,4 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { FAQ_CATEGORIES } from "@/lib/supportFaq";
+
+export const metadata: Metadata = {
+  title: "說明中心：圖片生成、影片生成、參考素材、點數與方案",
+  description: "The Blue Wing 的操作說明：快速開始、圖片與影片生成、參考素材與 @ 提及、浮水印與審核強度、智慧畫布與 3D 導演台、生成紀錄與下載、點數與方案，以及各主題的常見問題。",
+  alternates: { canonical: "/help" },
+  openGraph: { title: "說明中心 · The Blue Wing", description: "從快速開始到點數方案，所有操作說明與常見問題。", url: "/help" },
+};
 
 /**
  * Static help/documentation content — the "說明" button in TopBar used to be
@@ -322,6 +331,19 @@ export default function HelpPage() {
                   </dd>
                 </div>
               </dl>
+            </Card>
+            <Card>
+              <div className="text-[13px] font-medium text-white">依主題瀏覽常見問題</div>
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                {FAQ_CATEGORIES.map((c) => (
+                  <li key={c.id}>
+                    <Link href={`/help/${c.id}`} className="flex items-baseline justify-between rounded-xl border border-[#262626] px-3 py-2 text-[13px] text-[#dcdcdc] hover:border-[#444]">
+                      <span>{c.label}</span><span className="text-[11.5px] text-[#7a7a7a]">{c.entries.length} 題</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-[12.5px] text-[#8a8a8a]">想知道每個模型的能力與點數？看 <Link href="/models" className="text-[#7ff0cd] hover:underline">模型一覽</Link>。</p>
             </Card>
           </section>
         </div>

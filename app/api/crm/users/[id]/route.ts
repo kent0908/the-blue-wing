@@ -49,7 +49,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     ]);
     const spend = usage.rows.filter((u) => u.status === "charged");
     return NextResponse.json({
-      user: { ...toPublicUser(user), lastSeenAt: user.last_seen_at ?? null },
+      user: { ...toPublicUser(user), lastSeenAt: user.last_seen_at ?? null, signupSource: user.signup_source ?? null },
       balance,
       ledger,
       usage: usage.rows.map((u) => ({ ...u, id: Number(u.id), list_cost_usd: u.cost_known && u.status === "charged" ? u.list_cost_usd : null, actual_cost_usd: u.cost_known && u.status === "charged" ? u.actual_cost_usd : null })),

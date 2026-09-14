@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { NOINDEX } from "@/lib/seo/site";
+
+export const metadata: Metadata = { title: "管理後台", ...NOINDEX };
 import { getSessionUser, SESSION_COOKIE } from "@/lib/auth";
 import CrmShell from "@/components/crm/CrmShell";
 import type { ReactNode } from "react";

@@ -9,7 +9,7 @@ import { CREDIT_PACKS } from "@/lib/creditPacks";
 import { modelLabel } from "@/lib/modelLabel";
 
 interface Detail {
-  user: { id: number; uid: string | null; email: string; role: "user" | "admin"; status: "active" | "banned"; emailVerified: boolean; planCode: string; planRenewsAt: string | null; createdAt: string; lastSeenAt: string | null };
+  user: { id: number; uid: string | null; email: string; role: "user" | "admin"; status: "active" | "banned"; emailVerified: boolean; planCode: string; planRenewsAt: string | null; createdAt: string; lastSeenAt: string | null; signupSource: { ref?: string; utm_source?: string | null; utm_medium?: string | null; utm_campaign?: string | null; landing?: string; channel?: string } | null };
   balance: number;
   ledger: { id: number; delta: number; reason: string; ref: string | null; created_at: string }[];
   usage: { id: number; kind: string; model: string; credits: number; units: number; unit: string; resolution: string | null; list_cost_usd: number | null; actual_cost_usd: number | null; status: string; created_at: string }[];
@@ -71,6 +71,7 @@ export default function CrmUserDetailPage() {
           </h1>
           <p className="text-[12px] text-[#6d6d6d]">
             內部 #{u.id} · 註冊 {dt(u.createdAt)} · 最後活動 {dt(u.lastSeenAt)} · 活躍 {num(data.activity.days)} 天 · 有效登入 {data.sessions} 個 · 陪聊角色 {data.characters} 個
+            {u.signupSource && <><br />來源 {({organic:"自然搜尋",ai:"AI 助理",social:"社群",paid:"廣告",referral:"外部連結",direct:"直接"} as Record<string,string>)[u.signupSource.channel ?? ""] ?? u.signupSource.channel}{u.signupSource.ref ? ` · ${u.signupSource.ref.replace(/^https?:\/\//, "").slice(0, 60)}` : ""}{u.signupSource.utm_campaign ? ` · ${u.signupSource.utm_campaign}` : ""}{u.signupSource.landing ? ` · 著陸 ${u.signupSource.landing.slice(0, 40)}` : ""}</>}
           </p>
         </div>
       </div>

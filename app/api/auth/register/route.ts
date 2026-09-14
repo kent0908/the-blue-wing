@@ -2,6 +2,7 @@ import { authLimit } from "@/lib/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 import { sql, toPublicUser, type UserRow } from "@/lib/db";
 import { generateUid } from "@/lib/uid";
+import { readSignupSource } from "@/lib/signupSource";
 import { hashPassword, newToken } from "@/lib/auth";
 import { sendVerifyEmail } from "@/lib/mail";
 
@@ -32,9 +33,10 @@ export async function POST(req: NextRequest) {
     const admin = false; // Public registration never grants administrative privileges.
     const token = newToken(24);
     const expires = new Date(Date.now() + VERIFY_TTL_MS).toISOString();
+    const source = readSignupSource(req);
 
     const { rows } = await sql<UserRow>`
-      insert into users (email, password_hash, role, email_verified, verify_token, verify_expires, uid)
+      insert into users (email, password_hash, role, email_verified, verify_token, verify_expires, uid, signup_source)
       values (
         ${mail},
         ${hashPassword(password)},
@@ -42,7 +44,8 @@ export async function POST(req: NextRequest) {
         ${admin},
         ${admin ? null : token},
         ${admin ? null : expires},
-        ${generateUid()}
+        ${generateUid()},
+        ${source ? JSON.stringify(source) : null}::jsonb
       )
       returning *
     `;

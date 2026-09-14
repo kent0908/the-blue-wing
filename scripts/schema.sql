@@ -496,3 +496,8 @@ create table if not exists alert_events (
   last_sent_at timestamptz,
   last_seen_at timestamptz not null default now()
 );
+
+-- First-touch attribution captured by proxy.ts (bw_src cookie) at sign-up:
+-- {ref, utm_source, utm_medium, utm_campaign, landing, at, channel}. Read
+-- by the CRM to separate organic / AI-assistant / social sign-ups.
+alter table users add column if not exists signup_source jsonb;

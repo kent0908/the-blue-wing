@@ -1,13 +1,33 @@
 import Link from "next/link";
 import { PLANS } from "@/lib/plans";
 import { CREDIT_PACKS } from "@/lib/creditPacks";
+import type { Metadata } from "next";
+import { jsonLd, SITE_URL } from "@/lib/seo/site";
+
+export const metadata: Metadata = {
+  title: "方案與點數價格：免費每日 10 點、Basic / Standard / Premium 與點數包",
+  description: `The Blue Wing 的收費方式：免費方案每天 10 點，${PLANS.filter(p=>p.priceUSD>0).map(p=>`${p.name} $${p.priceUSD}/月（${p.monthlyCredits.toLocaleString("en-US")} 點）`).join("、")}；點數包 ${CREDIT_PACKS.map(p=>`${p.credits.toLocaleString("en-US")} 點 $${p.priceUSD}`).join("、")}。影片依秒數與解析度計點，圖片依張數計點。`,
+  alternates: { canonical: "/pricing" },
+  openGraph: { title: "方案與點數價格 · The Blue Wing", description: "免費每日 10 點起，方案與點數包一覽。", url: "/pricing" },
+};
+
+const offersLd = jsonLd({
+  "@type": "Product",
+  name: "The Blue Wing 創作方案",
+  description: "AI 影片與圖片生成的點數方案與點數包",
+  brand: { "@id": `${SITE_URL}/#organization` },
+  offers: [
+    ...PLANS.map((p) => ({ "@type": "Offer", name: `${p.name} 方案`, price: String(p.priceUSD), priceCurrency: "USD", description: p.priceUSD ? `每月 ${p.monthlyCredits.toLocaleString("en-US")} 點` : `每天 ${p.dailyCredits ?? 0} 點`, url: `${SITE_URL}/pricing`, availability: "https://schema.org/InStock" })),
+    ...CREDIT_PACKS.map((c) => ({ "@type": "Offer", name: `${c.credits.toLocaleString("en-US")} 點數包`, price: String(c.priceUSD), priceCurrency: "USD", url: `${SITE_URL}/pricing`, availability: "https://schema.org/InStock" })),
+  ],
+});
 const COPY: Record<string,{eyebrow:string;description:string;features:string[]}>={
  free:{eyebrow:"從靈感開始",description:"輕鬆探索你的第一個作品。",features:["每天領取 10 點","依點數體驗生成","建立你的智慧畫布"]},
  basic:{eyebrow:"日常創作",description:"為偶爾湧現的靈感，留一點空間。",features:["每期 900 點","圖片、影片與文字創作","智慧畫布工作流程"]},
  standard:{eyebrow:"穩定產出",description:"讓系列作品，成為你的日常。",features:["每期 3,200 點","圖片、影片與文字創作","智慧畫布工作流程"]},
  premium:{eyebrow:"完整創作體驗",description:"為更大的故事，準備更多可能。",features:["每期 11,000 點","圖片、影片與文字創作","智慧畫布工作流程","解鎖陪聊角色專屬場景生成"]}
 };
-export default function PricingPage(){return <div className="h-full overflow-y-auto bg-[#080909] text-white"><div className="mx-auto max-w-[1560px] px-4 py-12 sm:px-8 lg:py-16">
+export default function PricingPage(){return <div className="h-full overflow-y-auto bg-[#080909] text-white"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: offersLd }} /><div className="mx-auto max-w-[1560px] px-4 py-12 sm:px-8 lg:py-16">
 <header className="mx-auto mb-10 max-w-2xl text-center"><p className="text-xs font-medium tracking-[.3em] text-[#7ff0cd]">BLUE WING · MEMBERSHIP</p><h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl"><span className="block">為你的下一個作品，</span><span className="mt-2 block">選擇更多可能。</span></h1><p className="mt-5 text-sm leading-7 text-neutral-400">從第一個靈感，到完整的創作計畫。<br/>選擇適合自己的點數額度，自由安排每一次生成。</p><span className="mt-6 inline-block rounded-full border border-neutral-700 bg-neutral-900 px-5 py-2 text-xs text-neutral-300">月方案 · 美元 USD</span></header>
 <div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">{PLANS.map(p=>{const special=p.code==="standard",gold=p.code==="premium",c=COPY[p.code];return <section key={p.code} className={`flex flex-col rounded-[24px] border p-[1px] ${gold?"border-[#dfbf72] bg-gradient-to-br from-[#ffedb2] to-[#e2b854]":special?"border-[#b3c8dc] bg-gradient-to-br from-[#eff6ff] to-[#aabfd5]":"border-[#303333] bg-[#222525]"}`}>
 <div className={`flex h-9 items-center justify-center text-xs font-semibold ${special||gold?"text-[#182029]":"text-neutral-400"}`}>{special?"✦ 推薦創作方案":gold?"✦ 更多點數・完整體驗":c.eyebrow}</div>

@@ -6,6 +6,14 @@ const nextConfig: NextConfig = {
   // optional node backends out of the server bundle so the SSR compile
   // doesn't try to resolve onnxruntime-node / sharp through it.
   serverExternalPackages: ["@huggingface/transformers", "onnxruntime-node", "sharp"],
+  // One canonical host. The *.vercel.app deployment URL still answered the
+  // whole site with 200 — a full duplicate in search engines' eyes.
+  async redirects() {
+    return [
+      { source: "/:path*", has: [{ type: "host", value: "the-blue-wing.vercel.app" }], destination: "https://thebluewing.studio/:path*", permanent: true },
+      { source: "/:path*", has: [{ type: "host", value: "www.thebluewing.studio" }], destination: "https://thebluewing.studio/:path*", permanent: true },
+    ];
+  },
   async headers() {
     // Baseline hardening for every response. No CSP yet: the layer editor
     // pulls browser ML models from the Hugging Face CDN and runs blob: workers,

@@ -40,6 +40,7 @@ export interface UserRow {
   uid: string | null;
   nickname?: string | null;
   last_seen_at?: string | null;
+  signup_source?: Record<string, unknown> | null;
 }
 
 /** Public shape sent to the client — never includes password_hash / tokens. */
