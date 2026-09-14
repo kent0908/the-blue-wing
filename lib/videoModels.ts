@@ -81,7 +81,9 @@ export type VideoResolution = "480p" | "720p" | "1080p" | "4k";
  */
 export function videoResolutionsForModel(modelId: string | null | undefined): readonly VideoResolution[] {
   const id = (modelId ?? "").toLowerCase().replace(/seedance-(\d)-(\d)/, "seedance-$1.$2");
-  if (/seedance-2\.0-(mini|fast)(?:-|$)/.test(id) || /seedance-2\.5(?:-|$)/.test(id)) return ["480p", "720p"];
+  // 2026-09-15: official ModelArk pricing + SIRAYA accepted 1080p job.
+  if (/seedance-2\.5(?:-|$)/.test(id)) return ["480p", "720p", "1080p"];
+  if (/seedance-2\.0-(mini|fast)(?:-|$)/.test(id)) return ["480p", "720p"];
   if (/seedance-2\.0(?:-\d+)?$/.test(id)) return ["480p", "720p", "1080p", "4k"];
   if (/seedance-1\.(0|5)-pro(?:-fast)?(?:-\d+)?$/.test(id)) return ["480p", "720p", "1080p"];
   if (/happyhorse-1\.0-(t2v|i2v|r2v|video-edit)$/.test(id)) return ["720p", "1080p"];

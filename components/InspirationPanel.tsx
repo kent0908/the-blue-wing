@@ -45,12 +45,13 @@ function FilterDropdown<T extends string>({
   }, [open]);
 
   return (
-    <div className="relative shrink-0" ref={ref}>
+    <div className="relative min-w-0 flex-1" ref={ref}>
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={[
-          "flex h-9 items-center gap-1 rounded-full px-3 text-[13px] transition-colors",
+          "flex h-9 w-full items-center justify-between gap-1 whitespace-nowrap rounded-full px-3 text-[13px] transition-colors",
           value === "all" ? "bg-[#1a1a1a] text-[#c9c9c9] hover:bg-[#222]" : "bg-[#1f1f1f] text-white ring-1 ring-[#3a3a3a]",
         ].join(" ")}
       >
@@ -58,7 +59,7 @@ function FilterDropdown<T extends string>({
         <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="bw-menu absolute right-0 top-[calc(100%+6px)] z-40 w-[150px] p-1.5">
+        <div className="bw-menu absolute right-0 top-[calc(100%+6px)] z-40 w-full min-w-0 p-1.5">
           {options.map((opt) => (
             <button
               key={opt}
@@ -158,8 +159,8 @@ export default function InspirationPanel({
       </div>
 
       {tab === "history" && (
-        <div className="flex items-center gap-2 px-4 pb-3">
-          <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-[#1a1a1a] px-3.5">
+        <div className="grid min-w-0 grid-cols-2 gap-2 px-4 pb-3">
+          <div className="col-span-2 flex h-9 min-w-0 items-center gap-2 rounded-full bg-[#1a1a1a] px-3.5">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}

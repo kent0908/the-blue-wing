@@ -21,7 +21,8 @@ const matrix = [
   ...['ByteDance','NSFW'].flatMap(p=>['1.0-pro','1.0-pro-fast','1.5-pro'].map(v=>[p+'-Seedance-'+v,['480p','720p','1080p']])),
   ...['SIRAYA','NSFW'].flatMap(p=>[
     [p+'-Seedance-2.0',['480p','720p','1080p','4k']],
-    ...['2.0-mini','2.0-fast','2.5'].map(v=>[p+'-Seedance-'+v,['480p','720p']])]),
+    [p+'-Seedance-2.5',['480p','720p','1080p']],
+    ...['2.0-mini','2.0-fast'].map(v=>[p+'-Seedance-'+v,['480p','720p']])]),
   ['veo-3.1-generate-001',['720p','1080p','4k']],
 ];
 for(const [model,expected] of matrix) {
