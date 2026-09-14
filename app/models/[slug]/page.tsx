@@ -49,7 +49,7 @@ function faqFor(page: ModelPage, name: string, specs: ReturnType<typeof modelSpe
 }
 
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
-  return <div className="flex gap-4 border-b border-[#1e1e1e] py-2.5 text-[13.5px]"><dt className="w-[128px] shrink-0 text-[#8a8a8a]">{k}</dt><dd className="m-0 min-w-0 flex-1 text-[#e6e6e6]">{v}</dd></div>;
+  return <div className="flex flex-col gap-1 sm:flex-row sm:gap-4 border-b border-[#1e1e1e] py-2.5 text-[13.5px]"><dt className="sm:w-[128px] shrink-0 text-[#8a8a8a]">{k}</dt><dd className="m-0 min-w-0 flex-1 text-[#e6e6e6]">{v}</dd></div>;
 }
 
 export default async function ModelPageView({ params }: { params: Promise<{ slug: string }> }) {

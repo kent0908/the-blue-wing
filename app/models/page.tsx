@@ -15,8 +15,8 @@ export default async function ModelsIndex() {
  let rates: ModelRate[] = [];
  try { rates = await listRates(); } catch { /* Keep the collection readable without rates. */ }
  const groups = [
-  { kind: "video" as const, number: "01", title: "讓故事流動", label: "動態影像", sub: "一個回眸、一陣風，或一段還沒說完的故事。從鏡頭與時間開始。" },
-  { kind: "image" as const, number: "02", title: "讓想像停留", label: "靜態創作", sub: "構圖、色彩、材質與留白。為腦海中的畫面，找到合適的表達。" },
+  { kind: "video" as const, number: "01", title: "讓故事流動", label: "動態影像", sub: "一個回眸，一陣風。讓鏡頭接著說故事。" },
+  { kind: "image" as const, number: "02", title: "讓想像停留", label: "靜態創作", sub: "構圖、色彩與留白，描繪你心中的畫面。" },
  ];
  const listLd = jsonLd({ "@type": "ItemList", itemListElement: MODEL_PAGES.map((m,i)=>({"@type":"ListItem",position:i+1,name:modelPageName(m),url:absoluteUrl(`/models/${m.slug}`)})) });
  return <div className="h-full overflow-y-auto bg-[#0b0c0c] text-[#eeeae1]">
@@ -27,7 +27,7 @@ export default async function ModelsIndex() {
     <div className="flex items-center justify-between gap-4 text-[11px] tracking-[0.2em] text-[#a4a599]"><span>THE BLUE WING / 創作工具選集</span><span className="hidden sm:block">模型一覽</span></div>
     <div className="mt-10 grid gap-8 lg:grid-cols-[1.3fr_1fr] lg:items-end">
      <h1 className="font-serif text-[clamp(2.5rem,5vw,4.8rem)] font-normal leading-[1.3] tracking-[0.02em]">為想像，<br /><span className="text-[#b6c7bc]">選一種筆觸。</span></h1>
-     <div className="max-w-[360px] lg:justify-self-end"><p className="text-[15px] leading-8 text-[#b7b8ae]">有些故事，需要一個鏡頭。<br />有些心情，留在一張畫裡就好。</p><p className="mt-4 text-[13px] leading-7 text-[#8d9189]">從你想創作的畫面開始，看看哪一種工具，適合這一次的表達。</p></div>
+     <div className="max-w-[360px] lg:justify-self-end"><p className="text-[15px] leading-8 text-[#b7b8ae]">有些故事，需要一個鏡頭。<br />有些心情，留在一張畫裡就好。</p><p className="mt-4 text-[13px] leading-7 text-[#8d9189]">從心中的畫面出發，<span className="bw-phrase">找到合適的創作工具。</span></p></div>
     </div>
     <nav aria-label="創作類別" className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm"><a className="border-b border-[#a9bdad] pb-2 transition-colors hover:text-white" href="#video">01　動態影像 ↗</a><a className="border-b border-[#44483f] pb-2 transition-colors hover:text-white" href="#image">02　靜態創作 ↗</a></nav>
    </header>

@@ -163,3 +163,16 @@ textarea {
   max-height: 40vh;
   overflow-y: auto;
 }
+
+/* Keep prose endings together without forcing whole paragraphs onto one line. */
+:where(p, li, dd, dt, label, figcaption, blockquote) {
+  text-wrap: pretty;
+  line-break: strict;
+  overflow-wrap: break-word;
+}
+:where(h1, h2, h3, h4) {
+  text-wrap: balance;
+  line-break: strict;
+  overflow-wrap: break-word;
+}
+.bw-phrase { display: inline-block; }
