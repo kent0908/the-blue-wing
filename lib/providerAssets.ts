@@ -1,6 +1,7 @@
 import { get } from '@vercel/blob';
 import { sql } from './db';
 import type { AssetRow } from './assets';
+import { raiseAlert } from './alerts';
 
 const BASE = 'https://console-api.siraya.ai/extapi/v1/assets';
 export type ProviderAssetType = 'image' | 'video' | 'audio';
@@ -108,6 +109,7 @@ export async function createProviderAsset(userId:number,assetId:unknown,consent:
   // marked failed and the user can retry or delete it themselves.
   const definite=error instanceof ProviderAssetError&&(error.code==='asset_upstream_error'||error.code==='asset_feature_inactive');
   await sql.query('update provider_assets set status=$1,updated_at=now() where id=$2 and user_id=$3',[submitted&&!definite?'needs_review':'failed',row.id,userId]);
+  if(submitted&&error instanceof ProviderAssetError&&error.code!=='asset_feature_inactive')void raiseAlert({key:`asset_upstream:${type}`,title:`素材服務無法接收${type==='video'?'影片':type==='audio'?'音訊':'圖片'}`,detail:`${error.code}：${error.message}${definite?'':'（結果不明，該筆已標記待人工確認）'}`,cooldownMinutes:60});
   if(error instanceof ProviderAssetError)throw error;
   throw new ProviderAssetError(submitted?'素材登錄結果待確認，請勿重複上傳，請聯絡管理員':'讀取素材失敗，請稍後重試',502,'asset_upload_uncertain');
  }

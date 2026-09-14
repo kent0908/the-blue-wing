@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { raiseAlert } from "@/lib/alerts";
 import { getVideoStatus } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
@@ -74,6 +75,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
 
     if (status === "failed") {
+      void raiseAlert({ key: `video_failed:${req.nextUrl.searchParams.get("model") ?? "unknown"}`, title: "影片任務回報失敗", detail: `模型 ${req.nextUrl.searchParams.get("model") ?? "未知"}，任務 ${id.slice(0, 24)}…，點數已退還`, cooldownMinutes: 30, level: "warn" });
       const { rows } = await sql`select id from credit_ledger where user_id=${user.id} and reason='video' and ref=${id} and delta<0 limit 1`;
       if(rows[0]) await refundCharge(user.id,String(rows[0].id));
     }

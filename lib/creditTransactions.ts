@@ -1,4 +1,5 @@
 import type { VercelPoolClient } from "@vercel/postgres";
+import { alertGenerationFailure } from "./alerts";
 import { sql } from "./db";
 import { replayCredits, type CreditEvent } from "./creditReplay";
 import { SirayaApiError } from "./siraya";
@@ -75,6 +76,7 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
   let result:T;
   try {result=await call(chargeId);} catch(e) {
     await refundCharge(userId,chargeId);
+    alertGenerationFailure(kind,ref,e);
     throw e;
   }
   await recordUsageEvent({userId,chargeId,kind,model:ref,credits:cost,units:usage?.units,resolution:usage?.resolution});

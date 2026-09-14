@@ -7,9 +7,19 @@ interface Settings {
   settings: { credit_value_usd: number; default_discount_pct: number; usd_to_twd: number };
   mail: { configured: boolean; from: string | null };
 }
+interface TelegramStatus {
+  configured: boolean;
+  tokenSet: boolean;
+  chatSet: boolean;
+  webhookSecretSet: boolean;
+  cronSecretSet: boolean;
+  botUsername: string | null;
+  alerts: { key: string; title: string; level: string; detail: string; count: number; last_seen_at: string }[];
+}
 
 export default function CrmSettingsPage() {
   const { data, error, reload } = useApi<Settings>("/api/crm/settings");
+  const { data: tg, reload: reloadTg } = useApi<TelegramStatus>("/api/crm/telegram");
   const [form, setForm] = useState({ credit_value_usd: "", default_discount_pct: "", usd_to_twd: "" });
   const [msg, setMsg] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -45,6 +55,22 @@ export default function CrmSettingsPage() {
       setMsg({ kind: "ok", text: "測試信已送出，請到你的信箱確認（含垃圾郵件匣）。" });
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "寄信失敗" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const telegram = async (action: "test" | "daily" | "report" | "scan") => {
+    setBusy(`tg-${action}`);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/crm/telegram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.sent) throw new Error(j?.error?.message || "傳送失敗");
+      setMsg({ kind: "ok", text: action === "scan" ? `掃描完成，${(j.findings ?? []).length} 項需要注意，結果已送到 Telegram。` : "已送到 Telegram，請到聊天視窗確認。" });
+      reloadTg();
+    } catch (e) {
+      setMsg({ kind: "err", text: e instanceof Error ? e.message : "傳送失敗" });
     } finally {
       setBusy(null);
     }
@@ -102,6 +128,47 @@ export default function CrmSettingsPage() {
               <div className="mb-1 font-medium text-[#c9c9c9]">安全設計</div>
               密碼以 scrypt 加鹽雜湊儲存，資料庫與後台都沒有明文；管理員只能「寄重設連結」給使用者本人（連結 1 小時有效、用過即失效，重設後所有裝置登出），無法直接看到或設定密碼。
               所有後台操作寫入稽核紀錄；後台 API 一律要求管理員身分並有速率限制；每位用戶有兩英文＋八位數字的 UID 供客服對照，不需揭露 email。
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Telegram 小助手（日報 / 告警）" sub="每天 09:00（台北）自動送昨日的人數、金流、銷售與生成摘要；生成服務或素材服務出錯時即時通知。" className="lg:col-span-2">
+          <div className="grid gap-4 text-[12.5px] lg:grid-cols-2">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className={`inline-block h-2.5 w-2.5 rounded-full ${tg?.configured ? "bg-[#7ff0cd]" : "bg-[#ff9b9b]"}`} />
+                {tg?.configured ? `已連上${tg.botUsername ? ` @${tg.botUsername}` : ""}` : "尚未完整設定"}
+              </div>
+              <ul className="space-y-1 text-[12px] text-[#c9c9c9]">
+                <li>{tg?.tokenSet ? "✅" : "❌"} <code className="rounded bg-[#1c1c1c] px-1">TELEGRAM_BOT_TOKEN</code> — 向 @BotFather 用 /newbot 建立機器人取得</li>
+                <li>{tg?.chatSet ? "✅" : "❌"} <code className="rounded bg-[#1c1c1c] px-1">TELEGRAM_ADMIN_CHAT_ID</code> — 先跟機器人說 /start，它會回你 chat id（或跑 <code className="rounded bg-[#1c1c1c] px-1">node scripts/telegram-setup.mjs discover</code>）</li>
+                <li>{tg?.webhookSecretSet ? "✅" : "❌"} <code className="rounded bg-[#1c1c1c] px-1">TELEGRAM_WEBHOOK_SECRET</code> — 任意隨機字串；設好後跑 <code className="rounded bg-[#1c1c1c] px-1">node scripts/telegram-setup.mjs webhook</code> 讓指令生效</li>
+                <li>{tg?.cronSecretSet ? "✅" : "❌"} <code className="rounded bg-[#1c1c1c] px-1">CRON_SECRET</code> — 任意隨機字串；Vercel 排程用它呼叫日報</li>
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={busy !== null} onClick={() => void telegram("test")} className={btnCls}>{busy === "tg-test" ? "傳送中…" : "傳測試訊息"}</button>
+                <button type="button" disabled={busy !== null} onClick={() => void telegram("daily")} className={btnCls}>{busy === "tg-daily" ? "傳送中…" : "現在送昨日日報"}</button>
+                <button type="button" disabled={busy !== null} onClick={() => void telegram("report")} className={btnCls}>{busy === "tg-report" ? "傳送中…" : "送今日即時報表"}</button>
+                <button type="button" disabled={busy !== null} onClick={() => void telegram("scan")} className={btnCls}>{busy === "tg-scan" ? "掃描中…" : "執行告警掃描"}</button>
+              </div>
+              <div className="text-[11.5px] leading-relaxed text-[#8a8a8a]">
+                指令：/report 今日至今 · /daily 日報 · /week 近 7 天 · /users 人數 · /status 服務健康 · /alerts 立即掃描。只有上面設定的那個聊天能下指令。
+              </div>
+            </div>
+            <div>
+              <div className="mb-2 text-[11.5px] text-[#8a8a8a]">最近告警（同一類事件在冷卻時間內只通知一次，次數會累計）</div>
+              {tg && tg.alerts.length === 0 && <div className="text-[12px] text-[#6d6d6d]">還沒有任何告警。</div>}
+              <ul className="space-y-1.5">
+                {tg?.alerts.map((a) => (
+                  <li key={a.key} className="rounded-lg bg-[#161616] px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={a.level === "error" ? "text-[#ff9b9b]" : "text-[#f0c27f]"}>{a.title}</span>
+                      <span className="text-[11px] text-[#8a8a8a]">×{a.count} · {new Date(a.last_seen_at).toLocaleString("zh-TW", { hour12: false })}</span>
+                    </div>
+                    {a.detail && <div className="mt-1 whitespace-pre-line text-[11.5px] text-[#a8a8a8]">{a.detail}</div>}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </Card>

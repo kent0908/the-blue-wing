@@ -483,3 +483,16 @@ alter table usage_events add column if not exists cost_known boolean not null de
 
 -- Public creator attribution; email remains private.
 alter table users add column if not exists nickname varchar(96);
+
+-- Operational alerts sent to the Telegram 小助手 (lib/alerts.ts). One row
+-- per alert key; count accumulates inside a cooldown window so a single
+-- outage is one message, not hundreds.
+create table if not exists alert_events (
+  key          text primary key,
+  title        text not null,
+  level        text not null default 'error',
+  detail       text not null default '',
+  count        integer not null default 1,
+  last_sent_at timestamptz,
+  last_seen_at timestamptz not null default now()
+);
