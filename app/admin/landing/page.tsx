@@ -118,9 +118,9 @@ export default function AdminLandingPage() {
             const isBusy = busySlot === slot.key;
             return (
               <div key={slot.key} className="flex flex-wrap items-center gap-4 rounded-xl border border-[#262626] bg-[#141414] p-4">
-                <div className="flex h-24 w-40 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#0a0a0a]">
+                <div className="flex aspect-video w-full sm:w-72 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#0a0a0a]">
                   {current?.kind === "video" ? (
-                    <video src={current.url} className="h-full w-full object-cover" muted loop autoPlay playsInline disablePictureInPicture disableRemotePlayback />
+                    <video key={current.url} src={`${current.url}#t=0.1`} aria-label={`${slot.label}影片預覽`} className="h-full w-full object-contain" controls preload="auto" playsInline disablePictureInPicture disableRemotePlayback />
                   ) : current?.kind === "image" ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={current.url} alt={slot.label} className="h-full w-full object-cover" />
