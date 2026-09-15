@@ -11,6 +11,7 @@
  * in director3d.ts.
  */
 import type { CameraKeyframe, CameraTrack, CharacterState } from "./director3d";
+import { k } from "../i18n/k";
 
 export interface ShotRequest {
   position: [number, number, number];
@@ -48,14 +49,14 @@ export interface ShotPreset {
 }
 
 export const SHOT_PRESETS: ShotPreset[] = [
-  { id: "front-full", label: "正面全身", angle: "front", framing: "full" },
-  { id: "front-medium", label: "正面半身", angle: "front", framing: "medium" },
-  { id: "front-closeup", label: "正面特寫", angle: "front", framing: "closeup" },
-  { id: "side", label: "側面", angle: "left", framing: "medium" },
-  { id: "back", label: "背面", angle: "back", framing: "full" },
-  { id: "45", label: "45° 側前", angle: "45", framing: "full" },
-  { id: "top", label: "鳥瞰俯視", angle: "top", framing: "full" },
-  { id: "low", label: "仰視英雄鏡", angle: "low", framing: "medium" },
+  { id: "front-full", label: k("正面全身"), angle: "front", framing: "full" },
+  { id: "front-medium", label: k("正面半身"), angle: "front", framing: "medium" },
+  { id: "front-closeup", label: k("正面特寫"), angle: "front", framing: "closeup" },
+  { id: "side", label: k("側面"), angle: "left", framing: "medium" },
+  { id: "back", label: k("背面"), angle: "back", framing: "full" },
+  { id: "45", label: k("45° 側前"), angle: "45", framing: "full" },
+  { id: "top", label: k("鳥瞰俯視"), angle: "top", framing: "full" },
+  { id: "low", label: k("仰視英雄鏡"), angle: "low", framing: "medium" },
 ];
 
 /** The Canvas's own initial camera — used for a "重置視角" button. */
@@ -116,15 +117,15 @@ export function describeCameraMove(from: ShotRequest, to: ShotRequest): string {
   let dAz = b.azimuth - a.azimuth;
   while (dAz > Math.PI) dAz -= Math.PI * 2;
   while (dAz < -Math.PI) dAz += Math.PI * 2;
-  if (Math.abs(rad2deg(dAz)) > 8) parts.push(dAz > 0 ? "鏡頭向右環繞移動" : "鏡頭向左環繞移動");
+  if (Math.abs(rad2deg(dAz)) > 8) parts.push(dAz > 0 ? k("鏡頭向右環繞移動") : k("鏡頭向左環繞移動"));
 
   const dEl = rad2deg(b.elevation - a.elevation);
-  if (Math.abs(dEl) > 6) parts.push(dEl > 0 ? "同時升高視角（往上看）" : "同時降低視角（往下看）");
+  if (Math.abs(dEl) > 6) parts.push(dEl > 0 ? k("同時升高視角（往上看）") : k("同時降低視角（往下看）"));
 
   const dDist = b.distance - a.distance;
-  if (Math.abs(dDist) > 0.3) parts.push(dDist < 0 ? "並持續拉近（推鏡）" : "並持續拉遠（拉鏡）");
+  if (Math.abs(dDist) > 0.3) parts.push(dDist < 0 ? k("並持續拉近（推鏡）") : k("並持續拉遠（拉鏡）"));
 
-  return parts.length ? parts.join("，") : "鏡頭在原地小幅度環顧";
+  return parts.length ? parts.join("，") : k("鏡頭在原地小幅度環顧");
 }
 
 /** Fit every character in frame at once — for multi-character blocking. */
@@ -261,18 +262,18 @@ export interface CameraMoveTemplate {
 }
 
 export const CAMERA_MOVE_TEMPLATES: CameraMoveTemplate[] = [
-  { id: "dolly-in", label: "推鏡", hint: "從目前視角慢慢推近主體", prompt: "鏡頭緩慢推近主體（推鏡）", kind: "keyframes" },
-  { id: "dolly-out", label: "拉鏡", hint: "從目前視角慢慢拉遠", prompt: "鏡頭緩慢拉遠、逐漸帶出環境（拉鏡）", kind: "keyframes" },
-  { id: "orbit-left", label: "左環繞 180°", hint: "繞著主體向左轉半圈", prompt: "鏡頭以主體為中心向左環繞半圈", kind: "keyframes" },
-  { id: "orbit-right", label: "右環繞 180°", hint: "繞著主體向右轉半圈", prompt: "鏡頭以主體為中心向右環繞半圈", kind: "keyframes" },
-  { id: "orbit-360", label: "環繞一圈 360°", hint: "繞著主體轉整整一圈", prompt: "鏡頭以主體為中心環繞一整圈", kind: "keyframes" },
-  { id: "crane-up", label: "升起", hint: "從目前高度升到俯視", prompt: "鏡頭逐漸升高、轉為俯視主體（升降鏡頭向上）", kind: "keyframes" },
-  { id: "crane-down", label: "下降", hint: "從俯視降到目前高度", prompt: "鏡頭由高處逐漸下降到與主體平視（升降鏡頭向下）", kind: "keyframes" },
-  { id: "pan", label: "搖鏡", hint: "鏡頭不動、視線由左掃到右", prompt: "鏡頭定點由左向右搖鏡掃過場景", kind: "keyframes" },
-  { id: "truck", label: "橫移", hint: "鏡頭與視線一起向右平移", prompt: "鏡頭沿水平方向向右平移（橫移）", kind: "keyframes" },
-  { id: "arc-in", label: "弧形推近", hint: "邊環繞邊推近，最有電影感", prompt: "鏡頭沿弧線環繞並逐漸推近主體", kind: "keyframes" },
-  { id: "follow-chase", label: "跟拍", hint: "鏡頭跟著角色一起移動", prompt: "鏡頭跟隨主體移動、保持相同距離（跟拍）", kind: "follow" },
-  { id: "follow-aim", label: "定點跟蹤", hint: "鏡頭不動、視線一直對著角色", prompt: "鏡頭定點不動，視線持續跟蹤主體（跟蹤搖鏡）", kind: "follow" },
+  { id: "dolly-in", label: k("推鏡"), hint: k("從目前視角慢慢推近主體"), prompt: k("鏡頭緩慢推近主體（推鏡）"), kind: "keyframes" },
+  { id: "dolly-out", label: k("拉鏡"), hint: k("從目前視角慢慢拉遠"), prompt: k("鏡頭緩慢拉遠、逐漸帶出環境（拉鏡）"), kind: "keyframes" },
+  { id: "orbit-left", label: k("左環繞 180°"), hint: k("繞著主體向左轉半圈"), prompt: k("鏡頭以主體為中心向左環繞半圈"), kind: "keyframes" },
+  { id: "orbit-right", label: k("右環繞 180°"), hint: k("繞著主體向右轉半圈"), prompt: k("鏡頭以主體為中心向右環繞半圈"), kind: "keyframes" },
+  { id: "orbit-360", label: k("環繞一圈 360°"), hint: k("繞著主體轉整整一圈"), prompt: k("鏡頭以主體為中心環繞一整圈"), kind: "keyframes" },
+  { id: "crane-up", label: k("升起"), hint: k("從目前高度升到俯視"), prompt: k("鏡頭逐漸升高、轉為俯視主體（升降鏡頭向上）"), kind: "keyframes" },
+  { id: "crane-down", label: k("下降"), hint: k("從俯視降到目前高度"), prompt: k("鏡頭由高處逐漸下降到與主體平視（升降鏡頭向下）"), kind: "keyframes" },
+  { id: "pan", label: k("搖鏡"), hint: k("鏡頭不動、視線由左掃到右"), prompt: k("鏡頭定點由左向右搖鏡掃過場景"), kind: "keyframes" },
+  { id: "truck", label: k("橫移"), hint: k("鏡頭與視線一起向右平移"), prompt: k("鏡頭沿水平方向向右平移（橫移）"), kind: "keyframes" },
+  { id: "arc-in", label: k("弧形推近"), hint: k("邊環繞邊推近，最有電影感"), prompt: k("鏡頭沿弧線環繞並逐漸推近主體"), kind: "keyframes" },
+  { id: "follow-chase", label: k("跟拍"), hint: k("鏡頭跟著角色一起移動"), prompt: k("鏡頭跟隨主體移動、保持相同距離（跟拍）"), kind: "follow" },
+  { id: "follow-aim", label: k("定點跟蹤"), hint: k("鏡頭不動、視線一直對著角色"), prompt: k("鏡頭定點不動，視線持續跟蹤主體（跟蹤搖鏡）"), kind: "follow" },
 ];
 
 /** `right` vector on the ground plane for a camera looking from `position` at `target`. */

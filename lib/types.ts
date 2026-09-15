@@ -1,3 +1,4 @@
+import { k } from "./i18n/tr";
 export type Mode = "image" | "video" | "text" | "audio";
 
 export interface ModelInfo {
@@ -40,10 +41,10 @@ export const ASPECT_RATIOS = ["auto", "1:1", "3:4", "4:3", "9:16", "16:9", "21:9
 // videoConstraintFor() for the real per-model lists.
 
 export const MODE_LABELS: Record<Mode, string> = {
-  image: "智慧生圖",
-  video: "智慧影片",
-  text: "多輪對話",
-  audio: "語音",
+  image: k("智慧生圖"),
+  video: k("智慧影片"),
+  text: k("多輪對話"),
+  audio: k("語音"),
 };
 
 export interface ResultItem {

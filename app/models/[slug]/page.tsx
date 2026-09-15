@@ -5,10 +5,12 @@ import { MODEL_PAGES, modelPageBySlug, modelPageName, modelPricing, modelSpecs, 
 import { listRates, type ModelRate } from "@/lib/rateCard";
 import { SITE_DEFINITION, SITE_NAME, SITE_URL, absoluteUrl, breadcrumbLd, faqLd, jsonLd } from "@/lib/seo/site";
 import ModelLogo from "@/components/ModelLogo";
-import { getDict } from "@/lib/i18n/server";
+import { getDict, getTr } from "@/lib/i18n/server";
 import { fmt, type Dict } from "@/lib/i18n/dict";
+import type { Tr } from "@/lib/i18n/tr";
 
-export const revalidate = 3600;
+// Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
+export const dynamic = "force-dynamic";
 export const dynamicParams = false;
 
 export function generateStaticParams() {
@@ -34,7 +36,7 @@ async function safeRates(): Promise<ModelRate[]> {
   }
 }
 
-function faqFor(t: Dict, page: ModelPage, name: string, specs: ReturnType<typeof modelSpecs>, pricing: ReturnType<typeof modelPricing>) {
+function faqFor(t: Dict, tr: Tr, page: ModelPage, name: string, specs: ReturnType<typeof modelSpecs>, pricing: ReturnType<typeof modelPricing>) {
   const M = t.models;
   const faq: { question: string; answer: string }[] = [];
   if (page.kind === "video") {
@@ -48,7 +50,7 @@ function faqFor(t: Dict, page: ModelPage, name: string, specs: ReturnType<typeof
   }
   if (pricing) {
     const unit = pricing.unit === "秒" ? M.sec : M.img;
-    faq.push({ question: fmt(M.faqCost.q, { name }), answer: fmt(M.faqCost.a, { unit, per: pricing.perUnit, examples: pricing.examples.map((e) => `${e.label} ${e.credits}${M.creditUnit}`).join(M.exampleSep) }) });
+    faq.push({ question: fmt(M.faqCost.q, { name }), answer: fmt(M.faqCost.a, { unit, per: pricing.perUnit, examples: pricing.examples.map((e) => `${tr(e.label, e.vars)} ${e.credits}${M.creditUnit}`).join(M.exampleSep) }) });
   }
   faq.push({ question: fmt(M.faqHow.q, { name }), answer: fmt(M.faqHow.a, { name, section: page.kind === "video" ? t.nav.video : t.nav.image, refs: specs.refImages ? M.faqHow.refs : "" }) });
   return faq;
@@ -63,11 +65,12 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
   const page = modelPageBySlug(slug);
   if (!page) notFound();
   const { t } = await getDict();
+  const tr = await getTr();
   const M = t.models;
   const name = modelPageName(page);
   const specs = modelSpecs(page);
   const pricing = modelPricing(page, await safeRates());
-  const faq = faqFor(t, page, name, specs, pricing);
+  const faq = faqFor(t, tr, page, name, specs, pricing);
   const unitWord = pricing ? (pricing.unit === "秒" ? M.sec : M.img) : "";
   const siblings = MODEL_PAGES.filter((m) => m.kind === page.kind && m.slug !== page.slug);
   const studioHref = `/studio?mode=${page.kind}&model=${encodeURIComponent(page.id)}`;
@@ -97,8 +100,8 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
             <p className="mt-1 text-[13px] text-[#8a8a8a]">{page.vendor} · {page.kind === "video" ? M.videoModel : M.imageModel} · {M.updated} {page.updatedAt}</p>
           </div>
         </header>
-        <p className="mt-5 text-[16px] leading-7 text-[#dcdcdc]">{page.tagline}</p>
-        <p className="mt-3 text-[14.5px] leading-7 text-[#b8b8b8]">{page.blurb}</p>
+        <p className="mt-5 text-[16px] leading-7 text-[#dcdcdc]">{tr(page.tagline)}</p>
+        <p className="mt-3 text-[14.5px] leading-7 text-[#b8b8b8]">{tr(page.blurb)}</p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href={studioHref} className="rounded-full bg-[#7ff0cd] px-5 py-2.5 text-[13.5px] font-semibold text-[#0a1a16] hover:brightness-110">{fmt(M.startWith, { name })}</Link>
           <Link href="/pricing" className="rounded-full border border-[#2a2a2a] px-5 py-2.5 text-[13.5px] text-[#dcdcdc] hover:border-[#444]">{M.seePricing}</Link>
@@ -107,7 +110,7 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
         <section className="mt-10">
           <h2 className="text-[18px] font-semibold text-white">{M.specs}</h2>
           <dl className="mt-3">
-            <Row k={M.modesLabel} v={specs.modes.map((m) => (t.modes as Record<string, string>)[m] ?? m).join(M.listSep)} />
+            <Row k={M.modesLabel} v={specs.modes.map((m) => tr(m)).join(M.listSep)} />
             {page.kind === "video" ? (
               <>
                 <Row k={M.resolution} v={specs.resolutions.join(" / ")} />
@@ -123,18 +126,18 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
                 <Row k={M.quality} v={specs.quality ? M.qualityV : M.fixed} />
               </>
             )}
-            <Row k={M.credits} v={pricing ? `${M.per}${unitWord} ${pricing.perUnit}${M.creditUnit} — ${pricing.examples.map((e) => `${e.label} ${e.credits}${M.creditUnit}`).join(M.exampleSep)}` : M.byRateCard} />
+            <Row k={M.credits} v={pricing ? `${M.per}${unitWord} ${pricing.perUnit}${M.creditUnit} — ${pricing.examples.map((e) => `${tr(e.label, e.vars)} ${e.credits}${M.creditUnit}`).join(M.exampleSep)}` : M.byRateCard} />
           </dl>
         </section>
 
         <section className="mt-10 grid gap-6 sm:grid-cols-2">
           <div>
             <h2 className="text-[18px] font-semibold text-white">{M.bestFor}</h2>
-            <ul className="mt-3 space-y-2 text-[14px] leading-6 text-[#cfcfcf]">{page.bestFor.map((t) => <li key={t} className="flex gap-2"><span className="text-[#7ff0cd]">✓</span><span>{t}</span></li>)}</ul>
+            <ul className="mt-3 space-y-2 text-[14px] leading-6 text-[#cfcfcf]">{page.bestFor.map((t) => <li key={t} className="flex gap-2"><span className="text-[#7ff0cd]">✓</span><span>{tr(t)}</span></li>)}</ul>
           </div>
           <div>
             <h2 className="text-[18px] font-semibold text-white">{M.notFor}</h2>
-            <ul className="mt-3 space-y-2 text-[14px] leading-6 text-[#cfcfcf]">{page.notFor.map((t) => <li key={t} className="flex gap-2"><span className="text-[#8a8a8a]">–</span><span>{t}</span></li>)}</ul>
+            <ul className="mt-3 space-y-2 text-[14px] leading-6 text-[#cfcfcf]">{page.notFor.map((t) => <li key={t} className="flex gap-2"><span className="text-[#8a8a8a]">–</span><span>{tr(t)}</span></li>)}</ul>
           </div>
         </section>
 
@@ -142,9 +145,9 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
           <h2 className="text-[18px] font-semibold text-white">{M.faq}</h2>
           <div className="mt-3 divide-y divide-[#1e1e1e]">
             {faq.map((f) => (
-              <details key={f.question} className="group py-3">
-                <summary className="cursor-pointer list-none text-[14.5px] font-medium text-[#e6e6e6] marker:content-none">{f.question}</summary>
-                <p className="mt-2 text-[13.5px] leading-6 text-[#b8b8b8]">{f.answer}</p>
+              <details key={tr(f.question)} className="group py-3">
+                <summary className="cursor-pointer list-none text-[14.5px] font-medium text-[#e6e6e6] marker:content-none">{tr(f.question)}</summary>
+                <p className="mt-2 text-[13.5px] leading-6 text-[#b8b8b8]">{tr(f.answer)}</p>
               </details>
             ))}
           </div>
@@ -154,13 +157,13 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
           <h2 className="text-[18px] font-semibold text-white">{page.kind === "video" ? M.otherVideo : M.otherImage}</h2>
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {siblings.map((m) => (
-              <li key={m.slug}><Link href={`/models/${m.slug}`} className="flex items-center gap-3 rounded-xl border border-[#1e1e1e] px-3 py-2.5 hover:border-[#3a3a3a]"><ModelLogo id={m.id} size={26} /><span className="min-w-0"><span className="block text-[13.5px] text-white">{modelPageName(m)}</span><span className="block truncate text-[12px] text-[#8a8a8a]">{m.tagline}</span></span></Link></li>
+              <li key={m.slug}><Link href={`/models/${m.slug}`} className="flex items-center gap-3 rounded-xl border border-[#1e1e1e] px-3 py-2.5 hover:border-[#3a3a3a]"><ModelLogo id={m.id} size={26} /><span className="min-w-0"><span className="block text-[13.5px] text-white">{modelPageName(m)}</span><span className="block truncate text-[12px] text-[#8a8a8a]">{tr(m.tagline)}</span></span></Link></li>
             ))}
           </ul>
         </section>
 
         <footer className="mt-12 border-t border-[#1e1e1e] pt-6 text-[12.5px] leading-6 text-[#7a7a7a]">
-          <p>{SITE_DEFINITION}</p>
+          <p>{tr(SITE_DEFINITION)}</p>
           <p className="mt-2">{M.footNote}</p>
         </footer>
       </article>

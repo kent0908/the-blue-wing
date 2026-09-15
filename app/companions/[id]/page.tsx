@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CharacterChat, { type CharacterData } from "@/components/CharacterChat";
+import { useTr } from "@/lib/i18n/client";
 
 export default function CharacterChatPage() {
+  const tr = useTr();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [character, setCharacter] = useState<CharacterData | null>(null);
@@ -18,13 +20,13 @@ export default function CharacterChatPage() {
           router.push(`/login?next=/companions/${params.id}`);
           return null;
         }
-        return r.ok ? r.json() : Promise.reject(new Error("找不到這個角色"));
+        return r.ok ? r.json() : Promise.reject(new Error(tr("找不到這個角色")));
       })
       .then((j: { character: CharacterData } | null) => {
         if (!alive || !j) return;
         setCharacter(j.character);
       })
-      .catch((e) => alive && setError(e instanceof Error ? e.message : "載入失敗"));
+      .catch((e) => alive && setError(e instanceof Error ? e.message : tr("載入失敗")));
     return () => {
       alive = false;
     };
@@ -34,7 +36,7 @@ export default function CharacterChatPage() {
     return (
       <div className="grid h-full place-items-center">
         <div className="max-w-sm rounded-xl border border-[#4a2020] bg-[#1a1010] px-5 py-4 text-center text-[13.5px] text-[#ffb4b4]">
-          {error}
+          {tr(error)}
         </div>
       </div>
     );

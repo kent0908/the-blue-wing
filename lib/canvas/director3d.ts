@@ -1,3 +1,4 @@
+import { k } from "../i18n/k";
 /**
  * 3D導演台 (Director's Desk) — a Canvas node type (see lib/canvas/types.ts)
  * that opens a small 3D scene editor: pose a mannequin, aim a camera,
@@ -65,8 +66,8 @@ export type Pose = Partial<Record<JointName, JointRotation>>;
 export type BodyStyle = "mannequin" | "stick";
 
 export const BODY_STYLE_LABEL: Record<BodyStyle, string> = {
-  mannequin: "精細模特兒",
-  stick: "簡易關節人偶（新手推薦）",
+  mannequin: k("精細模特兒"),
+  stick: k("簡易關節人偶（新手推薦）"),
 };
 
 /**

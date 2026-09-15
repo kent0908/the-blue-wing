@@ -1,22 +1,23 @@
+import { k } from "./i18n/k";
 /** Shared, bounded character settings. Free text is character data, never API configuration. */
 export const PROFILE_FIELDS = {
-  gender: { label: "性別", max: 30, options: ["女性", "男性", "非二元", "自訂"] },
-  style: { label: "視覺風格", max: 30, options: ["寫實", "動漫", "電影感", "繪本"] },
-  species: { label: "角色類型", max: 60, options: ["人類", "精靈", "機器人", "奇幻角色"] },
-  skin: { label: "膚色", max: 40, options: ["白皙", "自然", "小麥", "古銅", "深棕"] },
-  hair: { label: "髮型與髮色", max: 100 },
-  eyes: { label: "眼睛顏色", max: 40 },
-  build: { label: "體型", max: 40, options: ["纖細", "勻稱", "健美", "豐滿", "高挑"] },
-  outfit: { label: "服裝與外觀細節", max: 300 },
-  temperament: { label: "性格", max: 100, options: ["溫柔體貼", "開朗幽默", "沉穩理性", "活潑好奇", "內斂細膩"] },
-  speaking: { label: "說話方式", max: 100, options: ["自然簡短", "溫柔細膩", "幽默俏皮", "知性條理", "故事感"] },
-  occupation: { label: "職業", max: 100, options: ["藝術家", "設計師", "音樂人", "工程師", "作家", "旅行家"] },
-  relationship: { label: "你們的關係", max: 100, options: ["新朋友", "好友", "戀人", "同事", "室友", "冒險夥伴"] },
-  greeting: { label: "開場白", max: 600 },
-  scenario: { label: "相遇情境", max: 800 },
-  background: { label: "背景故事", max: 1000 },
-  boundaries: { label: "互動偏好與界線", max: 400 },
-  tags: { label: "管理標籤", max: 200 },
+  gender: { label: k("性別"), max: 30, options: [k("女性"), k("男性"), k("非二元"), k("自訂")] },
+  style: { label: k("視覺風格"), max: 30, options: [k("寫實"), k("動漫"), k("電影感"), k("繪本")] },
+  species: { label: k("角色類型"), max: 60, options: [k("人類"), k("精靈"), k("機器人"), k("奇幻角色")] },
+  skin: { label: k("膚色"), max: 40, options: [k("白皙"), k("自然"), k("小麥"), k("古銅"), k("深棕")] },
+  hair: { label: k("髮型與髮色"), max: 100 },
+  eyes: { label: k("眼睛顏色"), max: 40 },
+  build: { label: k("體型"), max: 40, options: [k("纖細"), k("勻稱"), k("健美"), k("豐滿"), k("高挑")] },
+  outfit: { label: k("服裝與外觀細節"), max: 300 },
+  temperament: { label: k("性格"), max: 100, options: [k("溫柔體貼"), k("開朗幽默"), k("沉穩理性"), k("活潑好奇"), k("內斂細膩")] },
+  speaking: { label: k("說話方式"), max: 100, options: [k("自然簡短"), k("溫柔細膩"), k("幽默俏皮"), k("知性條理"), k("故事感")] },
+  occupation: { label: k("職業"), max: 100, options: [k("藝術家"), k("設計師"), k("音樂人"), k("工程師"), k("作家"), k("旅行家")] },
+  relationship: { label: k("你們的關係"), max: 100, options: [k("新朋友"), k("好友"), k("戀人"), k("同事"), k("室友"), k("冒險夥伴")] },
+  greeting: { label: k("開場白"), max: 600 },
+  scenario: { label: k("相遇情境"), max: 800 },
+  background: { label: k("背景故事"), max: 1000 },
+  boundaries: { label: k("互動偏好與界線"), max: 400 },
+  tags: { label: k("管理標籤"), max: 200 },
 } as const;
 export type ProfileKey = keyof typeof PROFILE_FIELDS;
 export type CharacterProfile = Record<ProfileKey, string> & { version: 1; age: number };
@@ -35,9 +36,9 @@ export const EMPTY_PROFILE: CharacterProfile = {
 export const OFFICIAL_MIN_AGE = 16;
 
 export function validateProfile(value: unknown, minAge = 18): CharacterProfile {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("角色設定格式不正確");
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(k("角色設定格式不正確"));
   const input = value as Record<string, unknown>;
-  if (input.version !== undefined && input.version !== 1) throw new Error("角色設定版本不支援");
+  if (input.version !== undefined && input.version !== 1) throw new Error(k("角色設定版本不支援"));
   const age = input.age ?? 25;
   if (typeof age !== "number" || !Number.isInteger(age) || age < minAge || age > 120) throw new Error(`角色年齡請填寫 ${minAge} 至 120 歲`);
   const result = { ...EMPTY_PROFILE, age };

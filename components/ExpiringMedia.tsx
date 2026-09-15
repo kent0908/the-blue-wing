@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTr } from "@/lib/i18n/client";
 
 /**
  * Older generations may have been recorded with a signed upstream URL that's
@@ -28,6 +29,7 @@ export default function ExpiringMedia({
   controls?: boolean;
   onBroken?: () => void;
 }) {
+  const tr = useTr();
   const [broken, setBroken] = useState(false);
   const fail = () => {
     setBroken(true);
@@ -38,7 +40,7 @@ export default function ExpiringMedia({
     return (
       <div className={fallbackClassName ?? "flex aspect-square w-full flex-col items-center justify-center gap-1 bg-[#1c1c1c] text-[#6d6d6d]"}>
         <span className="text-[18px]">⚠</span>
-        <span className="text-[10.5px]">已過期</span>
+        <span className="text-[10.5px]">{tr("已過期")}</span>
       </div>
     );
   }

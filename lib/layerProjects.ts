@@ -1,5 +1,6 @@
 import { sql } from "./db";
 import { SirayaApiError } from "./siraya";
+import { k } from "./i18n/k";
 
 /**
  * 圖層編輯 project storage (see layer_projects / layer_project_versions in
@@ -51,12 +52,12 @@ export function summarize(row: LayerProjectRow): LayerProjectSummary {
 /** Shape + size gate for a document coming from the client. Throws a 400 SirayaApiError (errorResponse maps it). */
 export function assertDoc(doc: unknown): asserts doc is { canvas: object; layers: unknown[] } {
   const d = doc as { canvas?: unknown; layers?: unknown } | null;
-  if (!d || typeof d !== "object" || !d.canvas || typeof d.canvas !== "object" || !Array.isArray(d.layers)) throw new SirayaApiError(400, "專案資料格式不正確", "invalid_request_error", "bad_doc");
-  if (d.layers.length > 200) throw new SirayaApiError(400, "圖層數量超過上限（200）", "invalid_request_error", "bad_doc");
+  if (!d || typeof d !== "object" || !d.canvas || typeof d.canvas !== "object" || !Array.isArray(d.layers)) throw new SirayaApiError(400, k("專案資料格式不正確"), "invalid_request_error", "bad_doc");
+  if (d.layers.length > 200) throw new SirayaApiError(400, k("圖層數量超過上限（200）"), "invalid_request_error", "bad_doc");
   if (JSON.stringify(doc).length > MAX_PROJECT_DOC_BYTES) throw new SirayaApiError(400, `專案資料超過 ${MAX_PROJECT_DOC_BYTES / 1024 / 1024} MB — 圖片請先存進資產庫再加入，不要直接貼入`, "invalid_request_error", "too_large");
 }
 
-export function cleanName(value: unknown, fallback = "未命名專案"): string {
+export function cleanName(value: unknown, fallback = k("未命名專案")): string {
   const s = typeof value === "string" ? value.trim().slice(0, 80) : "";
   return s || fallback;
 }

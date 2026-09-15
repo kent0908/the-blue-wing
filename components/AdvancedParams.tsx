@@ -3,6 +3,7 @@
 import Popover from "./Popover";
 import { IconSettings } from "./Icons";
 import type { Mode } from "@/lib/types";
+import { useTr } from "@/lib/i18n/client";
 
 /**
  * The "進階" (advanced) button. Only exposes settings that are real, verified
@@ -73,10 +74,11 @@ export default function AdvancedParams({
   /** false when the current model doesn't accept the field at all (see lib/imageModels.ts). */
   watermarkSupported: boolean;
 }) {
+  const tr = useTr();
   const active = (mode === "image" && moderation === "low") || (watermarkSupported && watermark);
 
   return (
-    <Popover label="進階設定"
+    <Popover label={tr("進階設定")}
       widthClass="w-[320px]"
       // This chip sits at the right end of the Composer's toolbar row (right
       // before the price/send button) — anchoring the panel to grow
@@ -93,30 +95,30 @@ export default function AdvancedParams({
     >
       {() => (
         <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden p-3">
-          <div className="pb-3 text-[13px] font-medium text-white">進階設定</div>
+          <div className="pb-3 text-[13px] font-medium text-white">{tr("進階設定")}</div>
 
           {(mode === "image" || mode === "video") && (
             <div className="border-t border-[#262626] pt-3">
               {watermarkSupported ? (
                 <>
-                  <Switch label="生成浮水印" on={watermark} onChange={onWatermarkChange} />
+                  <Switch label={tr("生成浮水印")} on={watermark} onChange={onWatermarkChange} />
                   <p className="mt-1 text-[10.5px] leading-relaxed text-[#6d6d6d]">
-                    {watermark ? "已開啟：請求服務商加入生成浮水印。" : "已關閉（預設）：請求服務商不加入生成浮水印。"}
+                    {watermark ? tr("已開啟：請求服務商加入生成浮水印。") : tr("已關閉（預設）：請求服務商不加入生成浮水印。")}
                   </p>
                 </>
               ) : (
-                <p className="text-[11.5px] leading-relaxed text-[#6d6d6d]">此模型未提供可控制的浮水印參數；不會傳送不支援的設定。</p>
+                <p className="text-[11.5px] leading-relaxed text-[#6d6d6d]">{tr("此模型未提供可控制的浮水印參數；不會傳送不支援的設定。")}</p>
               )}
             </div>
           )}
 
           {mode === "image" && (
             <div className="border-t border-[#262626] pt-3 mt-3">
-              <div className="pb-2 text-[12.5px] text-[#a8a8a8]">內容審核強度</div>
+              <div className="pb-2 text-[12.5px] text-[#a8a8a8]">{tr("內容審核強度")}</div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { v: "auto", label: "自動（預設）" },
-                  { v: "low", label: "寬鬆" },
+                  { v: "auto", label: tr("自動（預設）") },
+                  { v: "low", label: tr("寬鬆") },
                 ].map((o) => (
                   <button
                     key={o.v}
@@ -129,7 +131,7 @@ export default function AdvancedParams({
                         : "bg-[#232323] text-[#c9c9c9] hover:bg-[#2b2b2b]",
                     ].join(" ")}
                   >
-                    {o.label}
+                    {tr(o.label)}
                   </button>
                 ))}
               </div>
@@ -138,15 +140,15 @@ export default function AdvancedParams({
 
           {mode === "image" && (
             <div className="border-t border-[#262626] pt-3 mt-3">
-              <div className="pb-1.5 text-[12.5px] text-[#a8a8a8]">多張參考圖怎麼下指令（實測有效寫法）</div>
+              <div className="pb-1.5 text-[12.5px] text-[#a8a8a8]">{tr("多張參考圖怎麼下指令（實測有效寫法）")}</div>
               <p className="text-[11.5px] leading-relaxed text-[#8a8a8a]">
-                模型收到的是一組沒有標籤的圖，@名稱 只是給你自己看的標記。實測發現直接說「用第一張的形狀」很容易失敗——模型會把兩張圖整個疊在一起，而不是照指令合成。
+                {tr("模型收到的是一組沒有標籤的圖，@名稱 只是給你自己看的標記。實測發現直接說「用第一張的形狀」很容易失敗——模型會把兩張圖整個疊在一起，而不是照指令合成。")}
               </p>
               <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8a8a8a]">
-                有效寫法：<span className="text-[#c9c9c9]">先逐張描述內容，再下指令</span>，例如：
+                {tr("有效寫法：")}<span className="text-[#c9c9c9]">{tr("先逐張描述內容，再下指令")}</span>{tr("，例如：")}
               </p>
               <p className="mt-1 rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2.5 py-2 text-[11px] leading-relaxed text-[#9a9a9a]">
-                圖1是一隻紅色蘋果，圖2是藍色。請畫出圖1的形狀，整個塗成圖2的藍色。
+                {tr("圖1是一隻紅色蘋果，圖2是藍色。請畫出圖1的形狀，整個塗成圖2的藍色。")}
               </p>
             </div>
           )}
@@ -154,28 +156,27 @@ export default function AdvancedParams({
           {mode === "video" && (
             <div className="space-y-4 border-t border-[#262626] pt-3 mt-3">
               <div>
-                <div className="pb-1.5 text-[12.5px] text-[#a8a8a8]">Prompt 小技巧（Seedance 官方寫法）</div>
+                <div className="pb-1.5 text-[12.5px] text-[#a8a8a8]">{tr("Prompt 小技巧（Seedance 官方寫法）")}</div>
                 <ul className="space-y-1 text-[11.5px] leading-relaxed text-[#8a8a8a]">
                   <li>
-                    <span className="text-[#c9c9c9]">鏡頭：</span>
-                    景別（wide / medium / close-up）、角度（eye-level / low angle / overhead）、
-                    運鏡（dolly-in / pan / tilt / tracking / orbit）直接寫進 prompt 就會生效
+                    <span className="text-[#c9c9c9]">{tr("鏡頭：")}</span>
+                    {tr("景別（wide / medium / close-up）、角度（eye-level / low angle / overhead）、 運鏡（dolly-in / pan / tilt / tracking / orbit）直接寫進 prompt 就會生效")}
                   </li>
                   <li>
-                    <span className="text-[#c9c9c9]">配樂：</span>
-                    <code className="text-[#9a9a9a]">(輕柔鋼琴聲)</code>
+                    <span className="text-[#c9c9c9]">{tr("配樂：")}</span>
+                    <code className="text-[#9a9a9a]">({tr("輕柔鋼琴聲")})</code>
                   </li>
                   <li>
-                    <span className="text-[#c9c9c9]">音效：</span>
-                    <code className="text-[#9a9a9a]">&lt;火車鳴笛聲&gt;</code>
+                    <span className="text-[#c9c9c9]">{tr("音效：")}</span>
+                    <code className="text-[#9a9a9a]">&lt;{tr("火車鳴笛聲")}&gt;</code>
                   </li>
                   <li>
-                    <span className="text-[#c9c9c9]">對白：</span>
-                    <code className="text-[#9a9a9a]">{"{我從沒想過會回到這裡}"}</code>
+                    <span className="text-[#c9c9c9]">{tr("對白：")}</span>
+                    <code className="text-[#9a9a9a]">{tr("{我從沒想過會回到這裡}")}</code>
                   </li>
                   <li>
-                    <span className="text-[#c9c9c9]">章節/字幕：</span>
-                    <code className="text-[#9a9a9a]">【第一章：啟程】</code>
+                    <span className="text-[#c9c9c9]">{tr("章節/字幕：")}</span>
+                    <code className="text-[#9a9a9a]">{tr("【第一章：啟程】")}</code>
                   </li>
                 </ul>
               </div>
@@ -183,7 +184,7 @@ export default function AdvancedParams({
           )}
 
           {mode !== "image" && mode !== "video" && (
-            <p className="border-t border-[#262626] pt-3 text-[12px] text-[#6d6d6d]">這個模式目前沒有進階設定</p>
+            <p className="border-t border-[#262626] pt-3 text-[12px] text-[#6d6d6d]">{tr("這個模式目前沒有進階設定")}</p>
           )}
         </div>
       )}

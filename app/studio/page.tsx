@@ -19,6 +19,7 @@ import { mainViewerJob, runningJobCount } from "@/lib/jobVisibility";
 import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
 import { generationTimeLabel } from "@/lib/formatTime";
+import { useTr } from "@/lib/i18n/client";
 
 /**
  * Which 生成紀錄 kind belongs on-screen for a given composer mode. The main
@@ -31,6 +32,7 @@ const KIND_FOR_MODE: Record<Mode, ResultItem["kind"]> = { image: "image", video:
 const MODE_FOR_KIND: Record<ResultItem["kind"], Mode> = { image: "image", video: "video", text: "text" };
 
 function StudioInner() {
+  const tr = useTr();
   const router = useRouter();
   const params = useSearchParams();
   const mode = (params.get("mode") as Mode) || "video";
@@ -92,7 +94,7 @@ function StudioInner() {
           })
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null);
-          if (alive && t?.ref) setPresetRefs([{ id: t.ref.id, src: t.ref.src, name: t.ref.name ?? "範本圖片" }]);
+          if (alive && t?.ref) setPresetRefs([{ id: t.ref.id, src: t.ref.src, name: t.ref.name ?? tr("範本圖片") }]);
         }
       } finally {
         if (alive) setPresetReady(true);
@@ -157,14 +159,14 @@ function StudioInner() {
             className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] text-[#c9c9c9] transition-colors hover:bg-[#222] hover:text-white"
           >
             <IconCompass className="h-4 w-4" />
-            靈感廣場
+            {tr("靈感廣場")}
           </button>
           <button
             onClick={() => setPanelOpen(true)}
             className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] text-[#c9c9c9] transition-colors hover:bg-[#222] hover:text-white"
           >
             <IconHistory className="h-4 w-4" />
-            生成紀錄
+            {tr("生成紀錄")}
           </button>
         </div>
 
@@ -177,7 +179,7 @@ function StudioInner() {
             // without needing a parent effect to sync it back to false.
             <MainViewerItem key={latest.id} item={latest} />
           ) : jobs.length === 0 ? (
-            <h2 className="text-center text-xl sm:text-[34px] font-normal text-[#5c5c5c]">用 The Blue Wing 點亮你的創作</h2>
+            <h2 className="text-center text-xl sm:text-[34px] font-normal text-[#5c5c5c]">{tr("用 The Blue Wing 點亮你的創作")}</h2>
           ) : null}
         </div>
 
@@ -186,7 +188,7 @@ function StudioInner() {
             <JobQueue jobs={jobs} onDismiss={dismissJob} />
             {atCapacity && (
               <p className="mb-2 text-center text-[11.5px] text-[#f0c27f]">
-                同時最多 {MAX_CONCURRENT_JOBS} 個生成在跑（不限模式），等其中一個完成才能再送出
+                {tr("同時最多")} {MAX_CONCURRENT_JOBS} {tr("個生成在跑（不限模式），等其中一個完成才能再送出")}
               </p>
             )}
             {official ? <OfficialTemplateComposer key={official.id} template={official} composerProps={{initialModel:urlModel,mode,onModeChange:setMode,onSubmit:handleSubmit,busy:atCapacity}} /> : presetReady ? (
@@ -236,6 +238,7 @@ function StudioInner() {
  * for.
  */
 function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMinimize: () => void; onDismiss: () => void }) {
+  const tr = useTr();
   const Icon = KIND_ICON[job.kind];
   if (job.error) {
     return (
@@ -244,7 +247,7 @@ function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMini
         <p className="text-[14px] leading-relaxed text-[#ff9b9b]">{job.error}</p>
         {job.errorCta && (
           <Link href={job.errorCta.href} className="mt-2 inline-block text-[12.5px] text-[#7ff0cd] hover:underline">
-            {job.errorCta.label}
+            {tr(job.errorCta.label)}
           </Link>
         )}
         <button
@@ -253,7 +256,7 @@ function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMini
           className="mx-auto mt-4 flex items-center gap-1.5 rounded-full bg-[#242424] px-4 py-1.5 text-[12.5px] text-white hover:bg-[#2e2e2e]"
         >
           <IconClose className="h-3.5 w-3.5" />
-          關閉
+          {tr("關閉")}
         </button>
       </div>
     );
@@ -264,7 +267,7 @@ function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMini
       <button
         type="button"
         onClick={onMinimize}
-        title="縮小（生成不會中斷，改用下面的小卡片顯示）"
+        title={tr("縮小（生成不會中斷，改用下面的小卡片顯示）")}
         className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full text-[#6d6d6d] hover:bg-[#1f1f1f] hover:text-white"
       >
         <IconCollapse className="h-4 w-4" />
@@ -282,6 +285,7 @@ function ActiveJobCard({ job, onMinimize, onDismiss }: { job: PendingJob; onMini
 }
 
 function MainViewerItem({ item }: { item: ResultItem }) {
+  const tr = useTr();
   const [broken, setBroken] = useState(false);
   if(item.layerSetId) return <LayerDecompositionResult id={item.layerSetId}/>;
   return (
@@ -299,17 +303,17 @@ function MainViewerItem({ item }: { item: ResultItem }) {
           />
         )}
         {item.kind === "text" && (
-          <div className="whitespace-pre-wrap rounded-xl bg-[#141414] p-6 text-[14px] leading-relaxed">{item.text}</div>
+          <div className="whitespace-pre-wrap rounded-xl bg-[#141414] p-6 text-[14px] leading-relaxed">{tr(item.text)}</div>
         )}
         {item.url && !broken && (
           <button
             type="button"
             onClick={() => downloadResult(item)}
-            title="下載"
+            title={tr("下載")}
             className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-[12.5px] text-white backdrop-blur transition-colors hover:bg-black/80"
           >
             <IconDownload className="h-4 w-4" />
-            下載
+            {tr("下載")}
           </button>
         )}
       </div>

@@ -7,6 +7,7 @@ import ShareWorkflowDialog from "@/components/canvas/ShareWorkflowDialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconPlus, IconCanvas, IconTrash, IconGlobe, IconApps } from "@/components/Icons";
+import { useTr } from "@/lib/i18n/client";
 
 interface WorkflowSummary {
   id: string;
@@ -62,6 +63,7 @@ function GalleryCard({
   previewVideo?: string;
   previewHref?: string;
 }) {
+  const tr = useTr();
   return (
     <div className="group relative flex min-h-[160px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]">
       {previewVideo ? <CanvasVideoPreview src={previewVideo} poster={cover} title={title} /> : cover && <Image width={3840} height={2160} src={cover} alt={title} className="mb-3 aspect-video w-full rounded-lg bg-white object-contain" />}
@@ -72,7 +74,7 @@ function GalleryCard({
       <div className="min-w-0">
         <p className="line-clamp-3 text-[11.5px] text-[#8a8a8a]">{subtitle}</p>
         <div className="mt-2 flex items-center justify-between">
-          {previewHref && <Link href={previewHref} className="text-xs text-emerald-300 hover:underline">預覽節點</Link>}
+          {previewHref && <Link href={previewHref} className="text-xs text-emerald-300 hover:underline">{tr("預覽節點")}</Link>}
           {badge ? <span className="text-[11px] text-[#7d7d7d]">{badge}</span> : <span />}
           <button
             type="button"
@@ -89,6 +91,7 @@ function GalleryCard({
 }
 
 export default function CanvasHomePage() {
+  const tr = useTr();
   const router = useRouter();
   const [shareId, setShareId] = useState<string | null>(null);
   const [workflows, setWorkflows] = useState<WorkflowSummary[] | null>(null);
@@ -111,7 +114,7 @@ export default function CanvasHomePage() {
       .then((j: { workflows: WorkflowSummary[] } | null) => {
         if (j) setWorkflows(j.workflows);
       })
-      .catch(() => setError("載入失敗，稍後再試"));
+      .catch(() => setError(tr("載入失敗，稍後再試")));
 
     fetch("/api/canvas/templates")
       .then((r) => (r.ok ? r.json() : { templates: [] }))
@@ -139,29 +142,29 @@ export default function CanvasHomePage() {
       const res = await fetch("/api/canvas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "未命名畫布" }),
+        body: JSON.stringify({ name: tr("未命名畫布") }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "建立失敗");
+      if (!res.ok) throw new Error(j?.error?.message || tr("建立失敗"));
       router.push(`/canvas/${j.workflow.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "建立失敗");
+      setError(e instanceof Error ? e.message : tr("建立失敗"));
     } finally {
       setCreating(false);
     }
   };
 
   const remove = async (id: string) => {
-    if (!confirm("刪除這個畫布？此動作無法復原。")) return;
+    if (!confirm(tr("刪除這個畫布？此動作無法復原。"))) return;
     const res = await fetch(`/api/canvas/${id}`, { method: "DELETE" }).catch(() => null);
-    if (!res?.ok) { setError("刪除失敗，畫布仍保留，請稍後再試"); return; }
+    if (!res?.ok) { setError(tr("刪除失敗，畫布仍保留，請稍後再試")); return; }
     setWorkflows((cur) => cur?.filter((w) => w.id !== id) ?? cur);
   };
 
   const publishTemplate = async (w: WorkflowSummary) => {
-    const name = prompt("官方模板名稱：", w.name);
+    const name = prompt(tr("官方模板名稱："), w.name);
     if (!name?.trim()) return;
-    const description = prompt("簡短說明（可留空）：", "") ?? "";
+    const description = prompt(tr("簡短說明（可留空）："), "") ?? "";
     setBusyId(w.id);
     try {
       const res = await fetch("/api/canvas/templates", {
@@ -170,11 +173,11 @@ export default function CanvasHomePage() {
         body: JSON.stringify({ name: name.trim(), description: description.trim(), workflowId: w.id }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "發布失敗");
-      alert("已發布為官方模板");
+      if (!res.ok) throw new Error(j?.error?.message || tr("發布失敗"));
+      alert(tr("已發布為官方模板"));
       load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "發布失敗");
+      alert(e instanceof Error ? e.message : tr("發布失敗"));
     } finally {
       setBusyId(null);
     }
@@ -187,10 +190,10 @@ export default function CanvasHomePage() {
     try {
       const res = await fetch(`/api/canvas/templates/${id}/clone`, { method: "POST" });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "複製失敗");
+      if (!res.ok) throw new Error(j?.error?.message || tr("複製失敗"));
       router.push(`/canvas/${j.workflowId}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "複製失敗");
+      alert(e instanceof Error ? e.message : tr("複製失敗"));
       setBusyId(null);
     }
   };
@@ -200,22 +203,22 @@ export default function CanvasHomePage() {
     try {
       const res = await fetch(`/api/canvas/plaza/${id}/clone`, { method: "POST" });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "複製失敗");
+      if (!res.ok) throw new Error(j?.error?.message || tr("複製失敗"));
       router.push(`/canvas/${j.workflowId}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "複製失敗");
+      alert(e instanceof Error ? e.message : tr("複製失敗"));
       setBusyId(null);
     }
   };
 
   const deleteTemplate = async (id: number) => {
-    if (!confirm("刪除這個官方模板？")) return;
+    if (!confirm(tr("刪除這個官方模板？"))) return;
     await fetch(`/api/canvas/templates/${id}`, { method: "DELETE" });
     setTemplates((cur) => cur?.filter((t) => t.id !== id) ?? cur);
   };
 
   const deletePlazaPost = async (id: number) => {
-    if (!confirm("刪除這篇分享？")) return;
+    if (!confirm(tr("刪除這篇分享？"))) return;
     await fetch(`/api/canvas/plaza/${id}`, { method: "DELETE" });
     setPlaza((cur) => cur?.filter((p) => p.id !== id) ?? cur);
   };
@@ -226,9 +229,9 @@ export default function CanvasHomePage() {
       <div className="mx-auto max-w-[1080px] px-6 py-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[22px] font-semibold tracking-tight">智慧畫布</h1>
+            <h1 className="text-[22px] font-semibold tracking-tight">{tr("智慧畫布")}</h1>
             <p className="mt-1 text-[13px] leading-relaxed text-[#8a8a8a]">
-              把文字、圖片、影片生成節點拉在一起，自由搭建你的工作流。
+              {tr("把文字、圖片、影片生成節點拉在一起，自由搭建你的工作流。")}
             </p>
           </div>
           <button
@@ -238,15 +241,15 @@ export default function CanvasHomePage() {
             className="flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[13px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:opacity-50"
           >
             <IconPlus className="h-4 w-4" />
-            {creating ? "建立中…" : "建立新畫布"}
+            {creating ? tr("建立中…") : tr("建立新畫布")}
           </button>
         </div>
 
-        {error && <p className="mt-4 text-[13px] text-[#ff9b9b]">{error}</p>}
+        {error && <p className="mt-4 text-[13px] text-[#ff9b9b]">{tr(error)}</p>}
 
         {/* 我的畫布 */}
         <section className="mt-8">
-          <h2 className="text-[15px] font-medium">我的畫布</h2>
+          <h2 className="text-[15px] font-medium">{tr("我的畫布")}</h2>
 
           {workflows === null && !error && (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -258,9 +261,9 @@ export default function CanvasHomePage() {
 
           {workflows?.length === 0 && (
             <div className="mt-16 text-center text-[13px] text-[#5c5c5c]">
-              還沒有任何畫布
+              {tr("還沒有任何畫布")}
               <br />
-              按右上角「建立新畫布」開始，或下面挑一個模板／廣場分享來改
+              {tr("按右上角「建立新畫布」開始，或下面挑一個模板／廣場分享來改")}
             </div>
           )}
 
@@ -276,10 +279,10 @@ export default function CanvasHomePage() {
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">
                       <IconCanvas className="h-4 w-4" />
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{w.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{tr(w.name)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-[#7d7d7d]">
-                    <span>{w.nodeCount} 個節點</span>
+                    <span>{w.nodeCount} {tr("個節點")}</span>
                     <span>{new Date(w.updatedAt).toLocaleDateString("zh-TW")}</span>
                   </div>
                   <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -291,8 +294,8 @@ export default function CanvasHomePage() {
                         shareToPlaza(w);
                       }}
                       disabled={busyId === w.id}
-                      aria-label="分享到廣場"
-                      title="分享到藍翼廣場"
+                      aria-label={tr("分享到廣場")}
+                      title={tr("分享到藍翼廣場")}
                       className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
                     >
                       <IconGlobe className="h-3.5 w-3.5" />
@@ -306,8 +309,8 @@ export default function CanvasHomePage() {
                           publishTemplate(w);
                         }}
                         disabled={busyId === w.id}
-                        aria-label="發布為官方模板"
-                        title="發布為官方模板"
+                        aria-label={tr("發布為官方模板")}
+                        title={tr("發布為官方模板")}
                         className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
                       >
                         <IconApps className="h-3.5 w-3.5" />
@@ -320,7 +323,7 @@ export default function CanvasHomePage() {
                         e.stopPropagation();
                         remove(w.id);
                       }}
-                      aria-label="刪除"
+                      aria-label={tr("刪除")}
                       className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
                     >
                       <IconTrash className="h-3.5 w-3.5" />
@@ -336,8 +339,8 @@ export default function CanvasHomePage() {
         <section className="mt-8">
           <div className="flex items-center gap-2">
             <IconApps className="h-4 w-4 text-[#7ff0cd]" />
-            <h2 className="text-[15px] font-medium">官方模板</h2>
-            <span className="text-[11.5px] text-[#6d6d6d]">— 直接複製使用，開箱即用的工作流</span>
+            <h2 className="text-[15px] font-medium">{tr("官方模板")}</h2>
+            <span className="text-[11.5px] text-[#6d6d6d]">{tr("— 直接複製使用，開箱即用的工作流")}</span>
           </div>
           {templates === null ? (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -346,7 +349,7 @@ export default function CanvasHomePage() {
               ))}
             </div>
           ) : templates.length === 0 ? (
-            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">目前還沒有官方模板</p>
+            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">{tr("目前還沒有官方模板")}</p>
           ) : (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {templates.map((t) => (
@@ -356,17 +359,17 @@ export default function CanvasHomePage() {
                   previewVideo={t.previewVideo}
                   previewHref={t.id < 0 ? `/canvas/templates/${t.id}` : undefined}
                   icon={<IconApps className="h-4 w-4" />}
-                  title={t.name}
-                  subtitle={t.description || `${t.nodeCount} 個節點`}
-                  badge={`${t.nodeCount} 個節點`}
+                  title={tr(t.name)}
+                  subtitle={tr(t.description) || tr("{n} 個節點", { n: t.nodeCount })}
+                  badge={tr("{n} 個節點", { n: t.nodeCount })}
                   onOpen={() => cloneTemplate(t.id)}
-                  onOpenLabel={busyId === `t${t.id}` ? "複製中…" : "複製到我的畫布"}
+                  onOpenLabel={busyId === `t${t.id}` ? tr("複製中…") : tr("複製到我的畫布")}
                   corner={
                     isAdmin && t.id > 0 ? (
                       <button
                         type="button"
                         onClick={() => deleteTemplate(t.id)}
-                        aria-label="刪除範本"
+                        aria-label={tr("刪除範本")}
                         className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
                       >
                         <IconTrash className="h-3.5 w-3.5" />
@@ -383,8 +386,8 @@ export default function CanvasHomePage() {
         <section className="mt-8">
           <div className="flex items-center gap-2">
             <IconGlobe className="h-4 w-4 text-[#7ff0cd]" />
-            <h2 className="text-[15px] font-medium">藍翼廣場</h2><button type="button" onClick={() => setShareId("")} className="rounded-full bg-[#7ff0cd] px-3 py-2 text-xs text-black">＋ 上傳工作流</button>
-            <span className="text-[11.5px] text-[#6d6d6d]">— 大家分享出來的工作流，歡迎拿去用</span>
+            <h2 className="text-[15px] font-medium">{tr("藍翼廣場")}</h2><button type="button" onClick={() => setShareId("")} className="rounded-full bg-[#7ff0cd] px-3 py-2 text-xs text-black">{tr("＋ 上傳工作流")}</button>
+            <span className="text-[11.5px] text-[#6d6d6d]">{tr("— 大家分享出來的工作流，歡迎拿去用")}</span>
           </div>
           {plaza === null ? (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -393,24 +396,24 @@ export default function CanvasHomePage() {
               ))}
             </div>
           ) : plaza.length === 0 ? (
-            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">還沒有人分享工作流，來當第一個吧</p>
+            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">{tr("還沒有人分享工作流，來當第一個吧")}</p>
           ) : (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {plaza.map((p) => (
                 <GalleryCard
                   key={p.id}
                   icon={<IconGlobe className="h-4 w-4" />}
-                  title={p.name}
+                  title={tr(p.name)}
                   subtitle={p.description || `by ${p.authorName}`}
-                  badge={`by ${p.authorName} · 複製 ${p.copyCount} 次`}
+                  badge={tr("by {author} · 複製 {n} 次", { author: p.authorName, n: p.copyCount })}
                   onOpen={() => clonePlazaPost(p.id)}
-                  onOpenLabel={busyId === `p${p.id}` ? "複製中…" : "複製到我的畫布"}
+                  onOpenLabel={busyId === `p${p.id}` ? tr("複製中…") : tr("複製到我的畫布")}
                   corner={
                     p.isOwn || isAdmin ? (
                       <button
                         type="button"
                         onClick={() => deletePlazaPost(p.id)}
-                        aria-label="刪除分享"
+                        aria-label={tr("刪除分享")}
                         className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
                       >
                         <IconTrash className="h-3.5 w-3.5" />

@@ -4,6 +4,7 @@ import { IconClose } from "../../Icons";
 import type { Director3DSceneData } from "@/lib/canvas/director3d";
 import Director3DStudioBody from "./Director3DStudioBody";
 import { useDirector3DEditor } from "./useDirector3DEditor";
+import { useTr } from "@/lib/i18n/client";
 
 /**
  * 3D導演台 editor — opened from a "director3d" Canvas node (see
@@ -33,6 +34,7 @@ export default function Director3DPanel({
   onSave: (data: Director3DSceneData) => void;
   onClose: () => void;
 }) {
+  const tr = useTr();
   const editor = useDirector3DEditor(initial);
 
   const save = () => {
@@ -44,20 +46,20 @@ export default function Director3DPanel({
     <div className="fixed inset-0 z-[200] flex flex-col bg-black">
       {/* toolbar */}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1c1c1c] px-4">
-        <span className="text-[13px] font-medium text-white">3D 導演台</span>
-        <span className="text-[11px] text-[#6d6d6d]">拖曳空白處旋轉視角、滾輪縮放；拖曳角色可移動；「路徑」分頁可點擊放置路線、「鏡頭」分頁設定運鏡</span>
+        <span className="text-[13px] font-medium text-white">{tr("3D 導演台")}</span>
+        <span className="text-[11px] text-[#6d6d6d]">{tr("拖曳空白處旋轉視角、滾輪縮放；拖曳角色可移動；「路徑」分頁可點擊放置路線、「鏡頭」分頁設定運鏡")}</span>
         <div className="ml-auto flex items-center gap-2">
           <button type="button" onClick={editor.takeScreenshot} className="h-8 rounded-full bg-[#1f1f1f] px-3.5 text-[12.5px] text-white hover:bg-[#282828]">
-            📷 截圖
+            {tr("📷 截圖")}
           </button>
           <button
             type="button"
             onClick={save}
             className="h-8 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[12.5px] font-medium text-[#0a1a16] hover:brightness-105"
           >
-            儲存並關閉
+            {tr("儲存並關閉")}
           </button>
-          <button type="button" onClick={onClose} aria-label="關閉（不儲存）" className="grid h-8 w-8 place-items-center rounded-full text-[#8a8a8a] hover:bg-[#1f1f1f] hover:text-white">
+          <button type="button" onClick={onClose} aria-label={tr("關閉（不儲存）")} className="grid h-8 w-8 place-items-center rounded-full text-[#8a8a8a] hover:bg-[#1f1f1f] hover:text-white">
             <IconClose className="h-4 w-4" />
           </button>
         </div>

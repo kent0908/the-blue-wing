@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 function load(file, deps = {}) {
   const m = {exports:{}};
   const code = ts.transpileModule(fs.readFileSync(file,'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-  new Function('require','module','exports',code)(id => {if (!(id in deps)) throw Error(id);return deps[id]},m,m.exports);
+  new Function('require','module','exports',code)(id => {if(/i18n\/(tr|k)$/.test(String(id)))return {k:(s)=>s};if (!(id in deps)) throw Error(id);return deps[id]},m,m.exports);
   return m.exports;
 }
 const caps = load('lib/videoModels.ts');

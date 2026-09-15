@@ -6,6 +6,7 @@ function load(file, imports = {}) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
   const mod = { exports: {} };
   new Function('require', 'module', 'exports', source)(name => {
+    if (/i18n\/(tr|k)$/.test(String(name))) return { k: (s) => s };
     if (name in imports) return imports[name];
     throw new Error(`Unexpected dependency: ${name}`);
   }, mod, mod.exports);

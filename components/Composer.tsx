@@ -43,6 +43,9 @@ import { supportsImageWatermark, supportsVideoWatermark } from "@/lib/watermark"
 import { AUDIO_MODELS } from "@/lib/audioModels";
 import ModelFunctionMenu from "./ModelFunctionMenu";
 import { modelFunctionSelection } from "@/lib/modelFunctionSelection";
+import { useT, useTr } from "@/lib/i18n/client";
+import { modeLabel } from "@/lib/i18n/dict";
+import { k } from "@/lib/i18n/tr";
 
 interface RefAsset {
   id: number;
@@ -65,16 +68,16 @@ function escapeRegExp(s: string): string {
 // fallback — see modalityForMode below — and ResultItem.kind reuses "text"
 // for audio results too), just no longer reachable from the UI.
 const MODE_ITEMS: { id: Mode; label: string; icon: (p: { className?: string }) => React.ReactElement }[] = [
-  { id: "image", label: "智慧生圖", icon: IconImage },
-  { id: "video", label: "智慧影片", icon: IconVideo },
-  { id: "audio", label: "文字創作", icon: IconAudio },
+  { id: "image", label: k("智慧生圖"), icon: IconImage },
+  { id: "video", label: k("智慧影片"), icon: IconVideo },
+  { id: "audio", label: k("文字創作"), icon: IconAudio },
 ];
 
 const PLACEHOLDER: Record<Mode, string> = {
-  video: "描述你想生成的影片畫面",
-  image: "描述你想生成的圖片畫面",
-  text: "輸入你的問題或指令",
-  audio: "輸入你想撰寫、改寫或討論的內容",
+  video: k("描述你想生成的影片畫面"),
+  image: k("描述你想生成的圖片畫面"),
+  text: k("輸入你的問題或指令"),
+  audio: k("輸入你想撰寫、改寫或討論的內容"),
 };
 
 /** Credits shown on the submit pill — 1 credit ≈ US$0.005, matching the
@@ -121,6 +124,8 @@ export default function Composer({
   /** a recorded 3D導演台 運鏡 clip handed off from /canvas/director3d — video mode only */
   initialVideoRef?: { url: string; name?: string };
 }) {
+  const tr = useTr();
+  const t = useT();
   const modeRouter = useRouter();
   const modeParams = useSearchParams();
   const [providerSelection,setProviderSelection] = useState<{model:string;operation:string;ids:number[]}>({model:"",operation:"",ids:[]});
@@ -275,7 +280,7 @@ export default function Composer({
         try {
           asset = await uploadAsset(file);
         } catch (e) {
-          if (activeRefSession.current === refSession) setRefError(e instanceof Error ? e.message : "上傳失敗");
+          if (activeRefSession.current === refSession) setRefError(e instanceof Error ? e.message : tr("上傳失敗"));
           continue;
         }
         if (activeRefSession.current !== refSession) break;
@@ -283,7 +288,7 @@ export default function Composer({
         addRef(asset);
       }
     } catch {
-      if (activeRefSession.current === refSession) setRefError("圖片上傳失敗，請檢查連線後重試。");
+      if (activeRefSession.current === refSession) setRefError(tr("圖片上傳失敗，請檢查連線後重試。"));
     } finally {
       setRefUpload(previous => previous?.session === refSession ? { session: refSession, busy: false } : previous);
     }
@@ -297,7 +302,7 @@ export default function Composer({
     fetch("/api/models")
       .then(async (r) => {
         const j = await r.json();
-        if (!r.ok) throw new Error(j?.error?.message || "無法載入模型清單");
+        if (!r.ok) throw new Error(j?.error?.message || tr("無法載入模型清單"));
         return j;
       })
       .then((j) => {
@@ -491,8 +496,8 @@ export default function Composer({
         isExpanded ? "min-h-[260px]" : "",
       ].join(" ")}
     >
-      {operation==="layer-separation" && <div className="px-4 py-3 text-xs text-[#b2c8c0]"><p>限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。</p><label className="mt-2 block">輸出解析度 <select aria-label="圖層解析度" value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">查看圖層紀錄</Link></div>}
-      {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label="確認圖層分離費用" className="mx-4 my-3 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>最高預扣 {credits} 點（底圖與最多 16 個圖層）。每張 {credits === null ? "—" : credits / 17} 點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>確認預扣並分離</button><button type="button" onClick={()=>setLayerConfirm(false)}>取消</button></div></div>}
+      {operation==="layer-separation" && <div className="px-4 py-3 text-xs text-[#b2c8c0]"><p>{tr("限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。")}</p><label className="mt-2 block">{tr("輸出解析度")} <select aria-label={tr("圖層解析度")} value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">{tr("查看圖層紀錄")}</Link></div>}
+      {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label={tr("確認圖層分離費用")} className="mx-4 my-3 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>{tr("最高預扣")} {credits} {tr("點（底圖與最多 16 個圖層）。每張")} {credits === null ? "—" : credits / 17} {tr("點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。")}</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>{tr("確認預扣並分離")}</button><button type="button" onClick={()=>setLayerConfirm(false)}>{tr("取消")}</button></div></div>}
       {isFramePair && <FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} />}
       <div className="relative flex flex-wrap gap-3 px-4 pt-4">
         {canUseRefs && !isFramePair && (
@@ -500,12 +505,12 @@ export default function Composer({
             {refs.map((r) => (
               <div key={r.id} className="relative h-[82px] w-[82px] -rotate-2 overflow-hidden rounded-xl border border-[#454545] shadow-md transition-transform hover:rotate-0 focus-within:rotate-0 motion-reduce:transition-none">
                 {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
-                <img src={r.src} alt={r.name} className="h-full w-full object-cover" />
+                <img src={r.src} alt={tr(r.name)} className="h-full w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => setRefs((cur) => cur.filter((x) => x.id !== r.id))}
                   className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black"
-                  aria-label="移除素材"
+                  aria-label={tr("移除素材")}
                 >
                   ×
                 </button>
@@ -519,16 +524,16 @@ export default function Composer({
                 className="group grid h-[82px] w-[106px] shrink-0 -rotate-2 place-items-center rounded-xl border border-dashed border-[#505050] bg-gradient-to-br from-[#2b2b2b] to-[#1c1c1c] px-2 py-2 text-[#d2d2d2] shadow-md transition-transform hover:rotate-0 hover:border-[#858585] focus-visible:rotate-0 focus-visible:outline-[#7ff0cd] motion-reduce:transition-none"
               >
                 <IconPlus className="h-4 w-4" />
-                <span className="text-[11px]">加入參考素材</span>
-                <span className="text-[9px] text-[#949494]">上傳 / 素材庫</span>
+                <span className="text-[11px]">{tr("加入參考素材")}</span>
+                <span className="text-[9px] text-[#949494]">{tr("上傳 / 素材庫")}</span>
               </button>
             )}
 
             {refPicker && (
               <div className="bw-menu absolute bottom-[calc(100%+8px)] left-0 z-40 w-[320px] max-w-[calc(100vw-64px)] p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-medium text-white">參考素材（最多 {refCap} 個）</span>
-                  <button type="button" onClick={() => setRefPicker(false)} className="text-[11px] text-[#8a8a8a] hover:text-white">關閉</button>
+                  <span className="text-[12px] font-medium text-white">{tr("參考素材（最多")} {refCap} {tr("個）")}</span>
+                  <button type="button" onClick={() => setRefPicker(false)} className="text-[11px] text-[#8a8a8a] hover:text-white">{tr("關閉")}</button>
                 </div>
 
                 <button
@@ -537,7 +542,7 @@ export default function Composer({
                   disabled={refBusy}
                   className="mt-2 w-full rounded-lg border border-dashed border-[#3a3a3a] bg-[#1c1c1c] py-2 text-[12px] text-[#c9c9c9] hover:border-[#555] disabled:opacity-50"
                 >
-                  {refBusy ? "上傳中…" : "上傳圖片"}
+                  {refBusy ? tr("上傳中…") : tr("上傳圖片")}
                 </button>
                 <input
                   ref={refInputRef}
@@ -551,28 +556,28 @@ export default function Composer({
                   }}
                 />
 
-                {refError && <p className="mt-2 text-[11px] text-[#ff9b9b]">{refError}</p>}
+                {refError && <p className="mt-2 text-[11px] text-[#ff9b9b]">{tr(refError)}</p>}
 
                 <p className="mt-2 text-[10.5px] text-[#6d6d6d]">
-                  小技巧：素材加進來之後，在下面輸入框打 <span className="text-[#9a9a9a]">@</span> 可以標記你這句話說的是哪一張
+                  {tr("小技巧：素材加進來之後，在下面輸入框打")} <span className="text-[#9a9a9a]">@</span> {tr("可以標記你這句話說的是哪一張")}
                 </p>
 
-                <div className="mt-2 text-[11px] text-[#8a8a8a]">從資產庫選</div>
+                <div className="mt-2 text-[11px] text-[#8a8a8a]">{tr("從資產庫選")}</div>
                 <div className="mt-1 grid max-h-[180px] grid-cols-4 gap-1.5 overflow-y-auto">
-                  {library === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</span>}
-                  {library?.length === 0 && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">資產庫還沒有圖片</span>}
+                  {library === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">{tr("載入中…")}</span>}
+                  {library?.length === 0 && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">{tr("資產庫還沒有圖片")}</span>}
                   {library?.map((a) => {
                     const on = refs.some((r) => r.id === a.id);
                     return (
                       <button
                         key={a.id}
                         type="button"
-                        title={a.name}
+                        title={tr(a.name)}
                         onClick={() => toggleRef(a)}
                         className={`relative aspect-square overflow-hidden rounded-md border ${on ? "border-[#7ff0cd]" : "border-[#2a2a2a] hover:border-[#4a4a4a]"}`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
-                        <img src={a.src} alt={a.name} className="h-full w-full object-cover" />
+                        <img src={a.src} alt={tr(a.name)} className="h-full w-full object-cover" />
                         {on && <span className="absolute inset-0 grid place-items-center bg-black/40 text-[11px] text-[#7ff0cd]">✓</span>}
                       </button>
                     );
@@ -587,13 +592,13 @@ export default function Composer({
           <div className="relative flex h-[74px] w-[74px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-[#2f2f2f] bg-[#1c1c1c] px-1 text-center">
             <span className="text-lg leading-none">🎬</span>
             <span className="text-[9.5px] leading-tight text-[#9a9a9a]">
-              {videoRefSupported ? "運鏡影片" : "目前模型不支援"}
+              {videoRefSupported ? tr("運鏡影片") : tr("目前模型不支援")}
             </span>
             <button
               type="button"
               onClick={() => setVideoRef(null)}
               className="absolute right-0.5 top-0.5 grid h-4 w-4 place-items-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black"
-              aria-label="移除運鏡影片參考"
+              aria-label={tr("移除運鏡影片參考")}
             >
               ×
             </button>
@@ -639,7 +644,7 @@ export default function Composer({
               // let a mousedown on the dropdown register before it disappears
               setTimeout(() => setMention(null), 120);
             }}
-            placeholder={canUseRefs && refs.length > 0 ? `${PLACEHOLDER[mode]}（可打 @ 標記素材）` : PLACEHOLDER[mode]}
+            placeholder={canUseRefs && refs.length > 0 ? tr("{p}（可打 @ 標記素材）", { p: tr(PLACEHOLDER[mode]) }) : tr(PLACEHOLDER[mode])}
             rows={isExpanded ? 8 : 3}
             className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
             // A flat 320px was the original "expanded" cap — nowhere near
@@ -659,25 +664,25 @@ export default function Composer({
             // edge, which made items near the edge hard to actually click.
             <div className="bw-menu absolute bottom-full left-0 z-40 mb-1.5 w-[290px] max-h-[280px] overflow-y-auto p-1.5">
               <div className="sticky top-0 z-10 -m-1.5 mb-1 flex items-center justify-between bg-[#1a1a1a] px-2.5 py-1.5">
-                <span className="text-[11px] text-[#8a8a8a]">標記已加入的素材</span>
+                <span className="text-[11px] text-[#8a8a8a]">{tr("標記已加入的素材")}</span>
                 <div className="flex items-center gap-2">
                   {mentionMatches.length > 1 && (
                     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={pickAllMentionMatches} className="text-[11px] text-[#7ff0cd] hover:underline">
-                      全部標註
+                      {tr("全部標註")}
                     </button>
                   )}
                   <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setMention(null)} className="text-[11px] text-[#8a8a8a] hover:text-white">
-                    關閉
+                    {tr("關閉")}
                   </button>
                 </div>
               </div>
               {refs.length === 0 && (
                 <div className="px-3 py-3 text-[12px] leading-relaxed text-[#6d6d6d]">
-                  還沒有加入素材 — 先點左邊的「素材」按鈕選取，再用 @ 標記你要在這句話裡指的是哪一張
+                  {tr("還沒有加入素材 — 先點左邊的「素材」按鈕選取，再用 @ 標記你要在這句話裡指的是哪一張")}
                 </div>
               )}
               {refs.length > 0 && mentionMatches.length === 0 && (
-                <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">找不到符合的素材</div>
+                <div className="px-3 py-3 text-[12px] text-[#6d6d6d]">{tr("找不到符合的素材")}</div>
               )}
               {mentionMatches.map((a, i) => (
                 <button
@@ -692,12 +697,12 @@ export default function Composer({
                     {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
                     <img src={a.src} alt="" className="h-full w-full object-cover" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[12.5px]">{a.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-[12.5px]">{tr(a.name)}</span>
                 </button>
               ))}
               {refs.length > 0 && (
                 <p className="mt-1 px-2.5 pb-0.5 text-[10px] leading-relaxed text-[#6d6d6d]">
-                  標記只是方便你自己書寫辨識。@名稱 本身模型看不懂——想讓模型正確分辨每張圖的用途，實測有效的寫法是先用文字描述每張圖，再說怎麼處理，例如：「圖1是⋯⋯，圖2是⋯⋯，請用圖1的形狀、圖2的顏色」
+                  {tr("標記只是方便你自己書寫辨識。@名稱 本身模型看不懂——想讓模型正確分辨每張圖的用途，實測有效的寫法是先用文字描述每張圖，再說怎麼處理，例如：「圖1是⋯⋯，圖2是⋯⋯，請用圖1的形狀、圖2的顏色」")}
                 </p>
               )}
             </div>
@@ -707,7 +712,7 @@ export default function Composer({
         <button
           type="button"
           onClick={() => setManualExpand(!isExpanded)}
-          aria-label={isExpanded ? "收合" : "展開"}
+          aria-label={isExpanded ? tr("收合") : tr("展開")}
           className="absolute right-4 top-4 text-[#7a7a7a] transition-colors hover:text-white"
         >
           <IconExpand className="h-4 w-4" />
@@ -723,7 +728,7 @@ export default function Composer({
             return (
               <>
                 <Icon className="h-[15px] w-[15px]" />
-                {MODE_LABELS[mode]}
+                {tr(MODE_LABELS[mode])}
                 <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
               </>
             );
@@ -744,25 +749,25 @@ export default function Composer({
                     }}
                   >
                     <Icon className="h-[15px] w-[15px]" />
-                    <span className="flex-1">{m.label}</span>
+                    <span className="flex-1">{tr(m.label)}</span>
                     {m.id === mode && <IconCheck className="h-3.5 w-3.5" />}
                   </button>
                 );
               })}
               <button type="button" className="bw-menu-item" onClick={close}>
                 <IconAvatar className="h-[15px] w-[15px]" />
-                <span className="flex-1 text-[#6d6d6d]">數位人（即將推出）</span>
+                <span className="flex-1 text-[#6d6d6d]">{tr("數位人（即將推出）")}</span>
               </button>
             </>
           )}
         </Popover>
 
         {/* Models and their functions share one bounded two-level menu. */}
-        <Popover label="選擇模型與功能" widthClass="w-[560px]" triggerClassName="max-w-[calc(100vw-84px)]" trigger={(open) => (
+        <Popover label={tr("選擇模型與功能")} widthClass="w-[560px]" triggerClassName="max-w-[calc(100vw-84px)]" trigger={(open) => (
           <>
             <IconModel className="h-[15px] w-[15px] shrink-0" />
-            <span className="min-w-0 max-w-[155px] truncate">{loadingModels ? "載入模型…" : resolvedModel ? modelLabel(available.find((m) => m.id === resolvedModel)?.displayName ?? getImageModel(resolvedModel)?.name ?? resolvedModel) : "無可用模型"}</span>
-            {operations.find(item=>item.id===operation)?.label && <span className="min-w-0 max-w-[96px] truncate border-l border-white/15 pl-2 text-[11px] text-[#a8a8a8]">{operations.find(item=>item.id===operation)!.label}</span>}
+            <span className="min-w-0 max-w-[155px] truncate">{loadingModels ? tr("載入模型…") : resolvedModel ? modelLabel(available.find((m) => m.id === resolvedModel)?.displayName ?? getImageModel(resolvedModel)?.name ?? resolvedModel) : tr("無可用模型")}</span>
+            {operations.find(item=>item.id===operation)?.label && <span className="min-w-0 max-w-[96px] truncate border-l border-white/15 pl-2 text-[11px] text-[#a8a8a8]">{modeLabel(t, operation, operations.find(item=>item.id===operation)!.label)}</span>}
             <IconChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
           </>
         )}>
@@ -787,8 +792,8 @@ export default function Composer({
         />
 
         <div className="ml-auto mr-14 flex items-center gap-3">
-          {isAdmin && <span data-testid="admin-provider-estimate" className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title="服務商成本預估，僅管理員可見；站內扣點依既定費率">
-            預估 {formatUSD(cost)}
+          {isAdmin && <span data-testid="admin-provider-estimate" className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title={tr("服務商成本預估，僅管理員可見；站內扣點依既定費率")}>
+            {tr("預估")} {formatUSD(cost)}
           </span>}
           <button
             type="button"
@@ -802,7 +807,7 @@ export default function Composer({
             ].join(" ")}
           >
             <IconSparkle className="h-4 w-4" />
-            {busy ? "生成中…" : credits === null ? "費率未設定" : `${operation==="layer-separation"?"最高 ":""}${credits} 點`}
+            {busy ? tr("生成中…") : credits === null ? tr("費率未設定") : tr("{prefix}{n} 點", { prefix: operation==="layer-separation"?tr("最高 "):"", n: credits })}
           </button>
         </div>
       </div>

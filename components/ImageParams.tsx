@@ -2,6 +2,7 @@
 
 import Popover from "./Popover";
 import { IconRatio, IconReset } from "./Icons";
+import { useTr } from "@/lib/i18n/client";
 import {
   defaultValues,
   type ImageControl,
@@ -24,6 +25,7 @@ export default function ImageParams({
   values: ImageControlValues;
   onChange: (v: ImageControlValues) => void;
 }) {
+  const tr = useTr();
   const set = (key: string, value: string | number) => onChange({ ...values, [key]: value });
 
   const summary = model.controls
@@ -32,8 +34,8 @@ export default function ImageParams({
       if (v === undefined || v === "") return null;
       if (c.key === "n") return `×${v}`;
       if (c.key === "seed") return `seed ${v}`;
-      if (c.key === "output_compression") return `壓縮 ${v}`;
-      if (c.key === "negative_prompt") return "負向";
+      if (c.key === "output_compression") return tr("壓縮 {v}", { v: String(v) });
+      if (c.key === "negative_prompt") return tr("負向");
       return String(v);
     })
     .filter(Boolean) as string[];
@@ -52,7 +54,7 @@ export default function ImageParams({
               </span>
             ))
           ) : (
-            <span>參數</span>
+            <span>{tr("參數")}</span>
           )}
         </span>
       )}
@@ -60,14 +62,14 @@ export default function ImageParams({
       {() => (
         <div className="p-3">
           <div className="flex items-center justify-between pb-3">
-            <span className="min-w-0 truncate text-[13.5px] font-medium">{model.name} 參數</span>
+            <span className="min-w-0 truncate text-[13.5px] font-medium">{tr(model.name)} {tr("參數")}</span>
             <button
               type="button"
               onClick={() => onChange(defaultValues(model))}
               className="flex shrink-0 items-center gap-1 text-[12px] text-[#8a8a8a] transition-colors hover:text-white"
             >
               <IconReset className="h-[13px] w-[13px]" />
-              重設
+              {tr("重設")}
             </button>
           </div>
 
@@ -78,7 +80,7 @@ export default function ImageParams({
           </div>
 
           <p className="mt-4 border-t border-[#262626] pt-2 text-[11px] leading-relaxed text-[#6d6d6d]">
-            參數會依模型自動切換，只有此模型支援的欄位才會送出。實際扣款以回應中的 usage 為準。
+            {tr("參數會依模型自動切換，只有此模型支援的欄位才會送出。實際扣款以回應中的 usage 為準。")}
           </p>
         </div>
       )}
@@ -95,9 +97,10 @@ function Field({
   value: string | number | undefined;
   onSet: (v: string | number) => void;
 }) {
+  const tr = useTr();
   return (
     <div>
-      <div className="pb-2 text-[12.5px] text-[#a8a8a8]">{control.label}</div>
+      <div className="pb-2 text-[12.5px] text-[#a8a8a8]">{tr(control.label)}</div>
 
       {control.kind === "select" && (
         <div className="grid grid-cols-1 gap-2">
@@ -115,7 +118,7 @@ function Field({
                     : "bg-[#232323] text-[#c9c9c9] hover:bg-[#2b2b2b]",
                 ].join(" ")}
               >
-                {o.label}
+                {tr(o.label)}
               </button>
             );
           })}
@@ -138,7 +141,7 @@ function Field({
             min={control.min}
             max={control.max}
             step={control.step}
-            placeholder={control.placeholder}
+            placeholder={tr(control.placeholder)}
             value={value === undefined ? "" : value}
             onChange={(e) => onSet(e.target.value === "" ? "" : Number(e.target.value))}
             className="h-9 w-20 rounded-lg bg-[#232323] px-2 text-center text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"
@@ -149,7 +152,7 @@ function Field({
       {control.kind === "text" && (
         <textarea
           rows={2}
-          placeholder={control.placeholder}
+          placeholder={tr(control.placeholder)}
           value={String(value ?? "")}
           onChange={(e) => onSet(e.target.value)}
           className="w-full resize-none rounded-lg bg-[#232323] px-3 py-2 text-[13px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none focus:ring-1 focus:ring-[#4a4a4a]"

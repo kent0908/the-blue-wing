@@ -5,6 +5,9 @@ import type { Metadata } from "next";
 import { jsonLd, SITE_URL } from "@/lib/seo/site";
 import { getDict } from "@/lib/i18n/server";
 
+// Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "方案與點數價格：免費每日 10 點、Basic / Standard / Premium 與點數包",
   description: `The Blue Wing 的收費方式：免費方案每天 10 點，${PLANS.filter(p=>p.priceUSD>0).map(p=>`${p.name} $${p.priceUSD}/月（${p.monthlyCredits.toLocaleString("en-US")} 點）`).join("、")}；點數包 ${CREDIT_PACKS.map(p=>`${p.credits.toLocaleString("en-US")} 點 $${p.priceUSD}`).join("、")}。影片依秒數與解析度計點，圖片依張數計點。`,

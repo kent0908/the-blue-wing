@@ -1,5 +1,6 @@
 import { modelLabel } from "./modelLabel";
 import { canonicalBillingModel } from "./billingModel";
+import { k } from "./i18n/k";
 /**
  * Image-generation model catalogue.
  *
@@ -68,7 +69,7 @@ export interface ImageModel {
 
 const SIZE: ImageControl = {
   key: "size",
-  label: "尺寸",
+  label: k("尺寸"),
   kind: "select",
   default: "1024x1024",
   options: [
@@ -84,7 +85,7 @@ const SIZE: ImageControl = {
  */
 const SIZE_HIRES: ImageControl = {
   key: "size",
-  label: "尺寸",
+  label: k("尺寸"),
   kind: "select",
   default: "2048x2048",
   options: [
@@ -97,7 +98,7 @@ const SIZE_HIRES: ImageControl = {
 
 const COUNT: ImageControl = {
   key: "n",
-  label: "生成張數",
+  label: k("生成張數"),
   kind: "number",
   min: 1,
   max: 10,
@@ -107,31 +108,31 @@ const COUNT: ImageControl = {
 
 const QUALITY: ImageControl = {
   key: "quality",
-  label: "品質",
+  label: k("品質"),
   kind: "select",
   default: "high",
   options: [
-    { value: "low", label: "低（快、省點數）" },
-    { value: "medium", label: "中" },
-    { value: "high", label: "高" },
+    { value: "low", label: k("低（快、省點數）") },
+    { value: "medium", label: k("中") },
+    { value: "high", label: k("高") },
   ],
 };
 
 const BACKGROUND: ImageControl = {
   key: "background",
-  label: "背景",
+  label: k("背景"),
   kind: "select",
   default: "auto",
   options: [
-    { value: "auto", label: "自動" },
-    { value: "opaque", label: "不透明" },
-    { value: "transparent", label: "透明（PNG/WebP）" },
+    { value: "auto", label: k("自動") },
+    { value: "opaque", label: k("不透明") },
+    { value: "transparent", label: k("透明（PNG/WebP）") },
   ],
 };
 
 const COMPRESSION: ImageControl = {
   key: "output_compression",
-  label: "壓縮率",
+  label: k("壓縮率"),
   kind: "number",
   min: 0,
   max: 100,
@@ -141,19 +142,19 @@ const COMPRESSION: ImageControl = {
 
 const NEGATIVE: ImageControl = {
   key: "negative_prompt",
-  label: "負向提示詞",
+  label: k("負向提示詞"),
   kind: "text",
-  placeholder: "不想出現的元素，例如：模糊、多餘手指、浮水印",
+  placeholder: k("不想出現的元素，例如：模糊、多餘手指、浮水印"),
 };
 
 const SEED: ImageControl = {
   key: "seed",
-  label: "隨機種子",
+  label: k("隨機種子"),
   kind: "number",
   min: 0,
   max: 2_147_483_647,
   step: 1,
-  placeholder: "留空為隨機",
+  placeholder: k("留空為隨機"),
 };
 
 /** GPT image 2 / 2.5 support flexible dimensions, including portrait 4K.
@@ -161,7 +162,7 @@ const SEED: ImageControl = {
  */
 const SIZE_GPT_IMAGE: ImageControl = {
   key: "size",
-  label: "尺寸",
+  label: k("尺寸"),
   kind: "select",
   default: "1024x1024",
   options: [
@@ -188,8 +189,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "ByteDance-Seedream-4.0",
     name: "Seedream 4.0",
     family: "seedream",
-    price: "$0.03 / 張",
-    blurb: "高性價比的通用文生圖，中文語意表現穩定。",
+    price: k("$0.03 / 張"),
+    blurb: k("高性價比的通用文生圖，中文語意表現穩定。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: SEEDREAM_CONTROLS,
   },
@@ -197,8 +198,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "ByteDance-Seedream-4.5",
     name: "Seedream 4.5",
     family: "seedream",
-    price: "$0.04 / 張",
-    blurb: "4.0 的升級版，細節與構圖更完整。僅支援 2K 以上尺寸。",
+    price: k("$0.04 / 張"),
+    blurb: k("4.0 的升級版，細節與構圖更完整。僅支援 2K 以上尺寸。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: SEEDREAM_HIRES_CONTROLS,
   },
@@ -206,8 +207,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "Dola-Seedream-5.0-lite",
     name: "Seedream 5.0 lite",
     family: "seedream",
-    price: "$0.035 / 張",
-    blurb: "第五代輕量版，速度快、成本低。僅支援 2K 以上尺寸。",
+    price: k("$0.035 / 張"),
+    blurb: k("第五代輕量版，速度快、成本低。僅支援 2K 以上尺寸。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: SEEDREAM_HIRES_CONTROLS,
   },
@@ -215,8 +216,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "Dola-Seedream-5.0-pro",
     name: "Seedream 5.0 pro",
     family: "seedream",
-    price: "$0.045 / 張",
-    blurb: "生產級視覺創作，質感與提示詞跟隨度最佳。僅支援 2K 以上尺寸。",
+    price: k("$0.045 / 張"),
+    blurb: k("生產級視覺創作，質感與提示詞跟隨度最佳。僅支援 2K 以上尺寸。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: SEEDREAM_HIRES_CONTROLS,
   },
@@ -224,8 +225,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "gemini-2.5-flash-image",
     name: "Gemini 2.5 Flash Image",
     family: "gemini",
-    price: "輸出圖像 $30 / 1M tokens",
-    blurb: "Google 多模態生圖，適合圖文混合、局部編修。",
+    price: k("輸出圖像 $30 / 1M tokens"),
+    blurb: k("Google 多模態生圖，適合圖文混合、局部編修。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: GEMINI_CONTROLS,
   },
@@ -233,8 +234,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "gemini-3.1-flash-image",
     name: "Gemini 3.1 Flash Image",
     family: "gemini",
-    price: "輸出圖像 $60 / 1M tokens",
-    blurb: "新一代 Flash 生圖，指令理解與版面控制更強。",
+    price: k("輸出圖像 $60 / 1M tokens"),
+    blurb: k("新一代 Flash 生圖，指令理解與版面控制更強。"),
     tags: ["PROMPT CACHING", "REASONING", "VISION"],
     controls: GEMINI_CONTROLS,
   },
@@ -242,8 +243,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "gemini-3.1-flash-lite-image",
     name: "Gemini 3.1 Flash Lite Image",
     family: "gemini",
-    price: "Flash Lite 級距",
-    blurb: "最省的 Gemini 生圖檔位，適合大量草稿。",
+    price: k("Flash Lite 級距"),
+    blurb: k("最省的 Gemini 生圖檔位，適合大量草稿。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: GEMINI_CONTROLS,
   },
@@ -251,8 +252,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "gemini-3-pro-image",
     name: "Gemini 3 Pro Image",
     family: "gemini",
-    price: "Pro 級距",
-    blurb: "Gemini 生圖旗艦，複雜場景與文字排版最穩。生成較慢。",
+    price: k("Pro 級距"),
+    blurb: k("Gemini 生圖旗艦，複雜場景與文字排版最穩。生成較慢。"),
     tags: ["REASONING", "VISION", "IMAGE GENERATION"],
     controls: GEMINI_CONTROLS,
     slow: true,
@@ -261,8 +262,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "gpt-image-2.5-sunburst",
     name: "GPT image 2.5 sunburst",
     family: "gpt-image",
-    price: "$0.04 / 張",
-    blurb: "OpenAI 最新一代生圖，品質檔位、透明背景與參考圖編修都支援。生成較慢（常超過 60 秒）。",
+    price: k("$0.04 / 張"),
+    blurb: k("OpenAI 最新一代生圖，品質檔位、透明背景與參考圖編修都支援。生成較慢（常超過 60 秒）。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: GPT_IMAGE_CONTROLS,
     slow: true,
@@ -271,8 +272,8 @@ export const IMAGE_MODELS: ImageModel[] = [
     id: "gpt-image-2",
     name: "GPT image 2",
     family: "gpt-image",
-    price: "$0.04 / 張",
-    blurb: "OpenAI 生圖，支援品質檔位與透明背景輸出。生成較慢（常超過 60 秒）。",
+    price: k("$0.04 / 張"),
+    blurb: k("OpenAI 生圖，支援品質檔位與透明背景輸出。生成較慢（常超過 60 秒）。"),
     tags: ["VISION", "IMAGE GENERATION"],
     controls: GPT_IMAGE_CONTROLS,
     slow: true,

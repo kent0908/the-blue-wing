@@ -6,12 +6,14 @@ import { downloadResult } from "@/lib/download";
 import ExpiringMedia from "./ExpiringMedia";
 import type { ResultItem } from "@/lib/types";
 import { formatDateTime, formatDuration, generationTimeLabel } from "@/lib/formatTime";
+import { useTr } from "@/lib/i18n/client";
+import { k } from "@/lib/i18n/tr";
 
 type KindFilter = "all" | "image" | "video" | "text";
 type TimeFilter = "all" | "today" | "7d" | "30d";
 
-const KIND_LABEL: Record<KindFilter, string> = { all: "全部類型", image: "圖片", video: "影片", text: "文字" };
-const TIME_LABEL: Record<TimeFilter, string> = { all: "全部時間", today: "今天", "7d": "近 7 天", "30d": "近 30 天" };
+const KIND_LABEL: Record<KindFilter, string> = { all: k("全部類型"), image: k("圖片"), video: k("影片"), text: k("文字") };
+const TIME_LABEL: Record<TimeFilter, string> = { all: k("全部時間"), today: k("今天"), "7d": k("近 7 天"), "30d": k("近 30 天") };
 
 /** Small downward-opening dropdown — Popover.tsx opens upward (built for the
  *  bottom-anchored Composer), which would run off-screen from this panel's
@@ -93,6 +95,7 @@ export default function InspirationPanel({
   onSelect?: (item: ResultItem) => void;
   onClose: () => void;
 }) {
+  const tr = useTr();
   const [tab, setTab] = useState<"inspiration" | "history">("history");
   const [q, setQ] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
@@ -138,7 +141,7 @@ export default function InspirationPanel({
             tab === "inspiration" ? "bg-[#1f1f1f] text-white" : "text-[#8a8a8a] hover:text-white",
           ].join(" ")}
         >
-          靈感廣場
+          {tr("靈感廣場")}
         </button>
         <button
           onClick={() => setTab("history")}
@@ -147,11 +150,11 @@ export default function InspirationPanel({
             tab === "history" ? "bg-[#1f1f1f] text-white" : "text-[#8a8a8a] hover:text-white",
           ].join(" ")}
         >
-          生成紀錄
+          {tr("生成紀錄")}
         </button>
         <button
           onClick={onClose}
-          aria-label="收起面板"
+          aria-label={tr("收起面板")}
           className="ml-auto rounded-lg p-1.5 text-[#8a8a8a] transition-colors hover:text-white"
         >
           <IconCollapse className="h-[18px] w-[18px]" />
@@ -164,7 +167,7 @@ export default function InspirationPanel({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="搜尋 Prompt 關鍵字"
+              placeholder={tr("搜尋 Prompt 關鍵字")}
               className="min-w-0 flex-1 bg-transparent text-[13px] text-white placeholder:text-[#6d6d6d] focus:outline-none"
             />
             <IconSearch className="h-4 w-4 shrink-0 text-[#6d6d6d]" />
@@ -178,12 +181,12 @@ export default function InspirationPanel({
         {tab === "history" && filtered.length === 0 && (
           <div className="pt-16 text-center text-[13px] text-[#5c5c5c]">
             {filtersActive ? (
-              "沒有符合篩選條件的紀錄"
+              tr("沒有符合篩選條件的紀錄")
             ) : (
               <>
-                還沒有生成紀錄
+                {tr("還沒有生成紀錄")}
                 <br />
-                送出第一個 prompt 就會出現在這裡
+                {tr("送出第一個 prompt 就會出現在這裡")}
               </>
             )}
           </div>
@@ -208,7 +211,7 @@ export default function InspirationPanel({
                 key={h.id}
                 type="button"
                 onClick={() => onSelect?.(h)}
-                title="在左邊主畫面顯示這個結果"
+                title={tr("在左邊主畫面顯示這個結果")}
                 className={[
                   "group relative overflow-hidden rounded-lg bg-[#141414] text-left transition-[outline] focus:outline-none",
                   selectedId === h.id ? "outline outline-2 outline-[#7ff0cd]" : "outline outline-2 outline-transparent hover:outline-[#3a3a3a]",
@@ -218,14 +221,14 @@ export default function InspirationPanel({
                   <ExpiringMedia kind={h.kind} url={h.url} alt={h.prompt} className={h.kind === "video" ? "pointer-events-none w-full" : "w-full object-cover"} />
                 )}
                 {h.kind === "text" && (
-                  <div className="line-clamp-6 p-3 text-[12px] leading-relaxed text-[#c9c9c9]">{h.text}</div>
+                  <div className="line-clamp-6 p-3 text-[12px] leading-relaxed text-[#c9c9c9]">{tr(h.text)}</div>
                 )}
                 {h.url && (
                   <span
                     role="button"
                     tabIndex={0}
-                    aria-label="下載"
-                    title="下載"
+                    aria-label={tr("下載")}
+                    title={tr("下載")}
                     onClick={(e) => {
                       e.stopPropagation();
                       downloadResult(h);

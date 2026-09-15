@@ -36,6 +36,7 @@ import type { RateCardEntry } from "@/lib/pricing";
 import { IMAGE_MODELS, sizeOptionsFor } from "@/lib/imageModels";
 import { isNewModel } from "@/lib/modelNew";
 import { videoResolutionsForModel, normalizeVideoResolution, videoConstraintFor } from "@/lib/videoModels";
+import { useTr } from "@/lib/i18n/client";
 
 const PORT_COLOR: Record<PortType, string> = {
   text: "#7ea8ff",
@@ -98,6 +99,7 @@ export default function CanvasEditor({
   initialGraph: CanvasGraph;
   initialVersion: string;
 }) {
+  const tr = useTr();
   const [rates, setRates] = useState<RateCardEntry[]>([]);
   const [costDetails, setCostDetails] = useState(false);
   useEffect(() => {
@@ -108,7 +110,7 @@ export default function CanvasEditor({
     return () => { alive = false; window.removeEventListener("focus", refresh); };
   }, []);
   const [name, setName] = useState(initialName);
-  const [graph, setGraph] = useState<CanvasGraph>(() => ({ ...initialGraph, nodes: initialGraph.nodes.map(n => n.status === "running" ? { ...n, status: "error", output: null, error: "上次執行已中斷，請確認生成紀錄後再執行" } : n) }));
+  const [graph, setGraph] = useState<CanvasGraph>(() => ({ ...initialGraph, nodes: initialGraph.nodes.map(n => n.status === "running" ? { ...n, status: "error", output: null, error: tr("上次執行已中斷，請確認生成紀錄後再執行") } : n) }));
   const [dirty, setDirty] = useState(initialGraph.nodes.some(n => n.status === "running"));
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveState] = useState(() => { const state = new CanvasSaveState(initialVersion); if (initialGraph.nodes.some(n => n.status === "running")) state.edit(); return state; });
@@ -160,7 +162,7 @@ export default function CanvasEditor({
     const leave = (e: MouseEvent) => {
       const link = (e.target as HTMLElement).closest?.("a[href]") as HTMLAnchorElement | null;
       if (!link || link.target === "_blank" || e.ctrlKey || e.metaKey || e.shiftKey || link.href === location.href) return;
-      if ((saveState.dirty || saveState.saving || runLock.busy) && !confirm("畫布尚有未儲存內容或執行中的工作。確定離開？可先取消並儲存或匯出草稿。")) { e.preventDefault(); e.stopPropagation(); }
+      if ((saveState.dirty || saveState.saving || runLock.busy) && !confirm(tr("畫布尚有未儲存內容或執行中的工作。確定離開？可先取消並儲存或匯出草稿。"))) { e.preventDefault(); e.stopPropagation(); }
     };
     window.addEventListener("beforeunload", guard);
     document.addEventListener("click", leave, true);
@@ -300,11 +302,11 @@ export default function CanvasEditor({
           body: JSON.stringify({ ...snapshot, version }),
         });
         const result = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(result.error?.message || `儲存失敗（${res.status}），草稿仍保留`);
-        if (result.workflow?.id !== workflowId) throw new Error("儲存回應與畫布不符，請保留草稿");
+        if (!res.ok) throw new Error(result.error?.message || tr("儲存失敗（{s}），草稿仍保留", { s: res.status }));
+        if (result.workflow?.id !== workflowId) throw new Error(tr("儲存回應與畫布不符，請保留草稿"));
         return { version: result.workflow.version };
       });
-    } catch (e) { setSaveError(e instanceof Error ? e.message : "儲存失敗，草稿仍保留"); }
+    } catch (e) { setSaveError(e instanceof Error ? e.message : tr("儲存失敗，草稿仍保留")); }
     finally { setSaving(false); setDirty(saveState.dirty); }
   };
   const exportDraft = () => {
@@ -334,16 +336,16 @@ export default function CanvasEditor({
       try {
         const snapshot = structuredClone(validateGraph(graphRef.current));
         const order = nodeId ? upstreamOrder(snapshot, nodeId) : topoOrder(snapshot);
-        if (!order || (nodeId && !order.length)) throw new Error("圖裡有循環連接，請先移除循環連線");
+        if (!order || (nodeId && !order.length)) throw new Error(tr("圖裡有循環連接，請先移除循環連線"));
         const currentRatesResponse = await fetch("/api/rates", { cache: "no-store" });
-        if (!currentRatesResponse.ok) throw new Error("無法取得點數費率，請稍後再試");
+        if (!currentRatesResponse.ok) throw new Error(tr("無法取得點數費率，請稍後再試"));
         const currentRates = (await currentRatesResponse.json()).rates ?? [];
         setRates(currentRates);
-        if (canvasRunCredits(snapshot, currentRates, order) === null) throw new Error("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行");
+        if (canvasRunCredits(snapshot, currentRates, order) === null) throw new Error(tr("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行"));
         await executeGraph(snapshot, order, (id, patch) => {
           if (!controller.signal.aborted) commitGraph({ ...graphRef.current, nodes: graphRef.current.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
         }, controller.signal);
-      } catch (e) { if (!controller.signal.aborted) setSaveError(e instanceof Error ? e.message : "執行失敗"); }
+      } catch (e) { if (!controller.signal.aborted) setSaveError(e instanceof Error ? e.message : tr("執行失敗")); }
       finally { if (!controller.signal.aborted) setRunningAll(false); runController.current = null; }
     });
   };
@@ -359,7 +361,7 @@ export default function CanvasEditor({
     <div className="flex h-full flex-col bg-[#0a0a0a]">
       {/* toolbar */}
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[#1c1c1c] bg-black px-4">
-        <Link href="/canvas" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label="返回">
+        <Link href="/canvas" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={tr("返回")}>
           <IconChevronLeft className="h-4 w-4" />
         </Link>
         <input
@@ -372,7 +374,7 @@ export default function CanvasEditor({
           }}
           className="w-[220px] rounded-lg bg-transparent px-2 py-1 text-[14px] font-medium text-white focus:bg-[#161616] focus:outline-none"
         />
-        <span className="text-[11.5px] text-[#6d6d6d]">{runningAll ? "執行中，請勿關閉" : saving ? "儲存中…" : dirty ? "尚未儲存" : "已儲存"}</span>
+        <span className="text-[11.5px] text-[#6d6d6d]">{runningAll ? tr("執行中，請勿關閉") : saving ? tr("儲存中…") : dirty ? tr("尚未儲存") : tr("已儲存")}</span>
 
         <div className="relative ml-4">
           <button
@@ -382,7 +384,7 @@ export default function CanvasEditor({
             className="flex h-8 items-center gap-1.5 rounded-full bg-[#1f1f1f] px-3 text-[12.5px] text-white transition-colors hover:bg-[#282828]"
           >
             <IconPlus className="h-3.5 w-3.5" />
-            新增節點
+            {tr("新增節點")}
           </button>
           {addMenuOpen && (
             <div className="bw-menu absolute left-0 top-[calc(100%+6px)] z-40 w-[200px] p-1.5">
@@ -392,8 +394,8 @@ export default function CanvasEditor({
                   <button key={t} type="button" className="bw-menu-item" onClick={() => addNode(t)}>
                     <Icon className="h-[15px] w-[15px]" />
                     <span className="flex-1 text-left">
-                      <span className="block">{NODE_SPECS[t].label}</span>
-                      <span className="block text-[10.5px] text-[#7d7d7d]">{NODE_SPECS[t].hint}</span>
+                      <span className="block">{tr(NODE_SPECS[t].label)}</span>
+                      <span className="block text-[10.5px] text-[#7d7d7d]">{tr(NODE_SPECS[t].hint)}</span>
                     </span>
                   </button>
                 );
@@ -403,7 +405,7 @@ export default function CanvasEditor({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <button type="button" onClick={exportDraft} className="whitespace-nowrap text-xs text-[#7ff0cd]">匯出草稿</button>
+          <button type="button" onClick={exportDraft} className="whitespace-nowrap text-xs text-[#7ff0cd]">{tr("匯出草稿")}</button>
           <button
             type="button"
             onClick={runAll}
@@ -411,7 +413,7 @@ export default function CanvasEditor({
             className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[12.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <IconPlay className="h-3.5 w-3.5" />
-            {runningAll ? "執行中…" : "全部執行"}
+            {runningAll ? tr("執行中…") : tr("全部執行")}
           </button>
           <button
             type="button"
@@ -419,18 +421,18 @@ export default function CanvasEditor({
             disabled={saving || runningAll}
             className="h-8 rounded-full border border-[#3a3a3a] px-4 text-[12.5px] text-white transition-colors hover:border-[#555] disabled:opacity-50"
           >
-            儲存
+            {tr("儲存")}
           </button>
         </div>
       </div>
 
       <div className="shrink-0 border-b border-[#252525] bg-[#101817] px-4 py-2 text-xs text-[#9ce9d5]">
         <button type="button" onClick={() => setCostDetails(v => !v)} aria-expanded={costDetails} className="text-left">
-          全部執行：約 {totalCredits === null ? "費率未設定" : `${totalCredits} 點`}　{selectedNode && `選取節點含上游：約 ${selectedCredits === null ? "費率未設定" : `${selectedCredits} 點`}　`}{costDetails ? "收合明細 ▴" : "查看點數明細 ▾"}
+          {tr("全部執行：約")} {totalCredits === null ? tr("費率未設定") : tr("{n} 點", { n: totalCredits })}　{selectedNode && tr("選取節點含上游：約 {n}　", { n: selectedCredits === null ? tr("費率未設定") : tr("{n} 點", { n: selectedCredits }) })}{costDetails ? tr("收合明細 ▴") : tr("查看點數明細 ▾")}
         </button>
         {costDetails && <div className="mt-2 max-h-36 overflow-auto text-[#b1bfbb]">
-          {graph.nodes.map((n, index) => <div key={n.id} className="flex flex-wrap justify-between gap-2 py-1"><span>{index + 1}. {NODE_SPECS[n.type].label} {n.data.model ? modelLabel(String(n.data.model)) : ""}</span><span>{canvasNodeCredits(n, rates) === null ? "費率未設定" : `${canvasNodeCredits(n, rates)} 點`}</span></div>)}
-          <p className="pt-2 text-[#849a93]">依站內費率估算；圖片以每節點 1 張計算，影片依時長及解析度計算。單點執行包含上游節點；每次重跑重新計費，實際扣點以執行紀錄為準。</p>
+          {graph.nodes.map((n, index) => <div key={n.id} className="flex flex-wrap justify-between gap-2 py-1"><span>{index + 1}. {NODE_SPECS[n.type].label} {n.data.model ? modelLabel(String(n.data.model)) : ""}</span><span>{canvasNodeCredits(n, rates) === null ? tr("費率未設定") : `${canvasNodeCredits(n, rates)} 點`}</span></div>)}
+          <p className="pt-2 text-[#849a93]">{tr("依站內費率估算；圖片以每節點 1 張計算，影片依時長及解析度計算。單點執行包含上游節點；每次重跑重新計費，實際扣點以執行紀錄為準。")}</p>
         </div>}
       </div>
 
@@ -549,9 +551,9 @@ export default function CanvasEditor({
         {graph.nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-[13px] text-[#4a4a4a]">
             <div>
-              畫布是空的
+              {tr("畫布是空的")}
               <br />
-              點左上角「新增節點」開始搭建工作流
+              {tr("點左上角「新增節點」開始搭建工作流")}
             </div>
           </div>
         )}
@@ -595,6 +597,7 @@ function NodeCard({
   onOpenDirector3D: () => void;
   onResizePointerDown: (e: React.PointerEvent) => void;
 }) {
+  const tr = useTr();
   const spec = NODE_SPECS[node.type];
   const Icon = NODE_ICON[node.type];
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
@@ -620,13 +623,13 @@ function NodeCard({
         className="flex h-10 cursor-grab items-center gap-1.5 rounded-t-xl border-b border-[#232323] px-2.5 active:cursor-grabbing"
       >
         <Icon className="h-3.5 w-3.5 shrink-0 text-[#9a9a9a]" />
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-white">{String(node.data.title || spec.label)}</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-white">{String(node.data.title || tr(spec.label))}</span>
         <StatusDot status={node.status} />
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onRun}
-          title="執行（會先跑上游節點）"
+          title={tr("執行（會先跑上游節點）")}
           className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a9a] transition-colors hover:bg-[#242424] hover:text-[#7ff0cd]"
         >
           <IconPlay className="h-3 w-3" />
@@ -635,7 +638,7 @@ function NodeCard({
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onDelete}
-          title="刪除節點"
+          title={tr("刪除節點")}
           className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a9a] transition-colors hover:bg-[#2a1616] hover:text-[#ff8a8a]"
         >
           <IconTrash className="h-3 w-3" />
@@ -645,7 +648,7 @@ function NodeCard({
         <div
           data-port-kind="out"
           onPointerDown={onOutputPortDown}
-          title={spec.output.label}
+          title={tr(spec.output.label)}
           className="absolute -right-[7px] top-1/2 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-[#161616]"
           style={{ background: PORT_COLOR[spec.output.type] }}
         />
@@ -662,7 +665,7 @@ function NodeCard({
             className="absolute -left-[7px] h-3 w-3 rounded-full border-2 border-[#161616]"
             style={{ background: PORT_COLOR[inp.type] }}
           />
-          <span className="ml-1.5">{inp.label}</span>
+          <span className="ml-1.5">{tr(inp.label)}</span>
         </div>
       ))}
 
@@ -672,7 +675,7 @@ function NodeCard({
           <textarea
             value={String(node.data.text ?? "")}
             onChange={(e) => onDataChange({ text: e.target.value })}
-            placeholder="輸入文字…"
+            placeholder={tr("輸入文字…")}
             className={fieldCls + " resize-none"}
             style={{ minHeight: MIN_TEXT_HEIGHT, maxHeight: node.textHeight ?? DEFAULT_TEXT_HEIGHT, overflowY: "auto" }}
           />
@@ -688,18 +691,18 @@ function NodeCard({
           };
           return (
             <div className="relative">
-              <label className="mb-2 block text-xs text-neutral-400">官方角色三視圖<select aria-label="官方角色三視圖" className="mt-1 w-full rounded bg-neutral-800 p-2 text-white" value={String(node.data.officialCharacter || "")} onChange={e => onDataChange({ officialCharacter: e.target.value, items: [] })}><option value="">使用自己的素材</option>{OFFICIAL_CHARACTERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-              {officialCharacter(node.data.officialCharacter) && <Image width={3840} height={2160} alt="角色三視圖參考" src={officialCharacter(node.data.officialCharacter)!.src} className="mb-2 w-full rounded bg-white" />}
+              <label className="mb-2 block text-xs text-neutral-400">{tr("官方角色三視圖")}<select aria-label={tr("官方角色三視圖")} className="mt-1 w-full rounded bg-neutral-800 p-2 text-white" value={String(node.data.officialCharacter || "")} onChange={e => onDataChange({ officialCharacter: e.target.value, items: [] })}><option value="">{tr("使用自己的素材")}</option>{OFFICIAL_CHARACTERS.map(c => <option key={c.id} value={c.id}>{tr(c.name)}</option>)}</select></label>
+              {officialCharacter(node.data.officialCharacter) && <Image width={3840} height={2160} alt={tr("角色三視圖參考")} src={officialCharacter(node.data.officialCharacter)!.src} className="mb-2 w-full rounded bg-white" />}
               {items.length > 0 && (
                 <div className="grid grid-cols-4 gap-1">
                   {items.map((it) => (
                     <div key={it.assetId} className="group/thumb relative aspect-square overflow-hidden rounded-md border border-[#2c2c2c]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={it.src} alt={it.name} title={it.name} className="h-full w-full object-cover" />
+                      <img src={it.src} alt={tr(it.name)} title={tr(it.name)} className="h-full w-full object-cover" />
                       <button
                         type="button"
                         onClick={() => onDataChange({ items: items.filter((x) => x.assetId !== it.assetId) })}
-                        aria-label="移除"
+                        aria-label={tr("移除")}
                         className="absolute right-0.5 top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-black/70 text-[9px] text-white opacity-0 group-hover/thumb:opacity-100"
                       >
                         ×
@@ -721,7 +724,7 @@ function NodeCard({
                   items.length > 0 ? "mt-1.5 h-8" : "h-16",
                 ].join(" ")}
               >
-                {items.length > 0 ? `再選一張（已選 ${items.length} 張）` : "選擇素材（可選多張）"}
+                {items.length > 0 ? tr("再選一張（已選 {n} 張）", { n: items.length }) : tr("選擇素材（可選多張）")}
               </button>
 
               {/*
@@ -744,26 +747,26 @@ function NodeCard({
                   style={{ top: assetPickerPos.top, left: assetPickerPos.left }}
                 >
                   <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[11px] text-white">選擇素材（可複選）</span>
+                    <span className="text-[11px] text-white">{tr("選擇素材（可複選）")}</span>
                     <button type="button" onClick={() => setAssetPickerOpen(false)} className="text-[10.5px] text-[#8a8a8a] hover:text-white">
-                      完成
+                      {tr("完成")}
                     </button>
                   </div>
                   <div className="grid max-h-[200px] grid-cols-4 gap-1.5 overflow-y-auto">
-                    {assetLibrary === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</span>}
-                    {assetLibrary?.length === 0 && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">資產庫還沒有圖片</span>}
+                    {assetLibrary === null && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">{tr("載入中…")}</span>}
+                    {assetLibrary?.length === 0 && <span className="col-span-4 py-3 text-center text-[11px] text-[#6d6d6d]">{tr("資產庫還沒有圖片")}</span>}
                     {assetLibrary?.map((a) => {
                       const on = selectedIds.has(a.id);
                       return (
                         <button
                           key={a.id}
                           type="button"
-                          title={a.name}
+                          title={tr(a.name)}
                           onClick={() => toggle(a)}
                           className={`relative aspect-square overflow-hidden rounded-md border ${on ? "border-[#7ff0cd]" : "border-[#2a2a2a] hover:border-[#4a4a4a]"}`}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={a.src} alt={a.name} className="h-full w-full object-cover" />
+                          <img src={a.src} alt={tr(a.name)} className="h-full w-full object-cover" />
                           {on && <span className="absolute inset-0 grid place-items-center bg-black/40 text-[11px] text-[#7ff0cd]">✓</span>}
                         </button>
                       );
@@ -790,7 +793,7 @@ function NodeCard({
           return (
           <>
             <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value, size: sizeOptionsFor(e.target.value)[0] })} className={fieldCls}>
-              {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>請重新選擇模型</option>}
+              {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>{tr("請重新選擇模型")}</option>}
               {IMAGE_MODELS.filter((m) => !/nsfw/i.test(m.id)).map((m) => (
                 <option key={m.id} value={m.id}>
                   {modelLabel(m.name)}{isNewModel(m.id) ? " · NEW" : ""}
@@ -807,7 +810,7 @@ function NodeCard({
             <textarea
               value={String(node.data.prompt ?? "")}
               onChange={(e) => onDataChange({ prompt: e.target.value })}
-              placeholder="沒接文字節點時用這裡的 prompt"
+              placeholder={tr("沒接文字節點時用這裡的 prompt")}
               rows={2}
               className={fieldCls + " resize-none"}
             />
@@ -828,8 +831,8 @@ function NodeCard({
           return (
           <>
             <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value, resolution: normalizeVideoResolution(e.target.value, String(node.data.resolution ?? "480p")) })} className={fieldCls}>
-              {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>請重新選擇模型</option>}
-              {videoModels.length === 0 && <option value="">載入中…</option>}
+              {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>{tr("請重新選擇模型")}</option>}
+              {videoModels.length === 0 && <option value="">{tr("載入中…")}</option>}
               {videoModels.map((m) => (
                 <option key={m.id} value={m.id}>
                   {modelLabel(m.name)}
@@ -846,7 +849,7 @@ function NodeCard({
                 className={fieldCls + " w-1/2"}
               />
               <select value={videoResolutionsForModel(String(node.data.model ?? "")).includes(String(node.data.resolution ?? "480p") as never) ? String(node.data.resolution ?? "480p") : ""} onChange={(e) => onDataChange({ resolution: e.target.value })} className={fieldCls + " w-1/2"}>
-                <option value="" disabled>請選擇支援的解析度</option>
+                <option value="" disabled>{tr("請選擇支援的解析度")}</option>
                 {videoResolutionsForModel(String(node.data.model ?? "")).map((r) => (
                   <option key={r} value={r}>
                     {r}
@@ -857,7 +860,7 @@ function NodeCard({
             <textarea
               value={String(node.data.prompt ?? "")}
               onChange={(e) => onDataChange({ prompt: e.target.value })}
-              placeholder="沒接文字節點時用這裡的 prompt"
+              placeholder={tr("沒接文字節點時用這裡的 prompt")}
               rows={2}
               className={fieldCls + " resize-none"}
             />
@@ -869,10 +872,10 @@ function NodeCard({
           <>
             {node.data.capturedImage ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={String(node.data.capturedImage)} alt="3D 截圖" className="w-full rounded-lg border border-[#2c2c2c]" />
+              <img src={String(node.data.capturedImage)} alt={tr("3D 截圖")} className="w-full rounded-lg border border-[#2c2c2c]" />
             ) : (
               <div className="grid h-20 place-items-center rounded-lg border border-dashed border-[#3a3a3a] text-[11px] text-[#6d6d6d]">
-                還沒截圖
+                {tr("還沒截圖")}
               </div>
             )}
             <button
@@ -880,7 +883,7 @@ function NodeCard({
               onClick={onOpenDirector3D}
               className="w-full rounded-lg border border-[#3a3a3a] bg-[#1c1c1c] py-1.5 text-[11.5px] text-[#c9c9c9] hover:border-[#555]"
             >
-              開啟 3D 導演台
+              {tr("開啟 3D 導演台")}
             </button>
           </>
         )}
@@ -902,7 +905,7 @@ function NodeCard({
             className="overflow-y-auto rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] p-2 text-[11px] text-[#c9c9c9]"
             style={{ maxHeight: node.textHeight ?? DEFAULT_TEXT_HEIGHT }}
           >
-            {node.output.text}
+            {tr(node.output.text)}
           </div>
         )}
         {node.error && <div className="rounded-lg border border-[#4a2020] bg-[#1a1010] p-2 text-[11px] text-[#ff9b9b]">{node.error}</div>}
@@ -911,7 +914,7 @@ function NodeCard({
       {/* resize handle — drags width + the text area's height together, see the "resizeNode" interaction in CanvasEditor */}
       <div
         onPointerDown={onResizePointerDown}
-        title="拖曳調整節點大小"
+        title={tr("拖曳調整節點大小")}
         className="absolute -bottom-1 -right-1 h-4 w-4 cursor-nwse-resize rounded-tl-md text-[#5c5c5c] hover:text-[#7ff0cd]"
       >
         <svg viewBox="0 0 16 16" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.5">

@@ -14,6 +14,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { GenSettings, Mode, PendingJob, ResultItem } from "./types";
 import { videoConstraintFor } from "./videoModels";
 import { runningJobCount } from "./jobVisibility";
+import { k } from "./i18n/k";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function readJson(res: Response): Promise<any> {
@@ -27,16 +28,16 @@ async function readJson(res: Response): Promise<any> {
       /timeout|timed out|FUNCTION_INVOCATION|error occurred/i.test(text);
     throw new Error(
       timedOut
-        ? "生成逾時：這個模型在伺服器 60 秒函式上限內跑不完（GPT image 系列、Gemini 3 pro image 等較慢）。請改用較快的模型（Seedream 系列、Gemini Flash），或將 Vercel 專案升級為 Pro（函式上限 300 秒）。"
-        : `伺服器回傳非 JSON 內容（HTTP ${res.status}）：${text.trim().slice(0, 160) || "（空白）"}`
+        ? k("生成逾時：這個模型在伺服器 60 秒函式上限內跑不完（GPT image 系列、Gemini 3 pro image 等較慢）。請改用較快的模型（Seedream 系列、Gemini Flash），或將 Vercel 專案升級為 Pro（函式上限 300 秒）。")
+        : `伺服器回傳非 JSON 內容（HTTP ${res.status}）：${text.trim().slice(0, 160) || k("（空白）")}`
     );
   }
 }
 
 function ctaForStatus(status: number, mode: string): { href: string; label: string } | null {
-  if (status === 401) return { href: `/login?next=${encodeURIComponent(`/studio?mode=${mode}`)}`, label: "前往登入" };
-  if (status === 403) return { href: "/login", label: "完成 email 驗證後再登入" };
-  if (status === 402) return { href: "/account", label: "查看方案 / 請管理員加點" };
+  if (status === 401) return { href: `/login?next=${encodeURIComponent(`/studio?mode=${mode}`)}`, label: k("前往登入") };
+  if (status === 403) return { href: "/login", label: k("完成 email 驗證後再登入") };
+  if (status === 402) return { href: "/account", label: k("查看方案 / 請管理員加點") };
   return null;
 }
 
@@ -254,14 +255,14 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           consecutiveErrors = 0;
           if (json.status === "completed" && json.url) {
             pushResult({ id: `${videoId}`, kind: "video", url: json.url, prompt, model, createdAt: Date.now(), durationMs: Date.now() - startedAt });
-            pushToast({ ok: true, mode: "video", title: "影片生成完成", detail: prompt });
+            pushToast({ ok: true, mode: "video", title: k("影片生成完成"), detail: prompt });
             dismissJob(jobId);
             return;
           }
-          if (json.status === "failed") throw new Error("影片生成失敗");
+          if (json.status === "failed") throw new Error(k("影片生成失敗"));
           updateJob(jobId, { stage: 2 });
         }
-        throw new Error("影片生成逾時，請稍後到生成紀錄查看");
+        throw new Error(k("影片生成逾時，請稍後到生成紀錄查看"));
       } finally {
         removePendingVideo(videoId);
       }
@@ -276,9 +277,9 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     for (const rec of readPendingVideos()) {
       void pollVideoJob(rec.jobId, rec.videoId, rec.prompt, rec.model).catch((e) => {
-        const message = e instanceof Error ? e.message : "發生未預期的錯誤";
+        const message = e instanceof Error ? e.message : k("發生未預期的錯誤");
         updateJob(rec.jobId, { error: message });
-        pushToast({ ok: false, mode: rec.mode, title: "影片生成失敗", detail: message });
+        pushToast({ ok: false, mode: rec.mode, title: k("影片生成失敗"), detail: message });
       });
     }
     // mount-only — deliberately not re-run per render
@@ -325,19 +326,19 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           });
           const json = await readJson(res);
           if (!res.ok) {
-            const message = json?.error?.message || "影片生成請求失敗";
+            const message = json?.error?.message || k("影片生成請求失敗");
             updateJob(jobId, { error: message, errorCta: ctaForStatus(res.status, jobMode) });
-            pushToast({ ok: false, mode: jobMode, title: "影片生成失敗", detail: message });
+            pushToast({ ok: false, mode: jobMode, title: k("影片生成失敗"), detail: message });
             return;
           }
           if (json.status === "completed" && json.url) {
             pushResult({ id: json.id ?? String(Date.now()), kind: "video", url: json.url, prompt, model, createdAt: Date.now(), durationMs: Date.now() - startedAt });
-            pushToast({ ok: true, mode: "video", title: "影片生成完成", detail: prompt });
+            pushToast({ ok: true, mode: "video", title: k("影片生成完成"), detail: prompt });
             dismissJob(jobId);
           } else if (json.id) {
             await pollVideoJob(jobId, json.id, prompt, model, startedAt);
           } else {
-            updateJob(jobId, { error: "API 沒有回傳影片 id 或網址" });
+            updateJob(jobId, { error: k("API 沒有回傳影片 id 或網址") });
           }
           return;
         }
@@ -357,9 +358,9 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           });
           const json = await readJson(res);
           if (!res.ok) {
-            const message = json?.error?.message || "圖片生成請求失敗";
+            const message = json?.error?.message || k("圖片生成請求失敗");
             updateJob(jobId, { error: message, errorCta: ctaForStatus(res.status, jobMode) });
-            pushToast({ ok: false, mode: jobMode, title: "圖片生成失敗", detail: message });
+            pushToast({ ok: false, mode: jobMode, title: k("圖片生成失敗"), detail: message });
             return;
           }
           updateJob(jobId, { stage: 3 });
@@ -368,7 +369,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
             const base = (json.layers??[]).find((layer:{z_index:number})=>layer.z_index===0);
             pushResult({id:`layers-${json.layerSetId}`,kind:"image",url:base?.url,layerSetId:json.layerSetId,prompt,model,createdAt:Date.now()});
             dismissJob(jobId);
-            pushToast({ok:true,mode:"image",title:"圖層分離完成",detail:`實扣 ${json.creditsSpent} 點，退回 ${json.creditsRefunded} 點`});
+            pushToast({ok:true,mode:"image",title:k("圖層分離完成"),detail:`實扣 ${json.creditsSpent} 點，退回 ${json.creditsRefunded} 點`});
             return;
           }
           (json.images ?? []).forEach((img: { url: string | null }, i: number) => {
@@ -378,7 +379,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
             }
           });
           dismissJob(jobId);
-          if (any) pushToast({ ok: true, mode: "image", title: "圖片生成完成", detail: prompt });
+          if (any) pushToast({ ok: true, mode: "image", title: k("圖片生成完成"), detail: prompt });
           return;
         }
 
@@ -390,20 +391,20 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
         });
         const json = await readJson(res);
         if (!res.ok) {
-          const message = json?.error?.message || "文字生成請求失敗";
+          const message = json?.error?.message || k("文字生成請求失敗");
           updateJob(jobId, { error: message, errorCta: ctaForStatus(res.status, jobMode) });
-          pushToast({ ok: false, mode: jobMode, title: "生成失敗", detail: message });
+          pushToast({ ok: false, mode: jobMode, title: k("生成失敗"), detail: message });
           return;
         }
         updateJob(jobId, { stage: 3 });
         const text = json?.choices?.[0]?.message?.content ?? "";
         pushResult({ id: String(Date.now()), kind: "text", text, prompt, model, createdAt: Date.now(), durationMs: Date.now() - startedAt });
-        pushToast({ ok: true, mode: jobMode, title: "生成完成", detail: prompt });
+        pushToast({ ok: true, mode: jobMode, title: k("生成完成"), detail: prompt });
         dismissJob(jobId);
       } catch (e) {
-        const message = e instanceof Error ? e.message : "發生未預期的錯誤";
+        const message = e instanceof Error ? e.message : k("發生未預期的錯誤");
         updateJob(jobId, { error: message });
-        pushToast({ ok: false, mode: jobMode, title: "生成失敗", detail: message });
+        pushToast({ ok: false, mode: jobMode, title: k("生成失敗"), detail: message });
       }
     },
     [dismissJob, pollVideoJob, pushResult, pushToast, updateJob]

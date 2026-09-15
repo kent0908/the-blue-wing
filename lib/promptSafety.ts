@@ -1,3 +1,4 @@
+import { k } from "./i18n/k";
 /**
  * First-layer product policy for user-supplied generation text.
  * This deliberately blocks the listed topics even in negations or educational
@@ -6,7 +7,7 @@
  * before credit reservation and before calling any generation provider.
  */
 export type PromptSafetyCategory = "minors" | "drugs";
-export const PROMPT_BLOCKED_MESSAGE = "提示詞含有未開放的兒童、未成年人或毒品相關內容，請修改後再試。此次未進行生成或扣點。";
+export const PROMPT_BLOCKED_MESSAGE = k("提示詞含有未開放的兒童、未成年人或毒品相關內容，請修改後再試。此次未進行生成或扣點。");
 
 export type PromptSafetyResult =
   | { allowed: true }

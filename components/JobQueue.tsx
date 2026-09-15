@@ -6,9 +6,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { IconImage, IconVideo, IconChat, IconClose } from "./Icons";
 import type { PendingJob } from "@/lib/types";
+import { useTr } from "@/lib/i18n/client";
+import { k } from "@/lib/i18n/tr";
 
 export const KIND_ICON = { image: IconImage, video: IconVideo, text: IconChat } as const;
-export const STAGE_LABEL = ["送出請求", "路由到供應商", "模型生成中", "取回結果"];
+export const STAGE_LABEL = [k("送出請求"), k("路由到供應商"), k("模型生成中"), k("取回結果")];
 
 export function Elapsed({ startedAt }: { startedAt: number }) {
   const [s, setS] = useState(() => Math.floor((Date.now() - startedAt) / 1000));
@@ -27,6 +29,7 @@ export function Elapsed({ startedAt }: { startedAt: number }) {
  * actually required that.
  */
 export default function JobQueue({ jobs, onDismiss }: { jobs: PendingJob[]; onDismiss: (id: string) => void }) {
+  const tr = useTr();
   if (!jobs.length) return null;
 
   return (
@@ -50,7 +53,7 @@ export default function JobQueue({ jobs, onDismiss }: { jobs: PendingJob[]; onDi
                   </div>
                   {j.errorCta && (
                     <Link href={j.errorCta.href} className="text-[10.5px] text-[#7ff0cd] hover:underline">
-                      {j.errorCta.label}
+                      {tr(j.errorCta.label)}
                     </Link>
                   )}
                 </div>
@@ -72,8 +75,8 @@ export default function JobQueue({ jobs, onDismiss }: { jobs: PendingJob[]; onDi
             <button
               type="button"
               onClick={() => onDismiss(j.id)}
-              aria-label={j.error ? "關閉" : "從清單隱藏（不會取消生成）"}
-              title={j.error ? "關閉" : "從清單隱藏（不會取消生成）"}
+              aria-label={j.error ? tr("關閉") : tr("從清單隱藏（不會取消生成）")}
+              title={j.error ? tr("關閉") : tr("從清單隱藏（不會取消生成）")}
               className="shrink-0 text-[#6d6d6d] transition-colors hover:text-white"
             >
               <IconClose className="h-3 w-3" />

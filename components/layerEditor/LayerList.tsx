@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { IconTrash } from "../Icons";
 import type { EditorLayer } from "@/lib/layerEditor";
+import { useTr } from "@/lib/i18n/client";
 
 /**
  * The layer stack (top of the list = front of the canvas). Click selects,
@@ -29,6 +30,7 @@ export default function LayerList({
   onDuplicate: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
+  const tr = useTr();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export default function LayerList({
           {renaming === l.id ? (
             <input
               autoFocus
-              defaultValue={l.name}
+              defaultValue={tr(l.name)}
               maxLength={60}
               onClick={(e) => e.stopPropagation()}
               onBlur={(e) => {
@@ -84,25 +86,25 @@ export default function LayerList({
               className="min-w-0 flex-1 rounded border border-[#3a3a3a] bg-[#111] px-1 text-[11px] text-white focus:outline-none"
             />
           ) : (
-            <span className="min-w-0 flex-1 truncate" title={`${l.name}（雙擊改名）`}>
-              {l.name}
+            <span className="min-w-0 flex-1 truncate" title={tr("{name}（雙擊改名）", { name: l.name })}>
+              {tr(l.name)}
             </span>
           )}
-          <button type="button" onClick={(e) => { e.stopPropagation(); onPatch(l.id, { visible: !l.visible }, true); }} className="text-[10px] text-[#6d6d6d] hover:text-white" title="顯示/隱藏">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onPatch(l.id, { visible: !l.visible }, true); }} className="text-[10px] text-[#6d6d6d] hover:text-white" title={tr("顯示/隱藏")}>
             {l.visible ? "👁" : "🚫"}
           </button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onPatch(l.id, { locked: !l.locked }, true); }} className={`text-[10px] hover:text-white ${l.locked ? "text-[#f0c27f]" : "text-[#6d6d6d]"}`} title={l.locked ? "解除鎖定" : "鎖定（防止誤拖）"}>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onPatch(l.id, { locked: !l.locked }, true); }} className={`text-[10px] hover:text-white ${l.locked ? "text-[#f0c27f]" : "text-[#6d6d6d]"}`} title={l.locked ? tr("解除鎖定") : tr("鎖定（防止誤拖）")}>
             {l.locked ? "🔒" : "🔓"}
           </button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onMove(l.id, 1); }} className="text-[#6d6d6d] hover:text-white" title="上移一層">↑</button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onMove(l.id, -1); }} className="text-[#6d6d6d] hover:text-white" title="下移一層">↓</button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(l.id); }} className="text-[10px] text-[#6d6d6d] hover:text-white" title="複製圖層（Ctrl+D）">⧉</button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(l.id); }} className="text-[#6d6d6d] hover:text-[#ff8a8a]" title="刪除（Delete）">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onMove(l.id, 1); }} className="text-[#6d6d6d] hover:text-white" title={tr("上移一層")}>↑</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onMove(l.id, -1); }} className="text-[#6d6d6d] hover:text-white" title={tr("下移一層")}>↓</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(l.id); }} className="text-[10px] text-[#6d6d6d] hover:text-white" title={tr("複製圖層（Ctrl+D）")}>⧉</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onRemove(l.id); }} className="text-[#6d6d6d] hover:text-[#ff8a8a]" title={tr("刪除（Delete）")}>
             <IconTrash className="h-3 w-3" />
           </button>
         </div>
       ))}
-      {layers.length === 0 && <p className="px-1 py-3 text-center text-[10.5px] text-[#5c5c5c]">還沒有圖層，先上傳或從資產庫選一張</p>}
+      {layers.length === 0 && <p className="px-1 py-3 text-center text-[10.5px] text-[#5c5c5c]">{tr("還沒有圖層，先上傳或從資產庫選一張")}</p>}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import styles from "./WingExperience.module.css";
+import { useTr } from "@/lib/i18n/client";
 
 // No logo texture is drawn. Its blue pixels become independent GPU point vertices.
 const vertex = `
@@ -63,11 +64,12 @@ void main(){
 
 type Controls = { paused: boolean; mode: "auto" | "logo" | "nebula"; shock: number };
 export default function WingExperience() {
+ const tr = useTr();
  const canvasRef=useRef<HTMLCanvasElement>(null);
  const control=useRef<Controls>({paused:false,mode:"auto",shock:0});
  const [paused,setPaused]=useState(false);
  const [mode,setMode]=useState<Controls["mode"]>("auto");
- const [status,setStatus]=useState("正在喚醒粒子…");
+ const [status,setStatus]=useState(tr("正在喚醒粒子…"));
  const [failed,setFailed]=useState(false);
  const [reduced,setReduced]=useState(false);
  const [retry,setRetry]=useState(0);
@@ -88,22 +90,22 @@ export default function WingExperience() {
   const leave=()=>{targetActive=0;};
   const down=(e:PointerEvent)=>{move(e);origin=point(e);shockAt=realTime;};
   const up=(e:PointerEvent)=>{if(e.pointerType!=="mouse")leave();};
-  const lost=(e:Event)=>{e.preventDefault();cancelAnimationFrame(frame);setFailed(true);setStatus("圖形連線中斷，請重新載入粒子。");};
+  const lost=(e:Event)=>{e.preventDefault();cancelAnimationFrame(frame);setFailed(true);setStatus(tr("圖形連線中斷，請重新載入粒子。"));};
   canvas.addEventListener("pointermove",move);canvas.addEventListener("pointerleave",leave);canvas.addEventListener("pointerdown",down);canvas.addEventListener("pointerup",up);canvas.addEventListener("pointercancel",leave);canvas.addEventListener("webglcontextlost",lost);
   const intersection=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;});intersection.observe(canvas);
   const init=async()=>{
    try{
-    motionChanged();setFailed(false);setStatus("正在喚醒粒子…");
+    motionChanged();setFailed(false);setStatus(tr("正在喚醒粒子…"));
     const img=new Image();img.src="/brand-particle-source.png";await img.decode();if(disposed)return;
     const sample=document.createElement("canvas");sample.width=286;sample.height=274;
-    const ctx=sample.getContext("2d");if(!ctx)throw Error("無法讀取品牌素材");
+    const ctx=sample.getContext("2d");if(!ctx)throw Error(tr("無法讀取品牌素材"));
     ctx.drawImage(img,397,55,286,274,0,0,286,274);
     const pixels=ctx.getImageData(0,0,286,274).data, homes:number[]=[];
     for(let y=0;y<274;y++)for(let x=0;x<286;x++){const i=(y*286+x)*4,r=pixels[i],g=pixels[i+1],b=pixels[i+2];if(b>55&&b>r*1.28&&g>r*1.12)homes.push((x/286-.5)*2,(.5-y/274)*1.92);}
-    if(homes.length<500)throw Error("品牌粒子素材無法辨識");
-    gl=canvas.getContext("webgl",{alpha:true,antialias:false,powerPreference:"high-performance"});if(!gl)throw Error("此裝置未能啟用 WebGL");
-    const compile=(type:number,source:string)=>{const shader=gl!.createShader(type)!;shaders.push(shader);gl!.shaderSource(shader,source);gl!.compileShader(shader);if(!gl!.getShaderParameter(shader,gl!.COMPILE_STATUS))throw Error("粒子著色器載入失敗");return shader;};
-    program=gl.createProgram()!;gl.attachShader(program,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error("粒子引擎初始化失敗");gl.useProgram(program);
+    if(homes.length<500)throw Error(tr("品牌粒子素材無法辨識"));
+    gl=canvas.getContext("webgl",{alpha:true,antialias:false,powerPreference:"high-performance"});if(!gl)throw Error(tr("此裝置未能啟用 WebGL"));
+    const compile=(type:number,source:string)=>{const shader=gl!.createShader(type)!;shaders.push(shader);gl!.shaderSource(shader,source);gl!.compileShader(shader);if(!gl!.getShaderParameter(shader,gl!.COMPILE_STATUS))throw Error(tr("粒子著色器載入失敗"));return shader;};
+    program=gl.createProgram()!;gl.attachShader(program,compile(gl.VERTEX_SHADER,vertex));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(tr("粒子引擎初始化失敗"));gl.useProgram(program);
     const compact=matchMedia("(max-width: 760px)").matches||navigator.hardwareConcurrency<=4;
     const count=compact?6500:15000;
     const home=new Float32Array(count*3),seed=new Float32Array(count*4);
@@ -130,18 +132,18 @@ export default function WingExperience() {
      }
      frame=requestAnimationFrame(render);
     };frame=requestAnimationFrame(render);
-   }catch(error){if(!disposed){setFailed(true);setStatus(error instanceof Error?error.message:"粒子載入失敗");}}
+   }catch(error){if(!disposed){setFailed(true);setStatus(error instanceof Error?error.message:tr("粒子載入失敗"));}}
   };void init();
   return()=>{disposed=true;cancelAnimationFrame(frame);observer?.disconnect();intersection.disconnect();motion.removeEventListener("change",motionChanged);canvas.removeEventListener("pointermove",move);canvas.removeEventListener("pointerleave",leave);canvas.removeEventListener("pointerdown",down);canvas.removeEventListener("pointerup",up);canvas.removeEventListener("pointercancel",leave);canvas.removeEventListener("webglcontextlost",lost);buffers.forEach(b=>gl?.deleteBuffer(b));shaders.forEach(s=>gl?.deleteShader(s));if(program)gl?.deleteProgram(program);};
  },[retry]);
  const select=(next:Controls["mode"])=>{control.current.mode=next;control.current.paused=false;setPaused(false);setMode(next);};
- return <section className={styles.experience} aria-label="啟程 — 互動粒子羽翼">
-  <div className={styles.copy}><p className={styles.eyebrow}><span/> THE BLUE WING / 啟程</p><h1>每個靈感，<br/>都有<span>翅膀。</span></h1><p className={styles.description}>讓想像，在此甦醒。<br/>從一點微光，飛向無限可能。</p><Link href="/studio?mode=video" className={styles.cta}>展開創作 <span>↗</span></Link><div className={styles.signature}>青い翼 <span>雲とAIで未来へ</span></div></div>
-  <div className={styles.visual}><div className={styles.visualLabel}><span>01 — LIVING EMBLEM</span><span>BLUE / CYAN / LIGHT</span></div><canvas key={retry} ref={canvasRef} className={styles.canvas} aria-label="由藍色與青綠粒子組成的品牌羽翼；移動或觸碰可推開粒子，點擊激起波紋。" role="img"/>
-   {failed&&<div className={styles.failure} role="alert"><strong>羽翼暫時無法展開</strong><p>{status}</p><button onClick={()=>setRetry(v=>v+1)}>重新載入粒子</button></div>}
-   <div className={styles.caption}><span className={styles.liveDot}/>{failed?"載入中斷":paused?"已暫停 · 仍可互動":mode==="auto"?status:mode==="logo"?"凝聚 · 羽翼形態":"流動 · 星雲形態"}<span className={styles.hint}>移動探索 · 點擊共振</span></div>
+ return <section className={styles.experience} aria-label={tr("啟程 — 互動粒子羽翼")}>
+  <div className={styles.copy}><p className={styles.eyebrow}><span/> {tr("THE BLUE WING / 啟程")}</p><h1>{tr("每個靈感，")}<br/>{tr("都有")}<span>{tr("翅膀。")}</span></h1><p className={tr(styles.description)}>{tr("讓想像，在此甦醒。")}<br/>{tr("從一點微光，飛向無限可能。")}</p><Link href="/studio?mode=video" className={styles.cta}>{tr("展開創作")} <span>↗</span></Link><div className={styles.signature}>{tr("青い翼")} <span>{tr("雲とAIで未来へ")}</span></div></div>
+  <div className={styles.visual}><div className={styles.visualLabel}><span>01 — LIVING EMBLEM</span><span>BLUE / CYAN / LIGHT</span></div><canvas key={retry} ref={canvasRef} className={styles.canvas} aria-label={tr("由藍色與青綠粒子組成的品牌羽翼；移動或觸碰可推開粒子，點擊激起波紋。")} role="img"/>
+   {failed&&<div className={styles.failure} role="alert"><strong>{tr("羽翼暫時無法展開")}</strong><p>{tr(status)}</p><button onClick={()=>setRetry(v=>v+1)}>{tr("重新載入粒子")}</button></div>}
+   <div className={styles.caption}><span className={styles.liveDot}/>{failed?tr("載入中斷"):paused?tr("已暫停 · 仍可互動"):mode==="auto"?status:mode==="logo"?tr("凝聚 · 羽翼形態"):tr("流動 · 星雲形態")}<span className={tr(styles.hint)}>{tr("移動探索 · 點擊共振")}</span></div>
   </div>
-  <div className={styles.bottom}><p>讓微光，回應你的每一次靠近。<span>{reduced?"已依系統偏好減少動態效果":"拖曳或觸碰粒子，感受它的呼吸。"}</span></p><div className={styles.controls} aria-label="粒子控制"><button disabled={failed} onClick={()=>select(mode==="nebula"?"logo":"nebula")}>{mode==="nebula"?"↗ 凝聚標誌":"✧ 切換星雲"}</button><button disabled={failed} onClick={()=>{control.current.shock++;}}>◎ 激起共振</button><button disabled={failed} aria-pressed={paused} onClick={()=>{control.current.paused=!paused;setPaused(!paused);}}>{paused?"▶ 播放":"Ⅱ 暫停"}</button><button disabled={failed} aria-pressed={mode==="auto"} className={styles.auto} onClick={()=>select("auto")}>自動循環</button></div></div>
+  <div className={styles.bottom}><p>{tr("讓微光，回應你的每一次靠近。")}<span>{reduced?tr("已依系統偏好減少動態效果"):tr("拖曳或觸碰粒子，感受它的呼吸。")}</span></p><div className={styles.controls} aria-label={tr("粒子控制")}><button disabled={failed} onClick={()=>select(mode==="nebula"?"logo":"nebula")}>{mode==="nebula"?tr("↗ 凝聚標誌"):tr("✧ 切換星雲")}</button><button disabled={failed} onClick={()=>{control.current.shock++;}}>{tr("◎ 激起共振")}</button><button disabled={failed} aria-pressed={paused} onClick={()=>{control.current.paused=!paused;setPaused(!paused);}}>{paused?tr("▶ 播放"):tr("Ⅱ 暫停")}</button><button disabled={failed} aria-pressed={mode==="auto"} className={styles.auto} onClick={()=>select("auto")}>{tr("自動循環")}</button></div></div>
  </section>;
 }
 

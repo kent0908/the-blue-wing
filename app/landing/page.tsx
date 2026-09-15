@@ -26,7 +26,8 @@ import styles from "./landing.module.css";
 // show it. ISR re-runs the component (including the DB read below) at most
 // once per minute, so an upload shows up shortly after without paying for a
 // full server-render on every single visitor.
-export const revalidate = 60;
+// Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
+export const dynamic = "force-dynamic";
 
 const FEATURES = [
   { id: "video", label: "01 / AI VIDEO", href: "/studio?mode=video", icon: IconVideo },

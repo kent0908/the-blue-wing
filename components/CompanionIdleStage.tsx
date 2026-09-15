@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTr } from "@/lib/i18n/client";
 
 interface IdleVideo {
   id: number;
@@ -38,6 +39,7 @@ export default function CompanionIdleStage({
   characterId: number;
   wardrobeOpen?: boolean;
 }) {
+  const tr = useTr();
   const [data, setData] = useState<IdleData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,7 +61,7 @@ export default function CompanionIdleStage({
       .then(({ res, j }) => {
         if (!aliveRef.current) return;
         if (!res.ok) {
-          setError(j?.error?.message || "載入失敗");
+          setError(j?.error?.message || tr("載入失敗"));
           return;
         }
         setData(j);
@@ -68,7 +70,7 @@ export default function CompanionIdleStage({
         if (stillPending || wardrobeOpen) pollTimer.current = setTimeout(() => loadRef.current(), 4000);
       })
       .catch(() => {
-        if (aliveRef.current) setError("載入失敗");
+        if (aliveRef.current) setError(tr("載入失敗"));
       });
   }, [characterId, wardrobeOpen]);
 
@@ -98,15 +100,15 @@ export default function CompanionIdleStage({
       const j = await res.json().catch(() => ({}));
       if (res.status === 402 && j?.needsConfirm) {
         setBusy(false);
-        if (confirm(`這個月的免費額度已經用掉了，重新生成需要 ${j.cost} 點，確定要繼續嗎？`)) {
+        if (confirm(tr("這個月的免費額度已經用掉了，重新生成需要 {n} 點，確定要繼續嗎？", { n: j.cost }))) {
           await regenerate(true);
         }
         return;
       }
-      if (!res.ok) throw new Error(j?.error?.message || "生成失敗");
+      if (!res.ok) throw new Error(j?.error?.message || tr("生成失敗"));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成失敗");
+      setError(e instanceof Error ? e.message : tr("生成失敗"));
     } finally {
       setBusy(false);
     }
@@ -115,10 +117,10 @@ export default function CompanionIdleStage({
   const setActive = async (videoId: number) => {
     try {
       const res = await fetch(`/api/characters/${characterId}/idle-video/${videoId}`, { method: "PATCH" });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message || "切換失敗");
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message || tr("切換失敗"));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "切換失敗");
+      setError(e instanceof Error ? e.message : tr("切換失敗"));
     }
   };
 
@@ -128,15 +130,15 @@ export default function CompanionIdleStage({
   const completedList = videos.filter((v) => v.status === "completed" && v.url);
 
   const needsReview = videos.find(v => v.needsReview);
-  const buttonLabel = needsReview ? "任務待核對" : pending
-    ? "生成中…"
+  const buttonLabel = needsReview ? tr("任務待核對") : pending
+    ? tr("生成中…")
     : videos.length === 0
       ? data?.freeAvailable
-        ? "免費生成待機影片"
-        : `生成待機影片（${data?.paidCost ?? "…"} 點）`
+        ? tr("免費生成待機影片")
+        : tr("生成待機影片（{n} 點）", { n: data?.paidCost ?? "…" })
       : data?.freeAvailable
-        ? "重新生成（免費）"
-        : `重新生成（${data?.paidCost ?? "…"} 點）`;
+        ? tr("重新生成（免費）")
+        : tr("重新生成（{n} 點）", { n: data?.paidCost ?? "…" });
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col border-r border-[#1c1c1c] bg-[#050505]">
@@ -147,8 +149,8 @@ export default function CompanionIdleStage({
               key={active.id}
               src={active.url!}
               className="h-full w-full object-cover object-center"
-              aria-label="循環立繪影片"
-              onError={() => setError("立繪影片無法載入，請稍後重試或切換其他影片")}
+              aria-label={tr("循環立繪影片")}
+              onError={() => setError(tr("立繪影片無法載入，請稍後重試或切換其他影片"))}
               autoPlay
               loop
               muted
@@ -158,12 +160,12 @@ export default function CompanionIdleStage({
             />
           ) : (
             <div className="grid h-full w-full place-items-center px-6 text-center text-[12.5px] leading-relaxed text-[#5c5c5c]">
-              尚未生成循環立繪，請使用下方按鈕生成
+              {tr("尚未生成循環立繪，請使用下方按鈕生成")}
             </div>
           )}
           {pending && (
             <div className="absolute inset-0 grid place-items-center bg-black/55 text-center">
-              <p className="px-4 text-[13px] leading-relaxed text-[#e5e5e5]">夥伴正在啟程，請稍後…</p>
+              <p className="px-4 text-[13px] leading-relaxed text-[#e5e5e5]">{tr("夥伴正在啟程，請稍後…")}</p>
             </div>
           )}
         </div>
@@ -181,8 +183,8 @@ export default function CompanionIdleStage({
                   "h-12 w-12 shrink-0 overflow-hidden rounded-lg border transition-opacity",
                   v.isActive ? "border-[#7ff0cd]" : "border-[#2a2a2a] opacity-70 hover:opacity-100",
                 ].join(" ")}
-                aria-label="設為待機影片"
-                title={v.isActive ? "目前使用中" : "設為待機影片"}
+                aria-label={tr("設為待機影片")}
+                title={v.isActive ? tr("目前使用中") : tr("設為待機影片")}
               >
                 <video
                   src={v.url!}
@@ -198,7 +200,7 @@ export default function CompanionIdleStage({
         )}
 
         {data?.regenAllowed === false ? (
-          <p className="mt-1 text-center text-[11px] text-[#7d7d7d]">官方角色的待機影片由官方提供</p>
+          <p className="mt-1 text-center text-[11px] text-[#7d7d7d]">{tr("官方角色的待機影片由官方提供")}</p>
         ) : (
           <>
             <button
@@ -209,11 +211,11 @@ export default function CompanionIdleStage({
             >
               {buttonLabel}
             </button>
-            {data && !data.hasAvatar && <p className="mt-2 text-xs text-[#a0aaa6]">請先在編輯角色選定參考素材</p>}
+            {data && !data.hasAvatar && <p className="mt-2 text-xs text-[#a0aaa6]">{tr("請先在編輯角色選定參考素材")}</p>}
           </>
         )}
-        {needsReview && <p role="status" className="mt-2 text-xs leading-relaxed text-[#e6c88f]">{needsReview.message || "任務提交結果待確認，請聯絡管理員；不會自動再次扣點。"}</p>}
-        {error && <p className="mt-1.5 text-[11px] leading-relaxed text-[#ff9b9b]">{error}</p>}
+        {needsReview && <p role="status" className="mt-2 text-xs leading-relaxed text-[#e6c88f]">{needsReview.message || tr("任務提交結果待確認，請聯絡管理員；不會自動再次扣點。")}</p>}
+        {error && <p className="mt-1.5 text-[11px] leading-relaxed text-[#ff9b9b]">{tr(error)}</p>}
       </div>
     </div>
   );

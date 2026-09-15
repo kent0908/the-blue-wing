@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import styles from "./ClosingGlow.module.css";
+import { useTr } from "@/lib/i18n/client";
 
 /** A small decorative field; animation runs only while the closing section is visible. */
 export default function ClosingGlow(){
+ const tr = useTr();
  const canvas=useRef<HTMLCanvasElement>(null),pausedRef=useRef(false);
  const [paused,setPaused]=useState(false);
  useEffect(()=>{
@@ -37,5 +39,5 @@ export default function ClosingGlow(){
   };frame=requestAnimationFrame(draw);
   return()=>{cancelAnimationFrame(frame);size.disconnect();view.disconnect();motion.removeEventListener('change',preference);};
  },[]);
- return <><canvas ref={canvas} aria-hidden="true" className={styles.canvas}/><button className={styles.toggle} aria-pressed={paused} onClick={()=>{pausedRef.current=!paused;setPaused(!paused);}}>{paused?'▷ 播放流光':'Ⅱ 暫停流光'}</button></>;
+ return <><canvas ref={canvas} aria-hidden="true" className={styles.canvas}/><button className={styles.toggle} aria-pressed={paused} onClick={()=>{pausedRef.current=!paused;setPaused(!paused);}}>{paused?tr("▷ 播放流光"):tr("Ⅱ 暫停流光")}</button></>;
 }

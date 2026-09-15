@@ -2,6 +2,7 @@
 
 import { upload } from "@vercel/blob/client";
 import { ALLOWED_ASSET_TYPES, MAX_ASSET_BYTES, MAX_ASSET_BYTES_DIRECT, type PublicAsset } from "./assets";
+import { k } from "./i18n/k";
 
 export interface UploadAssetOptions {
   onProgress?: (fraction: number) => void;
@@ -38,7 +39,7 @@ async function readError(res: Response, fallback: string): Promise<UploadAssetEr
  */
 export async function uploadAsset(file: File, opts: UploadAssetOptions = {}): Promise<PublicAsset> {
   if (!ALLOWED_ASSET_TYPES[file.type]) {
-    throw new UploadAssetError("接受圖片、MP4 / WebM 影片及 MP3 / WAV / M4A 音訊", "bad_type");
+    throw new UploadAssetError(k("接受圖片、MP4 / WebM 影片及 MP3 / WAV / M4A 音訊"), "bad_type");
   }
   if (file.size > MAX_ASSET_BYTES_DIRECT) {
     throw new UploadAssetError(`檔案太大，單檔上限 ${Math.floor(MAX_ASSET_BYTES_DIRECT / 1024 / 1024)} MB`, "too_large");
@@ -50,7 +51,7 @@ export async function uploadAsset(file: File, opts: UploadAssetOptions = {}): Pr
   // The token route pins the prefix to the session's user, so the pathname
   // has to carry that id — fetched once per page from /api/auth/me.
   const userId = await currentUserId();
-  if (!userId) throw new UploadAssetError("請先登入", "unauthorized");
+  if (!userId) throw new UploadAssetError(k("請先登入"), "unauthorized");
   const pathname = `assets/${userId}/${Date.now()}-${safe}`;
 
   let blobPathname: string;
@@ -66,11 +67,11 @@ export async function uploadAsset(file: File, opts: UploadAssetOptions = {}): Pr
     blobPathname = result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (opts.signal?.aborted) throw new UploadAssetError("已取消", "aborted");
+    if (opts.signal?.aborted) throw new UploadAssetError(k("已取消"), "aborted");
     // @vercel/blob's client only says "Failed to retrieve the client token"
     // for any non-2xx from the token route — reword the common cases.
-    if (/retrieve the client token/i.test(message)) throw new UploadAssetError("無法取得上傳授權，請重新登入後再試", "upload_token_failed");
-    throw new UploadAssetError(message.replace(/^Vercel Blob:\s*/, "") || "上傳失敗，請稍後再試");
+    if (/retrieve the client token/i.test(message)) throw new UploadAssetError(k("無法取得上傳授權，請重新登入後再試"), "upload_token_failed");
+    throw new UploadAssetError(message.replace(/^Vercel Blob:\s*/, "") || k("上傳失敗，請稍後再試"));
   }
 
   const reg = await fetch("/api/assets/register", {
@@ -78,7 +79,7 @@ export async function uploadAsset(file: File, opts: UploadAssetOptions = {}): Pr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pathname: blobPathname, filename: (file.name || "asset").slice(0, 120) }),
   });
-  if (!reg.ok) throw await readError(reg, "上傳完成但登錄失敗，請重新整理後再試");
+  if (!reg.ok) throw await readError(reg, k("上傳完成但登錄失敗，請重新整理後再試"));
   const j = (await reg.json()) as { asset: PublicAsset };
   opts.onProgress?.(1);
   return j.asset;
@@ -116,7 +117,7 @@ async function uploadAssetLegacy(file: File): Promise<PublicAsset> {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("/api/assets", { method: "POST", body: fd });
-  if (!res.ok) throw await readError(res, "上傳失敗，請稍後再試");
+  if (!res.ok) throw await readError(res, k("上傳失敗，請稍後再試"));
   const j = (await res.json()) as { asset: PublicAsset };
   return j.asset;
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import CharacterGrid from "@/components/CharacterGrid";
 import OfficialCharacterGrid from "@/components/OfficialCharacterGrid";
+import { useTr } from "@/lib/i18n/client";
 
 type Tab = "official" | "mine";
 
@@ -14,6 +15,7 @@ type Tab = "official" | "mine";
  * 我的創作 shelf says so rather than pretending.
  */
 export default function CompanionsPage() {
+  const tr = useTr();
   // lazy initializer reads the remembered shelf; guarded because the first
   // render happens on the server where localStorage doesn't exist
   const [tab, setTab] = useState<Tab>(() => {
@@ -36,8 +38,8 @@ export default function CompanionsPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[1100px] px-6 py-8">
-        <h1 className="text-[22px] font-semibold tracking-tight">陪聊角色</h1>
-        <p className="mt-1 text-[13px] text-[#8a8a8a]">跟官方角色一起冒險，或把資產庫裡的圖片變成自己的角色——多聊聊、聊到 ta 喜歡的話題，關係會慢慢累積。</p>
+        <h1 className="text-[22px] font-semibold tracking-tight">{tr("陪聊角色")}</h1>
+        <p className="mt-1 text-[13px] text-[#8a8a8a]">{tr("跟官方角色一起冒險，或把資產庫裡的圖片變成自己的角色——多聊聊、聊到 ta 喜歡的話題，關係會慢慢累積。")}</p>
 
         <div className="mt-5 flex gap-1 border-b border-[#1e1e1e]">
           {(["official", "mine"] as Tab[]).map((t) => (
@@ -47,7 +49,7 @@ export default function CompanionsPage() {
               onClick={() => pick(t)}
               className={`-mb-px rounded-t-lg px-4 py-2 text-[13px] ${tab === t ? "border-b-2 border-[#7ff0cd] text-white" : "text-[#8a8a8a] hover:text-white"}`}
             >
-              {t === "official" ? "官方角色" : "我的創作"}
+              {t === "official" ? tr("官方角色") : tr("我的創作")}
             </button>
           ))}
         </div>
@@ -59,7 +61,7 @@ export default function CompanionsPage() {
             <>
               <CharacterGrid />
               <div className="mt-8 rounded-xl border border-dashed border-[#2a2a2a] bg-[#0f0f0f] px-4 py-3 text-[12px] leading-relaxed text-[#6d6d6d]">
-                之後會開放把自己的角色分享給其他人，以及分享後的分潤機制——目前個人創作只有自己看得到。
+                {tr("之後會開放把自己的角色分享給其他人，以及分享後的分潤機制——目前個人創作只有自己看得到。")}
               </div>
             </>
           )}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconLock, IconChevronLeft, IconChevronRight } from "./Icons";
+import { useTr } from "@/lib/i18n/client";
 
 interface OutfitIdleVideo {
   id: number;
@@ -41,6 +42,7 @@ interface WardrobeData {
  * (shown in the sibling CompanionIdleStage panel, not rendered again here).
  */
 export default function CompanionWardrobe({ characterId }: { characterId: number }) {
+  const tr = useTr();
   const [data, setData] = useState<WardrobeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
       .then(({ res, j }) => {
         if (!aliveRef.current) return;
         if (!res.ok) {
-          setError(j?.error?.message || "載入失敗");
+          setError(j?.error?.message || tr("載入失敗"));
           return;
         }
         setData(j);
@@ -67,7 +69,7 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
         if (stillPending) pollTimer.current = setTimeout(() => loadRef.current(), 4000);
       })
       .catch(() => {
-        if (aliveRef.current) setError("載入失敗");
+        if (aliveRef.current) setError(tr("載入失敗"));
       });
   }, [characterId]);
 
@@ -86,7 +88,7 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
 
   const buy = async (outfitKey: string, label: string) => {
     if (!data || busyKey) return;
-    if (!confirm(`花費 ${data.cost} 點換上「${label}」，確定嗎？`)) return;
+    if (!confirm(tr("花費 {n} 點換上「{label}」，確定嗎？", { n: data.cost, label: tr(label) }))) return;
     setBusyKey(outfitKey);
     setError(null);
     try {
@@ -96,10 +98,10 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
         body: JSON.stringify({ outfitKey }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "換裝失敗");
+      if (!res.ok) throw new Error(j?.error?.message || tr("換裝失敗"));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "換裝失敗");
+      setError(e instanceof Error ? e.message : tr("換裝失敗"));
     } finally {
       setBusyKey(null);
     }
@@ -112,10 +114,10 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
     try {
       const res = await fetch(`/api/characters/${characterId}/outfits/${changeId}/retry`, { method: "POST" });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error?.message || "重新生成失敗");
+      if (!res.ok) throw new Error(j?.error?.message || tr("重新生成失敗"));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "重新生成失敗");
+      setError(e instanceof Error ? e.message : tr("重新生成失敗"));
     } finally {
       setBusyRetryId(null);
     }
@@ -128,12 +130,12 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="展開換裝衣櫃"
+        aria-label={tr("展開換裝衣櫃")}
         className="flex w-9 shrink-0 flex-col items-center gap-2 border-r border-[#1c1c1c] bg-[#050505] pt-4 text-[#8a8a8a] transition-colors hover:text-white"
       >
         <IconChevronRight className="h-4 w-4" />
         <span className="text-[11px] tracking-widest" style={{ writingMode: "vertical-rl" }}>
-          換裝衣櫃
+          {tr("換裝衣櫃")}
         </span>
       </button>
     );
@@ -142,11 +144,11 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
   return (
     <div className="flex w-[300px] shrink-0 flex-col overflow-y-auto border-r border-[#1c1c1c] bg-[#050505] p-3">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[13.5px] font-medium text-white">換裝衣櫃</span>
+        <span className="text-[13.5px] font-medium text-white">{tr("換裝衣櫃")}</span>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          aria-label="收合換裝衣櫃"
+          aria-label={tr("收合換裝衣櫃")}
           className="rounded-lg p-1 text-[#8a8a8a] transition-colors hover:text-white"
         >
           <IconChevronLeft className="h-4 w-4" />
@@ -159,7 +161,7 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
         <div className="rounded-xl border border-[#3a2e18] bg-[#1a150c] p-4 text-center">
           <IconLock className="mx-auto h-5 w-5 text-[#f0c27f]" />
           <p className="mt-2 text-[12.5px] leading-relaxed text-[#f0c27f]">
-            好感度到「熱戀時刻」（80）以上才能解鎖換裝衣櫃，多聊聊累積好感度吧
+            {tr("好感度到「熱戀時刻」（80）以上才能解鎖換裝衣櫃，多聊聊累積好感度吧")}
           </p>
         </div>
       )}
@@ -183,17 +185,17 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
                     className="absolute inset-0 h-full w-full object-cover opacity-50 transition-opacity group-hover:opacity-70"
                   />
                 )}
-                <span className="relative text-[12.5px] font-medium text-white">{o.label}</span>
-                <span className="relative text-[10.5px] text-[#7ff0cd]">{busyKey === o.key ? "生成中…" : `${data.cost} 點`}</span>
+                <span className="relative text-[12.5px] font-medium text-white">{tr(o.label)}</span>
+                <span className="relative text-[10.5px] text-[#7ff0cd]">{busyKey === o.key ? tr("生成中…") : tr("{n} 點", { n: data.cost })}</span>
               </button>
             ))}
           </div>
 
-          {error && <p className="mt-3 text-[11px] leading-relaxed text-[#ff9b9b]">{error}</p>}
+          {error && <p className="mt-3 text-[11px] leading-relaxed text-[#ff9b9b]">{tr(error)}</p>}
 
           {data.changes.length > 0 && (
             <div className="mt-5 border-t border-[#1c1c1c] pt-3">
-              <p className="mb-2 text-[12px] font-medium text-[#a8a8a8]">換裝紀錄</p>
+              <p className="mb-2 text-[12px] font-medium text-[#a8a8a8]">{tr("換裝紀錄")}</p>
               <div className="space-y-2">
                 {data.changes.map((c) => {
                   const latest = c.videos[c.videos.length - 1];
@@ -202,7 +204,7 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
                       <div className="min-w-0">
                         <div className="truncate text-[12.5px] text-white">{labelFor(c.outfitKey)}</div>
                         <div className="text-[10.5px] text-[#6d6d6d]">
-                          {latest?.status === "pending" ? "生成中…" : latest?.status === "failed" ? "生成失敗" : "已完成"}
+                          {latest?.status === "pending" ? tr("生成中…") : latest?.status === "failed" ? tr("生成失敗") : tr("已完成")}
                         </div>
                       </div>
                       {!c.retryUsed && latest && latest.status !== "pending" && (
@@ -212,7 +214,7 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
                           disabled={busyRetryId === c.id}
                           className="shrink-0 rounded-full border border-[#3a3a3a] px-2.5 py-1 text-[10.5px] text-[#c9c9c9] transition-colors hover:border-[#555] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {busyRetryId === c.id ? "生成中…" : "免費重生成一次"}
+                          {busyRetryId === c.id ? tr("生成中…") : tr("免費重生成一次")}
                         </button>
                       )}
                     </div>

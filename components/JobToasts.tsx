@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { IconImage, IconVideo, IconChat, IconClose, IconCheck } from "./Icons";
 import { useGenerationJobs } from "@/lib/jobsStore";
+import { useTr } from "@/lib/i18n/client";
 
 const KIND_ICON = { image: IconImage, video: IconVideo, text: IconChat, audio: IconChat } as const;
 
@@ -13,6 +14,7 @@ const KIND_ICON = { image: IconImage, video: IconVideo, text: IconChat, audio: I
  * app/studio/page.tsx.
  */
 export default function JobToasts() {
+  const tr = useTr();
   const { toasts, dismissToast } = useGenerationJobs();
   if (!toasts.length) return null;
 
@@ -39,7 +41,7 @@ export default function JobToasts() {
               {t.ok ? <IconCheck className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="text-[12.5px] font-medium text-white">{t.title}</div>
+              <div className="text-[12.5px] font-medium text-white">{tr(t.title)}</div>
               <div className="truncate text-[11.5px] text-[#9a9a9a]">{t.detail}</div>
             </div>
             <button
@@ -49,7 +51,7 @@ export default function JobToasts() {
                 e.stopPropagation();
                 dismissToast(t.id);
               }}
-              aria-label="關閉"
+              aria-label={tr("關閉")}
               className="shrink-0 text-[#6d6d6d] transition-colors hover:text-white"
             >
               <IconClose className="h-3.5 w-3.5" />

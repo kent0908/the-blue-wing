@@ -1,6 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { FAQ_CATEGORIES } from "@/lib/supportFaq";
+import { getTr } from "@/lib/i18n/server";
+import { k } from "@/lib/i18n/tr";
+
+// Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "說明中心：圖片生成、影片生成、參考素材、點數與方案",
@@ -23,15 +28,15 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
-  { id: "start", title: "快速開始" },
-  { id: "image", title: "圖片生成" },
-  { id: "video", title: "影片生成" },
-  { id: "refs", title: "參考素材與 @ 提及" },
-  { id: "advanced", title: "進階設定：浮水印、審核強度" },
-  { id: "canvas", title: "智慧畫布與 3D 導演台" },
-  { id: "history", title: "生成紀錄與下載" },
-  { id: "credits", title: "點數與方案" },
-  { id: "faq", title: "常見問題" },
+  { id: "start", title: k("快速開始") },
+  { id: "image", title: k("圖片生成") },
+  { id: "video", title: k("影片生成") },
+  { id: "refs", title: k("參考素材與 @ 提及") },
+  { id: "advanced", title: k("進階設定：浮水印、審核強度") },
+  { id: "canvas", title: k("智慧畫布與 3D 導演台") },
+  { id: "history", title: k("生成紀錄與下載") },
+  { id: "credits", title: k("點數與方案") },
+  { id: "faq", title: k("常見問題") },
 ];
 
 function H2({ id, children }: { id: string; children: React.ReactNode }) {
@@ -54,13 +59,14 @@ function Kbd({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function HelpPage() {
+export default async function HelpPage() {
+  const tr = await getTr();
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-[1080px] gap-10 px-6 py-8">
         {/* in-page nav */}
         <nav className="sticky top-8 hidden w-[180px] shrink-0 self-start md:block">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-[#6d6d6d]">目錄</div>
+          <div className="text-[11px] font-medium uppercase tracking-wide text-[#6d6d6d]">{tr("目錄")}</div>
           <ul className="mt-2 space-y-1">
             {SECTIONS.map((s) => (
               <li key={s.id}>
@@ -68,7 +74,7 @@ export default function HelpPage() {
                   href={`#${s.id}`}
                   className="block rounded-lg px-2 py-1.5 text-[12.5px] text-[#9a9a9a] transition-colors hover:bg-[#161616] hover:text-white"
                 >
-                  {s.title}
+                  {tr(s.title)}
                 </a>
               </li>
             ))}
@@ -77,30 +83,27 @@ export default function HelpPage() {
 
         <div className="min-w-0 flex-1 space-y-10 pb-16">
           <div>
-            <h1 className="text-[24px] font-semibold tracking-tight">說明</h1>
+            <h1 className="text-[24px] font-semibold tracking-tight">{tr("說明")}</h1>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[#8a8a8a]">
-              The Blue Wing 怎麼用：模式、參考素材、進階設定、點數計費都整理在這裡。有更即時的問題可以點右下角的
-              客服對話框直接問。
+              {tr("The Blue Wing 怎麼用：模式、參考素材、進階設定、點數計費都整理在這裡。有更即時的問題可以點右下角的 客服對話框直接問。")}
             </p>
           </div>
 
           {/* 快速開始 */}
           <section className="space-y-3">
-            <H2 id="start">快速開始</H2>
+            <H2 id="start">{tr("快速開始")}</H2>
             <Card>
               <ol className="list-decimal space-y-2 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
                 <li>
-                  在左側選單選一個模式：
-                  <Link href="/studio?mode=image" className="text-[#7ff0cd] hover:underline">圖片生成</Link>、
-                  <Link href="/studio?mode=video" className="text-[#7ff0cd] hover:underline">影片生成</Link>、
-                  <Link href="/studio?mode=text" className="text-[#7ff0cd] hover:underline">多輪對話</Link>，
-                  或輸入框左上角的模式切換也可以直接改。
+                  {tr("在左側選單選一個模式：")}
+                  <Link href="/studio?mode=image" className="text-[#7ff0cd] hover:underline">{tr("圖片生成")}</Link>、
+                  <Link href="/studio?mode=video" className="text-[#7ff0cd] hover:underline">{tr("影片生成")}</Link>、
+                  <Link href="/studio?mode=text" className="text-[#7ff0cd] hover:underline">{tr("多輪對話")}</Link>{tr("， 或輸入框左上角的模式切換也可以直接改。")}
                 </li>
-                <li>點模型下拉選單挑一個模型 — 不同模型支援的參數不同，切換模型時參數會自動重置成該模型支援的組合。</li>
-                <li>在輸入框打上描述，需要的話用 <Kbd>@</Kbd> 帶入參考素材（見下方「參考素材」）。</li>
+                <li>{tr("點模型下拉選單挑一個模型 — 不同模型支援的參數不同，切換模型時參數會自動重置成該模型支援的組合。")}</li>
+                <li>{tr("在輸入框打上描述，需要的話用")} <Kbd>@</Kbd> {tr("帶入參考素材（見下方「參考素材」）。")}</li>
                 <li>
-                  按右下角的送出鍵，或用 <Kbd>Cmd/Ctrl</Kbd> + <Kbd>Enter</Kbd> 快速送出。生成中會顯示進度條；完成後
-                  自動開啟右側「生成紀錄」面板。
+                  {tr("按右下角的送出鍵，或用")} <Kbd>Cmd/Ctrl</Kbd> + <Kbd>Enter</Kbd> {tr("快速送出。生成中會顯示進度條；完成後 自動開啟右側「生成紀錄」面板。")}
                 </li>
               </ol>
             </Card>
@@ -108,156 +111,121 @@ export default function HelpPage() {
 
           {/* 圖片生成 */}
           <section className="space-y-3">
-            <H2 id="image">圖片生成</H2>
+            <H2 id="image">{tr("圖片生成")}</H2>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                目前收錄 Seedream（4.0 / 4.5 / Dola 5.0 lite / pro）、Gemini（2.5 / 3.1 flash / 3.1 flash lite / 3
-                Pro）、GPT image 2 三個家族。每個模型只會顯示它實際支援的參數：
+                {tr("目前收錄 Seedream（4.0 / 4.5 / Dola 5.0 lite / pro）、Gemini（2.5 / 3.1 flash / 3.1 flash lite / 3 Pro）、GPT image 2 三個家族。每個模型只會顯示它實際支援的參數：")}
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
-                <li><span className="text-white">尺寸</span>：依模型提供 1:1 / 16:9 / 9:16 等比例；Seedream 4.5 與 Dola 5.0 系列只支援 2K 以上解析度。</li>
-                <li><span className="text-white">生成張數</span>：1–10 張，一次請求同時出多張。</li>
-                <li><span className="text-white">品質 / 背景 / 壓縮率</span>：GPT image 2 專屬，可以出透明背景 PNG/WebP。</li>
-                <li><span className="text-white">負向提示詞 / 隨機種子</span>：Seedream 專屬，種子留空就是隨機。</li>
+                <li><span className="text-white">{tr("尺寸")}</span>{tr("：依模型提供 1:1 / 16:9 / 9:16 等比例；Seedream 4.5 與 Dola 5.0 系列只支援 2K 以上解析度。")}</li>
+                <li><span className="text-white">{tr("生成張數")}</span>{tr("：1–10 張，一次請求同時出多張。")}</li>
+                <li><span className="text-white">{tr("品質 / 背景 / 壓縮率")}</span>{tr("：GPT image 2 專屬，可以出透明背景 PNG/WebP。")}</li>
+                <li><span className="text-white">{tr("負向提示詞 / 隨機種子")}</span>{tr("：Seedream 專屬，種子留空就是隨機。")}</li>
               </ul>
               <p className="mt-3 rounded-lg border border-[#3a2e18] bg-[#241d10] px-3 py-2 text-[12px] leading-relaxed text-[#f0c27f]">
-                GPT image 2 和 Gemini 3 pro image 生成常超過 60 秒，在 Vercel 免費方案的函式時限內可能會逾時失敗 —
-                建議先用 Seedream 系列或 Gemini Flash 出快稿。
+                {tr("GPT image 2 和 Gemini 3 pro image 生成常超過 60 秒，在 Vercel 免費方案的函式時限內可能會逾時失敗 — 建議先用 Seedream 系列或 Gemini Flash 出快稿。")}
               </p>
             </Card>
           </section>
 
           {/* 影片生成 */}
           <section className="space-y-3">
-            <H2 id="video">影片生成</H2>
+            <H2 id="video">{tr("影片生成")}</H2>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                秒數、解析度（480p / 720p / 1080p）、畫面比例可在生成設定裡調整。生成是非同步進行的：送出後系統會每
-                4 秒輪詢一次進度，跑完自動顯示在主畫面。
+                {tr("秒數、解析度（480p / 720p / 1080p）、畫面比例可在生成設定裡調整。生成是非同步進行的：送出後系統會每 4 秒輪詢一次進度，跑完自動顯示在主畫面。")}
               </p>
               <p className="mt-2 text-[13px] leading-relaxed text-[#c9c9c9]">
-                鏡頭運動、配樂、音效、對白這些沒有獨立的 API 參數 — Seedance 是直接讀 prompt 裡的自然語言描述，正確
-                寫法請看輸入框的「進階」面板（見下方）。
+                {tr("鏡頭運動、配樂、音效、對白這些沒有獨立的 API 參數 — Seedance 是直接讀 prompt 裡的自然語言描述，正確 寫法請看輸入框的「進階」面板（見下方）。")}
               </p>
             </Card>
           </section>
 
           {/* 參考素材 */}
           <section className="space-y-3">
-            <H2 id="refs">參考素材與 @ 提及</H2>
+            <H2 id="refs">{tr("參考素材與 @ 提及")}</H2>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                圖片模式（Seedream / Gemini）和影片模式（Seedance 系列）都可以附上參考素材，讓生成結果貼合你上傳的
-                圖片：
+                {tr("圖片模式（Seedream / Gemini）和影片模式（Seedance 系列）都可以附上參考素材，讓生成結果貼合你上傳的 圖片：")}
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
-                <li>點輸入框左邊的「素材」按鈕，上傳新圖或從資產庫裡選，可以一次選多張。</li>
+                <li>{tr("點輸入框左邊的「素材」按鈕，上傳新圖或從資產庫裡選，可以一次選多張。")}</li>
                 <li>
-                  加入之後，在 prompt 裡打 <Kbd>@</Kbd> 可以從已加入的素材裡標記「這句話說的是哪一張」——但這只是方便你
-                  自己書寫辨識，送出時系統會把 <Kbd>@名稱</Kbd> 標籤拿掉，模型實際收到的是一組沒有標籤的圖，@ 本身不會
-                  被模型理解。
+                  {tr("加入之後，在 prompt 裡打")} <Kbd>@</Kbd> {tr("可以從已加入的素材裡標記「這句話說的是哪一張」——但這只是方便你 自己書寫辨識，送出時系統會把")} <Kbd>{tr("@名稱")}</Kbd> {tr("標籤拿掉，模型實際收到的是一組沒有標籤的圖，@ 本身不會 被模型理解。")}
                 </li>
                 <li>
-                  <span className="text-white">真的想讓模型分辨每張圖的用途，實測有效的寫法是「先逐張描述內容，再下指令」</span>
-                  ，例如：「圖1是一隻紅色蘋果，圖2是藍色。請畫出圖1的形狀，整個塗成圖2的藍色」。實測過直接說「用第一張的
-                  形狀」很容易失敗——模型會把兩張圖整個疊在一起，而不是照指令合成；但先描述每張圖內容再指示，Seedream、
-                  Gemini 都能正確理解。
+                  <span className="text-white">{tr("真的想讓模型分辨每張圖的用途，實測有效的寫法是「先逐張描述內容，再下指令」")}</span>
+                  {tr("，例如：「圖1是一隻紅色蘋果，圖2是藍色。請畫出圖1的形狀，整個塗成圖2的藍色」。實測過直接說「用第一張的 形狀」很容易失敗——模型會把兩張圖整個疊在一起，而不是照指令合成；但先描述每張圖內容再指示，Seedream、 Gemini 都能正確理解。")}
                 </li>
                 <li>
-                  每次生成能附的張數依模型而定：圖片最多 4 張；影片只有 Seedance 家族支援，Seedance 2.5 最多 50
-                  張，其他 Seedance 版本先保守開放 6 張，非 Seedance 模型（Veo、Sora 等）目前不支援。
+                  {tr("每次生成能附的張數依模型而定：圖片最多 4 張；影片只有 Seedance 家族支援，Seedance 2.5 最多 50 張，其他 Seedance 版本先保守開放 6 張，非 Seedance 模型（Veo、Sora 等）目前不支援。")}
                 </li>
-                <li>參考圖會自動調整到適合的尺寸（短邊不足 320px 會放大、長邊超過 2048px 會縮小），不用自己裁切。</li>
+                <li>{tr("參考圖會自動調整到適合的尺寸（短邊不足 320px 會放大、長邊超過 2048px 會縮小），不用自己裁切。")}</li>
               </ul>
             </Card>
           </section>
 
           {/* 進階設定 */}
           <section className="space-y-3">
-            <H2 id="advanced">進階設定：浮水印、審核強度</H2>
+            <H2 id="advanced">{tr("進階設定：浮水印、審核強度")}</H2>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                輸入框工具列的齒輪圖示（進階）打開後有：
+                {tr("輸入框工具列的齒輪圖示（進階）打開後有：")}
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
                 <li>
-                  <span className="text-white">保留浮水印開關</span>：預設關閉，生成結果不會帶「AI generated」標記；
-                  打開後畫面右下角會出現這個標記。圖片、影片都支援。
+                  <span className="text-white">{tr("保留浮水印開關")}</span>{tr("：預設關閉，生成結果不會帶「AI generated」標記； 打開後畫面右下角會出現這個標記。圖片、影片都支援。")}
                 </li>
                 <li>
-                  <span className="text-white">內容審核強度</span>（僅圖片模式）：自動（預設）或寬鬆。
+                  <span className="text-white">{tr("內容審核強度")}</span>{tr("（僅圖片模式）：自動（預設）或寬鬆。")}
                 </li>
                 <li>
-                  <span className="text-white">Prompt 小技巧</span>（僅影片模式）：Seedance 官方鏡頭語彙，以及配樂
-                  <Kbd>(...)</Kbd>、音效 <Kbd>&lt;...&gt;</Kbd>、對白 <Kbd>{"{...}"}</Kbd>、章節/字幕 <Kbd>【...】</Kbd>
-                  的括號語法。
+                  <span className="text-white">{tr("Prompt 小技巧")}</span>{tr("（僅影片模式）：Seedance 官方鏡頭語彙，以及配樂")}
+                  <Kbd>(...)</Kbd>{tr("、音效")} <Kbd>&lt;...&gt;</Kbd>{tr("、對白")} <Kbd>{"{...}"}</Kbd>{tr("、章節/字幕")} <Kbd>【...】</Kbd>
+                  {tr("的括號語法。")}
                 </li>
               </ul>
               <p className="mt-3 text-[12px] leading-relaxed text-[#6d6d6d]">
-                這裡只放實際會生效的參數 — 「引導強度」「推理步數」這類擴散模型內部參數，Seedream / Seedance
-                並沒有對外開放，所以刻意沒有放假的滑桿。
+                {tr("這裡只放實際會生效的參數 — 「引導強度」「推理步數」這類擴散模型內部參數，Seedream / Seedance 並沒有對外開放，所以刻意沒有放假的滑桿。")}
               </p>
             </Card>
           </section>
 
           {/* 智慧畫布與 3D 導演台 */}
           <section className="space-y-3">
-            <H2 id="canvas">智慧畫布與 3D 導演台</H2>
+            <H2 id="canvas">{tr("智慧畫布與 3D 導演台")}</H2>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                <Link href="/canvas" className="text-[#7ff0cd] hover:underline">智慧畫布</Link>
-                是節點式的工作流編輯器：把文字、圖片、影片、素材這些節點拉出來、用線連起來，一個節點的輸出可以直接接
-                另一個節點的輸入（例如文字節點接到圖片生成節點的 prompt，或圖片生成節點的結果接到影片生成節點的參考圖）。
+                <Link href="/canvas" className="text-[#7ff0cd] hover:underline">{tr("智慧畫布")}</Link>
+                {tr("是節點式的工作流編輯器：把文字、圖片、影片、素材這些節點拉出來、用線連起來，一個節點的輸出可以直接接 另一個節點的輸入（例如文字節點接到圖片生成節點的 prompt，或圖片生成節點的結果接到影片生成節點的參考圖）。")}
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
-                <li><span className="text-white">文字</span>：手動輸入文字，接給其他節點當 prompt。</li>
-                <li><span className="text-white">讀取素材</span>：從資產庫選圖，可一次選多張。</li>
-                <li><span className="text-white">圖片生成 / 影片生成</span>：跟輸入框裡的生成功能吃同一套 API，一樣會消耗點數。</li>
+                <li><span className="text-white">{tr("文字")}</span>{tr("：手動輸入文字，接給其他節點當 prompt。")}</li>
+                <li><span className="text-white">{tr("讀取素材")}</span>{tr("：從資產庫選圖，可一次選多張。")}</li>
+                <li><span className="text-white">{tr("圖片生成 / 影片生成")}</span>{tr("：跟輸入框裡的生成功能吃同一套 API，一樣會消耗點數。")}</li>
                 <li>
-                  <span className="text-white">3D 導演台</span>：在一個簡單的 3D 場景裡擺放、旋轉一個人形模型，套用現成姿勢或用
-                  RIG 面板逐關節微調，調好角度後截圖——這張截圖就是這個節點的輸出，可以直接接到後面的圖片／影片生成節點當參考圖，
-                  不用再手動找或畫參考圖。目前是單一自由視角相機＋純色背景，一次只能截一張靜態圖；多相機切換、360°
-                  全景背景、時間軸關鍵幀動畫錄影輸出還沒做，之後會再擴充。人形模型是純幾何圖形組成的假人（不是外部下載的模型），
-                  姿勢庫也是手動調的近似姿勢，不是動作捕捉來的精確資料。
+                  <span className="text-white">{tr("3D 導演台")}</span>{tr("：在一個簡單的 3D 場景裡擺放、旋轉一個人形模型，套用現成姿勢或用 RIG 面板逐關節微調，調好角度後截圖——這張截圖就是這個節點的輸出，可以直接接到後面的圖片／影片生成節點當參考圖， 不用再手動找或畫參考圖。目前是單一自由視角相機＋純色背景，一次只能截一張靜態圖；多相機切換、360° 全景背景、時間軸關鍵幀動畫錄影輸出還沒做，之後會再擴充。人形模型是純幾何圖形組成的假人（不是外部下載的模型）， 姿勢庫也是手動調的近似姿勢，不是動作捕捉來的精確資料。")}
                 </li>
               </ul>
             </Card>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                3D 導演台也有{" "}
-                <Link href="/canvas/director3d" className="text-[#7ff0cd] hover:underline">獨立頁面</Link>
-                （側邊欄「3D 導演台」），不用先建智慧畫布也能直接開來用；場景會自動存在瀏覽器裡，截圖後按「用於圖片生成」
-                或「用於影片生成」，會把截圖存進資產庫並直接帶去輸入框當參考圖。
+                {tr("3D 導演台也有")}{" "}
+                <Link href="/canvas/director3d" className="text-[#7ff0cd] hover:underline">{tr("獨立頁面")}</Link>
+                {tr("（側邊欄「3D 導演台」），不用先建智慧畫布也能直接開來用；場景會自動存在瀏覽器裡，截圖後按「用於圖片生成」 或「用於影片生成」，會把截圖存進資產庫並直接帶去輸入框當參考圖。")}
               </p>
               <ul className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
                 <li>
-                  <span className="text-white">體型</span>：每個角色可在右側「attribute」分頁切換「精細模特兒」或「簡易關節
-                  人偶（圓形關節＋直立骨架，新手推薦）」，兩種骨架、比例、姿勢完全共用，只是畫法不同——不熟 3D
-                  操作時，球狀關節比箱型模特兒更容易看出「這一節現在轉到哪個方向」。
+                  <span className="text-white">{tr("體型")}</span>{tr("：每個角色可在右側「attribute」分頁切換「精細模特兒」或「簡易關節 人偶（圓形關節＋直立骨架，新手推薦）」，兩種骨架、比例、姿勢完全共用，只是畫法不同——不熟 3D 操作時，球狀關節比箱型模特兒更容易看出「這一節現在轉到哪個方向」。")}
                 </li>
                 <li>
-                  <span className="text-white">快速運鏡</span>：左側「快速運鏡」是一鍵鏡頭按鈕（正面全身／半身／特寫、側面、
-                  背面、45° 側前、鳥瞰俯視、仰視英雄鏡），選好角色再點一下，鏡頭會自動移過去對準該角色；多角色時可用
-                  「全員入鏡」自動抓一個能框住所有角色的鏡頭。套用預設之後仍然可以照舊拖曳、滾輪微調，「重置視角」則是
-                  回到剛進場景時的預設鏡頭。
+                  <span className="text-white">{tr("快速運鏡")}</span>{tr("：左側「快速運鏡」是一鍵鏡頭按鈕（正面全身／半身／特寫、側面、 背面、45° 側前、鳥瞰俯視、仰視英雄鏡），選好角色再點一下，鏡頭會自動移過去對準該角色；多角色時可用 「全員入鏡」自動抓一個能框住所有角色的鏡頭。套用預設之後仍然可以照舊拖曳、滾輪微調，「重置視角」則是 回到剛進場景時的預設鏡頭。")}
                 </li>
                 <li>
-                  <span className="text-white">錄製運鏡</span>：設定 15–30 秒的時長按「開始錄製」，錄製期間可以自由拖曳、
-                  滾輪、點運鏡按鈕，畫面怎麼動就錄成怎樣，時間到自動停止（也能提前手動停止）。這是真的把 3D
-                  畫面錄成一段 webm 影片，可以直接下載當分鏡參考。停止後按「送去影片生成」會一次帶三樣東西過去：
-                  這段錄製本身會直接當「運鏡影片參考」餵給 Seedance 2.0 / 2.5（已實際驗證生成服務支援這個功能，
-                  僅這兩個版本，其他模型會自動退回只用後面兩樣）、錄製過程中自動抽出的幾張畫面（當多重參考圖）、
-                  以及根據鏡頭起訖位置粗略判讀出的運鏡文字提示（例如「鏡頭向右環繞移動」，可在輸入框自行修改）。
-                  生成服務對參考影片有解析度下限（大約 480p），瀏覽器視窗開太小錄出來可能會被拒絕，建議放大視窗再錄；
-                  下載下來的影片檔本身只是給你自己看的分鏡參考，不會另外被 AI 讀取。
+                  <span className="text-white">{tr("錄製運鏡")}</span>{tr("：設定 15–30 秒的時長按「開始錄製」，錄製期間可以自由拖曳、 滾輪、點運鏡按鈕，畫面怎麼動就錄成怎樣，時間到自動停止（也能提前手動停止）。這是真的把 3D 畫面錄成一段 webm 影片，可以直接下載當分鏡參考。停止後按「送去影片生成」會一次帶三樣東西過去： 這段錄製本身會直接當「運鏡影片參考」餵給 Seedance 2.0 / 2.5（已實際驗證生成服務支援這個功能， 僅這兩個版本，其他模型會自動退回只用後面兩樣）、錄製過程中自動抽出的幾張畫面（當多重參考圖）、 以及根據鏡頭起訖位置粗略判讀出的運鏡文字提示（例如「鏡頭向右環繞移動」，可在輸入框自行修改）。 生成服務對參考影片有解析度下限（大約 480p），瀏覽器視窗開太小錄出來可能會被拒絕，建議放大視窗再錄； 下載下來的影片檔本身只是給你自己看的分鏡參考，不會另外被 AI 讀取。")}
                 </li>
                 <li>
-                  <span className="text-white">移動路徑</span>：右側「path」分頁可以讓角色沿著時間移動。直接在畫面裡按住
-                  角色拖曳就能移動它（沿地面滑動）；加過的路徑點會顯示成畫面上的黃色小球、中間用虛線連起來，這些黃色小球
-                  也可以直接拖曳調整位置。時間點和該時間點的姿勢還是在分頁裡的清單設定，點與點之間位置和姿勢都會自動
-                  平滑內插——不是真的走路動畫（沒有腳步交替），但可以做出「角色從 A 走到 B、途中換個動作」的效果，「預覽
-                  路徑」可以在錄製前先看一次。角色有 2 個以上路徑點時，錄製運鏡會自動照路徑播放，錄出來的影片就會有
-                  真的移動，不是只有鏡頭在繞著靜止的角色轉。
+                  <span className="text-white">{tr("移動路徑")}</span>{tr("：右側「path」分頁可以讓角色沿著時間移動。直接在畫面裡按住 角色拖曳就能移動它（沿地面滑動）；加過的路徑點會顯示成畫面上的黃色小球、中間用虛線連起來，這些黃色小球 也可以直接拖曳調整位置。時間點和該時間點的姿勢還是在分頁裡的清單設定，點與點之間位置和姿勢都會自動 平滑內插——不是真的走路動畫（沒有腳步交替），但可以做出「角色從 A 走到 B、途中換個動作」的效果，「預覽 路徑」可以在錄製前先看一次。角色有 2 個以上路徑點時，錄製運鏡會自動照路徑播放，錄出來的影片就會有 真的移動，不是只有鏡頭在繞著靜止的角色轉。")}
                 </li>
               </ul>
             </Card>
@@ -265,14 +233,13 @@ export default function HelpPage() {
 
           {/* 生成紀錄與下載 */}
           <section className="space-y-3">
-            <H2 id="history">生成紀錄與下載</H2>
+            <H2 id="history">{tr("生成紀錄與下載")}</H2>
             <Card>
               <ul className="list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-[#c9c9c9]">
-                <li>右上角「生成紀錄」會列出這個帳號過去的生成結果，可用關鍵字、類型、時間篩選。</li>
-                <li>點任一張縮圖會把它換到左邊主畫面顯示；目前顯示中的項目會有綠色外框標示。</li>
+                <li>{tr("右上角「生成紀錄」會列出這個帳號過去的生成結果，可用關鍵字、類型、時間篩選。")}</li>
+                <li>{tr("點任一張縮圖會把它換到左邊主畫面顯示；目前顯示中的項目會有綠色外框標示。")}</li>
                 <li>
-                  主畫面結果右上角、以及生成紀錄縮圖右上角（滑鼠移上去會出現）都有下載按鈕，點一下就會存成檔案
-                  到本機，不需要另外截圖或右鍵另存。
+                  {tr("主畫面結果右上角、以及生成紀錄縮圖右上角（滑鼠移上去會出現）都有下載按鈕，點一下就會存成檔案 到本機，不需要另外截圖或右鍵另存。")}
                 </li>
               </ul>
             </Card>
@@ -280,70 +247,64 @@ export default function HelpPage() {
 
           {/* 點數 */}
           <section className="space-y-3">
-            <H2 id="credits">點數與方案</H2>
+            <H2 id="credits">{tr("點數與方案")}</H2>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
-                每次生成會先檢查點數是否足夠，成功產出才會實際扣點；圖片生成失敗不扣點，影片提交後失敗會自動退點。
-                粗估費率：圖片約 10–60 點／張（依模型而定）；影片約 4–42 點／秒（480p 基準），解析度越高倍率越高
-                （720p ×2.25、1080p ×5.5）。免費方案每天有 10 點，當天沒用完不會累積到隔天；訂閱方案的點數每月
-                續訂時重新發放，加購的點數包則從加購當天起兩年內有效。詳細方案與點數紀錄在
-                <Link href="/account" className="text-[#7ff0cd] hover:underline">帳號</Link> 頁。
+                {tr("每次生成會先檢查點數是否足夠，成功產出才會實際扣點；圖片生成失敗不扣點，影片提交後失敗會自動退點。 粗估費率：圖片約 10–60 點／張（依模型而定）；影片約 4–42 點／秒（480p 基準），解析度越高倍率越高 （720p ×2.25、1080p ×5.5）。免費方案每天有 10 點，當天沒用完不會累積到隔天；訂閱方案的點數每月 續訂時重新發放，加購的點數包則從加購當天起兩年內有效。詳細方案與點數紀錄在")}
+                <Link href="/account" className="text-[#7ff0cd] hover:underline">{tr("帳號")}</Link> {tr("頁。")}
               </p>
             </Card>
           </section>
 
           {/* FAQ */}
           <section className="space-y-3">
-            <H2 id="faq">常見問題</H2>
+            <H2 id="faq">{tr("常見問題")}</H2>
             <Card>
               <dl className="space-y-4 text-[13px] leading-relaxed">
                 <div>
-                  <dt className="font-medium text-white">為什麼生成一直失敗顯示逾時？</dt>
+                  <dt className="font-medium text-white">{tr("為什麼生成一直失敗顯示逾時？")}</dt>
                   <dd className="mt-1 text-[#8a8a8a]">
-                    少數較慢的模型（GPT image 2、Gemini 3 pro image）常需要超過 60 秒，Vercel 免費方案的函式上限就是
-                    60 秒。換成 Seedream 系列或 Gemini Flash 通常幾秒內就會完成。
+                    {tr("少數較慢的模型（GPT image 2、Gemini 3 pro image）常需要超過 60 秒，Vercel 免費方案的函式上限就是 60 秒。換成 Seedream 系列或 Gemini Flash 通常幾秒內就會完成。")}
                   </dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-white">登入後功能還是用不了？</dt>
+                  <dt className="font-medium text-white">{tr("登入後功能還是用不了？")}</dt>
                   <dd className="mt-1 text-[#8a8a8a]">
-                    需要先完成 email 驗證信裡的連結，才能使用生成功能，不然 API 會回傳「請先完成 email 驗證」。
+                    {tr("需要先完成 email 驗證信裡的連結，才能使用生成功能，不然 API 會回傳「請先完成 email 驗證」。")}
                   </dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-white">上傳素材顯示「尚未設定素材儲存空間」？</dt>
+                  <dt className="font-medium text-white">{tr("上傳素材顯示「尚未設定素材儲存空間」？")}</dt>
                   <dd className="mt-1 text-[#8a8a8a]">
-                    這代表目前這個部署還沒接上 Vercel Blob（素材庫用的檔案儲存），請聯絡管理員設定。
+                    {tr("這代表目前這個部署還沒接上 Vercel Blob（素材庫用的檔案儲存），請聯絡管理員設定。")}
                   </dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-white">送出的參考圖為什麼被拒絕？</dt>
+                  <dt className="font-medium text-white">{tr("送出的參考圖為什麼被拒絕？")}</dt>
                   <dd className="mt-1 text-[#8a8a8a]">
-                    尺寸不會是原因——參考圖送出前會自動調整到生成服務接受的範圍（短邊至少 320px、長邊最多 2048px）。
-                    數量才有上限：圖片模式最多附 4 張、影片模式依模型上限（Seedance 2.5 最多 50 張），超過會被自動截斷；
-                    另外 Seedance 1.0-pro / 1.0-pro-fast / 1.5-pro 不接受參考圖。
+                    {tr("尺寸不會是原因——參考圖送出前會自動調整到生成服務接受的範圍（短邊至少 320px、長邊最多 2048px）。 數量才有上限：圖片模式最多附 4 張、影片模式依模型上限（Seedance 2.5 最多 50 張），超過會被自動截斷； 另外 Seedance 1.0-pro / 1.0-pro-fast / 1.5-pro 不接受參考圖。")}
                   </dd>
                 </div>
                 <div>
-                  <dt className="font-medium text-white">還有其他問題？</dt>
+                  <dt className="font-medium text-white">{tr("還有其他問題？")}</dt>
                   <dd className="mt-1 text-[#8a8a8a]">
-                    點畫面右下角的客服對話框，直接問方案、點數、模型或操作問題。
+                    {tr("點畫面右下角的客服對話框，直接問方案、點數、模型或操作問題。")}
                   </dd>
                 </div>
               </dl>
             </Card>
             <Card>
-              <div className="text-[13px] font-medium text-white">依主題瀏覽常見問題</div>
+              <div className="text-[13px] font-medium text-white">{tr("依主題瀏覽常見問題")}</div>
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                 {FAQ_CATEGORIES.map((c) => (
                   <li key={c.id}>
                     <Link href={`/help/${c.id}`} className="flex items-baseline justify-between rounded-xl border border-[#262626] px-3 py-2 text-[13px] text-[#dcdcdc] hover:border-[#444]">
-                      <span>{c.label}</span><span className="text-[11.5px] text-[#7a7a7a]">{c.entries.length} 題</span>
+                      <span>{tr(c.label)}</span><span className="text-[11.5px] text-[#7a7a7a]">{c.entries.length} {tr("題")}</span>
                     </Link>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-[12.5px] text-[#8a8a8a]">想知道每個模型的能力與點數？看 <Link href="/models" className="text-[#7ff0cd] hover:underline">模型一覽</Link>。</p>
+              <p className="mt-3 text-[12.5px] text-[#8a8a8a]">{tr("想知道每個模型的能力與點數？看")} <Link href="/models" className="text-[#7ff0cd] hover:underline">{tr("模型一覽")}</Link>。</p>
             </Card>
           </section>
         </div>

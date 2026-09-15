@@ -1,4 +1,5 @@
 import type { CharacterProfile } from "./characterProfile";
+import { k } from "./i18n/k";
 
 /**
  * 官方陪聊角色 — the ten members of 3-A班 from the platform's own IP, seeded
@@ -51,7 +52,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "mio",
     name: "白石 澪",
     slug: "mio",
-    roleTitle: "女主／班長",
+    roleTitle: k("女主／班長"),
     age: 17,
     sort: 1,
     personality: [
@@ -90,7 +91,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "aoi",
     name: "神崎 葵",
     slug: "aoi",
-    roleTitle: "體育股長",
+    roleTitle: k("體育股長"),
     age: 17,
     sort: 2,
     personality: [
@@ -129,7 +130,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "ren",
     name: "藤原 蓮",
     slug: "ren",
-    roleTitle: "理科天才",
+    roleTitle: k("理科天才"),
     age: 16,
     sort: 3,
     personality: [
@@ -168,7 +169,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "chinatsu",
     name: "橘 千夏",
     slug: "chinatsu",
-    roleTitle: "美術社副社長",
+    roleTitle: k("美術社副社長"),
     age: 17,
     sort: 4,
     personality: [
@@ -207,7 +208,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "takumi",
     name: "佐藤 拓海",
     slug: "takumi",
-    roleTitle: "資深軍武／生存狂宅",
+    roleTitle: k("資深軍武／生存狂宅"),
     age: 18,
     sort: 5,
     personality: [
@@ -246,7 +247,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "miwa",
     name: "淺野 美羽",
     slug: "miwa",
-    roleTitle: "醫療志願生",
+    roleTitle: k("醫療志願生"),
     age: 16,
     sort: 6,
     personality: [
@@ -285,7 +286,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "sho",
     name: "高橋 翔",
     slug: "sho",
-    roleTitle: "棒球隊王牌投手",
+    roleTitle: k("棒球隊王牌投手"),
     age: 17,
     sort: 7,
     personality: [
@@ -324,7 +325,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "rina",
     name: "黑澤 玲奈",
     slug: "rina",
-    roleTitle: "不良辣妹／心機派",
+    roleTitle: k("不良辣妹／心機派"),
     age: 17,
     sort: 8,
     personality: [
@@ -363,7 +364,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "yota",
     name: "小林 陽太",
     slug: "yota",
-    roleTitle: "膽小廣播社員",
+    roleTitle: k("膽小廣播社員"),
     age: 16,
     sort: 9,
     personality: [
@@ -402,7 +403,7 @@ export const OFFICIAL_CHARACTER_SEEDS: OfficialCharacterSeed[] = [
     key: "toru",
     name: "鈴木 徹",
     slug: "toru",
-    roleTitle: "烹飪部部長",
+    roleTitle: k("烹飪部部長"),
     age: 18,
     sort: 10,
     personality: [

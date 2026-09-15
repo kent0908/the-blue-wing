@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { IconChevronLeft, IconChevronRight } from "./Icons";
+import { useTr } from "@/lib/i18n/client";
+import { k } from "@/lib/i18n/tr";
 
 type Slide = {
   title: string;
@@ -36,39 +38,40 @@ function heroHref(b: HeroBlock): string {
 const SLIDES: Slide[] = [
   {
     title: "Seedance 2.0",
-    subtitle: "多鏡頭故事敘述，具備電影級運動效果",
+    subtitle: k("多鏡頭故事敘述，具備電影級運動效果"),
     href: "/studio?mode=video",
     gradient: "linear-gradient(135deg,#2b1f1a 0%,#4a2f22 55%,#1a1210 100%)",
   },
   {
-    title: "Seedream 5.0 Pro｜圖層分離",
-    subtitle: "精準編輯、多語言生成、高密度視覺，一應俱全",
+    title: k("Seedream 5.0 Pro｜圖層分離"),
+    subtitle: k("精準編輯、多語言生成、高密度視覺，一應俱全"),
     href: "/studio?mode=image",
     gradient: "linear-gradient(135deg,#3b2f16 0%,#6b5423 50%,#1c1710 100%)",
     overlayLeft: "Unflatten Reality",
     overlayRight: "Reframe the Future.",
   },
   {
-    title: "音樂影片助手",
-    subtitle: "用幾秒鐘將任何歌曲變成驚豔的音樂影片",
+    title: k("音樂影片助手"),
+    subtitle: k("用幾秒鐘將任何歌曲變成驚豔的音樂影片"),
     href: "/studio?mode=video",
     gradient: "linear-gradient(135deg,#3d1418 0%,#7a2224 55%,#170a0c 100%)",
   },
   {
     title: "Veo 3.1",
-    subtitle: "原生音軌、電影級畫面，最長 60 秒",
+    subtitle: k("原生音軌、電影級畫面，最長 60 秒"),
     href: "/studio?mode=video",
     gradient: "linear-gradient(135deg,#131f38 0%,#24406e 55%,#0b1120 100%)",
   },
   {
     title: "Imagen 4",
-    subtitle: "文字排版更準確，寫實質感更細膩",
+    subtitle: k("文字排版更準確，寫實質感更細膩"),
     href: "/studio?mode=image",
     gradient: "linear-gradient(135deg,#152b26 0%,#22483d 55%,#0b1614 100%)",
   },
 ];
 
 export default function HeroCarousel() {
+  const tr = useTr();
   const [dynamicSlides, setDynamicSlides] = useState<Slide[] | null>(null);
 
   useEffect(() => {
@@ -121,7 +124,7 @@ export default function HeroCarousel() {
           const isCenter = offset === 0;
           return (
             <Link
-              key={`${idx}-${s.title}`}
+              key={`${idx}-${tr(s.title)}`}
               href={s.href}
               className="absolute overflow-hidden rounded-2xl transition-all duration-500 ease-out"
               style={{
@@ -145,8 +148,8 @@ export default function HeroCarousel() {
                   </div>
                 )}
                 <div className="bg-gradient-to-t from-black/60 to-transparent pt-10">
-                  <h3 className={`font-semibold ${isCenter ? "text-[26px]" : "text-[20px]"}`}>{s.title}</h3>
-                  <p className="mt-1 text-[13px] text-white/70">{s.subtitle}</p>
+                  <h3 className={`font-semibold ${isCenter ? "text-[26px]" : "text-[20px]"}`}>{tr(s.title)}</h3>
+                  <p className="mt-1 text-[13px] text-white/70">{tr(s.subtitle)}</p>
                 </div>
               </div>
             </Link>
@@ -155,14 +158,14 @@ export default function HeroCarousel() {
 
         <button
           onClick={() => go(-1)}
-          aria-label="上一張"
+          aria-label={tr("上一張")}
           className="absolute left-[7%] z-20 grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white/80 backdrop-blur transition-colors hover:bg-black/70 hover:text-white"
         >
           <IconChevronLeft className="h-4 w-4" />
         </button>
         <button
           onClick={() => go(1)}
-          aria-label="下一張"
+          aria-label={tr("下一張")}
           className="absolute right-[7%] z-20 grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white/80 backdrop-blur transition-colors hover:bg-black/70 hover:text-white"
         >
           <IconChevronRight className="h-4 w-4" />
@@ -174,7 +177,7 @@ export default function HeroCarousel() {
           <button
             key={idx}
             onClick={() => setI(idx)}
-            aria-label={`第 ${idx + 1} 張`}
+            aria-label={tr("第 {n} 張", { n: idx + 1 })}
             className={[
               "h-1 rounded-full transition-all",
               idx === i ? "w-7 bg-white" : "w-3.5 bg-[#3a3a3a] hover:bg-[#555]",

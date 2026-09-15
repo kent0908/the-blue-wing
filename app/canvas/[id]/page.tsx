@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import CanvasEditor from "@/components/canvas/CanvasEditor";
 import { validateGraph } from "@/lib/canvas/validation";
 import type { CanvasGraph } from "@/lib/canvas/types";
+import { useTr } from "@/lib/i18n/client";
 
 interface WorkflowData {
   id: string;
@@ -14,6 +15,7 @@ interface WorkflowData {
 }
 
 export default function CanvasWorkflowPage() {
+  const tr = useTr();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [data, setData] = useState<WorkflowData | null>(null);
@@ -27,14 +29,14 @@ export default function CanvasWorkflowPage() {
           router.push(`/login?next=/canvas/${params.id}`);
           return null;
         }
-        return r.ok ? r.json() : Promise.reject(new Error("找不到這個畫布"));
+        return r.ok ? r.json() : Promise.reject(new Error(tr("找不到這個畫布")));
       })
       .then((j: { workflow: WorkflowData } | null) => {
         if (!alive || !j) return;
         const graph = validateGraph(j.workflow.graph);
         setData({ version: j.workflow.version, id: j.workflow.id, name: j.workflow.name, graph });
       })
-      .catch((e) => alive && setError(e instanceof Error ? e.message : "載入失敗"));
+      .catch((e) => alive && setError(e instanceof Error ? e.message : tr("載入失敗")));
     return () => {
       alive = false;
     };
@@ -44,7 +46,7 @@ export default function CanvasWorkflowPage() {
     return (
       <div className="grid h-full place-items-center">
         <div className="max-w-sm rounded-xl border border-[#4a2020] bg-[#1a1010] px-5 py-4 text-center text-[13.5px] text-[#ffb4b4]">
-          {error}
+          {tr(error)}
         </div>
       </div>
     );
@@ -58,5 +60,5 @@ export default function CanvasWorkflowPage() {
     );
   }
 
-  return <CanvasEditor key={data.id} initialVersion={data.version} workflowId={data.id} initialName={data.name} initialGraph={data.graph} />;
+  return <CanvasEditor key={data.id} initialVersion={data.version} workflowId={data.id} initialName={tr(data.name)} initialGraph={data.graph} />;
 }

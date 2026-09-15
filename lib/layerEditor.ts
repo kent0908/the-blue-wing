@@ -1,3 +1,4 @@
+import { k } from "./i18n/k";
 /**
  * 圖層編輯 (Layer Editor) — a standalone multi-image compositing + local
  * mask-redraw tool, separate from 智慧畫布 (that's a node-graph workflow
@@ -44,22 +45,22 @@ export type BlendMode =
   | "luminosity";
 
 export const BLEND_MODES: { id: BlendMode; label: string }[] = [
-  { id: "normal", label: "正常" },
-  { id: "multiply", label: "正片疊底" },
-  { id: "screen", label: "濾色" },
-  { id: "overlay", label: "覆蓋" },
-  { id: "darken", label: "變暗" },
-  { id: "lighten", label: "變亮" },
-  { id: "color-dodge", label: "加亮顏色" },
-  { id: "color-burn", label: "加深顏色" },
-  { id: "hard-light", label: "實光" },
-  { id: "soft-light", label: "柔光" },
-  { id: "difference", label: "差異化" },
-  { id: "exclusion", label: "排除" },
-  { id: "hue", label: "色相" },
-  { id: "saturation", label: "飽和度" },
-  { id: "color", label: "顏色" },
-  { id: "luminosity", label: "明度" },
+  { id: "normal", label: k("正常") },
+  { id: "multiply", label: k("正片疊底") },
+  { id: "screen", label: k("濾色") },
+  { id: "overlay", label: k("覆蓋") },
+  { id: "darken", label: k("變暗") },
+  { id: "lighten", label: k("變亮") },
+  { id: "color-dodge", label: k("加亮顏色") },
+  { id: "color-burn", label: k("加深顏色") },
+  { id: "hard-light", label: k("實光") },
+  { id: "soft-light", label: k("柔光") },
+  { id: "difference", label: k("差異化") },
+  { id: "exclusion", label: k("排除") },
+  { id: "hue", label: k("色相") },
+  { id: "saturation", label: k("飽和度") },
+  { id: "color", label: k("顏色") },
+  { id: "luminosity", label: k("明度") },
 ];
 
 /** CSS mix-blend-mode (DOM preview) and canvas globalCompositeOperation share names except "normal". */
@@ -109,12 +110,12 @@ export interface LayerCrop {
 export const FULL_CROP: LayerCrop = { x: 0, y: 0, w: 1, h: 1 };
 
 export const TEXT_FONTS: { id: string; label: string }[] = [
-  { id: "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif", label: "黑體" },
-  { id: "'Noto Serif TC', 'PMingLiU', serif", label: "明體" },
+  { id: "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif", label: k("黑體") },
+  { id: "'Noto Serif TC', 'PMingLiU', serif", label: k("明體") },
   { id: "Impact, 'Arial Black', sans-serif", label: "Impact" },
   { id: "Georgia, 'Times New Roman', serif", label: "Georgia" },
-  { id: "'Courier New', monospace", label: "等寬" },
-  { id: "'Comic Sans MS', 'Segoe Print', cursive", label: "手寫" },
+  { id: "'Courier New', monospace", label: k("等寬") },
+  { id: "'Comic Sans MS', 'Segoe Print', cursive", label: k("手寫") },
 ];
 
 export interface TextStyle {
@@ -133,7 +134,7 @@ export interface TextStyle {
 }
 
 export const DEFAULT_TEXT_STYLE: TextStyle = {
-  text: "文字",
+  text: k("文字"),
   fontFamily: TEXT_FONTS[0].id,
   fontSize: 64,
   color: "#ffffff",
@@ -239,7 +240,7 @@ export function newTextLayer(canvasW: number, canvasH: number, style: Partial<Te
     id: newLayerId(),
     kind: "text",
     src: "",
-    name: text.text.slice(0, 20) || "文字",
+    name: text.text.slice(0, 20) || k("文字"),
     x: (canvasW - width) / 2,
     y: (canvasH - height) / 2,
     width,
@@ -357,7 +358,7 @@ export async function renderDoc(doc: EditorDoc, opts: RenderOptions = {}): Promi
   canvas.width = Math.max(1, Math.round(doc.canvas.width * scale));
   canvas.height = Math.max(1, Math.round(doc.canvas.height * scale));
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("這個瀏覽器不支援 canvas 合成");
+  if (!ctx) throw new Error(k("這個瀏覽器不支援 canvas 合成"));
   const background = opts.background ?? doc.canvas.background;
   if (background && background !== "transparent") {
     ctx.fillStyle = background;
@@ -414,7 +415,7 @@ export type ExportFormat = "png" | "jpeg" | "webp";
 export async function exportDoc(doc: EditorDoc, format: ExportFormat, scale: number, transparent: boolean, skipIds?: Set<string>): Promise<Blob> {
   const background = transparent && format !== "jpeg" ? "transparent" : doc.canvas.background === "transparent" ? "#ffffff" : doc.canvas.background;
   const canvas = await renderDoc(doc, { scale, background, skipIds });
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("匯出失敗"))), `image/${format}`, format === "png" ? undefined : 0.92));
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(k("匯出失敗")))), `image/${format}`, format === "png" ? undefined : 0.92));
 }
 
 /** Small JPEG preview of the whole doc — saved-project thumbnails. */
@@ -439,7 +440,7 @@ export async function toDataUrl(src: string, maxDim = 1280, keepAlpha = false): 
   canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
   canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("這個瀏覽器不支援 canvas 合成");
+  if (!ctx) throw new Error(k("這個瀏覽器不支援 canvas 合成"));
   if (!keepAlpha) {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -623,7 +624,7 @@ export function normalizeDoc(raw: unknown): EditorDoc {
         id: l.id!,
         kind: l.kind === "text" ? "text" : "image",
         src: typeof l.src === "string" ? l.src : "",
-        name: typeof l.name === "string" ? l.name.slice(0, 60) : "圖層",
+        name: typeof l.name === "string" ? l.name.slice(0, 60) : k("圖層"),
         x: Number(l.x) || 0,
         y: Number(l.y) || 0,
         width: Math.max(1, Number(l.width) || 100),

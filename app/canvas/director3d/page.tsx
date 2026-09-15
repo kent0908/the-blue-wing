@@ -10,6 +10,8 @@ import { DIRECTOR3D_HANDOFF_KEY, defaultDirector3DData, type Director3DSceneData
 import { uploadDataUrlAsset } from "@/lib/uploadAsset";
 import { upload } from "@vercel/blob/client";
 import { MAX_VIDEO_REF_BYTES, MAX_VIDEO_REF_BYTES_DIRECT } from "@/lib/videoRefs";
+import { useTr } from "@/lib/i18n/client";
+import type { Tr } from "@/lib/i18n/tr";
 
 async function uploadImage(dataUrl: string, filename: string): Promise<{ id: number; src: string; name: string }> {
   return uploadDataUrlAsset(dataUrl, filename);
@@ -23,27 +25,27 @@ async function uploadImage(dataUrl: string, filename: string): Promise<{ id: num
  * limit; falls back to the legacy ≤4MB multipart POST only where direct
  * upload isn't available.
  */
-async function uploadVideoRef(clip: RecordedClip): Promise<{ url: string }> {
+async function uploadVideoRef(clip: RecordedClip, tr: Tr): Promise<{ url: string }> {
   const ext = clip.blob.type.includes("mp4") ? "mp4" : "webm";
   const type = ext === "mp4" ? "video/mp4" : "video/webm";
   const probe = await fetch("/api/video-refs/upload", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   if (probe?.available) {
-    if (clip.blob.size > MAX_VIDEO_REF_BYTES_DIRECT) throw new Error(`影片檔太大，單檔上限 ${Math.floor(MAX_VIDEO_REF_BYTES_DIRECT / 1024 / 1024)} MB — 錄短一點再試`);
+    if (clip.blob.size > MAX_VIDEO_REF_BYTES_DIRECT) throw new Error(tr("影片檔太大，單檔上限 {n} MB — 錄短一點再試", { n: Math.floor(MAX_VIDEO_REF_BYTES_DIRECT / 1024 / 1024) }));
     const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
     const filename = `${token}.${ext}`;
     try {
       await upload(`video-refs/${filename}`, clip.blob, { access: "private", handleUploadUrl: "/api/video-refs/upload", contentType: type, multipart: clip.blob.size > 8 * 1024 * 1024 });
     } catch (e) {
-      throw new Error(e instanceof Error ? e.message.replace(/^Vercel Blob:\s*/, "") : "運鏡影片上傳失敗");
+      throw new Error(e instanceof Error ? e.message.replace(/^Vercel Blob:\s*/, "") : tr("運鏡影片上傳失敗"));
     }
     return { url: `${window.location.origin}/api/video-refs/${filename}` };
   }
-  if (clip.blob.size > MAX_VIDEO_REF_BYTES) throw new Error(`這個環境的運鏡影片上限是 ${Math.floor(MAX_VIDEO_REF_BYTES / 1024 / 1024)} MB — 錄短一點再試`);
+  if (clip.blob.size > MAX_VIDEO_REF_BYTES) throw new Error(tr("這個環境的運鏡影片上限是 {n} MB — 錄短一點再試", { n: Math.floor(MAX_VIDEO_REF_BYTES / 1024 / 1024) }));
   const form = new FormData();
   form.append("file", clip.blob, `director3d-camera-move.${ext}`);
   const res = await fetch("/api/video-refs", { method: "POST", body: form });
   const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j?.error?.message || "運鏡影片上傳失敗");
+  if (!res.ok) throw new Error(j?.error?.message || tr("運鏡影片上傳失敗"));
   return j;
 }
 
@@ -57,6 +59,7 @@ async function uploadVideoRef(clip: RecordedClip): Promise<{ url: string }> {
  * localStorage with.
  */
 export default function Director3DStandalonePage() {
+  const tr = useTr();
   const router = useRouter();
   const [initial, setInitial] = useState<Director3DSceneData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -76,7 +79,7 @@ export default function Director3DStandalonePage() {
         const scene = j.scene && Array.isArray(j.scene.characters) ? j.scene : defaultDirector3DData();
         setInitial(scene);
       })
-      .catch(() => alive && setLoadError("載入場景失敗，稍後再試"));
+      .catch(() => alive && setLoadError(tr("載入場景失敗，稍後再試")));
     return () => {
       alive = false;
     };
@@ -102,6 +105,7 @@ export default function Director3DStandalonePage() {
 }
 
 function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData }) {
+  const tr = useTr();
   const router = useRouter();
   const editor = useDirector3DEditor(initial, true);
   const [sending, setSending] = useState<"image" | "video" | "frames" | null>(null);
@@ -122,11 +126,11 @@ function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData 
     setSending(mode);
     try {
       const dataUrl = editor.captured ?? editor.takeScreenshot();
-      if (!dataUrl) throw new Error("請先截圖");
+      if (!dataUrl) throw new Error(tr("請先截圖"));
       const asset = await uploadImage(dataUrl, "director3d.jpg");
       handoff([asset], mode);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "傳送失敗，請稍後再試");
+      setErr(e instanceof Error ? e.message : tr("傳送失敗，請稍後再試"));
     } finally {
       setSending(null);
     }
@@ -136,14 +140,14 @@ function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData 
     setErr(null);
     setSending("frames");
     try {
-      if (!frames.length && !clip) throw new Error("還沒有錄到任何畫面");
+      if (!frames.length && !clip) throw new Error(tr("還沒有錄到任何畫面"));
       const [assets, videoRef] = await Promise.all([
         Promise.all(frames.map((f, i) => uploadImage(f.url, `director3d-frame-${i}.jpg`))),
-        clip ? uploadVideoRef(clip) : Promise.resolve(undefined),
+        clip ? uploadVideoRef(clip, tr) : Promise.resolve(undefined),
       ]);
       handoff(assets, "video", promptHint, videoRef);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "傳送失敗，請稍後再試");
+      setErr(e instanceof Error ? e.message : tr("傳送失敗，請稍後再試"));
     } finally {
       setSending(null);
     }
@@ -152,15 +156,15 @@ function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData 
   return (
     <div className="flex h-full flex-col bg-[#0a0a0a]">
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-[#1c1c1c] bg-black px-4">
-        <Link href="/canvas" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label="返回智慧畫布">
+        <Link href="/canvas" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={tr("返回智慧畫布")}>
           <IconChevronLeft className="h-4 w-4" />
         </Link>
-        <span className="text-[13px] font-medium text-white">3D 導演台</span>
-        <span className="hidden text-[11px] text-[#6d6d6d] sm:inline">拖曳空白處旋轉視角、滾輪縮放；拖曳角色可移動；「路徑」分頁點擊放置路線、「鏡頭」分頁設定運鏡；場景會存到你的帳號</span>
+        <span className="text-[13px] font-medium text-white">{tr("3D 導演台")}</span>
+        <span className="hidden text-[11px] text-[#6d6d6d] sm:inline">{tr("拖曳空白處旋轉視角、滾輪縮放；拖曳角色可移動；「路徑」分頁點擊放置路線、「鏡頭」分頁設定運鏡；場景會存到你的帳號")}</span>
         <div className="ml-auto flex items-center gap-2">
-          {err && <span className="text-[11.5px] text-[#ff9b9b]">{err}</span>}
+          {err && <span className="text-[11.5px] text-[#ff9b9b]">{tr(err)}</span>}
           <button type="button" onClick={editor.takeScreenshot} className="h-8 rounded-full bg-[#1f1f1f] px-3.5 text-[12.5px] text-white hover:bg-[#282828]">
-            📷 截圖
+            {tr("📷 截圖")}
           </button>
           <button
             type="button"
@@ -169,7 +173,7 @@ function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData 
             className="flex h-8 items-center gap-1.5 rounded-full bg-[#1f1f1f] px-3.5 text-[12.5px] text-white hover:bg-[#282828] disabled:opacity-50"
           >
             <IconImage className="h-3.5 w-3.5" />
-            {sending === "image" ? "傳送中…" : "用於圖片生成"}
+            {sending === "image" ? tr("傳送中…") : tr("用於圖片生成")}
           </button>
           <button
             type="button"
@@ -178,7 +182,7 @@ function Director3DStandaloneEditor({ initial }: { initial: Director3DSceneData 
             className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3.5 text-[12.5px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-50"
           >
             <IconVideo className="h-3.5 w-3.5" />
-            {sending === "video" ? "傳送中…" : "用於影片生成"}
+            {sending === "video" ? tr("傳送中…") : tr("用於影片生成")}
           </button>
         </div>
       </div>

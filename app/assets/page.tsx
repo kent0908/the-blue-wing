@@ -5,6 +5,7 @@ import { MAX_ASSET_BYTES_DIRECT } from "@/lib/assets";
 import { uploadAsset } from "@/lib/uploadAsset";
 import { useRouter } from "next/navigation";
 import ProviderAssetLibrary from "@/components/ProviderAssetLibrary";
+import { useTr } from "@/lib/i18n/client";
 
 interface Asset {
   id: number;
@@ -25,6 +26,7 @@ function fmtSize(n: number) {
 }
 
 export default function AssetsPage() {
+  const tr = useTr();
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [configured, setConfigured] = useState(true);
@@ -41,12 +43,12 @@ export default function AssetsPage() {
       const res = await fetch("/api/assets?media=all");
       if (res.status === 401) return router.push("/login?next=/assets");
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || "載入失敗");
+      if (!res.ok) throw new Error(json?.error?.message || tr("載入失敗"));
       setAssets(json.assets);
       setConfigured(json.configured);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "載入失敗");
+      setError(e instanceof Error ? e.message : tr("載入失敗"));
     } finally {
       setLoading(false);
     }
@@ -69,7 +71,7 @@ export default function AssetsPage() {
       setAssets((a) => [asset, ...a]);
       setUploads((u) => u.filter((x) => !(x.name === file.name && x.state === "pending")));
     } catch (e) {
-      fail(e instanceof Error ? e.message : "連線失敗");
+      fail(e instanceof Error ? e.message : tr("連線失敗"));
     }
   }, []);
 
@@ -77,7 +79,7 @@ export default function AssetsPage() {
     (files: FileList | File[]) => {
       for (const f of Array.from(files)) {
         if (f.size > MAX_MB * 1024 * 1024) {
-          setUploads((u) => [...u, { name: f.name, state: "error", msg: `超過 ${MAX_MB} MB` }]);
+          setUploads((u) => [...u, { name: f.name, state: "error", msg: tr("超過 {n} MB", { n: MAX_MB }) }]);
           continue;
         }
         uploadOne(f);
@@ -87,10 +89,10 @@ export default function AssetsPage() {
   );
 
   const remove = async (id: number) => {
-    if (!confirm("刪除這個素材？")) return;
+    if (!confirm(tr("刪除這個素材？"))) return;
     const res = await fetch(`/api/assets/${id}`, { method: "DELETE" });
     if (res.ok) setAssets((a) => a.filter((x) => x.id !== id));
-    else alert("刪除失敗");
+    else alert(tr("刪除失敗"));
   };
 
   const copyUrl = async (a: Asset) => {
@@ -118,15 +120,15 @@ export default function AssetsPage() {
       }}
     >
       <div className="mx-auto max-w-[1000px] px-6 py-8">
-        <h1 className="text-[22px] font-semibold tracking-tight">資產庫</h1>
+        <h1 className="text-[22px] font-semibold tracking-tight">{tr("資產庫")}</h1>
         <ProviderAssetLibrary sources={assets} />
         <p className="mt-1 text-[13px] text-[#8a8a8a]">
-          上傳圖片、影片或音訊，之後可在這裡管理、登錄人物參考素材。單檔上限 {MAX_MB} MB。
+          {tr("上傳圖片、影片或音訊，之後可在這裡管理、登錄人物參考素材。單檔上限")} {MAX_MB} MB。
         </p>
 
         {!configured && (
           <div className="mt-4 rounded-xl border border-[#3a2e18] bg-[#1a150c] px-4 py-3 text-[12.5px] text-[#f0c27f]">
-            尚未設定素材儲存空間（Vercel Blob）。設定完成前無法上傳新素材。
+            {tr("尚未設定素材儲存空間（Vercel Blob）。設定完成前無法上傳新素材。")}
           </div>
         )}
 
@@ -137,8 +139,8 @@ export default function AssetsPage() {
             dragOver ? "border-[#7ff0cd] bg-[#10201c]" : "border-[#333] bg-[#141414] hover:border-[#4a4a4a]"
           }`}
         >
-          <span className="text-[13px] text-white">拖曳素材到這裡，或點擊選擇檔案</span>
-          <span className="mt-1 text-[11.5px] text-[#6d6d6d]">PNG · JPG · WebP · GIF · SVG · MP4 · WebM · MP3 · WAV · M4A（每個檔案最多 {MAX_MB} MB，直接上傳到儲存空間）</span>
+          <span className="text-[13px] text-white">{tr("拖曳素材到這裡，或點擊選擇檔案")}</span>
+          <span className="mt-1 text-[11.5px] text-[#6d6d6d]">{tr("PNG · JPG · WebP · GIF · SVG · MP4 · WebM · MP3 · WAV · M4A（每個檔案最多")} {MAX_MB} {tr("MB，直接上傳到儲存空間）")}</span>
         </button>
         <input
           ref={inputRef}
@@ -159,16 +161,16 @@ export default function AssetsPage() {
                 <span className={u.state === "error" ? "text-[#ff9b9b]" : "text-[#8a8a8a]"}>
                   {u.state === "error" ? "✕" : "↑"}
                 </span>
-                <span className="truncate text-[#c9c9c9]">{u.name}</span>
+                <span className="truncate text-[#c9c9c9]">{tr(u.name)}</span>
                 <span className={u.state === "error" ? "text-[#ff9b9b]" : "text-[#6d6d6d]"}>
-                  {u.state === "error" ? u.msg : u.progress ? `上傳中… ${Math.round(u.progress * 100)}%` : "上傳中…"}
+                  {u.state === "error" ? u.msg : u.progress ? tr("上傳中… {p}%", { p: Math.round(u.progress * 100) }) : tr("上傳中…")}
                 </span>
                 {u.state === "error" && (
                   <button
                     onClick={() => setUploads((x) => x.filter((_, j) => j !== i))}
                     className="text-[#6d6d6d] hover:text-white"
                   >
-                    清除
+                    {tr("清除")}
                   </button>
                 )}
               </div>
@@ -177,7 +179,7 @@ export default function AssetsPage() {
         )}
 
         {error ? (
-          <div className="mt-6 rounded-xl border border-[#4a2020] bg-[#1a1010] px-4 py-3 text-[13px] text-[#ffb4b4]">{error}</div>
+          <div className="mt-6 rounded-xl border border-[#4a2020] bg-[#1a1010] px-4 py-3 text-[13px] text-[#ffb4b4]">{tr(error)}</div>
         ) : loading ? (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -185,21 +187,21 @@ export default function AssetsPage() {
             ))}
           </div>
         ) : assets.length === 0 ? (
-          <p className="mt-10 text-center text-[13px] text-[#6d6d6d]">還沒有任何素材</p>
+          <p className="mt-10 text-center text-[13px] text-[#6d6d6d]">{tr("還沒有任何素材")}</p>
         ) : (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {assets.map((a) => (
               <div key={a.id} className="group relative overflow-hidden rounded-xl border border-[#262626] bg-[#111]">
                 {a.contentType.startsWith("video/") ? (
-                  <video disablePictureInPicture disableRemotePlayback src={a.src} aria-label={a.name} className="aspect-square w-full object-contain" controls playsInline preload="metadata" />
+                  <video disablePictureInPicture disableRemotePlayback src={a.src} aria-label={tr(a.name)} className="aspect-square w-full object-contain" controls playsInline preload="metadata" />
                 ) : a.contentType.startsWith("audio/") ? (
-                  <div className="flex aspect-square flex-col items-center justify-center gap-4 px-2"><span className="text-sm text-[#9caaa5]">音訊素材</span><audio src={a.src} aria-label={a.name} className="w-full" controls preload="metadata" /></div>
+                  <div className="flex aspect-square flex-col items-center justify-center gap-4 px-2"><span className="text-sm text-[#9caaa5]">{tr("音訊素材")}</span><audio src={a.src} aria-label={tr(a.name)} className="w-full" controls preload="metadata" /></div>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream, not a static asset
-                  <img src={a.src} alt={a.name} className="aspect-square w-full object-cover" loading="lazy" />
+                  <img src={a.src} alt={tr(a.name)} className="aspect-square w-full object-cover" loading="lazy" />
                 )}
                 <div className="bg-[#151515] px-2 py-1.5">
-                  <div className="truncate text-[10.5px] text-white" title={a.name}>{a.name}</div>
+                  <div className="truncate text-[10.5px] text-white" title={tr(a.name)}>{tr(a.name)}</div>
                   <div className="flex items-center justify-between gap-1 text-[10.5px] text-[#c9c9c9]">
                     <span>{fmtSize(a.size)}</span>
                     <span className="text-[#8a8a8a]">{new Date(a.createdAt).toLocaleDateString("zh-TW")}</span>
@@ -210,13 +212,13 @@ export default function AssetsPage() {
                     onClick={() => copyUrl(a)}
                     className="rounded bg-black/70 px-1.5 py-0.5 text-[10.5px] text-white hover:bg-black"
                   >
-                    {copiedId === a.id ? "已複製" : "複製連結"}
+                    {copiedId === a.id ? tr("已複製") : tr("複製連結")}
                   </button>
                   <button
                     onClick={() => remove(a.id)}
                     className="rounded bg-black/70 px-1.5 py-0.5 text-[10.5px] text-[#ff9b9b] hover:bg-black"
                   >
-                    刪除
+                    {tr("刪除")}
                   </button>
                 </div>
               </div>

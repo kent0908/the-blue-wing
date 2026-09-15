@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { FULL_CROP, DEFAULT_TEXT_STYLE, filterString, snapRect, type EditorDoc, type EditorLayer, type Guide } from "@/lib/layerEditor";
+import { useTr } from "@/lib/i18n/client";
 
 export type StageMode = "select" | "annotate" | "crop";
 
@@ -100,6 +101,7 @@ export default function CanvasStage({
   /** bump to zoom-to-fit the whole canvas in the viewport (also runs on mount and whenever the canvas size changes) */
   fitRequest: number;
 }) {
+  const tr = useTr();
   const { canvas, layers } = doc;
   const scrollRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -343,13 +345,13 @@ export default function CanvasStage({
                       paintOrder: "stroke fill",
                     }}
                   >
-                    {t.text}
+                    {tr(t.text)}
                   </div>
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={l.src}
-                    alt={l.name}
+                    alt={tr(l.name)}
                     draggable={false}
                     className="pointer-events-none absolute select-none"
                     style={{
@@ -393,7 +395,7 @@ export default function CanvasStage({
                   const cy = selected.y + selected.height / 2;
                   setInteraction({ kind: "rotate", id: selected.id, cx, cy, startAngle: (Math.atan2(p.y - cy, p.x - cx) * 180) / Math.PI, startRotation: selected.rotation });
                 }}
-                title="拖曳旋轉（Shift = 每 15°）"
+                title={tr("拖曳旋轉（Shift = 每 15°）")}
                 className="pointer-events-auto absolute left-1/2 rounded-full border border-black bg-white"
                 style={{ top: -28 / zoom, width: 12 / zoom, height: 12 / zoom, marginLeft: -6 / zoom, cursor: "grab" }}
               />

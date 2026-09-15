@@ -7,6 +7,7 @@
  * see app/canvas/page.tsx for the "coming later" list shown to the user.
  */
 import { defaultDirector3DData } from "./director3d";
+import { k } from "../i18n/k";
 
 export type PortType = "text" | "image" | "video";
 
@@ -74,44 +75,44 @@ export interface NodeSpec {
 export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   text: {
     type: "text",
-    label: "文字",
-    hint: "手動輸入文字，接到其他節點當 prompt",
+    label: k("文字"),
+    hint: k("手動輸入文字，接到其他節點當 prompt"),
     inputs: [],
-    output: { id: "out", label: "文字", type: "text" },
+    output: { id: "out", label: k("文字"), type: "text" },
   },
   loadImage: {
     type: "loadImage",
-    label: "讀取素材",
-    hint: "從資產庫選一張圖，當其他節點的參考圖",
+    label: k("讀取素材"),
+    hint: k("從資產庫選一張圖，當其他節點的參考圖"),
     inputs: [],
-    output: { id: "out", label: "圖片", type: "image" },
+    output: { id: "out", label: k("圖片"), type: "image" },
   },
   image: {
     type: "image",
-    label: "圖片生成",
-    hint: "文生圖 / 圖生圖",
+    label: k("圖片生成"),
+    hint: k("文生圖 / 圖生圖"),
     inputs: [
       { id: "prompt", label: "Prompt", type: "text" },
-      { id: "image", label: "參考圖", type: "image" },
+      { id: "image", label: k("參考圖"), type: "image" },
     ],
-    output: { id: "out", label: "圖片", type: "image" },
+    output: { id: "out", label: k("圖片"), type: "image" },
   },
   video: {
     type: "video",
-    label: "影片生成",
-    hint: "文生影片 / 圖生影片",
+    label: k("影片生成"),
+    hint: k("文生影片 / 圖生影片"),
     inputs: [
       { id: "prompt", label: "Prompt", type: "text" },
-      { id: "image", label: "參考圖", type: "image" },
+      { id: "image", label: k("參考圖"), type: "image" },
     ],
-    output: { id: "out", label: "影片", type: "video" },
+    output: { id: "out", label: k("影片"), type: "video" },
   },
   director3d: {
     type: "director3d",
-    label: "3D 導演台",
-    hint: "在 3D 場景裡擺姿勢、調相機，截圖當參考圖",
+    label: k("3D 導演台"),
+    hint: k("在 3D 場景裡擺姿勢、調相機，截圖當參考圖"),
     inputs: [],
-    output: { id: "out", label: "截圖", type: "image" },
+    output: { id: "out", label: k("截圖"), type: "image" },
   },
 };
 

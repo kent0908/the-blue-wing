@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, type Locale } from "./locale";
 import { DICTS, type Dict } from "./dict";
+import { trFor, type Tr } from "./tr";
 
 const LocaleContext = createContext<Locale>(DEFAULT_LOCALE);
 
@@ -17,6 +18,11 @@ export function useLocale(): Locale {
 /** The whole dictionary for the active locale — `const t = useT(); t.nav.home`. */
 export function useT(): Dict {
   return DICTS[useContext(LocaleContext)];
+}
+
+/** String-keyed translator for the active locale: `const tr = useTr(); tr("尚未設定")`. */
+export function useTr(): Tr {
+  return trFor(useContext(LocaleContext));
 }
 
 /** Writes the cookie the server reads; caller then router.refresh() so server components re-render. */

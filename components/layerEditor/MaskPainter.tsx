@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { IconClose, IconTrash } from "../Icons";
 import { loadImage } from "@/lib/layerEditor";
 import { prepareSmartSelect, type SmartSelectSession } from "./models";
+import { useTr } from "@/lib/i18n/client";
+import { k } from "@/lib/i18n/tr";
 
 /**
  * Paints masks over one layer's image and submits 局部重繪 (local redraw)
@@ -34,11 +36,11 @@ export interface RedrawRegion {
 type Tool = "brush" | "eraser" | "rect" | "lasso" | "smart";
 
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
-  { id: "brush", label: "筆刷", hint: "塗抹要重畫的區域" },
-  { id: "eraser", label: "橡皮擦", hint: "擦掉多塗的部分" },
-  { id: "rect", label: "矩形", hint: "拖出一個矩形範圍" },
-  { id: "lasso", label: "套索", hint: "沿著物件邊緣畫一圈" },
-  { id: "smart", label: "點選物件", hint: "點一下自動選取整個物件（Shift+點＝從選取中扣除）" },
+  { id: "brush", label: k("筆刷"), hint: k("塗抹要重畫的區域") },
+  { id: "eraser", label: k("橡皮擦"), hint: k("擦掉多塗的部分") },
+  { id: "rect", label: k("矩形"), hint: k("拖出一個矩形範圍") },
+  { id: "lasso", label: k("套索"), hint: k("沿著物件邊緣畫一圈") },
+  { id: "smart", label: k("點選物件"), hint: k("點一下自動選取整個物件（Shift+點＝從選取中扣除）") },
 ];
 
 const SEL_COLOR = "rgba(255, 64, 64, 1)";
@@ -57,6 +59,7 @@ export default function MaskPainter({
   submitting: boolean;
   errorMessage: string | null;
 }) {
+  const tr = useTr();
   const imgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const selCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewRef = useRef<HTMLCanvasElement | null>(null);
@@ -204,7 +207,7 @@ export default function MaskPainter({
         smartRef.current = await prepareSmartSelect(imgCanvasRef.current!.toDataURL("image/png"), (m) => setSmartStatus(m));
       }
       const session = smartRef.current;
-      setSmartStatus("計算選取範圍…");
+      setSmartStatus(tr("計算選取範圍…"));
       const mask = await session.maskAt([{ x: (x / s.width) * session.width, y: (y / s.height) * session.height, label: 1 }]);
       pushUndo();
       // paint the mask (session resolution) onto the selection canvas
@@ -226,9 +229,9 @@ export default function MaskPainter({
       ctx.drawImage(tmp, 0, 0, s.width, s.height);
       ctx.globalCompositeOperation = "source-over";
       refreshPreview();
-      setSmartStatus(subtract ? "已從選取中扣除" : "已加入選取（Shift+點可扣除）");
+      setSmartStatus(subtract ? tr("已從選取中扣除") : tr("已加入選取（Shift+點可扣除）"));
     } catch (e) {
-      setSmartStatus(e instanceof Error ? e.message : "智慧選取失敗");
+      setSmartStatus(e instanceof Error ? e.message : tr("智慧選取失敗"));
     }
   };
 
@@ -348,9 +351,9 @@ export default function MaskPainter({
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-black">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1c1c1c] px-4">
-        <span className="text-[13px] font-medium text-white">局部重繪</span>
-        <span className="text-[11px] text-[#6d6d6d]">選出想重畫的區域，其他地方會盡量保持不變</span>
-        <button type="button" onClick={onCancel} aria-label="關閉" className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[#8a8a8a] hover:bg-[#1f1f1f] hover:text-white">
+        <span className="text-[13px] font-medium text-white">{tr("局部重繪")}</span>
+        <span className="text-[11px] text-[#6d6d6d]">{tr("選出想重畫的區域，其他地方會盡量保持不變")}</span>
+        <button type="button" onClick={onCancel} aria-label={tr("關閉")} className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[#8a8a8a] hover:bg-[#1f1f1f] hover:text-white">
           <IconClose className="h-4 w-4" />
         </button>
       </div>
@@ -358,42 +361,42 @@ export default function MaskPainter({
       <div className="flex min-h-0 flex-1">
         {/* tools */}
         <div className="flex w-[150px] shrink-0 flex-col gap-1 border-r border-[#1c1c1c] p-3">
-          <div className="mb-1 text-[10.5px] text-[#8a8a8a]">工具</div>
+          <div className="mb-1 text-[10.5px] text-[#8a8a8a]">{tr("工具")}</div>
           {TOOLS.map((t) => (
             <button
               key={t.id}
               type="button"
-              title={t.hint}
+              title={tr(t.hint)}
               onClick={() => setTool(t.id)}
               className={`rounded-lg px-2 py-1.5 text-left text-[11.5px] ${tool === t.id ? "bg-[#233a34] text-[#7ff0cd]" : "bg-[#161616] text-[#c9c9c9] hover:bg-[#222]"}`}
             >
-              {t.label}
+              {tr(t.label)}
             </button>
           ))}
           <div className="mt-2 border-t border-[#1e1e1e] pt-2">
             <label className="block text-[10px] text-[#8a8a8a]">
-              筆刷大小 <span className="text-[#c9c9c9]">{brush}</span>
+              {tr("筆刷大小")} <span className="text-[#c9c9c9]">{brush}</span>
               <input type="range" min={4} max={160} value={brush} onChange={(e) => setBrush(Number(e.target.value))} className="w-full accent-[#7ff0cd]" />
             </label>
             <label className="block text-[10px] text-[#8a8a8a]">
-              羽化邊緣 <span className="text-[#c9c9c9]">{feather}px</span>
+              {tr("羽化邊緣")} <span className="text-[#c9c9c9]">{feather}px</span>
               <input type="range" min={0} max={40} value={feather} onChange={(e) => setFeather(Number(e.target.value))} className="w-full accent-[#7ff0cd]" />
             </label>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-1">
             <button type="button" onClick={undo} disabled={!undoStack.length} className="rounded-md bg-[#1f1f1f] px-1.5 py-1 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828] disabled:opacity-40">
-              ↶ 復原
+              {tr("↶ 復原")}
             </button>
             <button type="button" onClick={invertSelection} className="rounded-md bg-[#1f1f1f] px-1.5 py-1 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]">
-              反轉
+              {tr("反轉")}
             </button>
             <button type="button" onClick={clearSelection} className="col-span-2 rounded-md bg-[#1f1f1f] px-1.5 py-1 text-[10.5px] text-[#c9c9c9] hover:bg-[#282828]">
-              清除選取
+              {tr("清除選取")}
             </button>
           </div>
           {tool === "smart" && (
             <p className="mt-2 text-[10px] leading-relaxed text-[#8daba1]">
-              {smartStatus ?? "第一次使用會下載約 14MB 的模型（之後免下載），全程在你的瀏覽器裡計算，不花點數。"}
+              {smartStatus ?? tr("第一次使用會下載約 14MB 的模型（之後免下載），全程在你的瀏覽器裡計算，不花點數。")}
             </p>
           )}
         </div>
@@ -417,12 +420,12 @@ export default function MaskPainter({
         {/* prompt + regions */}
         <div className="flex w-[300px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-[#1c1c1c] p-3">
           <label className="block">
-            <div className="mb-1 text-[11px] text-[#8a8a8a]">選取的地方要改成什麼</div>
+            <div className="mb-1 text-[11px] text-[#8a8a8a]">{tr("選取的地方要改成什麼")}</div>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}
-              placeholder="例如：把這裡換成藍天白雲"
+              placeholder={tr("例如：把這裡換成藍天白雲")}
               className="w-full resize-none rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2.5 py-1.5 text-[12px] text-white focus:border-[#4a4a4a] focus:outline-none"
             />
           </label>
@@ -431,25 +434,25 @@ export default function MaskPainter({
             onClick={addRegion}
             disabled={!hasSelection || !prompt.trim()}
             className="w-full rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828] disabled:opacity-40"
-            title="把目前的選取＋描述存成一個區域，然後可以繼續選下一個區域"
+            title={tr("把目前的選取＋描述存成一個區域，然後可以繼續選下一個區域")}
           >
-            ＋ 存成區域，繼續選下一個
+            {tr("＋ 存成區域，繼續選下一個")}
           </button>
 
           {regions.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-[10.5px] text-[#8a8a8a]">批次區域（{regions.length}）— 會依序送出，每個結果各成一層</div>
+              <div className="text-[10.5px] text-[#8a8a8a]">{tr("批次區域（")}{regions.length}{tr("）— 會依序送出，每個結果各成一層")}</div>
               {regions.map((r, i) => (
                 <div key={r.id} className="flex items-center gap-2 rounded-lg bg-[#161616] p-1.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={r.thumb} alt="" className="h-9 w-12 shrink-0 rounded object-cover" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[10px] text-[#8a8a8a]">區域 {i + 1}</div>
+                    <div className="text-[10px] text-[#8a8a8a]">{tr("區域")} {i + 1}</div>
                     <div className="truncate text-[11px] text-[#d8d8d8]" title={r.prompt}>
                       {r.prompt}
                     </div>
                   </div>
-                  <button type="button" onClick={() => setRegions((cur) => cur.filter((x) => x.id !== r.id))} className="text-[#6d6d6d] hover:text-[#ff8a8a]" aria-label="移除區域">
+                  <button type="button" onClick={() => setRegions((cur) => cur.filter((x) => x.id !== r.id))} className="text-[#6d6d6d] hover:text-[#ff8a8a]" aria-label={tr("移除區域")}>
                     <IconTrash className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -464,10 +467,10 @@ export default function MaskPainter({
             disabled={submitting || !canSubmit}
             className="w-full rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-2 text-[12.5px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-50"
           >
-            {submitting ? "重繪中…" : regions.length + (hasSelection && prompt.trim() ? 1 : 0) > 1 ? `開始重繪（${regions.length + (hasSelection && prompt.trim() ? 1 : 0)} 個區域）` : "開始重繪"}
+            {submitting ? tr("重繪中…") : regions.length + (hasSelection && prompt.trim() ? 1 : 0) > 1 ? tr("開始重繪（{n} 個區域）", { n: regions.length + (hasSelection && prompt.trim() ? 1 : 0) }) : tr("開始重繪")}
           </button>
           <p className="text-[10px] leading-relaxed text-[#6d6d6d]">
-            固定使用 Seedream 5.0 pro，每個區域各算一次點數。羽化會讓邊界過渡更自然；「反轉」可以改成「除了選取處都重畫」。重繪後可以在圖層面板用「比對」看前後差異、不滿意一鍵回復。
+            {tr("固定使用 Seedream 5.0 pro，每個區域各算一次點數。羽化會讓邊界過渡更自然；「反轉」可以改成「除了選取處都重畫」。重繪後可以在圖層面板用「比對」看前後差異、不滿意一鍵回復。")}
           </p>
         </div>
       </div>

@@ -2,9 +2,9 @@ const fs = require('node:fs');
 const ts = require('typescript');
 const assert = require('node:assert/strict');
 const mod = { exports: {} };
-new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/promptSafety.ts', 'utf8'), {
+new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync('lib/promptSafety.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText)(mod, mod.exports);
+}).outputText)((id) => (/i18n[\\/](tr|k)$/.test(String(id)) ? { k: (s) => s } : require(id)), mod, mod.exports);
 const { checkPromptSafety, assertPromptSafety, PromptSafetyError } = mod.exports;
 const blocked = [
   ['兒童在公園', 'minors'], ['儿\u200b童', 'minors'], ['小・學・生', 'minors'],

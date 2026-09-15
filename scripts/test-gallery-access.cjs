@@ -1,5 +1,5 @@
 (async()=>{
- const base='https://the-blue-wing.vercel.app';
+ const base='https://thebluewing.studio';
  for(const slot of ['video-2','companions-3','video-99']){
   const r=await fetch(base+'/api/landing-media/'+slot);console.log(JSON.stringify({slot,status:r.status,expected:slot==='video-99'?400:404}));if(r.status!==(slot==='video-99'?400:404))process.exitCode=1;
  }

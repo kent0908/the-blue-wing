@@ -4,7 +4,7 @@ const { renderToStaticMarkup } = require('react-dom/server');
 function load(file) {
   const m = {exports:{}};
   const output = ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  new Function('require','module','exports',output)(id=>id==='@/lib/relationshipStages'?load('lib/relationshipStages.ts'):require(id),m,m.exports);
+  new Function('require','module','exports',output)(id=>/i18n\/(tr|k)$/.test(String(id))?{k:(s)=>s}:id==='@/lib/i18n/client'?{useTr:()=>((z,v)=>v?String(z).replace(/\{(\w+)\}/g,(_,k)=>String(v[k]??'')):String(z??'')),useT:()=>({}),useLocale:()=>'zh-Hant'}:id==='@/lib/relationshipStages'?load('lib/relationshipStages.ts'):require(id),m,m.exports);
   return m.exports;
 }
 const Stages = load('components/RelationshipStages.tsx').default;

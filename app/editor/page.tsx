@@ -35,6 +35,9 @@ import {
 } from "@/lib/layerEditor";
 import { uploadAsset } from "@/lib/uploadAsset";
 import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
+import { useTr } from "@/lib/i18n/client";
+import type { Tr } from "@/lib/i18n/tr";
+import { k } from "@/lib/i18n/tr";
 
 interface AssetLite {
   id: number;
@@ -42,14 +45,14 @@ interface AssetLite {
   name: string;
 }
 
-const ANNOTATION_LAYER_NAME = "標記";
+const ANNOTATION_LAYER_NAME = k("標記");
 const AUTOSAVE_MS = 1200;
 
-async function editImage(body: { prompt: string; image: string; mask?: string }): Promise<string> {
+async function editImage(body: { prompt: string; image: string; mask?: string }, tr: Tr): Promise<string> {
   const res = await fetch("/api/images/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const json = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(json?.error?.message || (res.status === 413 ? "圖片太大，請換一張較小的圖片再試" : `失敗（HTTP ${res.status}）`));
-  if (!json?.url) throw new Error("沒有取得結果");
+  if (!res.ok) throw new Error(json?.error?.message || (res.status === 413 ? tr("圖片太大，請換一張較小的圖片再試") : tr("失敗（HTTP {s}）", { s: res.status })));
+  if (!json?.url) throw new Error(tr("沒有取得結果"));
   return json.url as string;
 }
 
@@ -60,6 +63,7 @@ async function editImage(body: { prompt: string; image: string; mask?: string })
  * signed-out users can still edit, just without persistence.
  */
 export default function LayerEditorPage() {
+  const tr = useTr();
   const router = useRouter();
   const [doc, setDoc] = useState<EditorDoc>(defaultDoc);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -123,7 +127,7 @@ export default function LayerEditorPage() {
   /* ---- projects: load list, autosave, versions ---- */
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [projectName, setProjectName] = useState("未命名專案");
+  const [projectName, setProjectName] = useState(tr("未命名專案"));
   const [versions, setVersions] = useState<VersionSummary[]>([]);
   // "dirty" is derived (doc/name differ from what was last persisted) so the
   // autosave effect only schedules work and never sets state synchronously
@@ -164,7 +168,7 @@ export default function LayerEditorPage() {
 
   const openProject = async (id: number) => {
     const r = await fetch(`/api/editor/projects/${id}`, { cache: "no-store" });
-    if (!r.ok) return setError("載入專案失敗");
+    if (!r.ok) return setError(tr("載入專案失敗"));
     const j = (await r.json()) as { project: ProjectSummary; doc: unknown };
     const loaded = normalizeDoc(j.doc);
     skipSaveRef.current = true;
@@ -185,13 +189,13 @@ export default function LayerEditorPage() {
     setFuture([]);
     setSelectedId(null);
     setProjectId(null);
-    setProjectName("未命名專案");
+    setProjectName(tr("未命名專案"));
     setVersions([]);
     setSaved({ doc: null, name: "" });
     setSaveStatus("idle");
   };
   const deleteProject = async (id: number) => {
-    if (!confirm("刪除這個專案？版本歷史也會一起刪掉。")) return;
+    if (!confirm(tr("刪除這個專案？版本歷史也會一起刪掉。"))) return;
     await fetch(`/api/editor/projects/${id}`, { method: "DELETE" });
     if (id === projectId) newProject();
     void refreshProjects();
@@ -205,19 +209,19 @@ export default function LayerEditorPage() {
       if (projectId === null) {
         const r = await fetch("/api/editor/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, doc: d }) });
         const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j?.error?.message || "儲存失敗");
+        if (!r.ok) throw new Error(j?.error?.message || tr("儲存失敗"));
         setProjectId(Number(j.project.id));
       } else {
         const r = await fetch(`/api/editor/projects/${projectId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, doc: d }) });
         const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j?.error?.message || "儲存失敗");
+        if (!r.ok) throw new Error(j?.error?.message || tr("儲存失敗"));
       }
       setSaved({ doc: d, name });
       setSaveStatus("idle");
       void refreshProjects();
     } catch (e) {
       setSaveStatus("error");
-      setError(e instanceof Error ? e.message : "儲存失敗");
+      setError(e instanceof Error ? e.message : tr("儲存失敗"));
     }
   }, [signedIn, projectId, refreshProjects]);
   useEffect(() => {
@@ -250,9 +254,9 @@ export default function LayerEditorPage() {
   }, [signedIn, projectId, projectName, refreshVersions]);
   const restoreVersion = async (versionId: number) => {
     if (projectId === null) return;
-    await saveVersion("回到舊版前的狀態");
+    await saveVersion(tr("回到舊版前的狀態"));
     const r = await fetch(`/api/editor/projects/${projectId}/versions/${versionId}`);
-    if (!r.ok) return setError("載入版本失敗");
+    if (!r.ok) return setError(tr("載入版本失敗"));
     const j = (await r.json()) as { doc: unknown };
     snapshot();
     setDoc(normalizeDoc(j.doc));
@@ -268,7 +272,7 @@ export default function LayerEditorPage() {
       setLayers((cur) => [...cur, layer]);
       setSelectedId(layer.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "圖片載入失敗");
+      setError(e instanceof Error ? e.message : tr("圖片載入失敗"));
     }
   };
   /** Uploads go to 資產庫 first so the project document only stores a URL; if that fails the image still comes in as a data URL (won't persist well). */
@@ -283,11 +287,11 @@ export default function LayerEditorPage() {
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error("讀取檔案失敗"));
+          reader.onerror = () => reject(new Error(tr("讀取檔案失敗")));
           reader.readAsDataURL(file);
         });
         await addImageLayer(dataUrl, file.name);
-        setNotice(`「${file.name}」沒能存進資產庫（${e instanceof Error ? e.message : "上傳失敗"}），這張只會保存在本次編輯中`);
+        setNotice(tr("「{name}」沒能存進資產庫（{err}），這張只會保存在本次編輯中", { name: file.name, err: e instanceof Error ? e.message : tr("上傳失敗") }));
       }
     }
   };
@@ -315,7 +319,7 @@ export default function LayerEditorPage() {
     const src = layers.find((l) => l.id === id);
     if (!src) return;
     snapshot();
-    const copy: EditorLayer = { ...src, id: newLayerId(), name: `${src.name} 副本`, x: src.x + 20, y: src.y + 20, locked: false };
+    const copy: EditorLayer = { ...src, id: newLayerId(), name: tr("{name} 副本", { name: src.name }), x: src.x + 20, y: src.y + 20, locked: false };
     setLayers((cur) => {
       const i = cur.findIndex((l) => l.id === id);
       return [...cur.slice(0, i + 1), copy, ...cur.slice(i + 1)];
@@ -395,13 +399,13 @@ export default function LayerEditorPage() {
         body: JSON.stringify({ model: "Dola-Seedream-5.0-pro", prompt: prompt.trim(), n: 1, size: "2048x2048", response_format: "url", image: layers.length ? composite : undefined }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error?.message || "生成失敗");
+      if (!res.ok) throw new Error(json?.error?.message || tr("生成失敗"));
       const url = json?.images?.[0]?.url;
-      if (!url) throw new Error("沒有取得生成結果");
-      void saveVersion("AI 生成前");
-      await addImageLayer(url, "AI 生成結果");
+      if (!url) throw new Error(tr("沒有取得生成結果"));
+      void saveVersion(tr("AI 生成前"));
+      await addImageLayer(url, tr("AI 生成結果"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成失敗，請稍後再試");
+      setError(e instanceof Error ? e.message : tr("生成失敗，請稍後再試"));
     } finally {
       setGenerating(false);
     }
@@ -414,9 +418,9 @@ export default function LayerEditorPage() {
     try {
       const image = await bakeLayerPixels(redrawFor, 1280);
       const source = await toDataUrl(image, 1280, true);
-      void saveVersion("局部重繪前");
+      void saveVersion(tr("局部重繪前"));
       const results: string[] = [];
-      for (const r of regions) results.push(await editImage({ prompt: r.prompt, image: source, mask: r.mask }));
+      for (const r of regions) results.push(await editImage({ prompt: r.prompt, image: source, mask: r.mask }, tr));
       snapshot();
       if (results.length === 1) {
         patchLayer(redrawFor.id, bakedPatch(results[0], redrawFor));
@@ -424,13 +428,13 @@ export default function LayerEditorPage() {
         // batch: each result becomes its own layer stacked over the original so any can be toggled/kept
         setLayers((cur) => {
           const i = cur.findIndex((l) => l.id === redrawFor.id);
-          const extra = results.map((url, k) => ({ ...redrawFor, ...bakedPatch(url, redrawFor), id: newLayerId(), name: `${redrawFor.name} 重繪 ${k + 1}`, locked: false }));
+          const extra = results.map((url, k) => ({ ...redrawFor, ...bakedPatch(url, redrawFor), id: newLayerId(), name: tr("{name} 重繪 {n}", { name: redrawFor.name, n: k + 1 }), locked: false }));
           return [...cur.slice(0, i + 1), ...extra, ...cur.slice(i + 1)];
         });
       }
       setRedrawFor(null);
     } catch (e) {
-      setRedrawError(e instanceof Error ? e.message : "重繪失敗，請稍後再試");
+      setRedrawError(e instanceof Error ? e.message : tr("重繪失敗，請稍後再試"));
     } finally {
       setBusy(null);
     }
@@ -443,8 +447,8 @@ export default function LayerEditorPage() {
     try {
       const baked = await bakeLayerPixels(outpaintFor, 1024);
       const req = await buildOutpaintRequest(baked, margins, 1536);
-      void saveVersion("擴圖前");
-      const url = await editImage({ prompt: p, image: req.image, mask: req.mask });
+      void saveVersion(tr("擴圖前"));
+      const url = await editImage({ prompt: p, image: req.image, mask: req.mask }, tr);
       // grow the layer so the original stays at the same place/size on the canvas
       const sx = outpaintFor.width / req.inner.w;
       const sy = outpaintFor.height / req.inner.h;
@@ -452,7 +456,7 @@ export default function LayerEditorPage() {
       patchLayer(outpaintFor.id, { ...bakedPatch(url, outpaintFor), x: outpaintFor.x - req.inner.x * sx, y: outpaintFor.y - req.inner.y * sy, width: req.width * sx, height: req.height * sy });
       setOutpaintFor(null);
     } catch (e) {
-      setOutpaintError(e instanceof Error ? e.message : "擴圖失敗，請稍後再試");
+      setOutpaintError(e instanceof Error ? e.message : tr("擴圖失敗，請稍後再試"));
     } finally {
       setBusy(null);
     }
@@ -478,9 +482,9 @@ export default function LayerEditorPage() {
       }
       snapshot();
       patchLayer(layer.id, bakedPatch(src, layer));
-      setNotice("去背完成 — 用「前後比對」檢查邊緣，不滿意可回復");
+      setNotice(tr("去背完成 — 用「前後比對」檢查邊緣，不滿意可回復"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "去背失敗");
+      setError(e instanceof Error ? e.message : tr("去背失敗"));
     } finally {
       setBusy(null);
     }
@@ -576,10 +580,10 @@ export default function LayerEditorPage() {
     <div className="flex h-full flex-col bg-[#0a0a0a]">
       {/* toolbar */}
       <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-[#1c1c1c] bg-black px-3">
-        <Link href="/" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label="返回">
+        <Link href="/" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={tr("返回")}>
           <IconChevronLeft className="h-4 w-4" />
         </Link>
-        <span className="mr-1 text-[13px] font-medium text-white">圖層編輯</span>
+        <span className="mr-1 text-[13px] font-medium text-white">{tr("圖層編輯")}</span>
         <select
           value={CANVAS_SIZES.find((s) => s.width === canvas.width && s.height === canvas.height)?.label ?? "custom"}
           onChange={(e) => {
@@ -589,57 +593,57 @@ export default function LayerEditorPage() {
             setDoc((d) => ({ ...d, canvas: { ...d.canvas, width: s.width, height: s.height } }));
           }}
           className={`h-8 ${fieldCls}`}
-          title="畫布尺寸（已放好的圖層位置不會跟著動）"
+          title={tr("畫布尺寸（已放好的圖層位置不會跟著動）")}
         >
           {CANVAS_SIZES.map((s) => (
-            <option key={s.label} value={s.label}>
-              {s.label}
+            <option key={tr(s.label)} value={tr(s.label)}>
+              {tr(s.label)}
             </option>
           ))}
-          {!CANVAS_SIZES.some((s) => s.width === canvas.width && s.height === canvas.height) && <option value="custom">自訂 {canvas.width}×{canvas.height}</option>}
+          {!CANVAS_SIZES.some((s) => s.width === canvas.width && s.height === canvas.height) && <option value="custom">{tr("自訂")} {canvas.width}×{canvas.height}</option>}
         </select>
-        <input type="number" value={canvas.width} min={64} max={4096} onFocus={snapshot} onChange={(e) => setDoc((d) => ({ ...d, canvas: { ...d.canvas, width: Math.min(4096, Math.max(64, Number(e.target.value) || 64)) } }))} className={`h-8 w-[70px] ${fieldCls}`} title="寬" />
+        <input type="number" value={canvas.width} min={64} max={4096} onFocus={snapshot} onChange={(e) => setDoc((d) => ({ ...d, canvas: { ...d.canvas, width: Math.min(4096, Math.max(64, Number(e.target.value) || 64)) } }))} className={`h-8 w-[70px] ${fieldCls}`} title={tr("寬")} />
         <span className="text-[11px] text-[#6d6d6d]">×</span>
-        <input type="number" value={canvas.height} min={64} max={4096} onFocus={snapshot} onChange={(e) => setDoc((d) => ({ ...d, canvas: { ...d.canvas, height: Math.min(4096, Math.max(64, Number(e.target.value) || 64)) } }))} className={`h-8 w-[70px] ${fieldCls}`} title="高" />
-        <label className="ml-1 flex items-center gap-1 text-[11px] text-[#8a8a8a]" title="畫布背景">
-          背景
+        <input type="number" value={canvas.height} min={64} max={4096} onFocus={snapshot} onChange={(e) => setDoc((d) => ({ ...d, canvas: { ...d.canvas, height: Math.min(4096, Math.max(64, Number(e.target.value) || 64)) } }))} className={`h-8 w-[70px] ${fieldCls}`} title={tr("高")} />
+        <label className="ml-1 flex items-center gap-1 text-[11px] text-[#8a8a8a]" title={tr("畫布背景")}>
+          {tr("背景")}
           <input type="color" value={canvas.background === "transparent" ? "#ffffff" : canvas.background} onChange={(e) => setDoc((d) => ({ ...d, canvas: { ...d.canvas, background: e.target.value } }))} className="h-6 w-7 cursor-pointer rounded border border-[#2c2c2c] bg-[#1c1c1c]" />
           <button type="button" onClick={() => setDoc((d) => ({ ...d, canvas: { ...d.canvas, background: d.canvas.background === "transparent" ? "#ffffff" : "transparent" } }))} className={`rounded-md px-1.5 py-0.5 text-[10.5px] ${canvas.background === "transparent" ? "bg-[#233a34] text-[#7ff0cd]" : "bg-[#1f1f1f] text-[#c9c9c9]"}`}>
-            透明
+            {tr("透明")}
           </button>
         </label>
 
         <div className="ml-2 flex items-center gap-0.5 border-l border-[#1e1e1e] pl-2">
-          <button type="button" onClick={undo} disabled={!history.length} title="上一步（Ctrl+Z）" className={tbBtn}>↶</button>
-          <button type="button" onClick={redo} disabled={!future.length} title="重做（Ctrl+Y）" className={tbBtn}>↷</button>
+          <button type="button" onClick={undo} disabled={!history.length} title={tr("上一步（Ctrl+Z）")} className={tbBtn}>↶</button>
+          <button type="button" onClick={redo} disabled={!future.length} title={tr("重做（Ctrl+Y）")} className={tbBtn}>↷</button>
         </div>
         <div className="flex items-center gap-0.5 border-l border-[#1e1e1e] pl-2">
-          <button type="button" onClick={() => setZoom((z) => Math.max(0.1, z / 1.2))} title="縮小（Ctrl+-）" className={tbBtn}>−</button>
+          <button type="button" onClick={() => setZoom((z) => Math.max(0.1, z / 1.2))} title={tr("縮小（Ctrl+-）")} className={tbBtn}>−</button>
           <button type="button" onClick={() => setZoom(1)} title="100%（Ctrl+0）" className={`${tbBtn} w-[52px] text-center tabular-nums`}>
             {Math.round(zoom * 100)}%
           </button>
-          <button type="button" onClick={() => setZoom((z) => Math.min(4, z * 1.2))} title="放大（Ctrl+=）" className={tbBtn}>＋</button>
-          <button type="button" onClick={() => setFitRequest((n) => n + 1)} title="縮放到整張畫布剛好看得到（Ctrl+1）" className={tbBtn}>適合</button>
+          <button type="button" onClick={() => setZoom((z) => Math.min(4, z * 1.2))} title={tr("放大（Ctrl+=）")} className={tbBtn}>＋</button>
+          <button type="button" onClick={() => setFitRequest((n) => n + 1)} title={tr("縮放到整張畫布剛好看得到（Ctrl+1）")} className={tbBtn}>{tr("適合")}</button>
         </div>
 
         <button
           type="button"
           onClick={mode === "annotate" ? () => setMode("select") : startAnnotating}
           disabled={!layers.length && mode !== "annotate"}
-          title="在畫面上圈出想修改的地方，生成時會一起參考"
+          title={tr("在畫面上圈出想修改的地方，生成時會一起參考")}
           className={`ml-2 rounded-lg px-2.5 py-1.5 text-[12px] disabled:opacity-30 ${mode === "annotate" ? "bg-[#3a1a1a] text-[#ff9b9b]" : "bg-[#1f1f1f] text-[#c9c9c9] hover:bg-[#282828]"}`}
         >
-          🖍 {mode === "annotate" ? "標記中…" : "圈出要修正的地方"}
+          🖍 {mode === "annotate" ? tr("標記中…") : tr("圈出要修正的地方")}
         </button>
-        <button type="button" onClick={() => setExportOpen(true)} disabled={!layers.length} title="匯出 / 存到資產庫 / 送去生成（Ctrl+E）" className="ml-auto rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-1.5 text-[12px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-40">
-          ⬇ 匯出 / 送出
+        <button type="button" onClick={() => setExportOpen(true)} disabled={!layers.length} title={tr("匯出 / 存到資產庫 / 送去生成（Ctrl+E）")} className="ml-auto rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-1.5 text-[12px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-40">
+          {tr("⬇ 匯出 / 送出")}
         </button>
       </div>
 
       {(error || notice) && (
         <div className={`flex items-center gap-2 border-b border-[#1c1c1c] px-4 py-1.5 text-[11.5px] ${error ? "bg-[#1a0f0f] text-[#ff9b9b]" : "bg-[#0f1a16] text-[#7ff0cd]"}`}>
           <span className="min-w-0 flex-1 truncate">{error ?? notice}</span>
-          <button type="button" onClick={() => { setError(null); setNotice(null); }} aria-label="關閉訊息" className="opacity-70 hover:opacity-100">
+          <button type="button" onClick={() => { setError(null); setNotice(null); }} aria-label={tr("關閉訊息")} className="opacity-70 hover:opacity-100">
             <IconClose className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -658,37 +662,37 @@ export default function LayerEditorPage() {
             onNew={newProject}
             onRename={setProjectName}
             onDelete={deleteProject}
-            onSaveVersion={(label) => void saveVersion(label || "手動存檔")}
+            onSaveVersion={(label) => void saveVersion(label || tr("手動存檔"))}
             onRestoreVersion={restoreVersion}
           />
           <div className="grid grid-cols-2 gap-1.5">
             <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-1 rounded-lg border border-dashed border-[#3a3a3a] bg-[#161616] py-2 text-[12px] text-[#c9c9c9] hover:border-[#555]">
               <IconPlus className="h-3.5 w-3.5" />
-              上傳
+              {tr("上傳")}
             </button>
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) void handleUpload(e.target.files); e.target.value = ""; }} />
             <button type="button" onClick={() => { ensureAssets(); setAssetPickerOpen((v) => !v); }} className="rounded-lg bg-[#1f1f1f] px-2 py-2 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">
-              從資產庫選
+              {tr("從資產庫選")}
             </button>
             <button type="button" onClick={addText} className="col-span-2 rounded-lg bg-[#1f1f1f] px-2 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">
-              T 新增文字圖層
+              {tr("T 新增文字圖層")}
             </button>
           </div>
           {assetPickerOpen && (
             <div className="rounded-lg border border-[#2a2a2a] bg-[#141414] p-2">
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[10.5px] text-[#8a8a8a]">選一張加入畫布</span>
+                <span className="text-[10.5px] text-[#8a8a8a]">{tr("選一張加入畫布")}</span>
                 <button type="button" onClick={() => setAssetPickerOpen(false)} className="text-[#8a8a8a] hover:text-white">
                   <IconClose className="h-3 w-3" />
                 </button>
               </div>
               <div className="grid max-h-[160px] grid-cols-3 gap-1.5 overflow-y-auto">
-                {assetLibrary === null && <span className="col-span-3 py-2 text-center text-[10.5px] text-[#6d6d6d]">載入中…</span>}
-                {assetLibrary?.length === 0 && <span className="col-span-3 py-2 text-center text-[10.5px] text-[#6d6d6d]">資產庫還沒有圖片</span>}
+                {assetLibrary === null && <span className="col-span-3 py-2 text-center text-[10.5px] text-[#6d6d6d]">{tr("載入中…")}</span>}
+                {assetLibrary?.length === 0 && <span className="col-span-3 py-2 text-center text-[10.5px] text-[#6d6d6d]">{tr("資產庫還沒有圖片")}</span>}
                 {assetLibrary?.map((a) => (
-                  <button key={a.id} type="button" title={a.name} onClick={() => void addImageLayer(a.src, a.name)} className="aspect-square overflow-hidden rounded-md border border-[#2a2a2a] hover:border-[#4a4a4a]">
+                  <button key={a.id} type="button" title={tr(a.name)} onClick={() => void addImageLayer(a.src, a.name)} className="aspect-square overflow-hidden rounded-md border border-[#2a2a2a] hover:border-[#4a4a4a]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={a.src} alt={a.name} className="h-full w-full object-cover" />
+                    <img src={a.src} alt={tr(a.name)} className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -696,7 +700,7 @@ export default function LayerEditorPage() {
           )}
 
           <div className="mt-1 flex items-center justify-between border-t border-[#1e1e1e] pt-2 text-[11px] text-[#8a8a8a]">
-            <span>圖層（上 = 前）</span>
+            <span>{tr("圖層（上 = 前）")}</span>
             <span className="text-[9.5px] text-[#5c5c5c]">{Math.round(docBytes(doc) / 1024)} KB</span>
           </div>
           <LayerList layers={layers} selectedId={selectedId} onSelect={setSelectedId} onPatch={patchLayer} onMove={moveLayer} onReorder={reorderLayer} onDuplicate={duplicateLayer} onRemove={removeLayer} />
@@ -722,49 +726,49 @@ export default function LayerEditorPage() {
         <div className="flex w-[290px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-[#1c1c1c] p-3">
           {mode === "annotate" ? (
             <div className="space-y-2">
-              <div className="text-[11px] text-[#8a8a8a]">在畫面上圈出想修改的地方</div>
+              <div className="text-[11px] text-[#8a8a8a]">{tr("在畫面上圈出想修改的地方")}</div>
               <p className="text-[10.5px] leading-relaxed text-[#6d6d6d]">
-                用滑鼠在畫布上塗畫，紅色標記會變成一個圖層跟畫面一起送給模型，之後在下面 prompt 裡描述「紅圈的地方想改成什麼」——模型看得到這個標記，但不保證完全照著範圍修改。想要精準控制範圍，請用圖層的「局部重繪」。
+                {tr("用滑鼠在畫布上塗畫，紅色標記會變成一個圖層跟畫面一起送給模型，之後在下面 prompt 裡描述「紅圈的地方想改成什麼」——模型看得到這個標記，但不保證完全照著範圍修改。想要精準控制範圍，請用圖層的「局部重繪」。")}
               </p>
               <button type="button" onClick={() => annotateCanvasRef.current?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)} className="w-full rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">
-                清除塗畫
+                {tr("清除塗畫")}
               </button>
               <div className="flex gap-1.5">
-                <button type="button" onClick={() => setMode("select")} className="flex-1 rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">取消</button>
-                <button type="button" onClick={confirmAnnotation} className="flex-1 rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-1.5 text-[12px] font-medium text-[#0a1a16] hover:brightness-105">完成標記</button>
+                <button type="button" onClick={() => setMode("select")} className="flex-1 rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">{tr("取消")}</button>
+                <button type="button" onClick={confirmAnnotation} className="flex-1 rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-1.5 text-[12px] font-medium text-[#0a1a16] hover:brightness-105">{tr("完成標記")}</button>
               </div>
             </div>
           ) : mode === "crop" && selected ? (
             <div className="space-y-2">
-              <div className="text-[11px] text-[#8a8a8a]">裁切：{selected.name}</div>
-              <p className="text-[10.5px] leading-relaxed text-[#6d6d6d]">拖曳金色框選要保留的範圍（Shift 鎖定比例）。裁切是非破壞的——之後再裁一次可以拿回被裁掉的部分。</p>
+              <div className="text-[11px] text-[#8a8a8a]">{tr("裁切：")}{tr(selected.name)}</div>
+              <p className="text-[10.5px] leading-relaxed text-[#6d6d6d]">{tr("拖曳金色框選要保留的範圍（Shift 鎖定比例）。裁切是非破壞的——之後再裁一次可以拿回被裁掉的部分。")}</p>
               <div className="grid grid-cols-2 gap-1.5">
                 <button type="button" onClick={() => selected.crop && patchLayer(selected.id, { crop: undefined, ...(() => { const c = selected.crop!; const fw = selected.width / c.w; const fh = selected.height / c.h; return { x: selected.x - c.x * fw, y: selected.y - c.y * fh, width: fw, height: fh }; })() }, true)} disabled={!selected.crop} className="col-span-2 rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828] disabled:opacity-40">
-                  還原成未裁切
+                  {tr("還原成未裁切")}
                 </button>
-                <button type="button" onClick={cancelCrop} className="rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">取消</button>
-                <button type="button" onClick={confirmCrop} className="rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-1.5 text-[12px] font-medium text-[#0a1a16] hover:brightness-105">套用裁切</button>
+                <button type="button" onClick={cancelCrop} className="rounded-lg bg-[#1f1f1f] px-3 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#282828]">{tr("取消")}</button>
+                <button type="button" onClick={confirmCrop} className="rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-1.5 text-[12px] font-medium text-[#0a1a16] hover:brightness-105">{tr("套用裁切")}</button>
               </div>
             </div>
           ) : selected ? (
             <PropertiesPanel layer={selected} canvas={canvas} busy={busy} onPatch={(patch, s) => patchLayer(selected.id, patch, s)} onSnapshot={snapshot} onAction={onAction} />
           ) : (
             <div className="space-y-2 text-[11.5px] text-[#6d6d6d]">
-              <p>選一個圖層來調整位置、大小、旋轉、不透明度、混合模式、色彩，或使用裁切／去背／局部重繪／擴圖。</p>
+              <p>{tr("選一個圖層來調整位置、大小、旋轉、不透明度、混合模式、色彩，或使用裁切／去背／局部重繪／擴圖。")}</p>
               <p className="text-[10.5px] leading-relaxed">
-                快捷鍵：拖曳移動、Shift+拉角鎖定比例、方向鍵微調（Shift = 10px）、Ctrl+D 複製、Delete 刪除、Ctrl+滾輪縮放、空白鍵+拖曳平移、Ctrl+E 匯出。拖曳時會自動吸附畫布中心與其他圖層邊緣（按住 Alt 關閉）。
+                {tr("快捷鍵：拖曳移動、Shift+拉角鎖定比例、方向鍵微調（Shift = 10px）、Ctrl+D 複製、Delete 刪除、Ctrl+滾輪縮放、空白鍵+拖曳平移、Ctrl+E 匯出。拖曳時會自動吸附畫布中心與其他圖層邊緣（按住 Alt 關閉）。")}
               </p>
             </div>
           )}
 
           <div className="border-t border-[#1e1e1e] pt-3">
-            <div className="mb-1.5 text-[11px] text-[#8a8a8a]">AI 生成 / 融合</div>
-            {hasAnnotation && <p className="mb-1.5 text-[10.5px] leading-relaxed text-[#ff9b9b]">畫面上有紅色標記——記得在下面描述「紅圈的地方想改成什麼」。</p>}
-            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="描述想生成的畫面（會把目前畫布上的排版當參考）" rows={4} className="w-full resize-none rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2.5 py-1.5 text-[12px] text-white focus:border-[#4a4a4a] focus:outline-none" />
+            <div className="mb-1.5 text-[11px] text-[#8a8a8a]">{tr("AI 生成 / 融合")}</div>
+            {hasAnnotation && <p className="mb-1.5 text-[10.5px] leading-relaxed text-[#ff9b9b]">{tr("畫面上有紅色標記——記得在下面描述「紅圈的地方想改成什麼」。")}</p>}
+            <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={tr("描述想生成的畫面（會把目前畫布上的排版當參考）")} rows={4} className="w-full resize-none rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2.5 py-1.5 text-[12px] text-white focus:border-[#4a4a4a] focus:outline-none" />
             <button type="button" onClick={generate} disabled={generating || !prompt.trim()} className="mt-1.5 w-full rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-3 py-2 text-[12.5px] font-medium text-[#0a1a16] hover:brightness-105 disabled:opacity-50">
-              {generating ? "生成中…" : "生成新圖層"}
+              {generating ? tr("生成中…") : tr("生成新圖層")}
             </button>
-            <p className="mt-1.5 text-[10px] leading-relaxed text-[#6d6d6d]">固定使用 Seedream 5.0 pro。畫布上的排版是給 AI 的參考構圖，不是像素級合成；生成前會自動存一個版本。</p>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-[#6d6d6d]">{tr("固定使用 Seedream 5.0 pro。畫布上的排版是給 AI 的參考構圖，不是像素級合成；生成前會自動存一個版本。")}</p>
           </div>
         </div>
       </div>
