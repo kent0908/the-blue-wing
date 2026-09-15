@@ -9,6 +9,7 @@ import OfficialTemplates from '@/components/OfficialTemplates';
 import HeroCarousel from "@/components/HeroCarousel";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
 import ModelLogo from "@/components/ModelLogo";
+import { useT } from "@/lib/i18n/client";
 
 interface Block {
   id: number;
@@ -19,20 +20,22 @@ interface Block {
   targetMode: string | null;
   modelId: string | null;
   prompt: string | null;
+  /** built-in blocks only: dictionary key so the label follows the UI language (admin-entered blocks show their own text) */
+  tKey?: string;
 }
 
 const DEFAULT_SHOWCASE: Block[] = [
-  { id: -1, title: "Seedance 2.0", subtitle: "電影級影片生成", badge: "熱門", imageUrl: null, targetMode: "video", modelId: "SIRAYA-Seedance-2.0", prompt: null },
-  { id: -2, title: "GPT image 2.5 sunburst", subtitle: "更清晰的圖像創作", badge: "新", imageUrl: null, targetMode: "image", modelId: "gpt-image-2.5-sunburst", prompt: null },
-  { id: -3, title: "Seedream 5.0 pro", subtitle: "生產級視覺創作", badge: null, imageUrl: null, targetMode: "image", modelId: "Dola-Seedream-5.0-pro", prompt: null },
-  { id: -4, title: "Veo 3.1", subtitle: "原生音軌、電影級畫面", badge: "新", imageUrl: null, targetMode: "video", modelId: "veo-3.1-generate-001", prompt: null },
+  { id: -1, tKey: "seedance20", title: "Seedance 2.0", subtitle: "電影級影片生成", badge: "熱門", imageUrl: null, targetMode: "video", modelId: "SIRAYA-Seedance-2.0", prompt: null },
+  { id: -2, tKey: "gptImage", title: "GPT image 2.5 sunburst", subtitle: "更清晰的圖像創作", badge: "新", imageUrl: null, targetMode: "image", modelId: "gpt-image-2.5-sunburst", prompt: null },
+  { id: -3, tKey: "seedream5", title: "Seedream 5.0 pro", subtitle: "生產級視覺創作", badge: null, imageUrl: null, targetMode: "image", modelId: "Dola-Seedream-5.0-pro", prompt: null },
+  { id: -4, tKey: "veo31", title: "Veo 3.1", subtitle: "原生音軌、電影級畫面", badge: "新", imageUrl: null, targetMode: "video", modelId: "veo-3.1-generate-001", prompt: null },
 ];
 
 const DEFAULT_TEMPLATES: Block[] = [
-  { id: -5, title: "關鍵影格攝影機", subtitle: "用關鍵影格控制攝影機移動", badge: null, imageUrl: null, targetMode: "video", modelId: null, prompt: null },
-  { id: -6, title: "故事板網格", subtitle: "將創意轉化為多幀場景", badge: null, imageUrl: null, targetMode: "image", modelId: null, prompt: null },
-  { id: -7, title: "鏡頭設計師", subtitle: "創造電影級攝影機角度", badge: null, imageUrl: null, targetMode: "video", modelId: null, prompt: null },
-  { id: -8, title: "電影色彩", subtitle: "添加豐富的電影風格色調", badge: null, imageUrl: null, targetMode: "image", modelId: null, prompt: null },
+  { id: -5, tKey: "keyframe", title: "關鍵影格攝影機", subtitle: "用關鍵影格控制攝影機移動", badge: null, imageUrl: null, targetMode: "video", modelId: null, prompt: null },
+  { id: -6, tKey: "storyboard", title: "故事板網格", subtitle: "將創意轉化為多幀場景", badge: null, imageUrl: null, targetMode: "image", modelId: null, prompt: null },
+  { id: -7, tKey: "shots", title: "鏡頭設計師", subtitle: "創造電影級攝影機角度", badge: null, imageUrl: null, targetMode: "video", modelId: null, prompt: null },
+  { id: -8, tKey: "color", title: "電影色彩", subtitle: "添加豐富的電影風格色調", badge: null, imageUrl: null, targetMode: "image", modelId: null, prompt: null },
 ];
 
 const TINTS = ["#2e4a2a", "#4a2f2a", "#4a3d24", "#2a3550"];
@@ -52,6 +55,11 @@ function hrefFor(b: Block): string {
 // when that was first built. The sidebar footer links back to that experience.
 export default function HomePage() {
   const router = useRouter();
+  const t = useT();
+  // Built-in blocks carry a dictionary key; anything an admin typed is shown as-is.
+  const showcaseSub = (b: Block) => (b.tKey && b.tKey in t.home.showcase ? t.home.showcase[b.tKey as keyof typeof t.home.showcase] : b.subtitle);
+  const templateText = (b: Block): [string, string] => (b.tKey && b.tKey in t.home.templates ? t.home.templates[b.tKey as keyof typeof t.home.templates] : [b.title, b.subtitle]);
+  const badgeText = (b: string) => (b === "熱門" ? t.home.hot : b === "新" ? t.home.new : b);
 
   const [playingCanvas, setPlayingCanvas] = useState<string|null>(null);
   const [prompt, setPrompt] = useState("");
@@ -100,9 +108,9 @@ export default function HomePage() {
             className="relative flex flex-col justify-center overflow-hidden rounded-xl p-5"
             style={{ background: "linear-gradient(115deg,#4fd1c5 0%,#3aa8e0 55%,#1d7fd6 100%)" }}
           >
-            <div className="text-[15px] font-semibold text-[#04211d]">Seedance 2.5 新版本 🔥</div>
+            <div className="text-[15px] font-semibold text-[#04211d]">{t.home.newVersion}</div>
             <div className="mt-3 flex items-center gap-1 text-[13px] text-[#04211d]/80">
-              立即體驗 <IconArrowRight className="h-3.5 w-3.5" />
+              {t.home.tryNow} <IconArrowRight className="h-3.5 w-3.5" />
             </div>
           </Link>
 
@@ -117,7 +125,7 @@ export default function HomePage() {
                   className="bw-badge absolute right-3 top-3 z-10"
                   style={{ color: m.badge === "熱門" ? "var(--bw-hot)" : "var(--bw-mint)" }}
                 >
-                  {m.badge}
+                  {badgeText(m.badge)}
                 </span>
               )}
               {m.imageUrl ? (
@@ -134,14 +142,14 @@ export default function HomePage() {
               )}
               <div className="flex flex-1 flex-col justify-center gap-1 p-4">
                 <div className="text-[14px] font-medium">{m.title}</div>
-                <div className="text-[12px] text-[#7d7d7d]">{m.subtitle}</div>
+                <div className="text-[12px] text-[#7d7d7d]">{showcaseSub(m)}</div>
               </div>
             </Link>
           ))}
         </div>
 
         <section id="canvas-showcase" className="mt-8 rounded-2xl bg-[#0e0e0e] p-6">
-          <h2 className="text-[26px] font-semibold tracking-tight">用畫布創造更多</h2>
+          <h2 className="text-[26px] font-semibold tracking-tight">{t.home.canvasHeading}</h2>
           <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {templates.slice(0, 8).map((c, i) => { const preview=CANVAS_PREVIEWS.find(p=>p.title===c.title); return (
               <div key={c.id} className="group">
@@ -158,8 +166,8 @@ export default function HomePage() {
                     style={{ background: `linear-gradient(160deg,${TINTS[i % TINTS.length]} 0%,#101010 100%)` }}
                   />
                 )}
-                <Link href={preview&&c.id<0?`/studio?mode=video&operation=freestyle&official=${preview.id}`:hrefFor(c)} className="mt-3 block text-[14px] font-medium hover:text-[#76dfbf]">{c.title} ↗</Link>
-                <div className="text-[12.5px] text-[#7d7d7d]">{c.subtitle}</div>
+                <Link href={preview&&c.id<0?`/studio?mode=video&operation=freestyle&official=${preview.id}`:hrefFor(c)} className="mt-3 block text-[14px] font-medium hover:text-[#76dfbf]">{templateText(c)[0]} ↗</Link>
+                <div className="text-[12.5px] text-[#7d7d7d]">{templateText(c)[1]}</div>
               </div>
             )})}
           </div>
@@ -169,14 +177,14 @@ export default function HomePage() {
 
       <div className="pointer-events-none sticky bottom-6 flex flex-col items-center justify-center gap-3 px-6 xl:flex-row">
         <div className="pointer-events-auto flex w-full max-w-[600px] items-center gap-3 rounded-full border border-[#2a2a2a] bg-[#161616]/95 py-2 pl-3 pr-2 backdrop-blur">
-          <button aria-label="前往素材庫" onClick={() => router.push("/assets")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#242424] text-[#9a9a9a] transition-colors hover:text-white">
+          <button aria-label={t.home.toAssets} onClick={() => router.push("/assets")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#242424] text-[#9a9a9a] transition-colors hover:text-white">
             <IconPlus className="h-4 w-4" />
           </button>
           <input
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && start()}
-            placeholder="描述你想生成的內容畫面"
+            placeholder={t.home.placeholder}
             className="min-w-0 flex-1 bg-transparent text-[14px] text-white placeholder:text-[#6d6d6d] focus:outline-none"
           />
           <button
@@ -184,7 +192,7 @@ export default function HomePage() {
             className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[13.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105"
           >
             <IconSparkle className="h-4 w-4" />
-            開始創作
+            {t.home.start}
           </button>
         </div>
       </div>

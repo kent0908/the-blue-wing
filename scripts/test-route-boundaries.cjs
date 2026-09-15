@@ -6,10 +6,11 @@ const landing = read('app/landing/page.tsx');
 assert.ok(home.includes('<HeroCarousel />') && home.includes('/api/home-blocks'));
 assert.ok(!home.includes('<WingExperience') && !home.includes('getLandingMediaMap'));
 for (const component of ['WingExperience', 'LandingMedia', 'ClosingGlow']) assert.ok(landing.includes('<' + component));
-assert.ok(landing.includes('id:"companions"') && landing.includes('landingGallerySlots(f.id)'));
+assert.ok(landing.includes('id: "companions"') && landing.includes('landingGallerySlots(f.id)'));
 const sidebar = read('components/Sidebar.tsx');
-assert.match(sidebar, /href:\s*"\/",\s*label:\s*"首頁"/);
-assert.match(sidebar, /href:\s*"\/landing",\s*label:\s*"(返回)?啟程"/);
+// labels are dictionary keys since the UI became multilingual (lib/i18n/dict.ts nav.*)
+assert.match(sidebar, /href:\s*"\/",\s*label:\s*"home"/);
+assert.match(sidebar, /href:\s*"\/landing",\s*label:\s*"landing"/);
 assert.match(read('components/AppFrame.tsx'), /if\(path==="\/landing"\)/);
 assert.ok(!read('components/AppFrame.tsx').includes('if(path==="/")'));
 assert.match(read('app/explore/page.tsx'), /redirect\("\/"\)/);

@@ -6,6 +6,9 @@ import AppFrame from "@/components/AppFrame";
 import JobToasts from "@/components/JobToasts";
 import { GenerationJobsProvider } from "@/lib/jobsStore";
 import { DEFAULT_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL, organizationLd, webSiteLd } from "@/lib/seo/site";
+import { getLocale } from "@/lib/i18n/server";
+import { LOCALE_TAG } from "@/lib/i18n/locale";
+import { LocaleProvider } from "@/lib/i18n/client";
 
 /**
  * Site-wide defaults. Every public page overrides `title` / `description`
@@ -24,16 +27,19 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="zh-Hant">
+    <html lang={LOCALE_TAG[locale]}>
       <body className="h-dvh overflow-hidden bg-black text-[var(--bw-text)]">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: organizationLd() }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: webSiteLd() }} />
-        <GenerationJobsProvider>
-          <AppFrame>{children}</AppFrame>
-          <JobToasts />
-        </GenerationJobsProvider>
+        <LocaleProvider locale={locale}>
+          <GenerationJobsProvider>
+            <AppFrame>{children}</AppFrame>
+            <JobToasts />
+          </GenerationJobsProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

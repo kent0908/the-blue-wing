@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { getDict } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
   title: "啟程：用一句話生成 AI 影片與圖片",
@@ -27,20 +28,22 @@ import styles from "./landing.module.css";
 // full server-render on every single visitor.
 export const revalidate = 60;
 
-const features=[
-  {id:"video",label:"01 / AI VIDEO",title:"讓想像，開始流動。",text:"從一句描述到一段影像。用文字或參考圖片，開啟你的下一個故事。",href:"/studio?mode=video",action:"開始影片創作",icon:IconVideo},
-  {id:"image",label:"02 / AI IMAGE",title:"每個靈感，都值得被看見。",text:"探索不同模型與視覺風格，把腦海中的畫面變成作品。",href:"/studio?mode=image",action:"開始圖片創作",icon:IconImage},
-  {id:"canvas",label:"03 / CREATIVE WORKFLOW",title:"把創意連起來。",text:"在智慧畫布排列素材與生成節點，建立自己的工作流程；也能進入 3D 導演台，探索構圖與鏡頭。",href:"/canvas",action:"開啟智慧畫布",icon:IconCanvas},
-  {id:"companions",label:"04 / AI COMPANION",title:"生成，只是開始。",text:"創造你的角色，讓TA活起來——有記憶、有個性，陪你聊每一天的心情與故事。",href:"/companions",action:"認識你的 AI 夥伴",icon:IconChat},
-];
+const FEATURES = [
+  { id: "video", label: "01 / AI VIDEO", href: "/studio?mode=video", icon: IconVideo },
+  { id: "image", label: "02 / AI IMAGE", href: "/studio?mode=image", icon: IconImage },
+  { id: "canvas", label: "03 / CREATIVE WORKFLOW", href: "/canvas", icon: IconCanvas },
+  { id: "companions", label: "04 / AI COMPANION", href: "/companions", icon: IconChat },
+] as const;
 
 export default async function LandingPage(){
-  const media = await getLandingMediaMap();
+  const [media, { t }] = await Promise.all([getLandingMediaMap(), getDict()]);
+  const L = t.landing;
+  const features = FEATURES.map((f) => ({ ...f, ...L.features[f.id] }));
   return <div className={styles.page}>
   <header className={styles.header}>
     <Link href="/" className={styles.brand}><Image src="/wing-mark.png" width={38} height={38} alt=""/>The Blue Wing</Link>
-    <nav aria-label="啟程導覽" className={styles.nav}><a href="#video">影片創作</a><a href="#image">圖片創作</a><a href="#canvas">智慧畫布</a><a href="#companions">AI 陪聊</a></nav>
-    <Link href="/studio?mode=video" className={styles.smallCta}>開始創作 <IconArrowRight className="h-4 w-4"/></Link>
+    <nav aria-label={t.nav.mainNav} className={styles.nav}><a href="#video">{L.navVideo}</a><a href="#image">{L.navImage}</a><a href="#canvas">{L.navCanvas}</a><a href="#companions">{L.navCompanions}</a></nav>
+    <Link href="/studio?mode=video" className={styles.smallCta}>{L.start} <IconArrowRight className="h-4 w-4"/></Link>
   </header>
   <WingExperience/>
   {media.hero && <section className={styles.hero}>
@@ -55,32 +58,32 @@ export default async function LandingPage(){
     {media.hero && <div className={styles.heroOverlay} aria-hidden="true"/>}
     <div className={styles.heroContent}>
       <p className={styles.eyebrow}>THE BLUE WING · CREATIVE STUDIO</p>
-      <h1>一句話，<br/><span>一個世界。</span></h1>
-      <p className={styles.subtitle}>生成，只是開始——讓TA活起來，才是故事的開頭。<br/>創造你的角色，然後愛上與TA相處的每一天。</p>
-      <div className={styles.actions}><Link className={styles.primary} href="/studio?mode=video">開始創作 <IconArrowRight className="h-5 w-5"/></Link><a className={styles.secondary} href="#video">探索創作工具 <span>↓</span></a></div>
+      <h1>{L.h1a}<br/><span>{L.h1b}</span></h1>
+      <p className={styles.subtitle}>{L.subtitle1}<br/>{L.subtitle2}</p>
+      <div className={styles.actions}><Link className={styles.primary} href="/studio?mode=video">{L.start} <IconArrowRight className="h-5 w-5"/></Link><a className={styles.secondary} href="#video">{L.explore} <span>↓</span></a></div>
     </div>
     <div className={styles.heroFooter}><span>IMAGE / VIDEO / CANVAS / COMPANION</span><span>SCROLL TO EXPLORE ↓</span></div>
   </section>}
   <div className={styles.features}>{features.map((f,i)=><section key={f.id} id={f.id} className={styles.feature}>
     <div className={styles.copy}><p className={styles.eyebrow}>{f.label}</p><h2>{f.title}</h2><p>{f.text}</p><Link href={f.href} className={styles.secondary}>{f.action}<IconArrowRight className="h-4 w-4"/></Link></div>
-    <div className={styles.gallery} aria-label={`${f.title}作品展示`}>
+    <div className={styles.gallery} aria-label={`${f.title} ${L.gallery}`}>
       {landingGallerySlots(f.id).map((slot,index)=>{
        const m=media[slot];
        return <div key={slot} data-media-slot={slot} className={`${styles.galleryCard} ${index===0?styles.featuredCard:styles.sideCard} ${styles['art'+i]}`}>
-        {m?<LandingMedia media={m} label={`${f.title}${index===0?'主展示':`作品 ${index+1}`}`}/>:<div className={styles.placeholder}>
-         <f.icon className={styles.placeholderIcon}/><span>{index===0?'靈感，從這裡展開':'更多作品，敬請期待'}</span><small>{index===0?'CREATE YOUR NEXT STORY':'TO BE CONTINUED'}</small>
+        {m?<LandingMedia media={m} label={`${f.title} ${index===0?L.mainShow:`${L.work} ${index+1}`}`}/>:<div className={styles.placeholder}>
+         <f.icon className={styles.placeholderIcon}/><span>{index===0?L.placeholderMain:L.placeholderMore}</span><small>{index===0?'CREATE YOUR NEXT STORY':'TO BE CONTINUED'}</small>
         </div>}
-        <div className={styles.cardCaption}><span>{String(index+1).padStart(2,'0')}</span><span>{index===0?'精選展示':m?'延伸作品':'即將展開'}</span></div>
+        <div className={styles.cardCaption}><span>{String(index+1).padStart(2,'0')}</span><span>{index===0?L.featured:m?L.extended:L.soon}</span></div>
 </div>;
       })}
     </div>
   </section>)}</div>
-  <section className={styles.closing}><ClosingGlow/><p className={styles.eyebrow}>PEOPLE + AI, TOGETHER</p><h2>Blue Wing——人與AI，<br/>共同振翅，邁向未來。</h2><Link href="/studio?mode=image" className={styles.primary}>立即開始 <IconArrowRight className="h-5 w-5"/></Link></section>
-  <footer className={styles.footer}><span>The Blue Wing</span><div><Link href="/">回到首頁</Link><Link href="/help">使用說明</Link><Link href="/login">登入帳號</Link></div></footer>
+  <section className={styles.closing}><ClosingGlow/><p className={styles.eyebrow}>PEOPLE + AI, TOGETHER</p><h2>{L.closingA}<br/>{L.closingB}</h2><Link href="/studio?mode=image" className={styles.primary}>{L.closingCta} <IconArrowRight className="h-5 w-5"/></Link></section>
+  <footer className={styles.footer}><span>The Blue Wing</span><div><Link href="/">{L.footHome}</Link><Link href="/help">{L.footHelp}</Link><Link href="/login">{L.footLogin}</Link></div></footer>
   {/* One fixed bottom-left shortcut into the app. Page-level on purpose — a
       2026-09-08 merge had pulled this inside the gallery-card .map(), which
       rendered 12 identical position:fixed links stacked on the same spot. */}
-  <Link href="/" className={styles.floatHome}>→ 前往首頁</Link>
+  <Link href="/" className={styles.floatHome}>{L.floatHome}</Link>
 </div>;
 }
 

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AuthShell, Field, SubmitButton } from "@/components/AuthUI";
+import { useT } from "@/lib/i18n/client";
 
 export default function ForgotPasswordPage() {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -23,13 +25,13 @@ export default function ForgotPasswordPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json?.error?.message || "送出失敗");
+        setError(json?.error?.message || t.auth.sendFailed);
         return;
       }
       setDone(true);
       setDevUrl(json?.devResetUrl ?? null);
     } catch {
-      setError("連線失敗，請稍後再試");
+      setError(t.auth.network);
     } finally {
       setBusy(false);
     }
@@ -37,15 +39,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthShell
-      title="忘記密碼"
-      foot={<Link href="/login" className="text-[#7ff0cd] hover:underline">回登入</Link>}
+      title={t.auth.forgotTitle}
+      foot={<Link href="/login" className="text-[#7ff0cd] hover:underline">{t.auth.backLogin}</Link>}
     >
       {done ? (
         <div className="space-y-3 text-[13px] leading-relaxed text-[#c9c9c9]">
-          <p className="text-[#7ff0cd]">如果這個 email 有註冊，我們已寄出重設連結（1 小時內有效）。請收信。</p>
+          <p className="text-[#7ff0cd]">{t.auth.forgotSent}</p>
           {devUrl && (
             <p className="break-all text-[12px] text-[#8a8a8a]">
-              （測試模式，未設寄信服務）重設連結：<br />
+              {t.auth.testMode}<br />
               <Link href={devUrl.replace(/^https?:\/\/[^/]+/, "")} className="text-[#7ff0cd] hover:underline">{devUrl}</Link>
             </p>
           )}
@@ -53,11 +55,11 @@ export default function ForgotPasswordPage() {
       ) : (
         <form onSubmit={submit} className="space-y-3">
           <p className="text-[12.5px] leading-relaxed text-[#8a8a8a]">
-            輸入註冊時用的 email，我們會寄一封重設密碼的連結給你。
+            {t.auth.forgotHint}
           </p>
           <Field label="Email" type="email" value={email} onChange={setEmail} autoFocus />
           {error && <p className="text-[12.5px] leading-relaxed text-[#ff9b9b]">{error}</p>}
-          <SubmitButton busy={busy} disabled={!email}>寄出重設連結</SubmitButton>
+          <SubmitButton busy={busy} disabled={!email}>{t.auth.sendReset}</SubmitButton>
         </form>
       )}
     </AuthShell>

@@ -3,6 +3,8 @@
 import { getGenerationModes } from "@/lib/generationModes";
 import { modelLabel } from "@/lib/modelLabel";
 import { isNewModel } from "@/lib/modelNew";
+import { useT } from "@/lib/i18n/client";
+import { modeLabel, type Dict } from "@/lib/i18n/dict";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -36,7 +38,8 @@ const SOCIAL_LINKS: { href: string; label: string; icon: (p: { className?: strin
 type Badge = { text: string; tone: "hot" | "new" };
 type Item = {
   href: string;
-  label: string;
+  /** key into the nav dictionary — the visible label is resolved per locale at render */
+  label: keyof Dict["nav"];
   icon: (p: { className?: string }) => React.ReactElement;
   badge?: Badge;
   /** image/video modes only — shows a hover flyout of that modality's live model list (see ModelFlyout below). */
@@ -44,22 +47,22 @@ type Item = {
 };
 
 const GROUP_A: Item[] = [
-  { href: "/", label: "首頁", icon: IconHome },
-  { href: "/studio?mode=image", label: "圖片生成", icon: IconImage, modelModality: "image" },
-  { href: "/studio?mode=video", label: "影片生成", icon: IconVideo, badge: { text: "HOT", tone: "hot" }, modelModality: "video" },
-  { href: "/studio?mode=audio", label: "文字創作", icon: IconAudio },
-  { href: "/avatar", label: "數位人", icon: IconAvatar },
+  { href: "/", label: "home", icon: IconHome },
+  { href: "/studio?mode=image", label: "image", icon: IconImage, modelModality: "image" },
+  { href: "/studio?mode=video", label: "video", icon: IconVideo, badge: { text: "HOT", tone: "hot" }, modelModality: "video" },
+  { href: "/studio?mode=audio", label: "text", icon: IconAudio },
+  { href: "/avatar", label: "avatar", icon: IconAvatar },
 ];
 
 const GROUP_B: Item[] = [
-  { href: "/canvas", label: "智慧畫布", icon: IconCanvas, badge: { text: "NEW", tone: "new" } },
-  { href: "/canvas/director3d", label: "3D 導演台", icon: IconAvatar, badge: { text: "NEW", tone: "new" } },
-  { href: "/editor", label: "圖層編輯", icon: IconImage, badge: { text: "NEW", tone: "new" } },
+  { href: "/canvas", label: "canvas", icon: IconCanvas, badge: { text: "NEW", tone: "new" } },
+  { href: "/canvas/director3d", label: "director3d", icon: IconAvatar, badge: { text: "NEW", tone: "new" } },
+  { href: "/editor", label: "editor", icon: IconImage, badge: { text: "NEW", tone: "new" } },
 ];
 
 const GROUP_C: Item[] = [
-  { href: "/assets", label: "資產庫", icon: IconAssets },
-  { href: "/companions", label: "陪聊角色", icon: IconChat, badge: { text: "NEW", tone: "new" } },
+  { href: "/assets", label: "assets", icon: IconAssets },
+  { href: "/companions", label: "companions", icon: IconChat, badge: { text: "NEW", tone: "new" } },
 ];
 
 function BadgeTag({ badge }: { badge: Badge }) {
@@ -113,6 +116,7 @@ function ModelFlyoutPortal({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
+  const t = useT();
   const [sub, setSub] = useState<{ id: string; top: number } | null>(null);
   const list = models.filter((m) => m.modality === state.modality && !/nsfw/i.test(m.id));
   return createPortal(
@@ -123,8 +127,8 @@ function ModelFlyoutPortal({
       className="bw-menu fixed z-50 max-h-[70vh] w-[240px] overflow-y-auto p-1.5"
       style={{ top: state.top, left: state.left }}
     >
-      <div className="px-2 pb-1.5 pt-1 text-[11px] text-[#8a8a8a]">模型</div>
-      {list.length === 0 && <div className="px-2 py-3 text-center text-[11px] text-[#6d6d6d]">載入中…</div>}
+      <div className="px-2 pb-1.5 pt-1 text-[11px] text-[#8a8a8a]">{t.nav.modelsHeading}</div>
+      {list.length === 0 && <div className="px-2 py-3 text-center text-[11px] text-[#6d6d6d]">{t.nav.loading}</div>}
       {list.map((m) => {
         return (
           <Link onMouseEnter={(e) => setSub({id:m.id,top:Math.min(e.currentTarget.getBoundingClientRect().top,window.innerHeight-300)})} onFocus={(e) => setSub({id:m.id,top:Math.min(e.currentTarget.getBoundingClientRect().top,window.innerHeight-300)})} key={m.id} href={`/studio?mode=${state.modality}&model=${encodeURIComponent(m.id)}`} className="bw-menu-item"
@@ -138,8 +142,8 @@ function ModelFlyoutPortal({
         );
       })}
     </div>
-    {sub && getGenerationModes(sub.id,state.modality).length>0 && <div aria-label="模型功能" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} className="bw-menu fixed z-[60] w-[210px] p-1.5" style={{top:Math.max(8,sub.top),left:Math.min(state.left+238,window.innerWidth-218)}}>
-      {getGenerationModes(sub.id,state.modality).map(item => item.enabled ? <Link key={item.id} className="bw-menu-item" href={`/studio?mode=${state.modality}&model=${encodeURIComponent(sub.id)}&operation=${item.id}`} onClick={() => window.dispatchEvent(new CustomEvent("bluewing:model-select",{detail:{mode:state.modality,model:sub.id,operation:item.id}}))}>{item.label}</Link> : <div key={item.id} className="px-3 py-2 text-xs text-[#777]" aria-disabled="true">{item.label}<p className="mt-1 text-[10px] leading-4">{item.reason}</p></div>)}
+    {sub && getGenerationModes(sub.id,state.modality).length>0 && <div aria-label={t.nav.modelFunctions} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} className="bw-menu fixed z-[60] w-[210px] p-1.5" style={{top:Math.max(8,sub.top),left:Math.min(state.left+238,window.innerWidth-218)}}>
+      {getGenerationModes(sub.id,state.modality).map(item => item.enabled ? <Link key={item.id} className="bw-menu-item" href={`/studio?mode=${state.modality}&model=${encodeURIComponent(sub.id)}&operation=${item.id}`} onClick={() => window.dispatchEvent(new CustomEvent("bluewing:model-select",{detail:{mode:state.modality,model:sub.id,operation:item.id}}))}>{modeLabel(t,item.id,item.label)}</Link> : <div key={item.id} className="px-3 py-2 text-xs text-[#777]" aria-disabled="true">{modeLabel(t,item.id,item.label)}<p className="mt-1 text-[10px] leading-4">{item.reason}</p></div>)}
     </div>}
     </>,
     document.body
@@ -160,10 +164,11 @@ function NavLink({
   onFlyoutLeave?: () => void;
 }) {
   const Icon = item.icon;
+  const label = useT().nav[item.label];
   return (
     <Link
       href={item.href}
-      title={collapsed ? item.label : undefined}
+      title={collapsed ? label : undefined}
       onMouseEnter={item.modelModality ? (e) => onFlyoutEnter?.(item.modelModality!, e.currentTarget) : undefined}
       onMouseLeave={item.modelModality ? onFlyoutLeave : undefined}
       className={[
@@ -175,7 +180,7 @@ function NavLink({
       <Icon className="h-[18px] w-[18px] shrink-0" />
       {!collapsed && (
         <>
-          <span className="truncate">{item.label}</span>
+          <span className="truncate">{label}</span>
           {item.badge && <BadgeTag badge={item.badge} />}
         </>
       )}
@@ -184,6 +189,7 @@ function NavLink({
 }
 
 function SidebarInner() {
+  const t = useT();
   const pathname = usePathname();
   const params = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
@@ -263,8 +269,8 @@ function SidebarInner() {
       </nav>
 
       <div className="px-3 pb-4">
-        <NavLink item={{ href: "/models", label: "模型一覽", icon: IconVideo }} active={isActive("/models")} collapsed={collapsed} />
-        <NavLink item={{ href: "/landing", label: "返回啟程", icon: IconWing }} active={isActive("/landing")} collapsed={collapsed} />
+        <NavLink item={{ href: "/models", label: "models", icon: IconVideo }} active={isActive("/models")} collapsed={collapsed} />
+        <NavLink item={{ href: "/landing", label: "landing", icon: IconWing }} active={isActive("/landing")} collapsed={collapsed} />
         {!collapsed && (
           <div className="mb-2 flex items-center gap-1.5 border-t border-[#1e1e1e] px-1 pt-3">
             {SOCIAL_LINKS.map((s) => (
@@ -291,7 +297,7 @@ function SidebarInner() {
           ].join(" ")}
         >
           <IconCollapse className="h-[18px] w-[18px] shrink-0" />
-          {!collapsed && <span>收起</span>}
+          {!collapsed && <span>{t.nav.collapse}</span>}
         </button>
 
 

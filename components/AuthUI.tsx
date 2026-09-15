@@ -1,4 +1,5 @@
 "use client";
+import { useT } from "@/lib/i18n/client";
 
 /** Shared chrome for /login, /register and /verify. */
 
@@ -53,13 +54,14 @@ export function Field({
 }
 
 export function SubmitButton({ busy, disabled, children }: { busy: boolean; disabled?: boolean; children: React.ReactNode }) {
+  const t = useT();
   return (
     <button
       type="submit"
       disabled={busy || disabled}
       className="mt-1 h-10 w-full rounded-lg bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] text-[13.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {busy ? "處理中…" : children}
+      {busy ? t.auth.busy : children}
     </button>
   );
 }

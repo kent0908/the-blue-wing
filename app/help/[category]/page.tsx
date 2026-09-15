@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FAQ_CATEGORIES } from "@/lib/supportFaq";
 import { SITE_DEFINITION, breadcrumbLd, faqLd } from "@/lib/seo/site";
+import { getDict } from "@/lib/i18n/server";
 
 export const dynamicParams = false;
 export function generateStaticParams() {
@@ -23,14 +24,16 @@ export default async function HelpCategory({ params }: { params: Promise<{ categ
   const { category } = await params;
   const c = FAQ_CATEGORIES.find((x) => x.id === category);
   if (!c) notFound();
+  const { t } = await getDict();
+  const H = t.help;
   return (
     <div className="h-full overflow-y-auto">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqLd(c.entries) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbLd([{ name: "首頁", path: "/" }, { name: "說明", path: "/help" }, { name: c.label, path: `/help/${c.id}` }]) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbLd([{ name: t.nav.home, path: "/" }, { name: H.crumb, path: "/help" }, { name: c.label, path: `/help/${c.id}` }]) }} />
       <article className="mx-auto max-w-[820px] px-6 py-10">
-        <nav aria-label="路徑" className="text-[12px] text-[#7a7a7a]"><Link href="/help" className="hover:text-white">說明</Link> <span className="mx-1">/</span> 常見問題</nav>
-        <h1 className="mt-3 text-[26px] font-semibold tracking-tight text-white">{c.label}常見問題</h1>
-        <p className="mt-2 text-[13.5px] text-[#8a8a8a]">{c.entries.length} 個問題，與站內客服助手的答案完全一致。</p>
+        <nav aria-label="breadcrumb" className="text-[12px] text-[#7a7a7a]"><Link href="/help" className="hover:text-white">{H.crumb}</Link> <span className="mx-1">/</span> {t.models.faq}</nav>
+        <h1 className="mt-3 text-[26px] font-semibold tracking-tight text-white">{c.label}{H.faqSuffix}</h1>
+        <p className="mt-2 text-[13.5px] text-[#8a8a8a]">{c.entries.length}{H.countSuffix}</p>
         <div className="mt-6 space-y-6">
           {c.entries.map((e, i) => (
             <section key={e.question} id={`q${i + 1}`} className="scroll-mt-20 rounded-2xl border border-[#1e1e1e] bg-[#111] p-5">
@@ -40,7 +43,7 @@ export default async function HelpCategory({ params }: { params: Promise<{ categ
           ))}
         </div>
         <nav className="mt-10 border-t border-[#1e1e1e] pt-5">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-[#6d6d6d]">其他主題</div>
+          <div className="text-[11px] font-medium uppercase tracking-wide text-[#6d6d6d]">{H.otherTopics}</div>
           <ul className="mt-2 flex flex-wrap gap-2">
             {FAQ_CATEGORIES.filter((x) => x.id !== c.id).map((x) => <li key={x.id}><Link href={`/help/${x.id}`} className="rounded-full border border-[#2a2a2a] px-3 py-1 text-[12.5px] text-[#dcdcdc] hover:border-[#444]">{x.label}</Link></li>)}
           </ul>

@@ -4,8 +4,10 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthShell, Field, SubmitButton } from "@/components/AuthUI";
+import { useT } from "@/lib/i18n/client";
 
 function LoginInner() {
+  const t = useT();
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/studio?mode=image";
@@ -29,15 +31,15 @@ function LoginInner() {
       if (!res.ok) {
         setError(
           json?.error?.code === "email_unverified"
-            ? "這個帳號還沒完成 email 驗證，請先收信點驗證連結。"
-            : json?.error?.message || "登入失敗"
+            ? t.auth.unverified
+            : json?.error?.message || t.auth.loginFailed
         );
         return;
       }
       router.push(next);
       router.refresh();
     } catch {
-      setError("連線失敗，請稍後再試");
+      setError(t.auth.network);
     } finally {
       setBusy(false);
     }
@@ -45,17 +47,17 @@ function LoginInner() {
 
   return (
     <AuthShell
-      title="登入 The Blue Wing"
-      foot={<>還沒有帳號？<Link href="/register" className="text-[#7ff0cd] hover:underline">註冊</Link></>}
+      title={t.auth.loginTitle}
+      foot={<>{t.auth.noAccount}<Link href="/register" className="text-[#7ff0cd] hover:underline">{t.auth.register}</Link></>}
     >
       <form onSubmit={submit} className="space-y-3">
         <Field label="Email" type="email" value={email} onChange={setEmail} autoFocus />
-        <Field label="密碼" type="password" value={password} onChange={setPassword} />
+        <Field label={t.auth.password} type="password" value={password} onChange={setPassword} />
         <div className="text-right">
-          <Link href="/forgot-password" className="text-[12px] text-[#8a8a8a] hover:text-white">忘記密碼？</Link>
+          <Link href="/forgot-password" className="text-[12px] text-[#8a8a8a] hover:text-white">{t.auth.forgot}</Link>
         </div>
         {error && <p className="text-[12.5px] leading-relaxed text-[#ff9b9b]">{error}</p>}
-        <SubmitButton busy={busy} disabled={!email || !password}>登入</SubmitButton>
+        <SubmitButton busy={busy} disabled={!email || !password}>{t.auth.login}</SubmitButton>
       </form>
     </AuthShell>
   );
@@ -63,7 +65,7 @@ function LoginInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<AuthShell title="登入 The Blue Wing">{null}</AuthShell>}>
+    <Suspense fallback={<AuthShell title="">{null}</AuthShell>}>
       <LoginInner />
     </Suspense>
   );

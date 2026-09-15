@@ -4,12 +4,14 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthShell } from "@/components/AuthUI";
+import { useT } from "@/lib/i18n/client";
 
 function VerifyInner() {
+  const t = useT();
   const router = useRouter();
   const token = useSearchParams().get("token");
   const [state, setState] = useState<"working" | "ok" | "error">(token ? "working" : "error");
-  const [message, setMessage] = useState(token ? "驗證中…" : "缺少驗證碼，請從註冊信裡的連結進來。");
+  const [message, setMessage] = useState(token ? t.auth.verifying : t.auth.missingVerify);
   const ran = useRef(false);
 
   useEffect(() => {
@@ -26,26 +28,26 @@ function VerifyInner() {
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
           setState("error");
-          setMessage(json?.error?.message || "驗證失敗");
+          setMessage(json?.error?.message || t.auth.verifyFailed);
           return;
         }
         setState("ok");
-        setMessage("驗證完成，已為你登入。");
+        setMessage(t.auth.verified);
         setTimeout(() => {
           router.push("/account");
           router.refresh();
         }, 900);
       } catch {
         setState("error");
-        setMessage("連線失敗，請稍後再試。");
+        setMessage(t.auth.networkDot);
       }
     })();
-  }, [token, router]);
+  }, [token, router, t]);
 
   return (
     <AuthShell
-      title="Email 驗證"
-      foot={state === "error" ? <Link href="/login" className="text-[#7ff0cd] hover:underline">回登入</Link> : null}
+      title={t.auth.verifyTitle}
+      foot={state === "error" ? <Link href="/login" className="text-[#7ff0cd] hover:underline">{t.auth.backLogin}</Link> : null}
     >
       <p
         className={[
@@ -61,7 +63,7 @@ function VerifyInner() {
 
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<AuthShell title="Email 驗證">{null}</AuthShell>}>
+    <Suspense fallback={<AuthShell title="">{null}</AuthShell>}>
       <VerifyInner />
     </Suspense>
   );

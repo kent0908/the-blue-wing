@@ -3,7 +3,7 @@ const cache=new Map();
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const m={exports:{}};const output=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;new Function('require','module','exports',output)(id=>{
  if(id.endsWith('.module.css'))return new Proxy({},{get:(_,k)=>String(k)});
  if(id==='./ModelLogo')return {__esModule:true,default:()=>null};
- if(id.startsWith('@/'))return load(id.slice(2)+'.ts');
+ if(id.startsWith('@/')){const base=id.slice(2);return load(fs.existsSync(path.resolve(base+'.tsx'))?base+'.tsx':base+'.ts');}
  if(id.startsWith('.'))return load(path.resolve(path.dirname(file),id+'.ts'));
  return require(id);
 },m,m.exports);cache.set(file,m.exports);return m.exports;}

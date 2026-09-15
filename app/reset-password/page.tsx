@@ -4,8 +4,10 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthShell, Field, SubmitButton } from "@/components/AuthUI";
+import { useT } from "@/lib/i18n/client";
 
 function ResetInner() {
+  const t = useT();
   const router = useRouter();
   const token = useSearchParams().get("token");
 
@@ -19,7 +21,7 @@ function ResetInner() {
     e.preventDefault();
     setError(null);
     if (pw !== confirm) {
-      setError("兩次輸入的新密碼不一致");
+      setError(t.auth.mismatch);
       return;
     }
     setBusy(true);
@@ -31,7 +33,7 @@ function ResetInner() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(json?.error?.message || "重設失敗");
+        setError(json?.error?.message || t.auth.resetFailed);
         return;
       }
       setOk(true);
@@ -40,7 +42,7 @@ function ResetInner() {
         router.refresh();
       }, 900);
     } catch {
-      setError("連線失敗，請稍後再試");
+      setError(t.auth.network);
     } finally {
       setBusy(false);
     }
@@ -48,25 +50,25 @@ function ResetInner() {
 
   if (!token) {
     return (
-      <AuthShell title="重設密碼" foot={<Link href="/forgot-password" className="text-[#7ff0cd] hover:underline">重新申請</Link>}>
-        <p className="text-[13px] leading-relaxed text-[#ff9b9b]">缺少重設碼，請從信裡的連結進來。</p>
+      <AuthShell title={t.auth.resetTitle} foot={<Link href="/forgot-password" className="text-[#7ff0cd] hover:underline">{t.auth.reapply}</Link>}>
+        <p className="text-[13px] leading-relaxed text-[#ff9b9b]">{t.auth.missingToken}</p>
       </AuthShell>
     );
   }
 
   return (
     <AuthShell
-      title="重設密碼"
-      foot={!ok ? <Link href="/login" className="text-[#7ff0cd] hover:underline">回登入</Link> : null}
+      title={t.auth.resetTitle}
+      foot={!ok ? <Link href="/login" className="text-[#7ff0cd] hover:underline">{t.auth.backLogin}</Link> : null}
     >
       {ok ? (
-        <p className="text-[13px] leading-relaxed text-[#7ff0cd]">密碼已重設，已為你登入，正在前往帳號頁…</p>
+        <p className="text-[13px] leading-relaxed text-[#7ff0cd]">{t.auth.resetDone}</p>
       ) : (
         <form onSubmit={submit} className="space-y-3">
-          <Field label="新密碼" type="password" value={pw} onChange={setPw} autoFocus hint="至少 8 個字元" />
-          <Field label="再次輸入新密碼" type="password" value={confirm} onChange={setConfirm} />
+          <Field label={t.auth.newPw} type="password" value={pw} onChange={setPw} autoFocus hint={t.auth.pwHint} />
+          <Field label={t.auth.confirmPw} type="password" value={confirm} onChange={setConfirm} />
           {error && <p className="text-[12.5px] leading-relaxed text-[#ff9b9b]">{error}</p>}
-          <SubmitButton busy={busy} disabled={!pw || !confirm}>設定新密碼</SubmitButton>
+          <SubmitButton busy={busy} disabled={!pw || !confirm}>{t.auth.setPw}</SubmitButton>
         </form>
       )}
     </AuthShell>
@@ -75,7 +77,7 @@ function ResetInner() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<AuthShell title="重設密碼">{null}</AuthShell>}>
+    <Suspense fallback={<AuthShell title="">{null}</AuthShell>}>
       <ResetInner />
     </Suspense>
   );
