@@ -176,7 +176,9 @@ export default function Composer({
     // 語音生成 has no real audio modality on SIRAYA (see lib/audioModels.ts) —
     // it shares "text"'s ~80-model chat-completions list otherwise, which is
     // exactly the "太雜" the curation here fixes.
-    if (mode === "audio") return live.filter((m) => AUDIO_MODELS.includes(m.id));
+    // keep AUDIO_MODELS' own order (cheapest first) so its first entry is the
+    // default pick, instead of whatever family /api/models happens to sort first
+    if (mode === "audio") return AUDIO_MODELS.flatMap((id) => live.filter((m) => m.id === id));
     if (modalityForMode !== "image") return live;
     // Merge the curated image catalogue so links to a specific model resolve
     // even before /api/models has loaded (and so it's pickable in the dropdown).
