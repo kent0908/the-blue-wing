@@ -43,8 +43,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
     const json = await getVideoStatus(id);
     const rawUrl = json?.output_url ?? json?.data?.[0]?.url ?? null;
-    const status = json?.status ?? (rawUrl ? "completed" : "processing");
+    let status = json?.status ?? (rawUrl ? "completed" : "processing");
     let url = rawUrl;
+
+    // Real case (ledger #520, 2026-09-14, Veo 3.1 4K): SIRAYA reported
+    // status "completed" with NO output_url/data at all (Google's response
+    // carried only raiMediaFilteredCount) — the clip was filtered or lost
+    // upstream. Left as "completed" the client polls until its own timeout
+    // and the charge is never refunded. Treat it as a failure so the refund
+    // path below runs (and its alert fires) and the user sees a real error.
+    if (status === "completed" && !rawUrl) status = "failed";
 
     if (status === "completed" && rawUrl) {
       // Re-host to our own storage first — this is a signed upstream URL

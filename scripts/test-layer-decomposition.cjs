@@ -39,7 +39,7 @@ console.log(`Layer decomposition ${passed} passed, mocked provider and ledger.`)
   if(q.startsWith('INSERT INTO credit_ledger')){refundTotal+=p[1];return {rows:[]}};
   throw Error(q);
  };
- const tx=load('lib/creditTransactions.ts',{'./db':{sql:{connect:async()=>({query,release(){}})}},'./creditReplay':{replayCredits:()=>1000},'./siraya':{SirayaApiError:ApiError}});
+ const tx=load('lib/creditTransactions.ts',{'./db':{sql:{connect:async()=>({query,release(){}})}},'./creditReplay':{replayCredits:()=>1000},'./siraya':{SirayaApiError:ApiError},'./alerts':{raiseAlert:async()=>{}}});
  assert.equal(await tx.settleCharge(1,'1',72),540);
  assert.equal(await tx.settleCharge(1,'1',72),0);
  assert.equal(refundTotal,540);

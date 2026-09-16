@@ -29,7 +29,7 @@ for (const env of ["production", "test"]) {
   const reset=load("app/api/auth/forgot-password/route.ts", {
     "@/lib/db":db, "@/lib/auth":{newToken:()=> "secret"},
     "@/lib/mail":{sendResetEmail:async()=>({sent:false})},
-    "@/lib/rateLimit":{authLimit:async()=>null}
+    "@/lib/rateLimit":{authLimit:async()=>null,limitRequest:async()=>true}
   },env);
   const response=await reset.POST(req("/api/auth/forgot-password",{email:"test@example.com"}));
   assert.deepEqual(await response.json(),{ok:true});
@@ -39,7 +39,9 @@ const register=load("app/api/auth/register/route.ts",{
   "@/lib/db":{sql:async(strings,...values)=>{call++; if(call===1)return {rows:[]};insert=values;return {rows:[{id:2}]};},toPublicUser:u=>u},
   "@/lib/auth":{hashPassword:()=> "hash",newToken:()=> "secret"},
   "@/lib/mail":{sendVerifyEmail:async()=>({sent:false})},
-  "@/lib/rateLimit":{authLimit:async()=>null}
+  "@/lib/uid":{generateUid:()=>"AB12345678"},
+  "@/lib/signupSource":{readSignupSource:()=>null},
+  "@/lib/rateLimit":{authLimit:async()=>null,limitRequest:async()=>true}
 });
 const response=await register.POST(req("/api/auth/register",{email:"admin@example.com",password:"test-password"}));
 const result=await response.json();
@@ -53,7 +55,8 @@ const video=load("app/api/videos/[id]/route.ts",{
   "@/lib/siraya":{getVideoStatus:async()=>{upstreamCalled=true;}},
   "@/lib/errors":{errorResponse:()=>new Response(null,{status:500})},
   "@/lib/credits":{}, "@/lib/generations":{}, "@/lib/mediaStore":{},
-  "@/lib/creditTransactions":{refundCharge:async()=>{}}
+  "@/lib/creditTransactions":{refundCharge:async()=>{}},
+  "@/lib/alerts":{raiseAlert:async()=>{}}
 });
 assert.equal((await video.GET(new next.NextRequest("https://app.example/api/videos/other"),{params:Promise.resolve({id:"other"})})).status,404);
 assert.equal(upstreamCalled,false);
