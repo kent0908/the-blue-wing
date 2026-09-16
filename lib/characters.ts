@@ -26,7 +26,9 @@ import { readProfile, profilePrompt, type CharacterProfile } from "./characterPr
 import { sceneContextWithinStage, sceneInteractionPolicy } from "./sceneInteractionPolicy";
 import { assertPromptSafety } from "./promptSafety";
 
-export const DEFAULT_CHARACTER_MODEL = "deepseek-v4-flash-0731";
+/** 2026-09-16: moved from deepseek-v4-flash-0731 (existing rows migrated by
+ *  the `update characters` statement in scripts/schema.sql). Rate: model_rates "deepseek-v4.1-flash". */
+export const DEFAULT_CHARACTER_MODEL = "deepseek-v4.1-flash";
 
 /** How many user turns between long-term-memory summary refreshes. */
 export const MEMORY_REFRESH_EVERY = 10;

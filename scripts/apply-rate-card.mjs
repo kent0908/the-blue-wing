@@ -68,6 +68,14 @@ const VIDEO_RATES = {
 // not independently verified against a current published rate the way the
 // Seedream/Seedance numbers above are.
 const TEXT_RATES = {
+  // 2026-09-16 文字創作 / 陪聊 picks (lib/audioModels.ts, lib/characters.ts) —
+  // SIRAYA list prices verified via llm-ext-api.siraya.ai/api/v1/models.
+  // Sized on a typical ~1.5K-in / 0.5K-out message at a $0.01/credit peg
+  // with ≥4x margin (companion prompts are longer but DeepSeek is cheap).
+  "deepseek-v4.1-flash": 1, // $0.15/$0.60 per MTok -> ~$0.0005/msg
+  "gemini-3.8-flash": 2, // $0.75/$3.75 -> ~$0.003/msg
+  "gpt-5.4-mini": 2, // $0.75/$4.50 -> ~$0.0034/msg
+  "claude-haiku-4.5": 2, // $1/$5 -> ~$0.004/msg
   "deepseek-v4-flash": 1,
   "deepseek-v4-flash-0731": 1,
   "deepseek-v4-pro": 2,

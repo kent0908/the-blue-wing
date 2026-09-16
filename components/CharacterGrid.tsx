@@ -22,7 +22,7 @@ interface Character {
 /**
  * 陪聊角色 — 把資產庫裡的一張圖綁成一個有名字、有人設的角色，點進去長期聊天
  * （像 yollo.ai 的 persona 陪聊）。模型固定用 lib/characters.ts 的
- * DEFAULT_CHARACTER_MODEL（deepseek-v4-flash-0731），這裡不開放切換。
+ * DEFAULT_CHARACTER_MODEL（deepseek-v4.1-flash），這裡不開放切換。
  */
 export default function CharacterGrid() {
   const tr = useTr();

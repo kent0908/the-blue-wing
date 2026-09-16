@@ -52,6 +52,12 @@ const RATES: Array<[string, RateCard]> = [
   ["gemini-3.1-flash-image", { perImage: 0.04 }],
   ["gemini-3-pro-image", { perImage: 0.06 }],
   // ---- text ----
+  // curated 文字創作 picks — SIRAYA list prices read from
+  // llm-ext-api.siraya.ai/api/v1/models on 2026-09-16 (off-peak for DeepSeek)
+  ["deepseek-v4.1-flash", { inputPerMTok: 0.15, outputPerMTok: 0.6 }],
+  ["gemini-3.8-flash", { inputPerMTok: 0.75, outputPerMTok: 3.75 }],
+  ["gpt-5.4-mini", { inputPerMTok: 0.75, outputPerMTok: 4.5 }],
+  ["claude-haiku-4.5", { inputPerMTok: 1, outputPerMTok: 5 }],
   ["claude-opus", { inputPerMTok: 15, outputPerMTok: 75 }],
   ["claude-sonnet", { inputPerMTok: 3, outputPerMTok: 15 }],
   ["claude-haiku", { inputPerMTok: 0.8, outputPerMTok: 4 }],

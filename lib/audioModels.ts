@@ -15,5 +15,11 @@
  * variant SIRAYA carries) — hence "太雜" (too messy). This curates it down
  * to one well-known model per major family, intersected with whatever's
  * actually live so a stale id here never produces a dead pick.
+ *
+ * 2026-09-16: one flash-class (fast/economy) model per vendor, each with a
+ * verified SIRAYA list price and a model_rates row (scripts/apply-rate-card.mjs).
+ * The previous sonnet-5 / gpt-5.4 / gemini-3.5-flash picks had no
+ * model_rates row at all, so choosing them failed every message with
+ * 「此模型尚未設定有效費率」.
  */
-export const AUDIO_MODELS = ["claude-sonnet-5", "gpt-5.4", "gemini-3.5-flash", "deepseek-v4-pro"];
+export const AUDIO_MODELS = ["deepseek-v4.1-flash", "gemini-3.8-flash", "gpt-5.4-mini", "claude-haiku-4.5"];

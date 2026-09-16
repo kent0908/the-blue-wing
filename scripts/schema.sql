@@ -175,12 +175,13 @@ create table if not exists characters (
   name            text not null,
   avatar_asset_id bigint references assets(id) on delete set null,
   personality     text not null default '',
-  model           text not null default 'deepseek-v4-flash-0731',
+  model           text not null default 'deepseek-v4.1-flash',
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
 create index if not exists characters_user_idx on characters(user_id, updated_at desc);
-alter table characters alter column model set default 'deepseek-v4-flash-0731';
+alter table characters alter column model set default 'deepseek-v4.1-flash';
+update characters set model = 'deepseek-v4.1-flash' where model in ('deepseek-v4-flash-0731', 'deepseek-v4-flash');
 
 -- 喜好標籤（逗號分隔的自由文字），聊到符合的話題會多拿好感度。
 alter table characters add column if not exists likes text not null default '';

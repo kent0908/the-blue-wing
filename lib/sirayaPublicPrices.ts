@@ -13,6 +13,7 @@ export interface PublicPrice {
 }
 export const PRICE_SOURCE = "https://siraya.ai/models/";
 export const PRICE_CHECKED = "2026-09-12";
+const SIRAYA_API = "https://llm-ext-api.siraya.ai/api/v1/models";
 const BYTEPLUS = "https://docs.byteplus.com/en/docs/modelark/1544106?redirect=1";
 const prices: Record<string, PublicPrice> = {
   "gemini-3.1-flash-lite-image": { price: 30, inputPrice: 0.25, unit: "million_output_tokens", source: "https://ai.google.dev/gemini-api/docs/pricing#gemini-3.1-flash-lite-image", note: "圖片輸出 $30、文字／思考輸出 $1.5、輸入 $0.25／百萬 Token，標準牌價。" },
@@ -37,6 +38,11 @@ const prices: Record<string, PublicPrice> = {
   "deepseek-v4-flash-0731": { price: 0.66, unit: "million_output_tokens", inputPrice: 0.22 },
   "deepseek-v4-pro": { price: 0.87, unit: "million_output_tokens", inputPrice: 0.43 },
   "deepseek-v4-flash": { price: 0.28, unit: "million_output_tokens", inputPrice: 0.14 },
+  // 文字創作 curated picks (lib/audioModels.ts) — llm-ext-api.siraya.ai/api/v1/models, 2026-09-16
+  "deepseek-v4.1-flash": { price: 0.6, unit: "million_output_tokens", inputPrice: 0.15, source: SIRAYA_API, note: "離峰牌價；平日 01–04 與 06–10 UTC 尖峰時段輸入 $0.3、輸出 $1.2。快取讀取 $0.015。" },
+  "gemini-3.8-flash": { price: 3.75, unit: "million_output_tokens", inputPrice: 0.75, source: SIRAYA_API, note: "快取讀取 $0.075／百萬 Token。" },
+  "gpt-5.4-mini": { price: 4.5, unit: "million_output_tokens", inputPrice: 0.75, source: SIRAYA_API, note: "快取讀取 $0.075／百萬 Token。" },
+  "claude-haiku-4.5": { price: 5, unit: "million_output_tokens", inputPrice: 1, source: SIRAYA_API, note: "快取讀取 $0.1／百萬 Token。" },
   "gpt-image-2": { price: 30, unit: "million_output_tokens", inputPrice: 5 },
   "gpt-image-2.5-flare": { price: 30, unit: "million_output_tokens", inputPrice: 5 },
   "gpt-image-2.5-sunburst": { price: 30, unit: "million_output_tokens", inputPrice: 5 },
