@@ -14,6 +14,39 @@ interface MediaInfo {
   updatedAt: string;
 }
 
+/**
+ * Decode a few frames of the chosen file in the admin's own browser before
+ * uploading. Real finding (2026-09-16): a 1080p HEVC (hvc1) .mp4 passed the
+ * MIME/size checks, published fine, and rendered as a black card with a
+ * working pause button on /landing — browsers without an H.265 decoder play
+ * the (muted) audio track and report videoWidth 0. Only H.264 / VP9 / AV1
+ * are safe to publish to anonymous visitors.
+ */
+function probeVideoDecodable(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const el = document.createElement("video");
+    el.muted = true;
+    el.preload = "auto";
+    let done = false;
+    const finish = (msg: string | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      el.removeAttribute("src");
+      el.load();
+      URL.revokeObjectURL(url);
+      resolve(msg);
+    };
+    const undecodable = "瀏覽器無法解碼這支影片（多半是 HEVC／H.265 編碼），訪客看到的會是黑畫面。請先轉成 H.264 的 MP4（或 VP9 的 WebM）再上傳。";
+    const timer = setTimeout(() => finish("影片讀取逾時，請確認檔案可正常播放後再試。"), 15000);
+    el.addEventListener("loadeddata", () => finish(el.videoWidth > 0 ? null : undecodable));
+    el.addEventListener("error", () => finish(undecodable));
+    el.src = url;
+    el.load();
+  });
+}
+
 export default function AdminLandingPage() {
   const router = useRouter();
   const [media, setMedia] = useState<Record<string, MediaInfo>>({});
@@ -50,6 +83,10 @@ export default function AdminLandingPage() {
 
   const handleUpload = async (slot: string, file: File) => {
     if (file.size > 30 * 1024 * 1024) { setError("檔案不可超過 30 MB"); return; }
+    if (file.type.startsWith("video/")) {
+      const problem = await probeVideoDecodable(file);
+      if (problem) { setError(problem); return; }
+    }
     setBusySlot(slot);
     setProgress(0);
     setError(null);
@@ -104,7 +141,7 @@ export default function AdminLandingPage() {
         <AdminTabs active="landing" />
 
         <p className="text-[13px] leading-relaxed text-[#8a8a8a]">
-          每個創作區有一個主展示與兩個延伸展示，可分別上傳圖片或影片（最大 30 MB）。原有主展示會保留；延伸位置上傳後約一分鐘內出現在啟程頁。
+          每個創作區有一個主展示與兩個延伸展示，可分別上傳圖片或影片（最大 30 MB；影片請用 H.264 MP4 或 VP9 WebM，HEVC／H.265 在多數瀏覽器會是黑畫面，上傳前會先檢查）。原有主展示會保留；延伸位置上傳後約一分鐘內出現在啟程頁。
         </p>
 
         {error && (
