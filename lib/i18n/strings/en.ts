@@ -9,6 +9,7 @@ import { EN8 } from "./parts/p08";
 import { EN9 } from "./parts/p09";
 import { EN10 } from "./parts/p10";
 import { EN11 } from "./parts/p11";
+import { EN12 } from "./parts/p12";
 
 /** Traditional Chinese source string → English. Split into parts by surface; scripts/check-i18n.cjs reports anything missing. */
-export const EN: Record<string, string> = { ...EN1, ...EN2, ...EN3, ...EN4, ...EN5, ...EN6, ...EN7, ...EN8, ...EN9, ...EN10, ...EN11 };
+export const EN: Record<string, string> = { ...EN1, ...EN2, ...EN3, ...EN4, ...EN5, ...EN6, ...EN7, ...EN8, ...EN9, ...EN10, ...EN11, ...EN12 };

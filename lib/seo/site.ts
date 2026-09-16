@@ -7,12 +7,12 @@ import { k } from "../i18n/k";
  */
 export const SITE_URL = "https://thebluewing.studio";
 export const SITE_NAME = "The Blue Wing";
-export const SITE_TAGLINE = "AI 影片、圖片與創作平台";
+export const SITE_TAGLINE = k("AI 影片、圖片與創作平台");
 /** The definition sentence. Keep the wording identical wherever it appears. */
 export const SITE_DEFINITION = k(
   "The Blue Wing 是台灣的 AI 影片與圖片創作平台，把 Seedance、Veo、GPT image、Seedream、Gemini 等模型收在同一個介面裡：文生影、圖生影、首尾幀、參考素材、智慧畫布、3D 導演台、圖層編輯與 AI 陪聊角色，一句話就能出片。");
-export const DEFAULT_DESCRIPTION =
-  "The Blue Wing 把頂尖的影片、圖片與文字模型收在同一個介面裡：Seedance 2.5、Veo 3.1、GPT image 2.5、Seedream 5.0。文生影、圖生影、首尾幀、智慧畫布、3D 導演台，一句話就能出片。";
+export const DEFAULT_DESCRIPTION = k(
+  "The Blue Wing 把頂尖的影片、圖片與文字模型收在同一個介面裡：Seedance 2.5、Veo 3.1、GPT image 2.5、Seedream 5.0。文生影、圖生影、首尾幀、智慧畫布、3D 導演台，一句話就能出片。");
 
 export function absoluteUrl(path: string): string {
   return new URL(path, SITE_URL).toString();

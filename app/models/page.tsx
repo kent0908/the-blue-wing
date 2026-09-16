@@ -7,12 +7,15 @@ import ModelLogo from "@/components/ModelLogo";
 import { getTr } from "@/lib/i18n/server";
 // Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
- title: "模型一覽｜為想像，選一種筆觸",
- description: "從動態影像到靜態創作，探索 The Blue Wing 的模型、創作用途與生成規格。",
- alternates: { canonical: "/models" },
- openGraph: { title: "為想像，選一種筆觸 · The Blue Wing", description: "鏡頭、光影、色彩。從你想創作的畫面開始。", url: "/models" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const tr = await getTr();
+  return {
+    title: tr("模型一覽｜為想像，選一種筆觸"),
+    description: tr("從動態影像到靜態創作，探索 The Blue Wing 的模型、創作用途與生成規格。"),
+    alternates: { canonical: "/models" },
+    openGraph: { title: `${tr("為想像，選一種筆觸")} · The Blue Wing`, description: tr("鏡頭、光影、色彩。從你想創作的畫面開始。"), url: "/models" },
+  };
+}
 export default async function ModelsIndex() {
  const tr = await getTr();
  let rates: ModelRate[] = [];

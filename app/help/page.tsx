@@ -7,12 +7,15 @@ import { k } from "@/lib/i18n/tr";
 // Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "說明中心：圖片生成、影片生成、參考素材、點數與方案",
-  description: "The Blue Wing 的操作說明：快速開始、圖片與影片生成、參考素材與 @ 提及、浮水印與審核強度、智慧畫布與 3D 導演台、生成紀錄與下載、點數與方案，以及各主題的常見問題。",
-  alternates: { canonical: "/help" },
-  openGraph: { title: "說明中心 · The Blue Wing", description: "從快速開始到點數方案，所有操作說明與常見問題。", url: "/help" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const tr = await getTr();
+  return {
+    title: tr("說明中心：圖片生成、影片生成、參考素材、點數與方案"),
+    description: tr("The Blue Wing 的操作說明：快速開始、圖片與影片生成、參考素材與 @ 提及、浮水印與審核強度、智慧畫布與 3D 導演台、生成紀錄與下載、點數與方案，以及各主題的常見問題。"),
+    alternates: { canonical: "/help" },
+    openGraph: { title: `${tr("說明中心")} · The Blue Wing`, description: tr("從快速開始到點數方案，所有操作說明與常見問題。"), url: "/help" },
+  };
+}
 
 /**
  * Static help/documentation content — the "說明" button in TopBar used to be

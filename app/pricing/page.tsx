@@ -3,17 +3,22 @@ import { PLANS } from "@/lib/plans";
 import { CREDIT_PACKS } from "@/lib/creditPacks";
 import type { Metadata } from "next";
 import { jsonLd, SITE_URL } from "@/lib/seo/site";
-import { getDict } from "@/lib/i18n/server";
+import { getDict, getTr } from "@/lib/i18n/server";
 
 // Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "方案與點數價格：免費每日 10 點、Basic / Standard / Premium 與點數包",
-  description: `The Blue Wing 的收費方式：免費方案每天 10 點，${PLANS.filter(p=>p.priceUSD>0).map(p=>`${p.name} $${p.priceUSD}/月（${p.monthlyCredits.toLocaleString("en-US")} 點）`).join("、")}；點數包 ${CREDIT_PACKS.map(p=>`${p.credits.toLocaleString("en-US")} 點 $${p.priceUSD}`).join("、")}。影片依秒數與解析度計點，圖片依張數計點。`,
-  alternates: { canonical: "/pricing" },
-  openGraph: { title: "方案與點數價格 · The Blue Wing", description: "免費每日 10 點起，方案與點數包一覽。", url: "/pricing" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const tr = await getTr();
+  const plans = PLANS.filter(p=>p.priceUSD>0).map(p=>tr("{name} ${price}/月（{credits} 點）",{name:p.name,price:p.priceUSD,credits:p.monthlyCredits.toLocaleString("en-US")})).join(tr("、"));
+  const packs = CREDIT_PACKS.map(p=>tr("{credits} 點 ${price}",{credits:p.credits.toLocaleString("en-US"),price:p.priceUSD})).join(tr("、"));
+  return {
+    title: tr("方案與點數價格：免費每日 10 點、Basic / Standard / Premium 與點數包"),
+    description: tr("The Blue Wing 的收費方式：免費方案每天 10 點，{plans}；點數包 {packs}。影片依秒數與解析度計點，圖片依張數計點。",{plans,packs}),
+    alternates: { canonical: "/pricing" },
+    openGraph: { title: `${tr("方案與點數價格")} · The Blue Wing`, description: tr("免費每日 10 點起，方案與點數包一覽。"), url: "/pricing" },
+  };
+}
 
 const offersLd = jsonLd({
   "@type": "Product",

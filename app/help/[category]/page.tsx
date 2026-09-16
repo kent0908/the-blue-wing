@@ -16,8 +16,9 @@ export async function generateMetadata({ params }: { params: Promise<{ category:
   const { category } = await params;
   const c = FAQ_CATEGORIES.find((x) => x.id === category);
   if (!c) return {};
-  const title = `${c.label}常見問題`;
-  const description = `${c.label}相關的 ${c.entries.length} 個常見問題：${c.entries.slice(0, 3).map((e) => e.question).join("、")}。The Blue Wing 說明中心。`;
+  const tr = await getTr();
+  const title = tr("{label}常見問題", { label: tr(c.label) });
+  const description = tr("{label}相關的 {n} 個常見問題：{questions}。The Blue Wing 說明中心。", { label: tr(c.label), n: c.entries.length, questions: c.entries.slice(0, 3).map((e) => tr(e.question)).join(tr("、")) });
   return { title, description, alternates: { canonical: `/help/${c.id}` }, openGraph: { title: `${title} · The Blue Wing`, description, url: `/help/${c.id}`, type: "article" } };
 }
 

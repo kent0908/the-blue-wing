@@ -22,9 +22,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const page = modelPageBySlug(slug);
   if (!page) return {};
   const name = modelPageName(page);
-  const kind = page.kind === "video" ? "AI 影片生成" : "AI 圖片生成";
-  const title = `${name} ${kind}：能力、限制與點數`;
-  const description = `${name}（${page.vendor}）在 The Blue Wing 上的完整說明：${page.tagline} 支援模式、解析度或尺寸、參考素材上限、每次生成的點數，以及適合與不適合的用途。`;
+  const tr = await getTr();
+  const kind = page.kind === "video" ? tr("AI 影片生成") : tr("AI 圖片生成");
+  const title = tr("{name} {kind}：能力、限制與點數", { name, kind });
+  const description = tr("{name}（{vendor}）在 The Blue Wing 上的完整說明：{tagline} 支援模式、解析度或尺寸、參考素材上限、每次生成的點數，以及適合與不適合的用途。", { name, vendor: page.vendor, tagline: tr(page.tagline) });
   return { title, description, alternates: { canonical: `/models/${page.slug}` }, openGraph: { title: `${name} · ${SITE_NAME}`, description, url: `/models/${page.slug}`, type: "article" }, twitter: { card: "summary_large_image", title: `${name} · ${SITE_NAME}`, description } };
 }
 
