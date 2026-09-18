@@ -67,6 +67,8 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [settingsNotice, setSettingsNotice] = useState("");
+  const settingsRevision = useRef(0);
   const [personaOpen, setPersonaOpen] = useState(false);
   const [relationshipOpen, setRelationshipOpen] = useState(true);
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
@@ -83,6 +85,27 @@ export default function CharacterChat({ character: initial }: { character: Chara
       .then((r) => (r.ok ? r.json() : { messages: [] }))
       .then((j) => { setMessages(j.messages ?? []); setSuggestions(j.suggestions ?? []); })
       .catch(() => setMessages([]));
+  }, [character.id]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const syncSettings = async () => {
+      if (document.visibilityState !== "visible") return;
+      const revision = ++settingsRevision.current;
+      try {
+        const response = await fetch(`/api/characters/${character.id}`, { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error("settings_sync_failed");
+        const data = await response.json();
+        if (revision !== settingsRevision.current || controller.signal.aborted) return;
+        setCharacter((current) => ({ ...current, ...data.character }));
+      } catch {
+        if (!controller.signal.aborted && revision === settingsRevision.current) {
+          setSettingsNotice("設定同步未完成，請重新整理後確認最新關係設定。");
+        }
+      }
+    };
+    window.addEventListener("focus", syncSettings);
+    return () => { controller.abort(); window.removeEventListener("focus", syncSettings); };
   }, [character.id]);
 
   useEffect(() => {
@@ -156,6 +179,11 @@ export default function CharacterChat({ character: initial }: { character: Chara
   return (
     <div className="flex h-full min-h-0 justify-center bg-[#090c0b] sm:p-4 lg:p-6">
       <div className="relative flex h-full max-h-[960px] w-full max-w-[1720px] min-h-0 min-w-0 flex-col overflow-hidden border border-white/10 bg-[#101313] sm:rounded-2xl">
+        {settingsNotice && <div role="status" className="flex shrink-0 flex-wrap items-center gap-3 border-b border-white/10 bg-[#172b25] px-4 py-3 text-sm leading-6 text-[#b6e5d5]">
+          <p className="min-w-0 flex-1">{settingsNotice}</p>
+          <button type="button" className="shrink-0 underline underline-offset-4" onClick={() => window.location.reload()}>重新整理</button>
+          <button type="button" aria-label="關閉設定更新提示" className="shrink-0 px-2" onClick={() => setSettingsNotice("")}>×</button>
+        </div>}
         <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-[#141918] px-3 py-3 sm:gap-3 sm:px-5">
           <Link href="/companions" aria-label={tr("返回角色列表")} className="shrink-0 text-[#8a8a8a] transition-colors hover:text-white">
             <IconChevronLeft className="h-5 w-5" />
@@ -359,7 +387,10 @@ export default function CharacterChat({ character: initial }: { character: Chara
           character={character}
           onClose={() => setEditing(false)}
           onSaved={(c) => {
+            ++settingsRevision.current;
             setCharacter((cur) => ({ ...cur, ...c }));
+            setSuggestions([]);
+            setSettingsNotice("設定已更新，下一則訊息將使用最新關係。先前已送出的訊息仍可能沿用當時設定；若畫面未更新，請重新整理。");
             setEditing(false);
           }}
         />
