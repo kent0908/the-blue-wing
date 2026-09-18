@@ -161,7 +161,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
           </Link>
           {character.avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
-            <img src={character.avatarSrc} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            <img src={character.avatarSrc} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover object-top" />
           ) : (
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#1c1c1c] text-[#5c5c5c]">
               <IconChat className="h-4 w-4" />
@@ -275,7 +275,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
       </div>
 
       <div className="shrink-0 border-t border-white/10 bg-[#141918] px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-5">
-        {isOfficial && messages !== null && <div className="mx-auto mb-3 max-w-3xl">
+        {isOfficial && messages !== null && suggestions.length > 0 && <div className="mx-auto mb-3 max-w-3xl">
           <p className="mb-2 text-xs leading-relaxed text-[#a2bcb2]">接下來想怎麼回應？點選帶入後，可修改再送出。</p>
           <div className="grid max-h-40 gap-2 overflow-y-auto sm:grid-cols-3">
             {suggestions.map((s) => <button key={s.direction} type="button" disabled={sending} onClick={() => setInput(s.text)} className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left text-sm leading-relaxed text-[#d5ded9] transition hover:border-[#7ff0cd]/40 disabled:opacity-40">

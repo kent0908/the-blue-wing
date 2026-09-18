@@ -37,3 +37,20 @@ export const STORY_MESSAGE_PREFIX = "[bluewing-story-v1]\n";
 export function decodeStoryMessage(raw: string) {
   return raw.startsWith(STORY_MESSAGE_PREFIX) ? parseStoryReply(raw.slice(STORY_MESSAGE_PREFIX.length)) : null;
 }
+
+/** Suggestions are optional enrichment: never discard a valid conversation reply. */
+export function recoverStoryReply(raw: unknown): { reply: string; suggestions: ReplySuggestion[] } | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const strict = parseStoryReply(raw);
+  if (strict) return strict;
+  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  try {
+    const value = JSON.parse(text);
+    if (typeof value?.reply === "string" && value.reply.trim()) return { reply: value.reply.trim(), suggestions: [] };
+    return null;
+  } catch {
+    // Never show broken JSON or internal reasoning as character dialogue.
+    if (/^[{[]/.test(text) || /<think[\s>]/i.test(text) || text.startsWith("```")) return null;
+    return { reply: text, suggestions: [] };
+  }
+}

@@ -1,4 +1,4 @@
-import { openingSuggestions, parseStoryReply, STORY_MESSAGE_PREFIX } from "@/lib/officialCompanionStory";
+import { openingSuggestions, recoverStoryReply, STORY_MESSAGE_PREFIX } from "@/lib/officialCompanionStory";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { after as afterResponse, NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
@@ -91,14 +91,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       createChatCompletion({ model: character.model, messages, max_tokens: maxTokens })
     );
     const rawReply = json?.choices?.[0]?.message?.content;
-    const structured = character.official_key && typeof rawReply === "string" ? parseStoryReply(rawReply) : null;
+    const structured = character.official_key && typeof rawReply === "string" ? recoverStoryReply(rawReply) : null;
     const reply = character.official_key ? structured?.reply : rawReply;
     if (!reply) {
+      console.warn("companion_reply_invalid", { model: character.model, finishReason: json?.choices?.[0]?.finish_reason ?? null, contentLength: typeof rawReply === "string" ? rawReply.length : 0, hasReasoning: Boolean(json?.choices?.[0]?.message?.reasoning_content), official: Boolean(character.official_key) });
       // HTTP 200 but no reply content — same real gap as /api/chat: paidCall
       // already reserved the charge, no exception was thrown for it to
       // auto-refund. Refund explicitly.
       await refundCharge(r.user.id, chargeId);
-      return NextResponse.json({ error: { message: "角色沒有回應，請再試一次", code: "empty_reply" } }, { status: 502 });
+      return NextResponse.json({ error: { message: json?.choices?.[0]?.finish_reason === "length" ? "角色回覆達到長度上限，未完成的訊息已退還點數，請再試一次" : "角色回覆為空或格式不完整，已退還點數，請再試一次", code: "empty_reply" } }, { status: 502 });
     }
 
     // Persist both sides only after a successful reply — a failed call leaves
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     let turnCount: number;
     try {
       await addMessage(id, "user", content);
-      saved = await addMessage(id, "assistant", structured ? STORY_MESSAGE_PREFIX + JSON.stringify({ reply: structured.reply, suggestions: structured.suggestions.map((s) => s.text) }) : String(reply));
+      saved = await addMessage(id, "assistant", structured?.suggestions.length === 3 ? STORY_MESSAGE_PREFIX + JSON.stringify({ reply: structured.reply, suggestions: structured.suggestions.map((s) => s.text) }) : String(reply));
       const turn = await recordTurn(id, gain);
       affection = turn.affection;
       turnCount = turn.turnCount;

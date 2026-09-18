@@ -20,3 +20,11 @@ assert.equal(decodeStoryMessage('舊對話內容'), null);
 for (const invalid of ['{', '{}', '{"reply":"hi","suggestions":["a","a","a"]}', '{"reply":"hi","suggestions":[1,2,3]}', '{"reply":"","suggestions":["a","b","c"]}']) assert.equal(parseStoryReply(invalid), null);
 assert.equal(parseStoryReply('```json\n{"reply":"好","suggestions":["甲","乙","丙"]}\n```').reply, '好');
 console.log('PASS: 10 official stories, suggestions, persistence envelopes, legacy text and malformed output.');
+
+const recover = mod.exports.recoverStoryReply;
+assert.equal(recover('你好，先一起確認情況。').reply, '你好，先一起確認情況。');
+assert.deepEqual(recover('{"reply":"你好","suggestions":[]}'), {reply:'你好',suggestions:[]});
+assert.equal(recover('{"reply":"未完成'), null);
+assert.equal(recover('<think>internal</think>'), null);
+assert.equal(recover(null), null);
+console.log('PASS: plain replies and optional suggestions survive; truncated JSON and reasoning stay hidden.');
