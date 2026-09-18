@@ -5,7 +5,7 @@ import { persistGeneratedMedia } from "./mediaStore";
 import { assertPromptSafety } from "./promptSafety";
 import { IDLE_NEGATIVE_PROMPT, IDLE_POSITIVE_TEMPLATE, IDLE_VIDEO_SECONDS } from "./characterIdleVideo";
 import { createCharacter, getOfficialClone, type CharacterRow } from "./characters";
-import { OFFICIAL_CHARACTER_SEEDS, contentRatingForAge, type ContentRating, type OfficialCharacterSeed } from "./companionOfficialSeed";
+import { OFFICIAL_CHARACTER_SEEDS, officialSeed, contentRatingForAge, type ContentRating, type OfficialCharacterSeed } from "./companionOfficialSeed";
 import { validateProfile, OFFICIAL_MIN_AGE } from "./characterProfile";
 import { characterLevel } from "./characters";
 
@@ -98,6 +98,8 @@ export interface PublicOfficialCharacter {
 }
 
 export function toPublicOfficial(row: OfficialCharacterRow, clone: CharacterRow | null): PublicOfficialCharacter {
+  const seed = officialSeed(row.key);
+  if (seed) row = { ...row, name: seed.name, personality: seed.personality, profile: { ...seed.profile, version: 1 } };
   const profile = (row.profile ?? {}) as { greeting?: string };
   return {
     key: row.key,

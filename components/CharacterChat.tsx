@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { OFFICIAL_STORIES, type ReplySuggestion } from "@/lib/officialCompanionStory";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconChat, IconTrash, IconArrowRight } from "./Icons";
@@ -60,6 +61,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const router = useRouter();
   const [character, setCharacter] = useState(initial);
   const [messages, setMessages] = useState<Message[] | null>(null);
+  const [suggestions, setSuggestions] = useState<ReplySuggestion[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +80,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
   useEffect(() => {
     fetch(`/api/characters/${character.id}/messages`)
       .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((j) => setMessages(j.messages ?? []))
+      .then((j) => { setMessages(j.messages ?? []); setSuggestions(j.suggestions ?? []); })
       .catch(() => setMessages([]));
   }, [character.id]);
 
@@ -115,6 +117,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
         ...(cur ?? []).map((m) => (m.id === optimisticId ? { ...m, pending: false } : m)),
         j.reply,
       ]);
+      setSuggestions(j.suggestions ?? []);
       if (j.affection) {
         setCharacter((cur) => ({
           ...cur,
@@ -126,7 +129,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
             nextMin: j.affection.nextMin,
           },
         }));
-        setToast({
+        if (j.affection.gain > 0) setToast({
           id: Date.now(),
           gain: j.affection.gain,
           leveledUp: j.affection.leveledUp,
@@ -272,6 +275,14 @@ export default function CharacterChat({ character: initial }: { character: Chara
       </div>
 
       <div className="shrink-0 border-t border-white/10 bg-[#141918] px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-6 sm:pb-5">
+        {isOfficial && messages !== null && <div className="mx-auto mb-3 max-w-3xl">
+          <p className="mb-2 text-xs leading-relaxed text-[#a2bcb2]">接下來想怎麼回應？點選帶入後，可修改再送出。</p>
+          <div className="grid max-h-40 gap-2 overflow-y-auto sm:grid-cols-3">
+            {suggestions.map((s) => <button key={s.direction} type="button" disabled={sending} onClick={() => setInput(s.text)} className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left text-sm leading-relaxed text-[#d5ded9] transition hover:border-[#7ff0cd]/40 disabled:opacity-40">
+              <span className="mb-1 block text-xs text-[#87b4a5]">{s.direction}</span>{s.text}
+            </button>)}
+          </div>
+        </div>}
         <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-[#2a2a2a] bg-[#161616] p-2.5">
           <textarea
             value={input}
@@ -330,7 +341,12 @@ export default function CharacterChat({ character: initial }: { character: Chara
           ) : (
             <p className="shrink-0 border-b border-white/10 px-4 py-2 text-xs text-[#6d6d6d]">{tr("官方角色的設定由官方維護")}{character.contentRating === "all_ages" ? tr("・全年齡：只有友誼與夥伴互動") : ""}</p>
           )}
-          {relationshipOpen && <div className="min-h-0 flex-1 overflow-y-auto"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label={tr("關閉設定")}>{tr("關閉")}</button></div><RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} /></div>}
+          {relationshipOpen && <div className="min-h-0 flex-1 overflow-y-auto">{isOfficial && <div className="space-y-3 border-b border-white/10 p-4 text-sm leading-7 text-[#baccc3]">
+            <h3 className="text-base text-white">{OFFICIAL_STORIES[character.officialKey ?? ""]?.title}</h3>
+            <p>{OFFICIAL_STORIES[character.officialKey ?? ""]?.goal}</p>
+            <details><summary className="cursor-pointer text-[#87b4a5]">可探索的故事方向</summary><ol className="mt-2 list-decimal space-y-2 pl-5">{OFFICIAL_STORIES[character.officialKey ?? ""]?.events.map((event) => <li key={event}>{event}</li>)}</ol></details>
+            <p className="text-xs leading-6 text-[#8c9e95]">這是你與角色的私人篇章。方向列表不代表事件已完成。舊有關係數值保留；目前不再依訊息數或喜好關鍵字加分，事件進度尚未自動計分。</p>
+          </div>}<div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label={tr("關閉設定")}>{tr("關閉")}</button></div><RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} /></div>}
           {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
           <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen || !rules.scenes}>{rules.scenes && <CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} />}</div>
           {wardrobeOpen && rules.wardrobe && <div className="flex min-h-0 flex-1 flex-col"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => { setScenesOpen(false); setWardrobeOpen(false); setRelationshipOpen(true); }} aria-label={tr("關閉衣櫃")}>{tr("關閉")}</button></div><div className="flex min-h-0 flex-1 overflow-y-auto [&>div]:w-full"><CompanionWardrobe key={`${character.id}:${character.affection ?? 0}`} characterId={character.id} /></div></div>}

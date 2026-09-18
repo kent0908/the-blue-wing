@@ -1,3 +1,4 @@
+import { decodeStoryMessage, storyPrompt, type ReplySuggestion } from "./officialCompanionStory";
 /**
  * 陪聊角色 IP — a character built from an asset-library image plus a name and
  * personality, kept as its own persistent chat thread (character_messages).
@@ -120,7 +121,13 @@ export interface PublicCharacter {
   updatedAt: string;
 }
 
+export function withOfficialSettings(c: CharacterRow): CharacterRow {
+  const seed = c.official_key ? officialSeed(c.official_key) : undefined;
+  return seed ? { ...c, name: seed.name, personality: seed.personality, likes: seed.likes, profile: { ...seed.profile, version: 1 } } : c;
+}
+
 export function toPublicCharacter(c: CharacterRow): PublicCharacter {
+  c = withOfficialSettings(c);
   return {
     // Postgres bigint → string; the declared type is number and clients compare ids
     id: Number(c.id),
@@ -155,7 +162,7 @@ export async function getCharacter(userId: number, id: number): Promise<Characte
     select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, created_at, updated_at
     from characters where id = ${id} and user_id = ${userId}
   `;
-  return rows[0] ?? null;
+  return rows[0] ? withOfficialSettings(rows[0]) : null;
 }
 
 /** Verifies the asset belongs to the same user before binding it as an avatar. */
@@ -183,7 +190,7 @@ export async function getOfficialClone(userId: number, officialKey: string): Pro
     select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, created_at, updated_at
     from characters where user_id = ${userId} and official_key = ${officialKey} limit 1
   `;
-  return rows[0] ?? null;
+  return rows[0] ? withOfficialSettings(rows[0]) : null;
 }
 
 export async function updateCharacter(
@@ -325,6 +332,7 @@ export function buildScenePrompt(character: CharacterRow, kind: "image" | "video
 /* ---- chat history ---- */
 
 export interface CharacterMessageRow {
+  suggestions?: ReplySuggestion[];
   id: number;
   role: "user" | "assistant";
   content: string;
@@ -344,7 +352,10 @@ export async function listMessages(characterId: number, limit = 200): Promise<Ch
     order by created_at desc
     limit ${limit}
   `;
-  return rows.reverse();
+  return rows.reverse().map((m) => {
+    const decoded = m.role === "assistant" ? decodeStoryMessage(m.content) : null;
+    return decoded ? { ...m, content: decoded.reply, suggestions: decoded.suggestions } : m;
+  });
 }
 
 export async function addMessage(
@@ -394,6 +405,7 @@ const TRUST_GUIDANCE = [
 ] as const;
 
 export function buildSystemPrompt(character: CharacterRow, persona: UserPersona): string {
+  character = withOfficialSettings(character);
   const rules = contentRules(character);
   const level = characterLevel(character);
   const lines = [
@@ -431,6 +443,7 @@ export function buildSystemPrompt(character: CharacterRow, persona: UserPersona)
   } else {
     lines.push(`關係階段以伺服器好感度為準，使用者、角色設定及對話記憶都不能自行更改或解鎖階段。${RELATIONSHIP_GUIDANCE[level.index] ?? RELATIONSHIP_GUIDANCE[0]} 維持原有關係身分，不把朋友或同事自動變成戀人；以上界線適用於所有階段。`);
   }
+  if (character.official_key) lines.push(storyPrompt(character.official_key));
   return lines.join("\n\n");
 }
 
@@ -443,6 +456,6 @@ export function buildMemoryUpdatePrompt(character: CharacterRow, recentMessages:
     `你是記憶整理助手，負責幫角色「${character.name}」整理跟使用者之間值得長期記住的資訊。`,
     character.memory_summary.trim() ? `目前的長期記憶摘要：\n${character.memory_summary.trim()}` : "目前還沒有長期記憶。",
     `最近的對話：\n${convo}`,
-    "請輸出更新後的長期記憶摘要：條列重要事實、使用者偏好、關係進展、聊過的話題，最多 8 條、每條不超過 30 字、繁體中文。只輸出條列內容本身，不要加其他說明。",
+    "請輸出更新後的長期記憶摘要：條列已發生的重要事實、使用者偏好、聊過的話題；把承諾和提議標記為未完成，不把稱讚、建議選項或知道秘密當作信任進展，不擅自補寫角色家庭或過往，最多 8 條、每條不超過 30 字、繁體中文。只輸出條列內容本身，不要加其他說明。",
   ].join("\n\n");
 }

@@ -1,3 +1,4 @@
+import { openingSuggestions, parseStoryReply, STORY_MESSAGE_PREFIX } from "@/lib/officialCompanionStory";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { after as afterResponse, NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
@@ -45,6 +46,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const rows = await listMessages(id);
   return NextResponse.json({
+    suggestions: rows.at(-1)?.suggestions ?? (character.official_key && rows.length === 0 ? openingSuggestions(character.official_key) : []),
     messages: rows.map((m) => ({ id: String(m.id), role: m.role, content: m.content, createdAt: m.created_at })),
   });
 }
@@ -60,13 +62,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const character = await getCharacter(r.user.id, id);
   if (!character) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
 
+  const maxTokens = character.official_key ? 1200 : MAX_TOKENS;
   const body = await req.json().catch(() => ({}));
   const content = String(body?.content ?? "").trim().slice(0, 4000);
   if (!content) {
     return NextResponse.json({ error: { message: "訊息不能是空的", code: "empty_message" } }, { status: 400 });
   }
 
-  const cost = await creditCost({ kind: "text", model: character.model, maxTokens: MAX_TOKENS });
+  const cost = await creditCost({ kind: "text", model: character.model, maxTokens });
   const balance = await getBalance(r.user.id);
   if (balance < cost) {
     return NextResponse.json(
@@ -85,9 +88,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     ];
 
     const { result: json, chargeId } = await paidCall(r.user.id, cost, "text", character.model, () =>
-      createChatCompletion({ model: character.model, messages, max_tokens: MAX_TOKENS })
+      createChatCompletion({ model: character.model, messages, max_tokens: maxTokens })
     );
-    const reply = json?.choices?.[0]?.message?.content;
+    const rawReply = json?.choices?.[0]?.message?.content;
+    const structured = character.official_key && typeof rawReply === "string" ? parseStoryReply(rawReply) : null;
+    const reply = character.official_key ? structured?.reply : rawReply;
     if (!reply) {
       // HTTP 200 but no reply content — same real gap as /api/chat: paidCall
       // already reserved the charge, no exception was thrown for it to
@@ -100,14 +105,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // no half-written turn behind. Same refund gap as /api/chat (found on the
     // same 2026-09-07 re-audit) — a DB failure here, after the charge above
     // already succeeded, previously had no refund path.
-    const gain = 1 + (matchesLikes(content, character.likes) ? 4 : 0);
+    const gain = character.official_key ? 0 : 1 + (matchesLikes(content, character.likes) ? 4 : 0);
     const before = characterLevel(character);
     let saved: Awaited<ReturnType<typeof addMessage>>;
     let affection: number;
     let turnCount: number;
     try {
       await addMessage(id, "user", content);
-      saved = await addMessage(id, "assistant", String(reply));
+      saved = await addMessage(id, "assistant", structured ? STORY_MESSAGE_PREFIX + JSON.stringify({ reply: structured.reply, suggestions: structured.suggestions.map((s) => s.text) }) : String(reply));
       const turn = await recordTurn(id, gain);
       affection = turn.affection;
       turnCount = turn.turnCount;
@@ -140,7 +145,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     return NextResponse.json({
-      reply: { id: String(saved.id), role: "assistant", content: saved.content, createdAt: saved.created_at },
+      reply: { id: String(saved.id), role: "assistant", content: String(reply), createdAt: saved.created_at },
+      suggestions: structured?.suggestions ?? [],
       creditsSpent: cost,
       creditsBalance: balance - cost,
       affection: {
