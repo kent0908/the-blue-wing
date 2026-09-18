@@ -24,3 +24,15 @@ assert.ok(profilePrompt(settings).includes('先聽完再表達'));
 assert.ok(!profilePrompt(settings,true).includes('先聽完再表達'));
 assert.throws(()=>validateProfile({...EMPTY_PROFILE,relationshipSettings:{hopes:'x'.repeat(501)}}));
 console.log('PASS: relationship settings persist and dialogue no longer depends on numeric thresholds');
+
+const {currentRelationshipPrompt,buildMemoryUpdatePrompt}=load('lib/characters.ts');
+const spouse={...base,profile:{...base.profile,relationship:'夫妻'},memory_summary:'以前彼此陌生'};
+const spousePrompt=buildSystemPrompt(spouse,persona);
+assert.ok(spousePrompt.lastIndexOf('目前有效的關係設定')>spousePrompt.indexOf('以前彼此陌生'));
+assert.ok(spousePrompt.includes('"relationship":"夫妻"'));
+assert.equal(currentRelationshipPrompt({...spouse,official_key:'mio'}),'');
+assert.equal(currentRelationshipPrompt({...spouse,content_rating:'all_ages'}),'');
+assert.equal(currentRelationshipPrompt(base),'');
+assert.ok(buildMemoryUpdatePrompt(spouse,[]).includes('移除過時的關係判斷'));
+assert.notEqual(currentRelationshipPrompt(spouse),currentRelationshipPrompt({...spouse,profile:{...spouse.profile,relationship:'朋友'}}));
+console.log('PASS: current relationship precedence, updated memory, official and all-ages isolation');
