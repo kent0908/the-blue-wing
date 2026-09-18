@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { OFFICIAL_STORIES, type ReplySuggestion } from "@/lib/officialCompanionStory";
+import { CroppedAvatar } from "./AvatarCropEditor";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconChat, IconTrash, IconArrowRight } from "./Icons";
@@ -160,7 +161,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
             <IconChevronLeft className="h-5 w-5" />
           </Link>
           <Link href={`/companions/${character.id}/memories`} className="order-last ml-auto rounded-full border border-white/15 px-3 py-2 text-xs text-[#a9d8ca]">回憶 · 生活照與影片</Link>
-          {character.avatarSrc ? (
+          {character.avatarSrc && character.profile?.avatarCrop ? <CroppedAvatar src={character.avatarSrc} crop={character.profile.avatarCrop} className="h-11 w-11 shrink-0 rounded-full" /> : character.avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream
             <span className="relative block h-11 w-11 shrink-0 overflow-hidden rounded-full bg-white"><img src={character.avatarSrc} alt="" className={isOfficial ? "absolute left-1/2 top-0 w-[320%] max-w-none -translate-x-1/2" : "h-full w-full object-cover object-top"} /></span>
           ) : (

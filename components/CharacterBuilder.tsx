@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import AvatarCropEditor, { CroppedAvatar } from "./AvatarCropEditor";
 import Link from "next/link";
 import { EMPTY_PROFILE, PROFILE_FIELDS, readProfile, validateProfile, type CharacterProfile, type ProfileKey } from "@/lib/characterProfile";
 import { useTr } from "@/lib/i18n/client";
@@ -120,7 +121,7 @@ export default function CharacterBuilder({ character, onClose, onSaved }: {
         <div className="grid gap-7 p-5 sm:p-8 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="hidden lg:block">
             <div className="sticky top-0 overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(ellipse_at_top,#24473d,#101313_75%)]">
-              {selectedSrc ?
+              {selectedSrc && profile.avatarCrop ? <CroppedAvatar src={selectedSrc} crop={profile.avatarCrop} className="aspect-square w-full" /> : selectedSrc ?
                 // eslint-disable-next-line @next/next/no-img-element -- private authenticated asset
                 <img src={selectedSrc} alt={tr("{name}的頭像", { name: name || tr("角色") })} className="aspect-[4/5] w-full object-cover" /> : <div className="grid aspect-[4/5] place-content-center text-center"><span className="text-7xl font-extralight text-[#7ff0cd]/70">✧</span><p className="mt-5 text-xs text-white/40">{tr("你的故事，由此開始")}</p></div>}
               <div className="p-5"><h3 className="break-words text-xl">{name || tr("未命名角色")}</h3><p className="mt-2 text-xs leading-6 text-white/50">{[profile.style, profile.temperament, profile.relationship].filter(Boolean).join(" · ")}</p></div>
@@ -139,11 +140,12 @@ export default function CharacterBuilder({ character, onClose, onSaved }: {
                 <div><label htmlFor="avatar-search" className="text-sm text-white/70">{tr("頭像 · 從素材庫選擇（選填）")}</label><input id="avatar-search" className={fieldClass} value={search} onChange={e => setSearch(e.target.value)} placeholder={tr("搜尋素材名稱")} />
                   {assetsLoading && <p className="mt-3 text-sm text-white/50">{tr("素材載入中…")}</p>}
                   {assetError && <p role="alert" className="mt-3 text-sm text-red-300">{assetError}</p>}
-                  <div className="empty:hidden mt-3 grid max-h-72 grid-cols-2 gap-3 overflow-y-auto overscroll-contain rounded-xl border border-white/10 p-2 sm:grid-cols-3 xl:grid-cols-4">{assets.filter(a => a.name.toLowerCase().includes(search.toLowerCase())).map(a => <button type="button" key={a.id} title={tr(a.name)} aria-label={`選擇頭像 ${tr(a.name)}`} aria-pressed={avatar === a.id || (avatar === undefined && character?.avatarSrc === a.src)} onClick={() => setAvatar(a.id)} className={`min-w-0 overflow-hidden rounded-xl border-2 ${avatar === a.id || (avatar === undefined && character?.avatarSrc === a.src) ? "border-[#7ff0cd]" : "border-transparent"}`}>
+                  <div className="empty:hidden mt-3 grid max-h-72 grid-cols-2 gap-3 overflow-y-auto overscroll-contain rounded-xl border border-white/10 p-2 sm:grid-cols-3 xl:grid-cols-4">{assets.filter(a => a.name.toLowerCase().includes(search.toLowerCase())).map(a => <button type="button" key={a.id} title={tr(a.name)} aria-label={`選擇頭像 ${tr(a.name)}`} aria-pressed={avatar === a.id || (avatar === undefined && character?.avatarSrc === a.src)} onClick={() => { setAvatar(a.id); setProfile(p => ({ ...p, avatarCrop: undefined })); }} className={`min-w-0 overflow-hidden rounded-xl border-2 ${avatar === a.id || (avatar === undefined && character?.avatarSrc === a.src) ? "border-[#7ff0cd]" : "border-transparent"}`}>
                     {/* eslint-disable-next-line @next/next/no-img-element -- private authenticated asset */}
                     <img src={a.src} alt={tr(a.name)} className="aspect-square w-full object-cover" /><span className="block truncate p-1 text-[10px]">{tr(a.name)}</span>
                   </button>)}</div>
                   {!assetsLoading && !assetError && !assets.length && <p className="mt-3 text-sm text-white/50">{tr("還沒有素材，可先建立角色，稍後上傳圖片再編輯頭像。")}</p>}
+                  {selectedSrc && <AvatarCropEditor src={selectedSrc} value={profile.avatarCrop} onChange={avatarCrop => setProfile(p => ({ ...p, avatarCrop }))} />}
                   <button type="button" onClick={() => setAvatar(null)} className="mt-3 text-xs text-[#7ff0cd]">{tr("移除頭像")}</button><Link href="/assets" target="_blank" rel="noopener noreferrer" className="ml-4 text-xs text-white/60 underline">{tr("另開素材庫")}</Link>
                 </div>
               </>}

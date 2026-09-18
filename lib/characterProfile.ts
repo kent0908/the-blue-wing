@@ -20,7 +20,8 @@ export const PROFILE_FIELDS = {
   tags: { label: k("管理標籤"), max: 200 },
 } as const;
 export type ProfileKey = keyof typeof PROFILE_FIELDS;
-export type CharacterProfile = Record<ProfileKey, string> & { version: 1; age: number };
+export interface AvatarCrop { x: number; y: number; zoom: number }
+export type CharacterProfile = Record<ProfileKey, string> & { version: 1; age: number; avatarCrop?: AvatarCrop };
 export const EMPTY_PROFILE: CharacterProfile = {
   version: 1, age: 25, gender: "", style: "", species: "", skin: "", hair: "", eyes: "", build: "", outfit: "",
   temperament: "", speaking: "", occupation: "", relationship: "", greeting: "", scenario: "", background: "", boundaries: "", tags: "",
@@ -46,6 +47,11 @@ export function validateProfile(value: unknown, minAge = 18): CharacterProfile {
     const text = input[key] ?? "";
     if (typeof text !== "string" || text.length > PROFILE_FIELDS[key].max) throw new Error(`${PROFILE_FIELDS[key].label}格式或長度不正確`);
     result[key] = text.trim();
+  }
+  if (input.avatarCrop !== undefined) {
+    const crop = input.avatarCrop as AvatarCrop;
+    if (!crop || typeof crop !== "object" || ![crop.x, crop.y, crop.zoom].every(v => typeof v === "number" && Number.isFinite(v)) || Math.abs(crop.x) > 300 || Math.abs(crop.y) > 300 || crop.zoom < 1 || crop.zoom > 8) throw new Error("頭像裁切設定不正確");
+    result.avatarCrop = { x: crop.x, y: crop.y, zoom: crop.zoom };
   }
   return result;
 }

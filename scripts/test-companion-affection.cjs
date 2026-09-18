@@ -9,3 +9,10 @@ assert.ok(!buildSystemPrompt({...base,affection:99},persona).includes('目前已
 const minor=buildSystemPrompt({...base,content_rating:'all_ages',official_key:'mio'},persona);
 assert.ok(!minor.includes('目前已達真實情感伴侶階段'));assert.ok(minor.includes('只會是同學、隊友、朋友'));
 console.log('PASS: 100-point adult companion, nickname, 99-point boundary, official friendship policy');
+
+const {validateProfile,readProfile,profilePrompt}=load('lib/characterProfile.ts');
+const cropped=validateProfile({...EMPTY_PROFILE,avatarCrop:{x:24,y:80,zoom:4}});
+assert.deepEqual(readProfile(cropped).avatarCrop,{x:24,y:80,zoom:4});
+assert.ok(!profilePrompt(cropped).includes('avatarCrop'));
+for(const crop of [{x:0,y:0,zoom:9},{x:301,y:0,zoom:1},{x:NaN,y:0,zoom:1},{x:'1',y:0,zoom:1}]) assert.throws(()=>validateProfile({...EMPTY_PROFILE,avatarCrop:crop}));
+console.log('PASS: crop persistence, numeric limits and exclusion from generation prompts');
