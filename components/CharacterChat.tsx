@@ -77,6 +77,12 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const scrollRef = useRef<HTMLDivElement>(null);
   const rules = character.rules ?? { ladder: "romance" as const, scenes: true, wardrobe: true, idleRegen: true, editable: true };
   const isOfficial = !!character.officialKey;
+  const isCustomGrowth = !isOfficial && rules.ladder === "romance";
+  const growthScore = Math.max(0, character.affection ?? 0);
+  const growthStep = growthScore < 100 ? 20 : 100;
+  const growthNext = (Math.floor(growthScore / growthStep) + 1) * growthStep;
+  const growthProgress = (growthScore % growthStep) / growthStep * 100;
+  const growthName = ["故事起筆", "日常累積", "相處漸深", "默契成形", "共同篇章"][Math.floor(growthScore / 20)] ?? "故事仍在繼續";
   // all_ages characters measure 信賴度, not 好感度 — same counter, different meaning
   const meter = rules.ladder === "trust" ? tr("信賴度") : tr("好感度");
 
@@ -153,7 +159,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
             nextMin: j.affection.nextMin,
           },
         }));
-        if (j.affection.gain > 0 && isOfficial) setToast({
+        if (j.affection.gain > 0) setToast({
           id: Date.now(),
           gain: j.affection.gain,
           leveledUp: j.affection.leveledUp,
@@ -208,6 +214,11 @@ export default function CharacterChat({ character: initial }: { character: Chara
                 </span>
               )}
             </div>
+            {isCustomGrowth && <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[#97b5aa]">
+              <span>{character.profile?.relationship || "自在相處"} · 互動 {growthScore}</span>
+              <progress aria-label="互動里程碑進度" max={100} value={growthProgress} className="h-1 w-20 accent-[#7ff0cd]" />
+              <span>{growthName}</span>
+            </div>}
             {character.level && (isOfficial || rules.ladder === "trust") && (
               <div className="mt-1 flex items-center gap-1.5">
                 <div className="h-1 w-24 overflow-hidden rounded-full bg-[#232323]">
@@ -259,7 +270,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
             toast.leveledUp ? "bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16]" : "bg-[#1c1c1c] text-[#7ff0cd]",
           ].join(" ")}
         >
-          {toast.leveledUp ? tr("🎉 {meter}提升：{level}！{unlock}", { meter, level: tr(toast.levelName), unlock: toast.unlock }) : `${meter} +${toast.gain}`}
+          {!isCustomGrowth && toast.leveledUp ? tr("🎉 {meter}提升：{level}！{unlock}", { meter, level: tr(toast.levelName), unlock: toast.unlock }) : `${isCustomGrowth ? "互動分數" : meter} +${toast.gain}`}
         </div>
       )}
 
@@ -376,7 +387,12 @@ export default function CharacterChat({ character: initial }: { character: Chara
             <p>{OFFICIAL_STORIES[character.officialKey ?? ""]?.goal}</p>
             <details><summary className="cursor-pointer text-[#87b4a5]">可探索的故事方向</summary><ol className="mt-2 list-decimal space-y-2 pl-5">{OFFICIAL_STORIES[character.officialKey ?? ""]?.events.map((event) => <li key={event}>{event}</li>)}</ol></details>
             <p className="text-xs leading-6 text-[#8c9e95]">這是你與角色的私人篇章。方向列表不代表事件已完成。舊有關係數值保留；目前不再依訊息數或喜好關鍵字加分，事件進度尚未自動計分。</p>
-          </div>}<div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label={tr("關閉設定")}>{tr("關閉")}</button></div>{!isOfficial && rules.ladder === "romance" ? <section className="space-y-3 p-4 text-sm leading-7"><h3 className="text-base">你們的相處</h3><p>{character.profile?.relationship || "從對話慢慢認識彼此"}</p><p className="text-white/55">關係依設定與共同經歷發展，互動點數不代表交往、婚姻或同意。可在「編輯角色設定」調整情感表達、相處習慣與關係期待。</p><p className="text-xs text-white/40">互動紀錄：{character.affection ?? 0}。圖影功能仍依現有方案與功能門檻使用。</p></section> : <RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} />}</div>}
+          </div>}<div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label={tr("關閉設定")}>{tr("關閉")}</button></div>{!isOfficial && rules.ladder === "romance" ? <section className="space-y-3 p-4 text-sm leading-7"><h3 className="text-base">你們的相處</h3><p>{character.profile?.relationship || "從對話慢慢認識彼此"}</p><p className="text-white/55">關係依設定與共同經歷發展，互動點數不代表交往、婚姻或同意。可在「編輯角色設定」調整情感表達、相處習慣與關係期待。</p><div className="space-y-2 rounded-xl border border-[#25473f] bg-[#11251f] p-3">
+              <p className="text-xs text-[#93b9b0]">互動分數 · {growthScore}</p>
+              <h4 className="text-base text-[#9af2da]">{growthName}</h4>
+              <progress aria-label="下一個互動里程碑" max={100} value={growthProgress} className="h-2 w-full accent-[#7ff0cd]" />
+              <p className="text-xs text-[#a9bbb7]">距離 {growthNext} 分里程碑，還有 {growthNext - growthScore} 分。</p>
+            </div><p className="text-xs text-white/50">每完成一輪成功對話累積 1 分，傳送失敗不加分。既有分數保留，100 分後持續累積。這是本站的陪伴紀錄，不會把已設定的伴侶變回陌生人。</p><p className="text-xs text-white/40">圖影功能仍依現有方案與功能門檻使用。</p></section> : <RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} />}</div>}
           {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
           <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen || !rules.scenes}>{rules.scenes && <CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} />}</div>
           {wardrobeOpen && rules.wardrobe && <div className="flex min-h-0 flex-1 flex-col"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => { setScenesOpen(false); setWardrobeOpen(false); setRelationshipOpen(true); }} aria-label={tr("關閉衣櫃")}>{tr("關閉")}</button></div><div className="flex min-h-0 flex-1 overflow-y-auto [&>div]:w-full"><CompanionWardrobe key={`${character.id}:${character.affection ?? 0}`} characterId={character.id} /></div></div>}

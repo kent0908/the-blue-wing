@@ -12,7 +12,6 @@ import {
   getPersona,
   buildSystemPrompt,
   buildMemoryUpdatePrompt,
-  matchesLikes,
   recordTurn,
   updateMemorySummary,
   characterLevel,
@@ -106,7 +105,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // no half-written turn behind. Same refund gap as /api/chat (found on the
     // same 2026-09-07 re-audit) — a DB failure here, after the charge above
     // already succeeded, previously had no refund path.
-    const gain = character.official_key ? 0 : 1 + (matchesLikes(content, character.likes) ? 4 : 0);
+    const gain = character.official_key ? 0 : 1;
     const before = characterLevel(character);
     let saved: Awaited<ReturnType<typeof addMessage>>;
     let affection: number;
