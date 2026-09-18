@@ -15,6 +15,7 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
   const [avatarAssetId, setAvatarAssetId] = useState<number | null>(null);
   const [assets, setAssets] = useState<{ id: number; src: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [nickname, setNickname] = useState("");
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [loading, setLoading] = useState(true);
@@ -29,6 +30,7 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
       .then((j) => {
         if (!alive) return;
         setAvatarAssetId(j?.persona?.avatarAssetId ? Number(j.persona.avatarAssetId) : null);
+        setNickname(j?.persona?.nickname ?? "");
         setName(j?.persona?.name ?? "");
         setBio(j?.persona?.bio ?? "");
       })
@@ -46,7 +48,7 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
       const res = await fetch("/api/persona", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, bio, avatarAssetId }),
+        body: JSON.stringify({ name, bio, avatarAssetId, nickname }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message || tr("儲存失敗"));
       onClose();
@@ -85,6 +87,7 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
           <div className="mt-4 h-[140px] animate-pulse rounded-xl bg-[#1c1c1c]" />
         ) : (
           <div className="mt-4 space-y-3">
+            <div><label htmlFor="persona-nickname" className="mb-2 block text-sm">小名（選填）</label><input id="persona-nickname" value={nickname} onChange={e => setNickname(e.target.value)} maxLength={30} placeholder="希望角色怎麼親切地稱呼你" className="w-full rounded-lg bg-[#242424] p-3 text-sm" /><p className="mt-2 text-xs leading-6 text-[#9aaba3]">角色會自然使用這個稱呼，不改變原本的關係界線。</p></div>
             <div className="space-y-2">
               <label htmlFor="persona-image" className="block text-sm">我的形象照</label>
               <p className="text-xs leading-6 text-[#9aaba3]">供生活照與互動影片參照。建議使用清楚的單人形象照；未設定時只呈現角色本人。</p>

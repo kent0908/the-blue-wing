@@ -1,3 +1,4 @@
+import { sql } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
@@ -36,11 +37,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (pending.length) await Promise.all(pending.map((v) => pollIdleVideoJob(v)));
     const videos = pending.length ? await listIdleVideos(id, r.user.id) : videosRaw;
 
+    const { rows: delivered } = await sql<{ purchase_id: number }>`select distinct v.purchase_id from character_idle_videos v where v.user_id=${r.user.id} and v.character_id=${id} and v.status='completed' and v.credits_spent>0 and v.purchase_id is not null and not exists(select 1 from credit_ledger r where r.user_id=v.user_id and ((r.reason='charge_refund' and r.ref=v.charge_id::text) or (r.reason='video_refund' and r.ref=v.job_id)))`;
+    const retryable = new Set(delivered.map(v => Number(v.purchase_id)));
     const changesOut = changes.map((c) => ({
       id: c.id,
       outfitKey: c.outfit_key,
       creditsSpent: c.credits_spent,
       retryUsed: c.retry_used,
+      canRetry: !c.retry_used && retryable.has(Number(c.id)) && !videos.some(v => v.status === "pending"),
       createdAt: c.created_at,
       // Both ids are bigint columns, which come back from Postgres as
       // strings — compare numerically rather than relying on both sides

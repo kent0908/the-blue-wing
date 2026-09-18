@@ -332,7 +332,6 @@ export default function CharacterChat({ character: initial }: { character: Chara
         </section>
         <aside className={styles.details + " " + ((scenesOpen || personaOpen) ? styles.detailsOpen : "")} aria-label={tr("場景與身分設定")}>
           <div className={styles.tabs}>
-            <Link href={`/companions/${character.id}/memories`} className="px-3 py-2 text-sm text-[#a9d8ca]">回憶</Link>
             <button type="button" aria-pressed={relationshipOpen} onClick={() => { setRelationshipOpen(true); setPersonaOpen(false); setWardrobeOpen(false); }}>{rules.ladder === "trust" ? tr("信賴階段") : tr("關係階段")}</button>
             {rules.scenes && <button type="button" aria-pressed={!personaOpen && !relationshipOpen && !wardrobeOpen} onClick={() => { setRelationshipOpen(false); setPersonaOpen(false); setWardrobeOpen(false); }}>{tr("解鎖場景")}</button>}
             <button type="button" aria-pressed={personaOpen} onClick={() => { setPersonaOpen(true); setRelationshipOpen(false); setWardrobeOpen(false); }}>{tr("我的身分")}</button>

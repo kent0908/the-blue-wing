@@ -12,7 +12,7 @@ export const AFFECTION_LEVELS: AffectionLevel[] = [
   { min: 40, name: k("曖昧升溫"), unlock: k("在彼此同意與關係設定允許下，表達含蓄的心動") },
   { min: 60, name: k("戀人未滿"), unlock: k("溫柔關懷與浪漫互動，尊重彼此界線") },
   { min: 80, name: k("熱戀時刻"), unlock: k("更深入分享情感，以非露骨方式表達愛意") },
-  { min: 100, name: k("靈魂伴侶"), unlock: k("深厚信任與真誠陪伴，仍保有同意與界線") },
+  { min: 100, name: k("真實情感伴侶"), unlock: k("熟悉彼此的日常與小名，像長期伴侶般自然親近；保有各自的生活與界線") },
 ];
 
 /**

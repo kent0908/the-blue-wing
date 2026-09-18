@@ -15,6 +15,7 @@ interface OutfitChange {
   outfitKey: string;
   creditsSpent: number;
   retryUsed: boolean;
+  canRetry?: boolean;
   createdAt: string;
   videos: OutfitIdleVideo[];
 }
@@ -204,10 +205,10 @@ export default function CompanionWardrobe({ characterId }: { characterId: number
                       <div className="min-w-0">
                         <div className="truncate text-[12.5px] text-white">{labelFor(c.outfitKey)}</div>
                         <div className="text-[10.5px] text-[#6d6d6d]">
-                          {latest?.status === "pending" ? tr("生成中…") : latest?.status === "failed" ? tr("生成失敗") : tr("已完成")}
+                          {latest?.status === "pending" ? tr("生成中…") : latest?.status === "failed" ? tr("生成失敗") : latest?.status === "completed" ? tr("已完成") : tr("尚未完成")}
                         </div>
                       </div>
-                      {!c.retryUsed && latest && latest.status !== "pending" && (
+                      {c.canRetry === true && (
                         <button
                           type="button"
                           onClick={() => retry(c.id)}

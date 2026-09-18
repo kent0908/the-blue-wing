@@ -9,8 +9,8 @@
 .conversation { display: flex; min-height: 0; min-width: 0; flex-direction: column; }
 .details { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-left: 1px solid #ffffff12; background: #101615; overflow: hidden; }
 .details > aside { flex: 1; }
-.tabs { display: flex; flex-shrink: 0; gap: 5px; padding: 12px 10px; border-bottom: 1px solid #ffffff12; }
-.tabs button { flex: 1; padding: 8px 4px; border-radius: 9px; font-size: 12px; color: #aebdb8; }
+.tabs { display: flex; overflow-x: auto; flex-shrink: 0; gap: 5px; padding: 12px 10px; border-bottom: 1px solid #ffffff12; }
+.tabs button { flex: 1 0 auto; white-space: nowrap; padding: 8px 4px; border-radius: 9px; font-size: 12px; color: #aebdb8; }
 .tabs button[aria-pressed=true] { color: #7ff0cd; background: #7ff0cd12; }
 .tabs button:hover { background: #ffffff0a; }
 @media (max-width: 1100px) {

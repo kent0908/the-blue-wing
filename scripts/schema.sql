@@ -506,3 +506,5 @@ alter table users add column if not exists signup_source jsonb;
 -- Companion personal reference and immutable quote reference snapshot.
 alter table user_personas add column if not exists avatar_asset_id bigint references assets(id) on delete set null;
 alter table character_scene_requests add column if not exists user_avatar_asset_id bigint references assets(id) on delete set null;
+
+alter table user_personas add column if not exists nickname text not null default '';

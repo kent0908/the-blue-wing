@@ -99,7 +99,7 @@ async function resolveRefs(userId: number, character: CharacterRow): Promise<Vid
   if (!character.avatar_asset_id) throw new SirayaApiError(422, "請先選擇角色圖片，再生成換裝影片");
   const owned = await sql`select id from assets where id=${character.avatar_asset_id} and user_id=${userId} and content_type like 'image/%'`;
   if (!owned.rows.length) throw new SirayaApiError(422, "角色圖片不存在或無法使用");
-  const urls = await assetsToDataUrls(userId, [character.avatar_asset_id], 1);
+  const urls = await assetsToDataUrls(userId, [Number(character.avatar_asset_id)], 1);
   if (urls.length !== 1) throw new SirayaApiError(422, "角色圖片無法讀取，請重新選擇素材");
   return urls.map((url) => ({ type: "image" as const, url }));
 }
