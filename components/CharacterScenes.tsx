@@ -104,7 +104,7 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
   return (
     <aside className="flex min-h-0 w-full min-w-0 flex-col border-l border-[#1c1c1c] bg-black">
       <div className="flex items-center justify-between px-4 py-3">
-        <span className="text-[14px] font-medium">{tr("解鎖場景")}</span>
+        <span className="text-[14px] font-medium">{tr("回憶")}</span>
         <button type="button" onClick={onClose} aria-label={tr("關閉")} className="text-[#8a8a8a] hover:text-white">
           <IconClose className="h-4 w-4" />
         </button>
@@ -148,19 +148,19 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
                 disabled={quoting || !!busy || !!data.pending?.length || data.avatarReady === false}
                 className="h-9 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] text-[12.5px] font-medium text-[#0a1a16] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {tr("圖片場景預覽")}
+                {tr("製作生活照")}
               </button>
               <button
                 type="button"
                 onClick={() => preview("video")}
-                disabled={!!busy}
+                disabled={quoting || !!busy || !!data.pending?.length || data.avatarReady === false}
                 className="h-9 rounded-full border border-[#3a3a3a] text-[12.5px] text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {tr("影片場景預覽")}
+                {tr("製作互動影片")}
               </button>
             </div>
 
-            <p className="mt-3 text-[11px] leading-relaxed text-[#8daba1]">{tr("依目前好感度、角色素材與近期對話準備場景。先查看點數，再確認生成。")}</p>
+            <p className="mt-3 text-[11px] leading-relaxed text-[#8daba1]">{tr("先查看畫面安排與點數，再確認生成。完成的生活照與影片會保存在這裡。")}</p>
             {quoting && <p className="mt-3 text-xs text-[#7ff0cd]">{tr("正在取得場景與點數預覽…")}</p>}
             {quote && <section aria-label={tr("場景生成確認")} className="mt-4 space-y-3 rounded-xl border border-[#7ff0cd55] bg-[#10201a] p-3 text-xs">
               <h3 className="text-sm font-medium text-[#b7f5e1]">{tr("確認場景與點數")}</h3>
@@ -173,7 +173,10 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
             {busy && <p className="mt-3 text-center text-[12px] text-[#7d7d7d]">{busyLabel}</p>}
             {error && <p className="mt-3 text-center text-[12px] text-[#ff9b9b]">{tr(error)}</p>}
 
-            {data.scenes.length === 0 ? (
+
+          </>
+        )}
+        {data && <section aria-label="過往回憶">{data.scenes.length === 0 ? (
               <p className="mt-8 text-center text-[13px] text-[#6d6d6d]">{tr("還沒有任何場景，點上面按鈕生成第一個")}</p>
             ) : (
               <div className="mt-4 grid grid-cols-2 gap-2">
@@ -181,24 +184,24 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
                   <div key={s.id} className="group relative overflow-hidden rounded-xl border border-[#262626] bg-[#111]">
                     {s.kind === "image" ? (
                       // eslint-disable-next-line @next/next/no-img-element -- upstream/blob url
-                      <img src={s.url} alt="" className="aspect-square w-full object-cover" />
+                      <img src={s.url} alt="角色生活照" className="aspect-video w-full object-contain" />
                     ) : (
-                      <video disablePictureInPicture disableRemotePlayback src={s.url} className="aspect-square w-full object-cover" muted preload="metadata" />
+                      <video disablePictureInPicture disableRemotePlayback src={s.url} className="aspect-video w-full object-contain" controls playsInline preload="metadata" />
                     )}
+                    <p className="px-3 py-2 text-xs text-white/50">{new Date(s.createdAt).toLocaleDateString("zh-TW")} · {s.kind === "image" ? "生活照" : "互動影片"}</p>
                     <a
                       href={s.url}
+                      aria-label="開啟回憶原檔"
                       target="_blank"
                       rel="noreferrer"
-                      className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                      className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-100 backdrop-blur transition-opacity hover:bg-black/80"
                     >
                       <IconDownload className="h-3.5 w-3.5" />
                     </a>
                   </div>
                 ))}
               </div>
-            )}
-          </>
-        )}
+            )}</section>}
       </div>
     </aside>
   );

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
+import { sql } from "@/lib/db";
 import { getPersona, savePersona } from "@/lib/characters";
 
 export const runtime = "nodejs";
@@ -23,6 +24,13 @@ export async function PUT(req: NextRequest) {
   const name = String(body?.name ?? "").trim().slice(0, 40);
   const bio = String(body?.bio ?? "").trim().slice(0, 500);
 
-  const persona = await savePersona(r.user.id, { name, bio });
+  const previous = await getPersona(r.user.id);
+  const avatarAssetId = body.avatarAssetId === undefined ? previous.avatarAssetId ?? null : body.avatarAssetId;
+  if (avatarAssetId !== null) {
+    if (!Number.isSafeInteger(avatarAssetId) || avatarAssetId <= 0) return NextResponse.json({ error: { message: "形象照素材不正確" } }, { status: 400 });
+    const { rows } = await sql`select id from assets where id=${avatarAssetId} and user_id=${r.user.id} and content_type like 'image/%'`;
+    if (!rows.length) return NextResponse.json({ error: { message: "請選擇自己的圖片素材" } }, { status: 400 });
+  }
+  const persona = await savePersona(r.user.id, { name, bio, avatarAssetId });
   return NextResponse.json({ persona });
 }

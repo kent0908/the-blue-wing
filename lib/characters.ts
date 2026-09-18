@@ -374,21 +374,22 @@ export async function addMessage(
 /* ---- the user's own persona for roleplay (one shared row per user) ---- */
 
 export interface UserPersona {
+  avatarAssetId?: number | null;
   name: string;
   bio: string;
 }
 
 export async function getPersona(userId: number): Promise<UserPersona> {
-  const { rows } = await sql<UserPersona>`select name, bio from user_personas where user_id = ${userId}`;
+  const { rows } = await sql<UserPersona>`select name, bio, avatar_asset_id as "avatarAssetId" from user_personas where user_id = ${userId}`;
   return rows[0] ?? { name: "", bio: "" };
 }
 
 export async function savePersona(userId: number, persona: UserPersona): Promise<UserPersona> {
   const { rows } = await sql<UserPersona>`
-    insert into user_personas (user_id, name, bio)
-    values (${userId}, ${persona.name}, ${persona.bio})
-    on conflict (user_id) do update set name = excluded.name, bio = excluded.bio, updated_at = now()
-    returning name, bio
+    insert into user_personas (user_id, name, bio, avatar_asset_id)
+    values (${userId}, ${persona.name}, ${persona.bio}, ${persona.avatarAssetId ?? null})
+    on conflict (user_id) do update set name = excluded.name, bio = excluded.bio, avatar_asset_id = excluded.avatar_asset_id, updated_at = now()
+    returning name, bio, avatar_asset_id as "avatarAssetId"
   `;
   return rows[0];
 }

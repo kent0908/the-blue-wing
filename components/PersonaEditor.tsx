@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { uploadAsset } from "@/lib/uploadAsset";
 import { IconClose } from "./Icons";
 import { useTr } from "@/lib/i18n/client";
 
@@ -11,6 +12,9 @@ import { useTr } from "@/lib/i18n/client";
  */
 export default function PersonaEditor({ onClose, embedded = false }: { onClose: () => void; embedded?: boolean }) {
   const tr = useTr();
+  const [avatarAssetId, setAvatarAssetId] = useState<number | null>(null);
+  const [assets, setAssets] = useState<{ id: number; src: string; name: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [loading, setLoading] = useState(true);
@@ -19,10 +23,12 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
 
   useEffect(() => {
     let alive = true;
+    fetch("/api/assets").then(r => r.ok ? r.json() : Promise.reject(new Error("素材載入失敗"))).then(j => { if (alive) setAssets(j.assets ?? []); }).catch(() => alive && setError("素材載入失敗"));
     fetch("/api/persona")
       .then((r) => r.json())
       .then((j) => {
         if (!alive) return;
+        setAvatarAssetId(j?.persona?.avatarAssetId ? Number(j.persona.avatarAssetId) : null);
         setName(j?.persona?.name ?? "");
         setBio(j?.persona?.bio ?? "");
       })
@@ -40,7 +46,7 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
       const res = await fetch("/api/persona", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, bio }),
+        body: JSON.stringify({ name, bio, avatarAssetId }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message || tr("儲存失敗"));
       onClose();
@@ -79,6 +85,21 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
           <div className="mt-4 h-[140px] animate-pulse rounded-xl bg-[#1c1c1c]" />
         ) : (
           <div className="mt-4 space-y-3">
+            <div className="space-y-2">
+              <label htmlFor="persona-image" className="block text-sm">我的形象照</label>
+              <p className="text-xs leading-6 text-[#9aaba3]">供生活照與互動影片參照。建議使用清楚的單人形象照；未設定時只呈現角色本人。</p>
+              {/* eslint-disable-next-line @next/next/no-img-element -- authenticated personal asset */}
+              {avatarAssetId && <img src={`/api/assets/${avatarAssetId}/raw`} alt="我的形象照" className="h-28 w-28 rounded-xl object-cover object-top" />}
+              <select id="persona-image" value={avatarAssetId ?? ""} onChange={e => setAvatarAssetId(e.target.value ? Number(e.target.value) : null)} className="w-full rounded-lg bg-[#242424] p-2 text-sm">
+                <option value="">不使用形象照</option>{assets.map(a => <option key={a.id} value={a.id}>{a.name || `圖片 ${a.id}`}</option>)}
+              </select>
+              <label className="block text-xs text-[#a9d8ca]">{uploading ? "上傳中…" : "上傳新的形象照"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} className="mt-2 block w-full text-xs" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                setUploading(true); setError(null);
+                try { const asset = await uploadAsset(file); setAssets(a => [{ id: Number(asset.id), src: asset.src, name: asset.name }, ...a]); setAvatarAssetId(Number(asset.id)); }
+                catch (err) { setError(err instanceof Error ? err.message : "上傳失敗"); } finally { setUploading(false); }
+              }} /></label>
+            </div>
             <div>
               <label className="mb-1.5 block text-[12px] text-[#a8a8a8]">{tr("你的名字")}</label>
               <input
@@ -116,7 +137,7 @@ export default function PersonaEditor({ onClose, embedded = false }: { onClose: 
           <button
             type="button"
             onClick={save}
-            disabled={saving || loading}
+            disabled={saving || loading || uploading}
             className="h-9 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[13px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? tr("儲存中…") : tr("儲存")}

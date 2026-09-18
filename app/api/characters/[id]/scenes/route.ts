@@ -5,7 +5,7 @@ import { canUnlockScenes } from "@/lib/plans";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { sql } from "@/lib/db";
 import { errorResponse } from "@/lib/errors";
-import { getCharacter, listScenes, listMessages, levelInfo, toPublicScene, contentRules } from "@/lib/characters";
+import { getPersona, getCharacter, listScenes, listMessages, levelInfo, toPublicScene, contentRules } from "@/lib/characters";
 import { buildSceneQuote } from "@/lib/characterSceneQuote";
 import { claimSceneQuote, createSceneQuote, completeSceneRequest, failSceneRequest, getSceneRequest, isSceneRequestId, parseCharacterId, pendingSceneRequests, setSceneRequestResult, type SceneRequest } from "@/lib/characterSceneRequests";
 import { POST as generateImage } from "@/app/api/images/route";
@@ -72,11 +72,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
       return pendingResponse(request);
     }
-    if (!contentRules(character).scenes) {
+    if (!contentRules(character).scenes && !character.official_key) {
       return NextResponse.json({ scenes: [], unlocked: false, eligible: false, disabled: true, avatarAssetId: character.avatar_asset_id, avatarReady: false, reason: "這是全年齡官方角色，不提供解鎖場景", pending: [] });
     }
     const [scenes, pending, avatarReady] = await Promise.all([listScenes(id), pendingSceneRequests(auth.user.id, id), ownedAvatar(auth.user.id, character.avatar_asset_id)]);
-    return NextResponse.json({ scenes: scenes.map(toPublicScene), unlocked: canUnlockScenes(auth.user.plan_code), eligible: levelInfo(character.affection).index >= 1,
+    return NextResponse.json({ scenes: scenes.map(toPublicScene), unlocked: canUnlockScenes(auth.user.plan_code), eligible: Boolean(character.official_key) || levelInfo(character.affection).index >= 1,
       avatarAssetId: character.avatar_asset_id, avatarReady, reason: avatarReady ? null : "請先選擇資產庫中的角色圖片，才能生成專屬場景",
       pending: pending.map((r) => ({ requestId: r.id, kind: r.kind, status: "processing" })) });
   } catch (error) { return errorResponse(error); }
@@ -92,13 +92,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (id === null) return failure(400, "角色 id 不正確", "bad_id");
     const character = await getCharacter(auth.user.id, id);
     if (!character) return failure(404, "找不到這個角色", "not_found");
-    if (!contentRules(character).scenes) return failure(403, "這是全年齡官方角色，不提供解鎖場景", "content_rating");
+    if (!contentRules(character).scenes && !character.official_key) return failure(403, "這是全年齡官方角色，不提供解鎖場景", "content_rating");
     if (!canUnlockScenes(auth.user.plan_code)) return failure(403, "解鎖角色專屬場景需要高階方案", "plan_required");
-    if (levelInfo(character.affection).index < 1) return failure(403, "尚未解鎖關係階段，請先提升好感度", "not_eligible");
+    if (!character.official_key && levelInfo(character.affection).index < 1) return failure(403, "尚未解鎖關係階段，請先提升好感度", "not_eligible");
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some((key) => !["kind", "action", "quoteId"].includes(key)) || !["image", "video"].includes(body.kind) || !["quote", "generate"].includes(body.action)) return failure(400, "請先預覽點數並確認，素材與生成設定由伺服器決定", "bad_request");
     if (!await ownedAvatar(auth.user.id, character.avatar_asset_id)) return failure(422, "請先選擇資產庫中的角色圖片", "avatar_required");
-    const spec = await buildSceneQuote(character, body.kind, await listMessages(id, 8));
+    const persona = await getPersona(auth.user.id);
+    const spec = await buildSceneQuote(character, body.kind, await listMessages(id, 8), persona);
     if (body.action === "quote") {
       if (body.quoteId !== undefined) return failure(400, "預覽請求不接受既有報價 id", "bad_request");
       const quote = await createSceneQuote(auth.user.id, character, spec);
@@ -116,17 +117,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
       return pendingResponse(quoted);
     }
-    if (!quoted.expires_at || new Date(quoted.expires_at).getTime() <= Date.now() || quoted.model !== spec.model || Number(quoted.credits_quoted) !== spec.credits || Number(quoted.avatar_asset_id) !== Number(spec.avatarAssetId) || quoted.level_index !== spec.levelIndex || quoted.prompt !== spec.prompt || quoted.summary !== spec.summary || quoted.seconds !== spec.seconds || quoted.resolution !== spec.resolution) {
+    if (!quoted.expires_at || new Date(quoted.expires_at).getTime() <= Date.now() || quoted.model !== spec.model || Number(quoted.user_avatar_asset_id) !== Number(spec.userAvatarAssetId) || Number(quoted.credits_quoted) !== spec.credits || Number(quoted.avatar_asset_id) !== Number(spec.avatarAssetId) || quoted.level_index !== spec.levelIndex || quoted.prompt !== spec.prompt || quoted.summary !== spec.summary || quoted.seconds !== spec.seconds || quoted.resolution !== spec.resolution) {
       return failure(409, "點數、角色或對話內容已變更，請重新預覽並確認", "stale_quote");
     }
-    const references = await assetsToDataUrls(auth.user.id, [Number(character.avatar_asset_id)], 1);
-    if (references.length !== 1) return failure(422, "角色圖片無法讀取，請重新選擇素材", "avatar_unavailable");
+    const referenceIds = [Number(character.avatar_asset_id), ...(spec.userAvatarAssetId ? [Number(spec.userAvatarAssetId)] : [])];
+    if (spec.userAvatarAssetId && !await ownedAvatar(auth.user.id, spec.userAvatarAssetId)) return failure(422, "個人形象照已不存在，請重新設定", "persona_unavailable");
+    const references = await assetsToDataUrls(auth.user.id, referenceIds, 2);
+    if (references.length !== new Set(referenceIds).size) return failure(422, "角色圖片無法讀取，請重新選擇素材", "avatar_unavailable");
     const claimed = await claimSceneQuote(auth.user.id, id, quoted.id);
     if (!claimed) return failure(409, "已有場景正在生成，或預覽已過期，請重新整理", "already_pending");
     const { request, created } = claimed;
     if (!created) return pendingResponse(request);
     const generationBody = request.kind === "image"
-      ? { model: request.model, prompt: request.prompt, n: 1, size: "2048x2048", response_format: "url", image: references[0], watermark: false }
+      ? { model: request.model, prompt: request.prompt, n: 1, size: "2048x2048", response_format: "url", image: references, watermark: false }
       : { model: request.model, prompt: request.prompt, seconds: request.seconds, resolution: request.resolution, imageUrls: references, generate_audio: false, extra_body: { watermark: false } };
     let response: Response;
     try {

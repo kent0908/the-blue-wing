@@ -11,6 +11,7 @@ export interface SceneRequest {
   kind: "image" | "video";
   level_index: number;
   avatar_asset_id: number;
+  user_avatar_asset_id: number | null;
   model: string;
   prompt: string;
   status: "quoted" | "submitting" | "processing" | "completed" | "failed";
@@ -50,8 +51,8 @@ export async function pendingSceneRequests(userId: number, characterId: number):
 
 export async function createSceneQuote(userId: number, character: CharacterRow, spec: SceneQuoteSpec): Promise<SceneRequest> {
   const { rows } = await sql<SceneRequest>`insert into character_scene_requests
-    (id,user_id,character_id,kind,level_index,avatar_asset_id,model,prompt,status,credits_quoted,seconds,resolution,summary,expires_at)
-    values (${randomUUID()},${userId},${character.id},${spec.kind},${spec.levelIndex},${spec.avatarAssetId},${spec.model},${spec.prompt},'quoted',${spec.credits},${spec.seconds},${spec.resolution},${spec.summary},now()+interval '10 minutes') returning *`;
+    (id,user_id,character_id,kind,level_index,avatar_asset_id,model,prompt,status,credits_quoted,seconds,resolution,summary,expires_at,user_avatar_asset_id)
+    values (${randomUUID()},${userId},${character.id},${spec.kind},${spec.levelIndex},${spec.avatarAssetId},${spec.model},${spec.prompt},'quoted',${spec.credits},${spec.seconds},${spec.resolution},${spec.summary},now()+interval '10 minutes',${spec.userAvatarAssetId}) returning *`;
   return rows[0];
 }
 
