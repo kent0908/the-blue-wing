@@ -130,7 +130,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
             nextMin: j.affection.nextMin,
           },
         }));
-        if (j.affection.gain > 0) setToast({
+        if (j.affection.gain > 0 && isOfficial) setToast({
           id: Date.now(),
           gain: j.affection.gain,
           leveledUp: j.affection.leveledUp,
@@ -174,13 +174,13 @@ export default function CharacterChat({ character: initial }: { character: Chara
               <span className="truncate text-[14.5px] font-medium">{tr(character.name)}</span>
               {isOfficial && <span className="shrink-0 rounded-full bg-[#1e2a3d] px-2 py-0.5 text-[10.5px] text-[#8ab4ff]">{tr("官方")}</span>}
               {character.contentRating === "all_ages" && <span className="shrink-0 rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10.5px] text-[#c9c9c9]" title={tr("全年齡角色：只有友誼與夥伴互動")}>{tr("全年齡")}</span>}
-              {character.level && (
+              {character.level && (isOfficial || rules.ladder === "trust") && (
                 <span className="shrink-0 rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10.5px] text-[#7ff0cd]" title={character.level.unlock}>
                   {tr(character.level.name)}
                 </span>
               )}
             </div>
-            {character.level && (
+            {character.level && (isOfficial || rules.ladder === "trust") && (
               <div className="mt-1 flex items-center gap-1.5">
                 <div className="h-1 w-24 overflow-hidden rounded-full bg-[#232323]">
                   <div
@@ -348,7 +348,7 @@ export default function CharacterChat({ character: initial }: { character: Chara
             <p>{OFFICIAL_STORIES[character.officialKey ?? ""]?.goal}</p>
             <details><summary className="cursor-pointer text-[#87b4a5]">可探索的故事方向</summary><ol className="mt-2 list-decimal space-y-2 pl-5">{OFFICIAL_STORIES[character.officialKey ?? ""]?.events.map((event) => <li key={event}>{event}</li>)}</ol></details>
             <p className="text-xs leading-6 text-[#8c9e95]">這是你與角色的私人篇章。方向列表不代表事件已完成。舊有關係數值保留；目前不再依訊息數或喜好關鍵字加分，事件進度尚未自動計分。</p>
-          </div>}<div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label={tr("關閉設定")}>{tr("關閉")}</button></div><RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} /></div>}
+          </div>}<div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => setScenesOpen(false)} aria-label={tr("關閉設定")}>{tr("關閉")}</button></div>{!isOfficial && rules.ladder === "romance" ? <section className="space-y-3 p-4 text-sm leading-7"><h3 className="text-base">你們的相處</h3><p>{character.profile?.relationship || "從對話慢慢認識彼此"}</p><p className="text-white/55">關係依設定與共同經歷發展，互動點數不代表交往、婚姻或同意。可在「編輯角色設定」調整情感表達、相處習慣與關係期待。</p><p className="text-xs text-white/40">互動紀錄：{character.affection ?? 0}。圖影功能仍依現有方案與功能門檻使用。</p></section> : <RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} />}</div>}
           {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
           <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen || !rules.scenes}>{rules.scenes && <CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} />}</div>
           {wardrobeOpen && rules.wardrobe && <div className="flex min-h-0 flex-1 flex-col"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => { setScenesOpen(false); setWardrobeOpen(false); setRelationshipOpen(true); }} aria-label={tr("關閉衣櫃")}>{tr("關閉")}</button></div><div className="flex min-h-0 flex-1 overflow-y-auto [&>div]:w-full"><CompanionWardrobe key={`${character.id}:${character.affection ?? 0}`} characterId={character.id} /></div></div>}

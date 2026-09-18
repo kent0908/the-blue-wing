@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import AvatarCropEditor, { CroppedAvatar } from "./AvatarCropEditor";
 import Link from "next/link";
-import { EMPTY_PROFILE, PROFILE_FIELDS, readProfile, validateProfile, type CharacterProfile, type ProfileKey } from "@/lib/characterProfile";
+import { RELATIONSHIP_FIELDS, type RelationshipSettings, EMPTY_PROFILE, PROFILE_FIELDS, readProfile, validateProfile, type CharacterProfile, type ProfileKey } from "@/lib/characterProfile";
 import { useTr } from "@/lib/i18n/client";
 import { k } from "@/lib/i18n/tr";
 
@@ -158,6 +158,7 @@ export default function CharacterBuilder({ character, onClose, onSaved }: {
                   return <button type="button" key={hobby} aria-pressed={selected.includes(hobby)} className={`rounded-full border px-3 py-2 text-xs ${selected.includes(hobby) ? "border-[#7ff0cd] text-[#7ff0cd]" : "border-white/15 text-white/50"}`} onClick={() => setLikes((selected.includes(hobby) ? selected.filter(s => s !== hobby) : [...selected, hobby]).join("、").slice(0, 200))}>{hobby}</button>;
                 })}</div><input id="character-likes" className={fieldClass} maxLength={200} value={likes} onChange={e => setLikes(e.target.value)} placeholder={tr("自訂興趣，以頓號分隔")} /></div>
               </>}
+              {step === 2 && <section className="space-y-4 rounded-xl border border-white/10 p-4"><h3 className="text-lg">你們如何相處</h3><p className="text-sm leading-7 text-white/55">可自由描述。關係以設定及對話中的共同表達發展，不會因分數自動成為戀人。以下都可留白。</p>{(Object.entries(RELATIONSHIP_FIELDS) as [keyof RelationshipSettings, string][]).map(([key,label]) => <label key={key} className="block text-sm text-white/70">{label}<textarea className={fieldClass} rows={3} maxLength={500} value={profile.relationshipSettings?.[key] ?? ""} onChange={e => setProfile(p => ({...p,relationshipSettings:{...p.relationshipSettings,[key]:e.target.value}}))} /></label>)}</section>}
               {step === 3 && fields(["greeting", "scenario", "background", "boundaries", "tags"])}
               {step === 4 && <>
                 <div className="rounded-2xl border border-white/10 bg-white/[.03] p-5"><p className="text-xl">{name} <span className="text-sm text-white/40">{profile.age} {tr("歲")}</span></p><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white/60">{profile.greeting || tr("尚未設定開場白，聊天時可直接打招呼。")}</p></div>
