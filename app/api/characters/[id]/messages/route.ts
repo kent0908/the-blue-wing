@@ -1,3 +1,5 @@
+import { decisionEnabled } from "@/lib/companionDecisionProvider";
+import { recordDecisionShadow } from "@/lib/companionDecisionShadow";
 import { openingSuggestions, recoverStoryReply, STORY_MESSAGE_PREFIX } from "@/lib/officialCompanionStory";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { after as afterResponse, NextRequest, NextResponse } from "next/server";
@@ -121,6 +123,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       throw err;
     }
     const after = characterLevel({ ...character, affection });
+    if (decisionEnabled(Number(saved.id))) afterResponse(() => recordDecisionShadow(id, Number(saved.id)));
 
     // Long-term memory: every MEMORY_REFRESH_EVERY turns, compress the recent
     // conversation into the rolling summary. Never let this block or fail the
