@@ -132,10 +132,25 @@ export interface ChatCompletionRequest {
  */
 const CHAT_DEFAULTS = { reasoning_effort: "none" } as const;
 
+/**
+ * Hard ceiling on a chat round trip, below every caller's maxDuration.
+ *
+ * Without it a slow provider outlives the function: the platform kills the
+ * request mid-await, so paidCall's catch never runs and the reserved charge
+ * is never refunded — the user pays for a reply they never get. Measured on
+ * the live gateway 2026-09-26, gemini-3.8-flash answered the SAME prompt in
+ * 3.1s, 146s and 299s on three consecutive tries (the others were all under
+ * 3.5s), and one production call took 51.7s. An abort lands inside the try,
+ * which refunds. Image and video keep their own longer budgets; this is
+ * chat-only on purpose.
+ */
+const CHAT_TIMEOUT_MS = 45_000;
+
 /** POST /chat/completions (non-streaming). */
 export async function createChatCompletion(body: ChatCompletionRequest) {
   const res = await sirayaFetch("/chat/completions", {
     method: "POST",
+    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
     body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: false }),
   });
   return res.json();
@@ -146,6 +161,7 @@ export async function createChatCompletion(body: ChatCompletionRequest) {
 export async function createChatCompletionStream(body: ChatCompletionRequest) {
   return sirayaFetch("/chat/completions", {
     method: "POST",
+    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
     body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: true, stream_options: { include_usage: true } }),
   });
 }

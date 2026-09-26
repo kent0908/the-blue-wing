@@ -11,6 +11,9 @@ import { recordGeneration } from "@/lib/generations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Must exceed CHAT_TIMEOUT_MS in lib/siraya.ts so the provider abort — and
+// the refund it triggers — happens inside the function, not after it dies.
+export const maxDuration = 60;
 
 /**
  * POST /api/chat
