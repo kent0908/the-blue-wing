@@ -4,7 +4,7 @@ import { sql } from "./db";
 import { replayCredits, type CreditEvent } from "./creditReplay";
 import { SirayaApiError } from "./siraya";
 import { randomUUID } from "node:crypto";
-import { markUsageRefunded, recordUsageEvent } from "./crm";
+import { markUsageRefunded, recordUsageEvent, quoteCost } from "./crm";
 
 export async function creditTransaction<T>(userId:number, fn:(c:VercelPoolClient)=>Promise<T>):Promise<T> {
   const c=await sql.connect();
@@ -73,13 +73,14 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
     const {rows}=await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref) VALUES($1,$2,$3,$4) RETURNING id",[userId,-cost,kind,kind==="video"?"pending:"+randomUUID():ref]);
     return String(rows[0].id);
   });
+  const quote = await quoteCost(ref, cost, usage).catch(() => null);
   let result:T;
   try {result=await call(chargeId);} catch(e) {
     await refundCharge(userId,chargeId);
     alertGenerationFailure(kind,ref,e);
     throw e;
   }
-  await recordUsageEvent({userId,chargeId,kind,model:ref,credits:cost,units:usage?.units,resolution:usage?.resolution});
+  await recordUsageEvent({userId,chargeId,kind,model:ref,credits:cost,units:usage?.units,resolution:usage?.resolution,providerResponse:result,quote});
   if(kind==="video") {
     const id=(result as {id?:unknown})?.id;
     if(id) {

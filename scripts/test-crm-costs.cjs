@@ -11,7 +11,7 @@ function load(file, mocks = {}) {
 const prices=load('lib/sirayaPublicPrices.ts');
 let discount=null;
 const sql=async strings=>({rows:strings.join('').includes('crm_settings')?[{key:'default_discount_pct',value:10}]:[{discount_pct:discount}]});
-const crm=load('lib/crm.ts',{'./db':{sql},'./rateCard':{getRate:async()=>({modality:'image',credits:60})},'./sirayaPublicPrices':prices});
+const crm=load('lib/crm.ts',{'./db':{sql},'./rateCard':{getRate:async()=>({modality:'image',credits:60})},'./sirayaPublicPrices':prices,'./providerReceipt':load('lib/providerReceipt.ts')});
 (async()=>{
  let q=await crm.quoteCost('ByteDance-Seedream-4.0',120,{units:2});
  assert.equal(q.listCostUsd,.06);assert.equal(q.actualCostUsd,.054);assert.equal(q.costKnown,true);
@@ -25,7 +25,7 @@ const crm=load('lib/crm.ts',{'./db':{sql},'./rateCard':{getRate:async()=>({modal
  for(const [nsfw,standard] of [['NSFW-Seedream-4.0','ByteDance-Seedream-4.0'],['NSFW-Seedream-4.5','ByteDance-Seedream-4.5'],['NSFW-Seedream-5.0-lite','Dola-Seedream-5.0-lite'],['NSFW-Dola-Seedream-5.0-pro','Dola-Seedream-5.0-pro']])assert.equal(prices.publicPrice(nsfw),prices.publicPrice(standard));
  assert.equal(prices.publicPrice('Dola-Seedream-5.0-lite').price,.035);
  assert.equal((await crm.quoteCost('NSFW-Seedream-4.0',60,{units:1})).costKnown,true);
- assert.equal(prices.publicPrice('gpt-image-2').inputPrice,5);
+ assert.equal(prices.publicPrice('gpt-image-2').inputPrice,2.5);
  let user=null;
  const guard=load('lib/apiauth.ts',{'./rateLimit':{limitRequest:async()=>true},'next/server':require('next/server'),'./auth':{getSessionUser:async()=>user},'./crm':{touchActivity:async()=>{}}});
  const request=new(require('next/server').NextRequest)('https://example.test/api/crm/costs');

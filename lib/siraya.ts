@@ -112,7 +112,7 @@ export async function createChatCompletion(body: ChatCompletionRequest) {
 export async function createChatCompletionStream(body: ChatCompletionRequest) {
   return sirayaFetch("/chat/completions", {
     method: "POST",
-    body: JSON.stringify({ ...body, stream: true }),
+    body: JSON.stringify({ ...body, stream: true, stream_options: { include_usage: true } }),
   });
 }
 

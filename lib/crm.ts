@@ -1,5 +1,6 @@
 import { sql } from "./db";
 import { getRate } from "./rateCard";
+import { extractProviderReceipt } from "./providerReceipt";
 import { publicPrice } from "./sirayaPublicPrices";
 
 /**
@@ -8,10 +9,10 @@ import { publicPrice } from "./sirayaPublicPrices";
  * Everything here is server-only and read by the /api/crm/* routes.
  *
  * Money model:
- *   revenue (估) = credits spent × credit_value_usd      (what those credits were sold for)
- *   revenue (實收) = credit packs + plan grants recorded in the ledger, priced from lib/creditPacks / lib/plans
- *   cost           = Σ usage_events.actual_cost_usd     (vendor list price × units × resolution, minus discount)
- *   gross profit   = revenue (估) − cost
+ *   consumption face value = customer credits spent × credit_value_usd (not cash)
+ *   grant face value = packs/plans issued; issuance is not proof of payment.
+ *   estimated cost = vendor tariff × independently known units × (1 - discount).
+ *   provider_cost_usd is a separate reported figure, never discounted again.
  * Costs are snapshotted per event at charge time, so editing the cost card
  * later changes future events only — historical reports stay what they were.
  */
@@ -80,6 +81,7 @@ export interface CostQuote {
   actualCostUsd: number;
   discountPct: number;
   costKnown: boolean;
+  tariffSnapshot?: ReturnType<typeof publicPrice>;
 }
 
 /** Quote only independently known vendor units; missing receipts stay unknown. */
@@ -96,19 +98,21 @@ export async function quoteCost(model: string, _credits: number, meta: { units?:
   const discountPct = cost?.discount_pct ?? settings.default_discount_pct;
   const listCostUsd = costKnown ? tariff!.price * units : 0;
   const actualCostUsd = listCostUsd * (1 - Math.min(100, Math.max(0, discountPct)) / 100);
-  return { units, unit, resolution, listCostUsd: round6(listCostUsd), actualCostUsd: round6(actualCostUsd), discountPct, costKnown };
+  return { units, unit, resolution, listCostUsd: round6(listCostUsd), actualCostUsd: round6(actualCostUsd), discountPct, costKnown, tariffSnapshot: tariff };
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 /* ---- usage events -------------------------------------------------------- */
 
-export async function recordUsageEvent(input: { userId: number; chargeId: string | null; kind: string; model: string; credits: number; units?: number; resolution?: string | null }): Promise<void> {
+export async function recordUsageEvent(input: { userId: number; chargeId: string | null; kind: string; model: string; credits: number; units?: number; resolution?: string | null; providerResponse?: unknown; quote?: CostQuote | null }): Promise<void> {
   try {
-    const q = await quoteCost(input.model, input.credits, { units: input.units, resolution: input.resolution });
+    const q = input.quote ?? await quoteCost(input.model, input.credits, { units: input.units, resolution: input.resolution });
+    const receipt = extractProviderReceipt(input.providerResponse);
+    const snapshot = { tariff: q.tariffSnapshot ?? null, discountPct: q.discountPct, version: "2026-09-26", basis: "official_reference" };
     await sql`
-      insert into usage_events (user_id, charge_id, kind, model, credits, units, unit, resolution, list_cost_usd, actual_cost_usd, cost_known)
-      values (${input.userId}, ${input.chargeId ? Number(input.chargeId) : null}, ${input.kind}, ${input.model}, ${input.credits}, ${q.units}, ${q.unit}, ${q.resolution}, ${q.listCostUsd}, ${q.actualCostUsd}, ${q.costKnown})
+      insert into usage_events (user_id, charge_id, kind, model, credits, units, unit, resolution, list_cost_usd, actual_cost_usd, cost_known, pricing_snapshot, provider_cost_usd, provider_usage)
+      values (${input.userId}, ${input.chargeId ? Number(input.chargeId) : null}, ${input.kind}, ${input.model}, ${input.credits}, ${q.units}, ${q.unit}, ${q.resolution}, ${q.listCostUsd}, ${q.actualCostUsd}, ${q.costKnown}, ${JSON.stringify(snapshot)}::jsonb, ${receipt?.costUsd ?? null}, ${JSON.stringify(receipt?.usage ?? {})}::jsonb)
     `;
   } catch (err) {
     // reporting must never break a paid call
@@ -151,4 +155,15 @@ export async function audit(adminId: number, action: string, targetUserId: numbe
   } catch (err) {
     console.error("audit failed:", err);
   }
+}
+
+/** Update only the owned charge; polling remains idempotent and never reprices history. */
+export async function recordProviderReceipt(userId: number, chargeId: string, value: unknown): Promise<void> {
+  const receipt = extractProviderReceipt(value);
+  if (!receipt) return;
+  try {
+    await sql`update usage_events set provider_cost_usd = coalesce(${receipt.costUsd}, provider_cost_usd),
+      provider_usage = coalesce(provider_usage, '{}'::jsonb) || ${JSON.stringify(receipt.usage)}::jsonb
+      where user_id = ${userId} and charge_id = ${Number(chargeId)}`;
+  } catch { console.error("Provider billing receipt could not be recorded"); }
 }

@@ -1,3 +1,4 @@
+import { recordProviderReceipt } from "@/lib/crm";
 import { NextRequest, NextResponse } from "next/server";
 import { raiseAlert } from "@/lib/alerts";
 import { getVideoStatus } from "@/lib/siraya";
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       return NextResponse.json({ error: { message: "無效的任務編號" } }, { status: 400 });
     }
     const { rows: owned } = await sql`
-      select 1 from credit_ledger
+      select id from credit_ledger
       where user_id = ${user.id} and reason = 'video' and ref = ${id} and delta < 0
       limit 1
     `;
@@ -42,6 +43,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       return NextResponse.json({ error: { message: "找不到任務" } }, { status: 404 });
     }
     const json = await getVideoStatus(id);
+    if (["completed", "failed", "succeeded"].includes(String(json?.status))) await recordProviderReceipt(user.id, String(owned[0].id), json);
     const rawUrl = json?.output_url ?? json?.data?.[0]?.url ?? null;
     let status = json?.status ?? (rawUrl ? "completed" : "processing");
     let url = rawUrl;

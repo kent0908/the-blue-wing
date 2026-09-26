@@ -522,3 +522,8 @@ create table if not exists companion_decision_evaluations (
  primary key(message_id, policy_version)
 );
 create index if not exists companion_decision_character_idx on companion_decision_evaluations(character_id, created_at desc);
+
+-- Separate reported provider costs from estimates; never backfill old usage.
+alter table usage_events add column if not exists pricing_snapshot jsonb;
+alter table usage_events add column if not exists provider_cost_usd numeric(18,8);
+alter table usage_events add column if not exists provider_usage jsonb;

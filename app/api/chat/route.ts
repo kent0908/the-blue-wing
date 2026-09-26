@@ -1,3 +1,5 @@
+import { recordProviderReceipt } from "@/lib/crm";
+import { observeBillingStream } from "@/lib/providerReceipt";
 import { validateGeneration } from "@/lib/generationValidation";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
@@ -51,12 +53,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.stream) {
-      // streaming: charge upfront since token usage isn't observable here.
-      // A genuinely empty/failed stream can't be detected here (the body is
-      // handed straight through unread) — that gap is real but a much
-      // smaller/rarer one than the non-streaming path below, left as-is.
-      const { result: upstream } = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletionStream(body));
-      return new Response(upstream.body, {
+      const { result: upstream, chargeId } = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletionStream(body));
+      return new Response(upstream.body ? observeBillingStream(upstream.body, receipt => recordProviderReceipt(user.id, chargeId, receipt)) : null, {
         headers: {
           "Content-Type": "text/event-stream; charset=utf-8",
           "Cache-Control": "no-cache, no-transform",

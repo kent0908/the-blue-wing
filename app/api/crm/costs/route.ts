@@ -1,9 +1,10 @@
+import { sql } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { audit, getSettings, listModelCosts, upsertModelCost } from "@/lib/crm";
 import { listRates } from "@/lib/rateCard";
-import { publicPrice, priceUnitLabel, PRICE_SOURCE, PRICE_CHECKED } from "@/lib/sirayaPublicPrices";
+import { publicPrice, priceUnitLabel, PRICE_SOURCE } from "@/lib/sirayaPublicPrices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,13 +41,21 @@ export async function GET(req: NextRequest) {
         inputPriceUsd: tariff?.inputPrice ?? null,
         priceNote: tariff?.note ?? "",
         source: tariff ? (tariff.source ?? PRICE_SOURCE) : null,
-        checkedAt: tariff ? PRICE_CHECKED : null,
+        checkedAt: tariff?.checkedAt ?? null,
+        verification: tariff?.verification ?? "pending",
+        components: tariff?.components ?? [],
         marginPct: null, // Retail and vendor units differ; require actual usage.
         notes: c?.notes ?? "",
         updatedAt: c?.updated_at ?? null,
       };
     });
-    return NextResponse.json({ settings, resolutionMultiplier: {}, rows });
+    const receipts = await sql`select model, kind, created_at, status, credits,
+      case when cost_known then list_cost_usd::float8 else null end as list_cost_usd,
+      case when cost_known then actual_cost_usd::float8 else null end as estimated_cost_usd,
+      provider_cost_usd::float8 as provider_cost_usd, provider_usage,
+      pricing_snapshot->'discountPct' as discount_pct
+      from usage_events order by created_at desc, id desc limit 100`;
+    return NextResponse.json({ settings, resolutionMultiplier: {}, rows, receipts: receipts.rows, auditDate: "2026-09-26" });
   } catch (err) {
     return errorResponse(err);
   }
@@ -60,6 +69,7 @@ export async function PUT(req: NextRequest) {
     const body = (await req.json().catch(() => null)) as { modelId?: unknown; listPriceUsd?: unknown; discountPct?: unknown; notes?: unknown } | null;
     const modelId = typeof body?.modelId === "string" ? body.modelId.trim() : "";
     if (!modelId || modelId.length > 120) return NextResponse.json({ error: { message: "模型代碼不正確" } }, { status: 400 });
+    if (!(await listRates()).some(rate => rate.modelId === modelId)) return NextResponse.json({ error: { message: "找不到此模型" } }, { status: 400 });
     const patch: { listPriceUsd?: number; discountPct?: number | null; notes?: string } = {};
     if (body?.listPriceUsd !== undefined) return NextResponse.json({ error: { message: "牌價由 SIRAYA 公開目錄維護；此處僅設定折扣與備註" } }, { status: 400 });
     if (body?.discountPct !== undefined) {

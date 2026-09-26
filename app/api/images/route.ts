@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
         const creditsSpent=layers.length*unitCost;
         const creditsRefunded=await settleCharge(user.id,chargeId,creditsSpent);
         const layerSetId=await saveLayerSet(user.id,String(body.model),String(body.prompt??''),layers,creditsSpent);
-        return {layers,layerSetId,creditsSpent,creditsRefunded,created:json.created??null};
+        return {layers,layerSetId,creditsSpent,creditsRefunded,created:json.created??null,cost:json.cost,usage:json.usage};
       });
       return NextResponse.json({...result,images:result.layers.map(l=>({url:l.url})),reservedCredits:cost,creditsBalance:await getBalance(user.id)});
     }
