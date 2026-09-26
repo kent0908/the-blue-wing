@@ -16,7 +16,7 @@ for(const mutate of [x=>x.answers.event.choice='married',x=>x.answers.event.conf
 console.log('PASS: typed response, probabilities, malformed output, low confidence, review-only contract');
 
 const providerModule={exports:{}};
-new Function('require','exports',ts.transpileModule(fs.readFileSync('lib/companionDecisionProvider.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(id=>id==='@vercel/oidc'?{getVercelOidcToken:()=>process.env.VERCEL_OIDC_TOKEN||''}:m.exports,providerModule.exports);
+new Function('require','exports',ts.transpileModule(fs.readFileSync('lib/companionDecisionProvider.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(id=>id==='@vercel/oidc'?{getVercelOidcToken:()=>process.env.VERCEL_OIDC_TOKEN||''}:id==='./modelMonitoring'?{monitoredModelFetch:(u,i)=>fetch(u,i),requestOutcome:()=>'network_error'}:m.exports,providerModule.exports);
 const {decisionEnabled,jevEvaluator}=providerModule.exports;
 (async()=>{
  delete process.env.VERCEL_OIDC_TOKEN;delete process.env.JEV_MODE;delete process.env.AI_GATEWAY_API_KEY;

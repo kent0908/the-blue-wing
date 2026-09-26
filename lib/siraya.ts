@@ -105,13 +105,38 @@ export interface ChatCompletionRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  /** override the default below; reasoning is off unless a caller asks for it */
+  reasoning_effort?: "none" | "minimal" | "low" | "medium" | "high";
 }
+
+/**
+ * Reasoning is OFF by default for chat, because its tokens come out of the
+ * SAME max_tokens budget as the reply and are spent FIRST. Measured on the
+ * live gateway 2026-09-26 with an ordinary companion-length prompt:
+ *
+ *   gemini-3.8-flash  baseline: 285 reasoning tokens, finish_reason "length",
+ *                               a 15-character reply — truncated to junk
+ *                     none:     0 reasoning, finish "stop", 138 characters
+ *   deepseek-v4.1-flash  168 -> 0 reasoning, 237 -> 62 output tokens
+ *   gpt-5.4-mini          59 -> 0 reasoning, 167 -> 79 output tokens
+ *
+ * Reproduced end to end against production the same day: a max_tokens=60
+ * request returned HTTP 200 with an empty reply (the charge was correctly
+ * refunded, but the user got nothing). Companion chat runs at 700, which
+ * makes the same failure rarer, not impossible.
+ *
+ * All four curated text models accept the parameter with HTTP 200, and a
+ * model that does not recognise it ignores it (verified: enable_thinking
+ * and thinking_budget were both silently dropped). A caller that genuinely
+ * wants deliberation passes its own reasoning_effort.
+ */
+const CHAT_DEFAULTS = { reasoning_effort: "none" } as const;
 
 /** POST /chat/completions (non-streaming). */
 export async function createChatCompletion(body: ChatCompletionRequest) {
   const res = await sirayaFetch("/chat/completions", {
     method: "POST",
-    body: JSON.stringify({ ...body, stream: false }),
+    body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: false }),
   });
   return res.json();
 }
@@ -121,7 +146,7 @@ export async function createChatCompletion(body: ChatCompletionRequest) {
 export async function createChatCompletionStream(body: ChatCompletionRequest) {
   return sirayaFetch("/chat/completions", {
     method: "POST",
-    body: JSON.stringify({ ...body, stream: true, stream_options: { include_usage: true } }),
+    body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: true, stream_options: { include_usage: true } }),
   });
 }
 

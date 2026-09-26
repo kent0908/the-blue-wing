@@ -56,6 +56,7 @@ const video=load("app/api/videos/[id]/route.ts",{
   "@/lib/errors":{errorResponse:()=>new Response(null,{status:500})},
   "@/lib/credits":{}, "@/lib/generations":{}, "@/lib/mediaStore":{},
   "@/lib/creditTransactions":{refundCharge:async()=>{}},
+  "@/lib/crm":{touchActivity:async()=>{},recordUsageEvent:async()=>{},markUsageRefunded:async()=>{},quoteCost:async()=>null},
   "@/lib/alerts":{raiseAlert:async()=>{}}
 });
 assert.equal((await video.GET(new next.NextRequest("https://app.example/api/videos/other"),{params:Promise.resolve({id:"other"})})).status,404);
