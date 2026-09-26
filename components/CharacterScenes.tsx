@@ -164,7 +164,7 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
             {quoting && <p className="mt-3 text-xs text-[#7ff0cd]">{tr("正在取得場景與點數預覽…")}</p>}
             {quote && <section aria-label={tr("場景生成確認")} className="mt-4 space-y-3 rounded-xl border border-[#7ff0cd55] bg-[#10201a] p-3 text-xs">
               <h3 className="text-sm font-medium text-[#b7f5e1]">{tr("確認場景與點數")}</h3>
-              <p className="break-words text-[#b5c7c0]">{modelLabel(quote.model)}{quote.resolution ? ` · ${quote.resolution}` : ""}{quote.seconds ? ` · ${quote.seconds} 秒` : ""}</p>
+              <p className="break-words text-[#b5c7c0]">{modelLabel(quote.model)}{quote.resolution ? ` · ${quote.resolution}` : ""}{quote.seconds ? ` · ${tr("{n} 秒", { n: quote.seconds })}` : ""}</p>
               <p className="whitespace-pre-wrap break-words leading-relaxed text-[#b5c7c0]">{tr(quote.summary)}</p>
               <p className="text-base font-medium text-white">{tr("本次消耗")} {quote.credits} {tr("點")}</p>
               <p className="text-[11px] text-[#91a99f]">{tr("確認後才扣點。生成失敗會依實際扣款紀錄退回。")}</p>
@@ -176,7 +176,7 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
 
           </>
         )}
-        {data && <section aria-label="過往回憶">{data.scenes.length === 0 ? (
+        {data && <section aria-label={tr("過往回憶")}>{data.scenes.length === 0 ? (
               <p className="mt-8 text-center text-[13px] text-[#6d6d6d]">{tr("還沒有任何場景，點上面按鈕生成第一個")}</p>
             ) : (
               <div className="mt-4 grid grid-cols-2 gap-2">
@@ -184,14 +184,14 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
                   <div key={s.id} className="group relative overflow-hidden rounded-xl border border-[#262626] bg-[#111]">
                     {s.kind === "image" ? (
                       // eslint-disable-next-line @next/next/no-img-element -- upstream/blob url
-                      <img src={s.url} alt="角色生活照" className="aspect-video w-full object-contain" />
+                      <img src={s.url} alt={tr("角色生活照")} className="aspect-video w-full object-contain" />
                     ) : (
                       <video disablePictureInPicture disableRemotePlayback src={s.url} className="aspect-video w-full object-contain" controls playsInline preload="metadata" />
                     )}
-                    <p className="px-3 py-2 text-xs text-white/50">{new Date(s.createdAt).toLocaleDateString("zh-TW")} · {s.kind === "image" ? "生活照" : "互動影片"}</p>
+                    <p className="px-3 py-2 text-xs text-white/50">{new Date(s.createdAt).toLocaleDateString("zh-TW")} · {s.kind === "image" ? tr("生活照") : tr("互動影片")}</p>
                     <a
                       href={s.url}
-                      aria-label="開啟回憶原檔"
+                      aria-label={tr("開啟回憶原檔")}
                       target="_blank"
                       rel="noreferrer"
                       className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-white opacity-100 backdrop-blur transition-opacity hover:bg-black/80"

@@ -20,7 +20,7 @@ export const PROFILE_FIELDS = {
   tags: { label: k("管理標籤"), max: 200 },
 } as const;
 export type ProfileKey = keyof typeof PROFILE_FIELDS;
-export const RELATIONSHIP_FIELDS = { affectionStyle: "情感表達方式", petNames: "親暱稱呼", dailyHabits: "相處習慣", conflictStyle: "衝突處理方式", hopes: "關係期待與發展方向", sharedHistory: "已建立的共同經歷" } as const;
+export const RELATIONSHIP_FIELDS = { affectionStyle: k("情感表達方式"), petNames: k("親暱稱呼"), dailyHabits: k("相處習慣"), conflictStyle: k("衝突處理方式"), hopes: k("關係期待與發展方向"), sharedHistory: k("已建立的共同經歷") } as const;
 export type RelationshipSettings = Partial<Record<keyof typeof RELATIONSHIP_FIELDS, string>>;
 export interface AvatarCrop { x: number; y: number; zoom: number }
 export type CharacterProfile = Record<ProfileKey, string> & { version: 1; age: number; avatarCrop?: AvatarCrop; relationshipSettings?: RelationshipSettings };
