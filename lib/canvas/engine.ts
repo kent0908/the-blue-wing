@@ -1,3 +1,4 @@
+import { shotPrompt } from "./storyboard";
 import { officialCharacter } from "./officialCharacters";
 /**
  * Canvas execution engine — pure functions, no React. Runs entirely
@@ -89,7 +90,8 @@ export async function runNode(
   }
 
   const promptSrc = inputs.prompt?.output;
-  const prompt = (promptSrc?.kind === "text" ? promptSrc.text : "") || String(node.data.prompt ?? "");
+  const basePrompt = (promptSrc?.kind === "text" ? promptSrc.text : "") || String(node.data.prompt ?? "");
+  const prompt = node.type === "video" ? shotPrompt(basePrompt, node.data.shotNotes) : basePrompt;
   if (!prompt.trim()) throw new Error("缺少 prompt（可以連接文字節點，或直接在節點裡打字）");
   const imageSrc = inputs.image?.output;
   // A connected "image" input can carry several references at once (a Load

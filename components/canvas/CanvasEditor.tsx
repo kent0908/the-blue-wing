@@ -1,5 +1,7 @@
 "use client";
 import Image from "next/image";
+import DirectorBoard from "./DirectorBoard";
+import { invalidateChanged, orderedShots, plannedShotRun, storyParagraphs } from "@/lib/canvas/storyboard";
 import { OFFICIAL_CHARACTERS, officialCharacter } from "@/lib/canvas/officialCharacters";
 
 import { modelLabel } from "@/lib/modelLabel";
@@ -101,6 +103,7 @@ export default function CanvasEditor({
 }) {
   const tr = useTr();
   const [rates, setRates] = useState<RateCardEntry[]>([]);
+  const [view, setView] = useState<"canvas" | "director">("director");
   const [costDetails, setCostDetails] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -148,11 +151,7 @@ export default function CanvasEditor({
   const mutate = useCallback((fn: (g: CanvasGraph) => CanvasGraph) => {
     if (runLock.busy) return;
     const current = graphRef.current;
-    let next = fn(current);
-    const signature = (g: CanvasGraph) => JSON.stringify({ nodes: g.nodes.map(n => ({ id: n.id, type: n.type, data: n.data })), edges: g.edges });
-    if (signature(current) !== signature(next)) {
-      next = { ...next, nodes: next.nodes.map(n => ({ ...n, status: "idle", output: null, error: null })) };
-    }
+    const next = invalidateChanged(current, fn(current));
     commitGraph(next);
   }, [runLock, commitGraph]);
   useEffect(() => {
@@ -273,7 +272,7 @@ export default function CanvasEditor({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Delete" && e.key !== "Backspace") return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (view !== "canvas" || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag ?? "") || (document.activeElement as HTMLElement)?.isContentEditable) return;
       if (selectedNode) {
         mutate((g) => ({
           nodes: g.nodes.filter((n) => n.id !== selectedNode),
@@ -287,7 +286,7 @@ export default function CanvasEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedNode, selectedEdge, mutate]);
+  }, [selectedNode, selectedEdge, mutate, view]);
 
   /* ---- save ---- */
   const save = async () => {
@@ -328,20 +327,21 @@ export default function CanvasEditor({
     mutate((g) => ({ ...g, nodes: g.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)) }));
   };
 
-  const execute = async (nodeId?: string) => {
+  const execute = async (nodeId?: string, reuseCompleted = false) => {
     if (saveState.saving) return;
     await runLock.run(async () => {
       setRunningAll(true); setSaveError(null);
       const controller = new AbortController(); runController.current = controller;
       try {
         const snapshot = structuredClone(validateGraph(graphRef.current));
-        const order = nodeId ? upstreamOrder(snapshot, nodeId) : topoOrder(snapshot);
+        const order = nodeId ? (reuseCompleted ? plannedShotRun(snapshot, nodeId) : upstreamOrder(snapshot, nodeId)) : topoOrder(snapshot);
         if (!order || (nodeId && !order.length)) throw new Error(tr("圖裡有循環連接，請先移除循環連線"));
         const currentRatesResponse = await fetch("/api/rates", { cache: "no-store" });
         if (!currentRatesResponse.ok) throw new Error(tr("無法取得點數費率，請稍後再試"));
         const currentRates = (await currentRatesResponse.json()).rates ?? [];
         setRates(currentRates);
         if (canvasRunCredits(snapshot, currentRates, order) === null) throw new Error(tr("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行"));
+        if (reuseCompleted && !confirm(`此次執行 ${order.length} 個節點，預估 ${canvasRunCredits(snapshot, currentRates, order)} 點。已完成的上游素材會沿用。確定生成？`)) return;
         await executeGraph(snapshot, order, (id, patch) => {
           if (!controller.signal.aborted) commitGraph({ ...graphRef.current, nodes: graphRef.current.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
         }, controller.signal);
@@ -352,6 +352,31 @@ export default function CanvasEditor({
   const runOne = (id: string) => execute(id);
   const runAll = () => execute();
 
+  const addShot = () => {
+    const id = newId("shot");
+    mutate(g => ({...g,nodes:[...g.nodes,{id,type:"video",x:orderedShots(g).length*300,y:360,data:{...defaultNodeData("video"),shotTitle:`分鏡 ${orderedShots(g).length+1}`,shotOrder:orderedShots(g).length},status:"idle"}]}));
+    setSelectedNode(id);
+  };
+  const connectSource = (id:string, source:string) => mutate(g => ({...g,edges:[...g.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),...(source?[{id:newId("edge"),fromNode:source,fromPort:"out",toNode:id,toPort:"image"}]:[])]}));
+  const openShotStage = (id:string) => {
+    const g=graphRef.current;
+    const source=g.edges.find(e=>e.toNode===id&&e.toPort==="image")?.fromNode;
+    if(g.nodes.find(n=>n.id===source)?.type==="director3d") {setDirector3dNodeId(source!);return;}
+    if(g.nodes.length>=200) {setSaveError("畫布已達 200 個節點，請先整理");return;}
+    if(source && !confirm("將建立 3D 構圖並替換此鏡的參考連線。原素材節點會保留，是否繼續？")) return;
+    const stageId=newId("stage");
+    mutate(current=>({...current,nodes:[...current.nodes,{id:stageId,type:"director3d",x:0,y:0,data:defaultNodeData("director3d")}],edges:[...current.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),{id:newId("edge"),fromNode:stageId,fromPort:"out",toNode:id,toPort:"image"}]}));
+    setDirector3dNodeId(stageId);
+  };
+  const fitCanvas = () => {
+    const nodes=graphRef.current.nodes; const box=containerRef.current?.getBoundingClientRect();
+    if(!nodes.length||!box) return;
+    const left=Math.min(...nodes.map(n=>n.x)), top=Math.min(...nodes.map(n=>n.y));
+    const right=Math.max(...nodes.map(n=>n.x+(n.width??NODE_WIDTH))), bottom=Math.max(...nodes.map(n=>n.y+500));
+    const scale=Math.max(.15,Math.min(1,(box.width-80)/(right-left),(box.height-80)/(bottom-top)));
+    setZoom(scale);setPan({x:(box.width-(right-left)*scale)/2-left*scale,y:40-top*scale});
+  };
+
   const totalCredits = canvasRunCredits(graph, rates);
   const selectedCredits = selectedNode ? canvasRunCredits(graph, rates, upstreamOrder(graph, selectedNode)) : null;
   const directorNode = graph.nodes.find(n => n.id === director3dNodeId);
@@ -360,7 +385,7 @@ export default function CanvasEditor({
   return (
     <div className="flex h-full flex-col bg-[#0a0a0a]">
       {/* toolbar */}
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[#1c1c1c] bg-black px-4">
+      <div className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-[#1c1c1c] bg-black px-4 py-2">
         <Link href="/canvas" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={tr("返回")}>
           <IconChevronLeft className="h-4 w-4" />
         </Link>
@@ -372,11 +397,14 @@ export default function CanvasEditor({
             nameRef.current = e.target.value; setName(e.target.value);
             saveState.edit(); setDirty(saveState.dirty);
           }}
-          className="w-[220px] rounded-lg bg-transparent px-2 py-1 text-[14px] font-medium text-white focus:bg-[#161616] focus:outline-none"
+          className="w-[150px] min-w-0 rounded-lg bg-transparent px-2 py-1 text-[14px] font-medium text-white focus:bg-[#161616] focus:outline-none"
         />
         <span className="text-[11.5px] text-[#6d6d6d]">{runningAll ? tr("執行中，請勿關閉") : saving ? tr("儲存中…") : dirty ? tr("尚未儲存") : tr("已儲存")}</span>
 
-        <div className="relative ml-4">
+        <div className="flex rounded-lg border border-[#354047] p-1">
+          {([['canvas','流程畫布'],['director','分鏡導演台']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>{setView(id);setAddMenuOpen(false);}} className={`whitespace-nowrap rounded px-3 py-1.5 text-xs ${view===id?'bg-[#31434f] text-white':'text-[#9aadb9]'}`}>{label}</button>)}
+        </div>
+        <div className="relative ml-1">
           <button
             type="button"
             disabled={runningAll}
@@ -437,11 +465,20 @@ export default function CanvasEditor({
       </div>
 
       {saveError && <p role="alert" className="shrink-0 bg-[#301919] px-4 py-2 text-sm text-red-200">{saveError}</p>}
-      {/* canvas */}
+      {view === "director" && <DirectorBoard graph={graph} selectedId={selectedNode} onSelect={setSelectedNode} onChange={updateNodeData} onAdd={addShot}
+        onStoryChange={text=>mutate(g=>{const story=g.nodes.find(n=>n.type==='text'&&n.data.directorStory===true);if(story)return {...g,nodes:g.nodes.map(n=>n.id===story.id?{...n,data:{...n.data,text}}:n)};if(g.nodes.length>=200)return g;return {...g,nodes:[...g.nodes,{id:newId('story'),type:'text',x:0,y:-300,data:{text,directorStory:true}}]};})}
+        onStorySplit={()=>{const g=graphRef.current;const parts=storyParagraphs(String(g.nodes.find(n=>n.data.directorStory===true)?.data.text??''));if(!parts.length||g.nodes.length+parts.length>200)return;if(!confirm(`將新增 ${parts.length} 個分鏡，各段文字會成為分鏡敘事。只建立草稿，不扣點。是否繼續？`))return;const offset=orderedShots(g).length;const added:CanvasNode[]=parts.map((prompt,i)=>({id:newId('shot'),type:'video',x:(i+offset)*300,y:360,data:{...defaultNodeData('video'),prompt,shotTitle:`分鏡 ${offset+i+1}`,shotOrder:offset+i},status:'idle'}));mutate(current=>({...current,nodes:[...current.nodes,...added]}));setSelectedNode(added[0].id);}}
+        busy={runningAll || saving} models={videoModels} onSource={connectSource} onStage={openShotStage} onRun={id=>void execute(id,true)}
+        quote={id=>{try{return canvasRunCredits(graph,rates,plannedShotRun(graph,id));}catch{return null;}}}
+        onDuplicate={id=>{const original=graphRef.current.nodes.find(n=>n.id===id);if(!original)return;const copyId=newId("shot");mutate(g=>({...g,nodes:[...g.nodes,{...structuredClone(original),id:copyId,x:original.x+280,data:{...structuredClone(original.data),shotTitle:`${original.data.shotTitle||'分鏡'} 副本`,shotOrder:orderedShots(g).length},status:"idle",output:null,error:null}],edges:[...g.edges,...g.edges.filter(e=>e.toNode===id).map(e=>({...e,id:newId("edge"),toNode:copyId}))]}));setSelectedNode(copyId);}}
+        onMove={(id,direction)=>mutate(g=>{const shots=orderedShots(g);const index=shots.findIndex(n=>n.id===id);const target=index+direction;if(target<0||target>=shots.length)return g;[shots[index],shots[target]]=[shots[target],shots[index]];return {...g,nodes:g.nodes.map(n=>n.type==='video'?{...n,data:{...n.data,shotOrder:shots.findIndex(s=>s.id===n.id)}}:n)};})}
+        onDelete={id=>{if(confirm('刪除此分鏡？原始生成紀錄仍保留。'))mutate(g=>({...g,nodes:g.nodes.filter(n=>n.id!==id),edges:g.edges.filter(e=>e.fromNode!==id&&e.toNode!==id)}));}}
+      />}
+      {/* Keep the canvas mounted so its wheel/viewport bindings survive view switching. */}
       <div
         ref={containerRef}
         inert={runningAll}
-        className="relative flex-1 select-none overflow-hidden"
+        className={`relative min-h-0 flex-1 select-none overflow-hidden ${view === "director" ? "hidden" : ""}`}
         style={{
           backgroundImage: "radial-gradient(circle, #1e1e1e 1px, transparent 1px)",
           backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
@@ -548,6 +585,12 @@ export default function CanvasEditor({
           ))}
         </div>
 
+        <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#39464e] bg-[#131c22]/95 px-3 py-2 shadow-lg" onPointerDown={e=>e.stopPropagation()}>
+          <button type="button" aria-label="縮小畫布" onClick={()=>setZoom(z=>Math.max(.15,z/1.2))} className="px-2 text-white">−</button>
+          <span className="w-12 text-center text-xs text-[#becbd3]">{Math.round(zoom*100)}%</span>
+          <button type="button" aria-label="放大畫布" onClick={()=>setZoom(z=>Math.min(2.5,z*1.2))} className="px-2 text-white">＋</button>
+          <button type="button" onClick={fitCanvas} className="whitespace-nowrap px-2 text-xs text-[#becbd3]">檢視全貌</button>
+        </div>
         {graph.nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-[13px] text-[#4a4a4a]">
             <div>
