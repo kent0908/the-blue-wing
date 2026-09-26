@@ -1,5 +1,6 @@
-import { authorizeSceneRequest } from "@/lib/companionGenerationAccess";
 ﻿import { NextRequest, NextResponse } from "next/server";
+import { authorizeSceneRequest } from "@/lib/companionGenerationAccess";
+import { k } from "@/lib/i18n/k";
 import { requireUser } from "@/lib/apiauth";
 import { canUnlockScenes } from "@/lib/plans";
 import { assetsToDataUrls } from "@/lib/assetData";
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
     const [scenes, pending, avatarReady] = await Promise.all([listScenes(id), pendingSceneRequests(auth.user.id, id), ownedAvatar(auth.user.id, character.avatar_asset_id)]);
     return NextResponse.json({ scenes: scenes.map(toPublicScene), unlocked: canUnlockScenes(auth.user.plan_code), eligible: Boolean(character.official_key) || levelInfo(character.affection).index >= 1,
-      avatarAssetId: character.avatar_asset_id, avatarReady, reason: avatarReady ? null : "請先選擇資產庫中的角色圖片，才能生成專屬場景",
+      avatarAssetId: character.avatar_asset_id, avatarReady, reason: avatarReady ? null : k("請先選擇資產庫中的角色圖片，才能生成專屬場景"),
       pending: pending.map((r) => ({ requestId: r.id, kind: r.kind, status: "processing" })) });
   } catch (error) { return errorResponse(error); }
 }

@@ -108,7 +108,7 @@ export default function OfficialCharacterGrid() {
               <span className="truncate text-[11px] text-[#7d7d7d]">{tr(c.roleTitle)}</span>
               {c.adopted ? (
                 <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-[#14332d] px-2 py-0.5 text-[10px] text-[#7ff0cd]">
-                  {opening === c.key ? tr("開啟中…") : tr("繼續聊天 · {level}", { level: c.adopted.levelName })}
+                  {opening === c.key ? tr("開啟中…") : tr("繼續聊天 · {level}", { level: tr(c.adopted.levelName) })}
                 </span>
               ) : (
                 <span className="mt-0.5 inline-flex w-fit items-center rounded-full bg-[#1c1c1c] px-2 py-0.5 text-[10px] text-[#c9c9c9]">

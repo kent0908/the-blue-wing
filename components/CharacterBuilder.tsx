@@ -115,7 +115,7 @@ export default function CharacterBuilder({ character, onClose, onSaved }: {
         <button type="button" disabled={saving} aria-label={tr("關閉角色設定")} onClick={onClose} className="rounded-full px-3 py-2 text-white/60 hover:bg-white/10">✕</button>
       </header>
       <nav ref={stepNav} aria-label={tr("建立角色步驟")} className="flex shrink-0 gap-2 overflow-x-auto border-b border-white/10 px-5 py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-8">
-        {STEPS.map((label, i) => <button type="button" key={label} disabled={saving} aria-current={step === i ? "step" : undefined} onClick={() => go(i)} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs ${step === i ? "bg-[#7ff0cd] text-black" : "bg-white/5 text-white/55"}`}>{i + 1} · {label}</button>)}
+        {STEPS.map((label, i) => <button type="button" key={label} disabled={saving} aria-current={step === i ? "step" : undefined} onClick={() => go(i)} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs ${step === i ? "bg-[#7ff0cd] text-black" : "bg-white/5 text-white/55"}`}>{i + 1} · {tr(label)}</button>)}
       </nav>
       <div className="min-h-0 overflow-y-auto overscroll-contain">
         <div className="grid gap-7 p-5 sm:p-8 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -128,7 +128,7 @@ export default function CharacterBuilder({ character, onClose, onSaved }: {
             </div>
           </aside>
           <section className="min-w-0 space-y-6">
-            <div><p className="text-xs text-[#7ff0cd]">0{step + 1} / 05</p><h3 ref={heading} tabIndex={-1} className="mt-2 text-2xl outline-none">{STEPS[step]}</h3><p className="mt-2 text-sm text-white/45">{[tr("先給角色一個名字與風格。其餘設定可隨時回來修改。"), tr("用文字定義外觀，將用於角色場景生成；不會自動更換頭像。"), tr("讓每段回覆，都有自己的個性。"), tr("設定故事的起點，也保留你喜歡的互動界線。"), tr("檢查完成後儲存。建立角色不會自動呼叫付費生成。 ")][step]}</p></div>
+            <div><p className="text-xs text-[#7ff0cd]">0{step + 1} / 05</p><h3 ref={heading} tabIndex={-1} className="mt-2 text-2xl outline-none">{tr(STEPS[step])}</h3><p className="mt-2 text-sm text-white/45">{[tr("先給角色一個名字與風格。其餘設定可隨時回來修改。"), tr("用文字定義外觀，將用於角色場景生成；不會自動更換頭像。"), tr("讓每段回覆，都有自己的個性。"), tr("設定故事的起點，也保留你喜歡的互動界線。"), tr("檢查完成後儲存。建立角色不會自動呼叫付費生成。 ")][step]}</p></div>
             <fieldset disabled={saving} className="min-w-0 space-y-6">
               {step === 0 && <>
                 <label className="block text-sm text-white/70">{tr("角色名字 *")}<input autoComplete="off" className={fieldClass} maxLength={40} value={name} onChange={e => setName(e.target.value)} placeholder={tr("例如：沐夏")} /></label>

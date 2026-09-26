@@ -153,7 +153,7 @@ export default function HomePage() {
           <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {templates.slice(0, 8).map((c, i) => { const preview=CANVAS_PREVIEWS.find(p=>p.title===c.title); return (
               <div key={c.id} className="group">
-                {preview ? <TemplatePreview id={preview.id} revision={preview.revision} title={c.title} active={playingCanvas===preview.id} onToggle={()=>setPlayingCanvas(playingCanvas===preview.id?null:preview.id)}/> : c.imageUrl ? (
+                {preview ? <TemplatePreview id={preview.id} revision={preview.revision} title={templateText(c)[0]} active={playingCanvas===preview.id} onToggle={()=>setPlayingCanvas(playingCanvas===preview.id?null:preview.id)}/> : c.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- public content proxy
                   <img
                     src={c.imageUrl}

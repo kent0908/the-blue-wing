@@ -59,6 +59,11 @@ export const EN13: Record<string, string> = {
   "關係期待與發展方向": "Hopes for the relationship",
   "已建立的共同經歷": "Shared history so far",
   "真實情感伴侶": "True partners",
+  "請先選擇資產庫中的角色圖片，才能生成專屬場景": "Pick a character image from your asset library first to generate its own scenes",
+  "{s} 秒": "{s}s",
+  "{m} 分 {s} 秒": "{m}m {s}s",
+  "生成於 {when}": "Generated {when}",
+  "耗時 {d}": "took {d}",
   "熟悉彼此的日常與小名，像長期伴侶般自然親近；保有各自的生活與界線": "You know each other's routines and pet names and are as easy together as long-term partners, while each keeping your own life and boundaries",
 };
 
@@ -122,5 +127,10 @@ export const JA13: Record<string, string> = {
   "關係期待與發展方向": "関係への期待",
   "已建立的共同經歷": "これまでの共有体験",
   "真實情感伴侶": "本当のパートナー",
+  "請先選擇資產庫中的角色圖片，才能生成專屬場景": "専用シーンを生成するには、まず資産ライブラリからキャラクター画像を選んでください",
+  "{s} 秒": "{s} 秒",
+  "{m} 分 {s} 秒": "{m} 分 {s} 秒",
+  "生成於 {when}": "{when} に生成",
+  "耗時 {d}": "所要 {d}",
   "熟悉彼此的日常與小名，像長期伴侶般自然親近；保有各自的生活與界線": "互いの日常も呼び名も知り尽くし、長年のパートナーのように自然に寄り添いながら、それぞれの生活と境界線は保つ",
 };

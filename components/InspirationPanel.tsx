@@ -247,8 +247,8 @@ export default function InspirationPanel({
                 )}
                 <div className="px-2.5 py-2">
                   <div className="truncate text-[11px] text-[#7d7d7d]">{h.prompt}</div>
-                  <div className="mt-0.5 truncate text-[10px] text-[#555]" title={generationTimeLabel(h.createdAt, h.durationMs)}>
-                    {formatDateTime(h.createdAt)}{h.durationMs ? ` · ${formatDuration(h.durationMs)}` : ""}
+                  <div className="mt-0.5 truncate text-[10px] text-[#555]" title={generationTimeLabel(h.createdAt, h.durationMs, tr)}>
+                    {formatDateTime(h.createdAt)}{h.durationMs ? ` · ${formatDuration(h.durationMs, tr)}` : ""}
                   </div>
                 </div>
               </button>

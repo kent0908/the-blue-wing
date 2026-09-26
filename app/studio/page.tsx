@@ -320,7 +320,7 @@ function MainViewerItem({ item }: { item: ResultItem }) {
       <p className="mt-4 text-center text-[12.5px] text-[#6d6d6d]">
         {modelLabel(item.model)} · {item.prompt}
       </p>
-      <p className="mt-1 text-center text-[11px] text-[#555]">{generationTimeLabel(item.createdAt, item.durationMs)}</p>
+      <p className="mt-1 text-center text-[11px] text-[#555]">{generationTimeLabel(item.createdAt, item.durationMs, tr)}</p>
     </div>
   );
 }
