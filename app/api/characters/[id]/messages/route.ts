@@ -4,6 +4,8 @@ import { openingSuggestions, recoverStoryReply, STORY_MESSAGE_PREFIX } from "@/l
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { after as afterResponse, NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
+import { listMessageAudio } from "@/lib/characterAudio";
+import { speechConfigured } from "@/lib/speech";
 import { createChatCompletion } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { getBalance, creditCost } from "@/lib/credits";
@@ -45,9 +47,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const character = await getCharacter(r.user.id, id);
   if (!character) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
 
-  const rows = await listMessages(id);
+  const [rows, audio] = await Promise.all([listMessages(id), listMessageAudio(r.user.id, id)]);
   return NextResponse.json({
     suggestions: rows.at(-1)?.suggestions ?? (character.official_key && rows.length === 0 ? openingSuggestions(character.official_key) : []),
+    // already-generated speech, so the chat can show "replay" instead of a
+    // priced "read aloud" button without one request per bubble
+    audio,
+    voiceName: character.voice_name ?? null,
+    speechEnabled: speechConfigured(),
     messages: rows.map((m) => ({ id: String(m.id), role: m.role, content: m.content, createdAt: m.created_at })),
   });
 }

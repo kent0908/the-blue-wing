@@ -112,7 +112,7 @@ for (const id of ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-073
   prices[id].note = "舊版 SIRAYA 牌價，尚未重新確認。原廠部分舊別名已轉新模型；不可據此推定此 SIRAYA 通道的版本、價格或折扣。";
 
 for (const [id, audio] of [["gemini-3.8-flash-tts", 9], ["gemini-3.8-flash-lite-tts", 6]] as const)
-  verified(id, GOOGLE, [token("input", "文字輸入・至 2026/12/31", .5), token("cached", "快取輸入・至 2026/12/31", .125), token("output", "音訊輸出・至 2026/12/31", audio), token("input2027", "文字輸入・2027/01/01 起", 1), token("cached2027", "快取輸入・2027/01/01 起", .25), token("output2027", "音訊輸出・2027/01/01 起", audio*2)], "標準線上價；每秒音訊 25 Token。快取儲存另計：2026 年 $0.50／百萬 Token 小時，2027 年 $1。SIRAYA 語音用量回執與計費路徑尚待確認。" );
+  verified(id, GOOGLE, [token("input", "文字輸入・至 2026/12/31", .5), token("cached", "快取輸入・至 2026/12/31", .125), token("output", "音訊輸出・至 2026/12/31", audio), token("input2027", "文字輸入・2027/01/01 起", 1), token("cached2027", "快取輸入・2027/01/01 起", .25), token("output2027", "音訊輸出・2027/01/01 起", audio*2)], "標準線上價；每秒音訊 25 Token。快取儲存另計：2026 年 $0.50／百萬 Token 小時，2027 年 $1。語音直連 Google，未提供金鑰前功能維持關閉；非 SIRAYA 通道。" );
 // Mutually exclusive billing conditions cannot be accidentally summed in one quote.
 for (const [id, price] of Object.entries(prices)) for (const c of price.components ?? []) {
   if (id.startsWith("seedance-") || id.startsWith("happyhorse-") || id.startsWith("veo-")) c.scenario = c.id;

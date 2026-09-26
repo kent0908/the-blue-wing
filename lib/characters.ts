@@ -49,6 +49,8 @@ export interface CharacterRow {
   /** set when this row is the user's own copy of an 官方角色 template (lib/officialCharacters.ts) */
   official_key: string | null;
   content_rating: ContentRating;
+  /** the user's chosen TTS voice for this character; null = lib/voices.ts default */
+  voice_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -150,7 +152,7 @@ export function toPublicCharacter(c: CharacterRow): PublicCharacter {
 
 export async function listCharacters(userId: number): Promise<CharacterRow[]> {
   const { rows } = await sql<CharacterRow>`
-    select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, created_at, updated_at
+    select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, voice_name, created_at, updated_at
     from characters where user_id = ${userId}
     order by updated_at desc
   `;
@@ -159,7 +161,7 @@ export async function listCharacters(userId: number): Promise<CharacterRow[]> {
 
 export async function getCharacter(userId: number, id: number): Promise<CharacterRow | null> {
   const { rows } = await sql<CharacterRow>`
-    select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, created_at, updated_at
+    select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, voice_name, created_at, updated_at
     from characters where id = ${id} and user_id = ${userId}
   `;
   return rows[0] ? withOfficialSettings(rows[0]) : null;
@@ -179,7 +181,7 @@ export async function createCharacter(
   const { rows } = await sql<CharacterRow>`
     insert into characters (user_id, name, avatar_asset_id, personality, profile, likes, model, official_key, content_rating)
     values (${userId}, ${input.name}, ${input.avatarAssetId}, ${input.personality}, ${JSON.stringify(input.profile ?? {})}::jsonb, ${input.likes}, ${DEFAULT_CHARACTER_MODEL}, ${input.officialKey ?? null}, ${input.contentRating ?? "adult"})
-    returning id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, created_at, updated_at
+    returning id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, voice_name, created_at, updated_at
   `;
   return rows[0];
 }
@@ -187,7 +189,7 @@ export async function createCharacter(
 /** The user's copy of an official template, if they've opened it before. */
 export async function getOfficialClone(userId: number, officialKey: string): Promise<CharacterRow | null> {
   const { rows } = await sql<CharacterRow>`
-    select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, created_at, updated_at
+    select id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, voice_name, created_at, updated_at
     from characters where user_id = ${userId} and official_key = ${officialKey} limit 1
   `;
   return rows[0] ? withOfficialSettings(rows[0]) : null;
@@ -209,7 +211,7 @@ export async function updateCharacter(
     update characters
     set name = ${name}, avatar_asset_id = ${avatarAssetId}, personality = ${personality}, profile = ${JSON.stringify(profile ?? {})}::jsonb, likes = ${likes}, updated_at = now()
     where id = ${id} and user_id = ${userId}
-    returning id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, created_at, updated_at
+    returning id, user_id, name, avatar_asset_id, personality, profile, likes, model, affection, turn_count, memory_summary, official_key, content_rating, voice_name, created_at, updated_at
   `;
   return rows[0] ?? null;
 }

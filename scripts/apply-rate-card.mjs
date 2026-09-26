@@ -82,6 +82,20 @@ const TEXT_RATES = {
   "deepseek-v4-pro-0813": 2,
 };
 
+// ---- speech (TTS): credits per SPEECH_CHARS_PER_UNIT (40) characters of
+// spoken text — see lib/creditFormula.ts. Google's published Gemini TTS
+// pricing (2026-09-26, ai.google.dev/gemini-api/docs/pricing): audio output
+// is billed at 25 tokens per second of audio, $9/M tokens for 3.8 Flash TTS
+// through 2026-12-31 (it DOUBLES on 2027-01-01 — revisit this rate then).
+// Mandarin TTS runs ~4.5 chars/second, so 40 characters ≈ 9s ≈ 225 audio
+// tokens ≈ $0.0020, plus a negligible text-input charge. At the $0.01/credit
+// peg that is ~5x margin, matching the >=4x floor used above. The site's own
+// 74 stored replies average 104 characters, i.e. ~3 credits to read aloud.
+const SPEECH_RATES = {
+  "gemini-3.8-flash-tts": 1,
+  "gemini-3.8-flash-lite-tts": 1, // cheaper alternative ($6/M) if quality allows
+};
+
 // ---- image: credits per image — real BytePlus $/image, verified ----
 const IMAGE_RATES = {
   "ByteDance-Seedream-4.0": 12, // $0.03 -> 4.0x
@@ -125,6 +139,10 @@ for (const [id, credits] of Object.entries(IMAGE_RATES)) {
 }
 for (const [id, credits] of Object.entries(TEXT_RATES)) {
   await upsert(id, "text", credits);
+  n++;
+}
+for (const [id, credits] of Object.entries(SPEECH_RATES)) {
+  await upsert(id, "speech", credits);
   n++;
 }
 console.log(`✓ Applied ${n} model_rates rows.`);
