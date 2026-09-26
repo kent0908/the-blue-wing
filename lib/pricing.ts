@@ -55,6 +55,7 @@ const RATES: Array<[string, RateCard]> = [
   // curated 文字創作 picks — SIRAYA list prices read from
   // llm-ext-api.siraya.ai/api/v1/models on 2026-09-16 (off-peak for DeepSeek)
   ["deepseek-v4.1-flash", { inputPerMTok: 0.15, outputPerMTok: 0.6 }],
+  ["gemini-3.5-flash", { inputPerMTok: 1.5, outputPerMTok: 9 }],
   ["gemini-3.8-flash", { inputPerMTok: 0.75, outputPerMTok: 3.75 }],
   ["gpt-5.4-mini", { inputPerMTok: 0.75, outputPerMTok: 4.5 }],
   ["claude-haiku-4.5", { inputPerMTok: 1, outputPerMTok: 5 }],

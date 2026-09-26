@@ -45,6 +45,7 @@ const prices: Record<string, PublicPrice> = {
   "deepseek-v4-flash": { price: 0.28, unit: "million_output_tokens", inputPrice: 0.14 },
   // 文字創作 curated picks (lib/audioModels.ts) — llm-ext-api.siraya.ai/api/v1/models, 2026-09-16
   "deepseek-v4.1-flash": { price: 0.6, unit: "million_output_tokens", inputPrice: 0.15, source: SIRAYA_API, note: "離峰牌價；平日 01–04 與 06–10 UTC 尖峰時段輸入 $0.3、輸出 $1.2。快取讀取 $0.015。" },
+  "gemini-3.5-flash": { price: 9, unit: "million_output_tokens", inputPrice: 1.5, source: SIRAYA_API, note: "快取讀取 $0.15／百萬 Token；另有每百萬 Token 每小時 $1 的快取儲存費。" },
   "gemini-3.8-flash": { price: 3.75, unit: "million_output_tokens", inputPrice: 0.75, source: SIRAYA_API, note: "快取讀取 $0.075／百萬 Token。" },
   "gpt-5.4-mini": { price: 4.5, unit: "million_output_tokens", inputPrice: 0.75, source: SIRAYA_API, note: "快取讀取 $0.075／百萬 Token。" },
   "claude-haiku-4.5": { price: 5, unit: "million_output_tokens", inputPrice: 1, source: SIRAYA_API, note: "快取讀取 $0.1／百萬 Token。" },
@@ -105,6 +106,7 @@ for (const id of ["gpt-image-2", "gpt-image-2.5-sunburst", "gpt-image-2.5-flare"
 }
 verified("gpt-5.4-mini", "https://developers.openai.com/api/docs/models/gpt-5.4-mini", [token("input", "未快取輸入", .75), token("cached", "快取輸入", .075), token("output", "輸出（含推理）", 4.5)]);
 verified("claude-haiku-4.5", "https://platform.claude.com/docs/en/about-claude/pricing", [token("input", "一般輸入", 1), token("cache5m", "5 分鐘快取寫入", 1.25), token("cache1h", "1 小時快取寫入", 2), token("cacheRead", "快取讀取", .1), token("output", "輸出", 5)], "全球標準價；快取各欄須互斥，區域平台或工具附加費另計。" );
+verified("gemini-3.5-flash", GOOGLE, [token("input", "輸入", 1.5), token("cached", "快取讀取", .15), token("output", "輸出（含思考）", 9)], "原廠標準線上價，無公告調整日期。快取儲存另計：每百萬 Token 每小時 $1。批次價約為一半，此通道是否提供未確認。" );
 verified("gemini-3.8-flash", GOOGLE, [token("input", "輸入・至 2026/12/31", .75), token("cached", "快取讀取・至 2026/12/31", .075), token("output", "輸出・至 2026/12/31", 3.75), token("input2027", "輸入・2027/01/01 起", 1.5), token("cached2027", "快取・2027/01/01 起", .15), token("output2027", "輸出・2027/01/01 起", 7.5)], "依呼叫日期擇一組費率；2027 年起牌價調整。工具、音訊與快取儲存費不包含在文字推估內。" );
 for (const [id, input, output, cached] of [["deepseek-v4.1-flash", .15, .6, .003], ["deepseek-v4-pro-0813", .66, 1.98, .022]] as const)
   verified(id, DEEPSEEK, [token("input", "離峰・未快取輸入", input), token("cached", "離峰・快取輸入", cached), token("output", "離峰・輸出", output), token("peakInput", "尖峰・未快取輸入", input * 2), token("peakCached", "尖峰・快取輸入", cached * 2), token("peakOutput", "尖峰・輸出", output * 2)], "原廠尖峰：平日 UTC 01–04、06–10（台灣 09–12、14–18），中國法定假日除外。SIRAYA 是否沿用時段與快取優惠待確認。" );

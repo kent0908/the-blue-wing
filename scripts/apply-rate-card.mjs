@@ -73,6 +73,11 @@ const TEXT_RATES = {
   // Sized on a typical ~1.5K-in / 0.5K-out message at a $0.01/credit peg
   // with ≥4x margin (companion prompts are longer but DeepSeek is cheap).
   "deepseek-v4.1-flash": 1, // $0.15/$0.60 per MTok -> ~$0.0005/msg
+  // Google slot: 3.5-flash replaced 3.8-flash on 2026-09-26 (see lib/audioModels.ts).
+  // $1.50/$9.00 per MTok standard tier; a ~1.5K-in/60-out companion turn is
+  // ~$0.0028, i.e. >10x margin at 3 credits charged. 3.8 keeps its row so an
+  // in-flight request still prices correctly, but it is no longer offered.
+  "gemini-3.5-flash": 2,
   "gemini-3.8-flash": 2, // $0.75/$3.75 -> ~$0.003/msg
   "gpt-5.4-mini": 2, // $0.75/$4.50 -> ~$0.0034/msg
   "claude-haiku-4.5": 2, // $1/$5 -> ~$0.004/msg
