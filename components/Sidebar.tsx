@@ -8,7 +8,7 @@ import { modeLabel, type Dict } from "@/lib/i18n/dict";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   IconHome,
@@ -170,7 +170,7 @@ function NavLink({
     <Link
       href={item.href}
       title={collapsed ? label : undefined}
-      onMouseEnter={item.modelModality ? (e) => onFlyoutEnter?.(item.modelModality!, e.currentTarget) : undefined}
+      onMouseEnter={item.modelModality && onFlyoutEnter ? (e) => onFlyoutEnter(item.modelModality!, e.currentTarget) : undefined}
       onMouseLeave={item.modelModality ? onFlyoutLeave : undefined}
       className={[
         "flex items-center gap-3 rounded-lg py-2 text-[13.5px] transition-colors",
@@ -186,6 +186,28 @@ function NavLink({
         </>
       )}
     </Link>
+  );
+}
+
+/**
+ * Whether this device actually hovers. The model flyout below is a hover
+ * affordance, and on a phone the sidebar lives inside AppFrame's modal
+ * <dialog> drawer: a tap fires mouseenter, opens the flyout into a portal
+ * OUTSIDE that dialog, and the same tap's click closes the drawer — so the
+ * nav vanished and left an orphaned model list floating where the drawer
+ * used to be (reported 2026-09-26, reproduced at 390x844). Touch devices
+ * just navigate to the mode page, which has its own model picker.
+ */
+const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
+function useCanHover(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(HOVER_QUERY);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(HOVER_QUERY).matches,
+    () => false
   );
 }
 
@@ -209,6 +231,7 @@ function SidebarInner() {
   // Only one flyout open at a time; a short close delay lets the mouse
   // travel from the nav row into the (portaled, so not visually adjacent in
   // the DOM) flyout without it disappearing first.
+  const canHover = useCanHover();
   const [flyout, setFlyout] = useState<FlyoutState | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelClose = () => {
@@ -222,6 +245,7 @@ function SidebarInner() {
     closeTimer.current = setTimeout(() => setFlyout(null), 150);
   };
   const openFlyout = (modality: "image" | "video", el: HTMLElement) => {
+    if (!canHover) return;
     cancelClose();
     const rect = el.getBoundingClientRect();
     setFlyout({ modality, top: rect.top, left: rect.right + 8 });
@@ -248,7 +272,7 @@ function SidebarInner() {
       <nav className="flex-1 overflow-y-auto px-3 pt-2">
         <div className="space-y-0.5">
           {GROUP_A.map((i) => (
-            <NavLink key={i.href} item={i} active={isActive(i.href)} collapsed={collapsed} onFlyoutEnter={openFlyout} onFlyoutLeave={scheduleClose} />
+            <NavLink key={i.href} item={i} active={isActive(i.href)} collapsed={collapsed} onFlyoutEnter={canHover ? openFlyout : undefined} onFlyoutLeave={canHover ? scheduleClose : undefined} />
           ))}
         </div>
 

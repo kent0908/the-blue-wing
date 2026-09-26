@@ -492,18 +492,27 @@ export default function Composer({
   };
 
   return (
+    // Bounded flex column. The app shell is h-dvh/overflow-hidden, so anything
+    // taller than the space left under the top bar is simply CUT OFF with no
+    // way to scroll to it — a long prompt auto-expands this composer and used
+    // to push the generate button clean off a 667px-tall phone (reproduced
+    // 2026-09-26: 649px composer on a 667px viewport, button unreachable).
+    // The cap plus min-h-0/flex-1 on the textarea below makes the textarea
+    // absorb the squeeze and scroll internally, keeping the controls visible.
+    // Deliberately NO overflow on this element: every popover in the control
+    // row opens upward out of its own box (see Popover.tsx) and an overflow
+    // value here would clip them.
     <div
       className={[
-        "rounded-2xl border border-[#2a2a2a] bg-[#161616] transition-all",
-        isExpanded ? "min-h-[260px]" : "",
+        "flex max-h-[calc(100dvh-152px)] flex-col rounded-2xl border border-[#2a2a2a] bg-[#161616] transition-all",
       ].join(" ")}
     >
-      {operation==="layer-separation" && <div className="px-4 py-3 text-xs text-[#b2c8c0]"><p>{tr("限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。")}</p><label className="mt-2 block">{tr("輸出解析度")} <select aria-label={tr("圖層解析度")} value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">{tr("查看圖層紀錄")}</Link></div>}
-      {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label={tr("確認圖層分離費用")} className="mx-4 my-3 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>{tr("最高預扣")} {credits} {tr("點（底圖與最多 16 個圖層）。每張")} {credits === null ? "—" : credits / 17} {tr("點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。")}</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>{tr("確認預扣並分離")}</button><button type="button" onClick={()=>setLayerConfirm(false)}>{tr("取消")}</button></div></div>}
-      {isFramePair && <FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} />}
-      <div className="relative flex flex-wrap gap-3 px-4 pt-4">
+      {operation==="layer-separation" && <div className="shrink-0 px-4 py-3 text-xs text-[#b2c8c0]"><p>{tr("限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。")}</p><label className="mt-2 block">{tr("輸出解析度")} <select aria-label={tr("圖層解析度")} value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">{tr("查看圖層紀錄")}</Link></div>}
+      {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label={tr("確認圖層分離費用")} className="mx-4 my-3 shrink-0 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>{tr("最高預扣")} {credits} {tr("點（底圖與最多 16 個圖層）。每張")} {credits === null ? "—" : credits / 17} {tr("點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。")}</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>{tr("確認預扣並分離")}</button><button type="button" onClick={()=>setLayerConfirm(false)}>{tr("取消")}</button></div></div>}
+      {isFramePair && <div className="shrink-0"><FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} /></div>}
+      <div className="relative flex min-h-0 flex-auto flex-col gap-3 px-4 pt-4">
         {canUseRefs && !isFramePair && (
-          <div className="relative flex w-full min-w-0 flex-wrap items-start gap-3 pb-1">
+          <div className="relative flex w-full min-w-0 shrink-0 flex-wrap items-start gap-3 pb-1">
             {refs.map((r) => (
               <div key={r.id} className="relative h-[82px] w-[82px] -rotate-2 overflow-hidden rounded-xl border border-[#454545] shadow-md transition-transform hover:rotate-0 focus-within:rotate-0 motion-reduce:transition-none">
                 {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
@@ -590,6 +599,7 @@ export default function Composer({
           </div>
         )}
 
+        <div className="relative flex min-h-0 flex-auto gap-3">
         {videoRef && mode === "video" && (
           <div className="relative flex h-[74px] w-[74px] shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-[#2f2f2f] bg-[#1c1c1c] px-1 text-center">
             <span className="text-lg leading-none">🎬</span>
@@ -607,7 +617,7 @@ export default function Composer({
           </div>
         )}
 
-        <div className="relative min-w-0 flex-1">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <textarea
             ref={taRef}
             value={prompt}
@@ -648,7 +658,7 @@ export default function Composer({
             }}
             placeholder={canUseRefs && refs.length > 0 ? tr("{p}（可打 @ 標記素材）", { p: tr(PLACEHOLDER[mode]) }) : tr(PLACEHOLDER[mode])}
             rows={isExpanded ? 8 : 3}
-            className="w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none"
+            className={`w-full resize-none bg-transparent pr-8 text-[14px] leading-relaxed text-white placeholder:text-[#6d6d6d] focus:outline-none ${isExpanded ? "min-h-[60px] flex-auto" : ""}`}
             // A flat 320px was the original "expanded" cap — nowhere near
             // enough for a genuinely long multi-scene prompt (a real one hit
             // ~1500+ characters), so scrolling that tiny a window through a
@@ -710,6 +720,7 @@ export default function Composer({
             </div>
           )}
         </div>
+        </div>
 
         <button
           type="button"
@@ -721,7 +732,7 @@ export default function Composer({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 px-3 pb-3 pt-3">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 pb-3 pt-3">
         {/* mode */}
         <Popover
           widthClass="w-[164px]"
