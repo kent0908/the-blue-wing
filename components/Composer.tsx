@@ -4,6 +4,7 @@ import Link from "next/link";
 import { uploadAsset } from "@/lib/uploadAsset";
 import { useRouter, useSearchParams } from "next/navigation";
 import GenerationModePanel from "./GenerationModePanel";
+import SeedanceDraftPreview from "./SeedanceDraftPreview";
 import FrameUploadCards from "./FrameUploadCards";
 import { orderedFrameIds, type FrameSnapshot } from "@/lib/frameSlots";
 import { getGenerationModes } from "@/lib/generationModes";
@@ -507,6 +508,7 @@ export default function Composer({
         "flex max-h-[calc(100dvh-152px)] flex-col rounded-2xl border border-[#2a2a2a] bg-[#161616] transition-all",
       ].join(" ")}
     >
+      {mode === "video" && resolvedModel === "SIRAYA-Seedance-2.5" && <SeedanceDraftPreview />}
       {operation==="layer-separation" && <div className="shrink-0 px-4 py-3 text-xs text-[#b2c8c0]"><p>{tr("限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。")}</p><label className="mt-2 block">{tr("輸出解析度")} <select aria-label={tr("圖層解析度")} value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">{tr("查看圖層紀錄")}</Link></div>}
       {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label={tr("確認圖層分離費用")} className="mx-4 my-3 shrink-0 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>{tr("最高預扣")} {credits} {tr("點（底圖與最多 16 個圖層）。每張")} {credits === null ? "—" : credits / 17} {tr("點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。")}</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>{tr("確認預扣並分離")}</button><button type="button" onClick={()=>setLayerConfirm(false)}>{tr("取消")}</button></div></div>}
       {isFramePair && <div className="shrink-0"><FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} /></div>}
