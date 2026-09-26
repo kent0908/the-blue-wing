@@ -4,6 +4,8 @@ new Function('exports',ts.transpileModule(fs.readFileSync('lib/companionDecision
 const {parseDecision,reviewDecision}=m.exports;
 const fixture={model:'jev-1.13.0',answers:{event:{type:'choice',choice:'proposed',confidence:0.95,probabilities:{none:0.01,proposed:0.96,in_progress:0.01,completed:0.01,uncertain:0.01}},memory:{type:'noul',noul:0.1}},usage:{input_tokens:123}};
 const parsed=parseDecision(fixture);
+assert.equal(parseDecision({...fixture,provider_metadata:{gateway:{cost:'0.00001',generationId:'gen_test'}}}).gatewayCostUsd,0.00001);
+assert.equal(parseDecision({...fixture,provider_metadata:{gateway:{cost:'invalid'}}}).gatewayCostUsd,undefined);
 assert.equal(parsed.event,'proposed');
 assert.equal(reviewDecision(parsed).applyAutomatically,false);
 assert.equal(reviewDecision({...parsed,confidence:0.4}).eventCandidate,'uncertain');
@@ -14,16 +16,18 @@ for(const mutate of [x=>x.answers.event.choice='married',x=>x.answers.event.conf
 console.log('PASS: typed response, probabilities, malformed output, low confidence, review-only contract');
 
 const providerModule={exports:{}};
-new Function('require','exports',ts.transpileModule(fs.readFileSync('lib/companionDecisionProvider.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(()=>m.exports,providerModule.exports);
+new Function('require','exports',ts.transpileModule(fs.readFileSync('lib/companionDecisionProvider.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(id=>id==='@vercel/oidc'?{getVercelOidcToken:()=>process.env.VERCEL_OIDC_TOKEN||''}:m.exports,providerModule.exports);
 const {decisionEnabled,jevEvaluator}=providerModule.exports;
 (async()=>{
- delete process.env.JEV_MODE;delete process.env.TYPESAFE_API_KEY;
+ delete process.env.VERCEL_OIDC_TOKEN;delete process.env.JEV_MODE;delete process.env.AI_GATEWAY_API_KEY;
  assert.equal(decisionEnabled(1),false);
- process.env.JEV_MODE='shadow';process.env.TYPESAFE_API_KEY='mock-only';process.env.JEV_SAMPLE_PERCENT='100';
+ process.env.JEV_MODE='shadow';process.env.AI_GATEWAY_API_KEY='mock-only';process.env.JEV_SAMPLE_PERCENT='100';
  assert.equal(decisionEnabled(1),true);
+ delete process.env.AI_GATEWAY_API_KEY;process.env.VERCEL_OIDC_TOKEN='mock-oidc';assert.equal(decisionEnabled(1),true);
+ process.env.JEV_MODE='off';assert.equal(decisionEnabled(1),false);process.env.JEV_MODE='shadow';
  process.env.JEV_SAMPLE_PERCENT='bad';assert.equal(decisionEnabled(1),false);
  process.env.JEV_SAMPLE_PERCENT='100';
- let count=0;global.fetch=async(url,options)=>{count++;assert.equal(url,'https://api.typesafe.ai/v1/systemone');assert.ok(options.signal);const body=JSON.parse(options.body);assert.equal(body.model,'jev-1.13.0');return {ok:true,json:async()=>fixture}};
+ let count=0;global.fetch=async(url,options)=>{count++;assert.equal(url,'https://ai-gateway.vercel.sh/typesafe/v1/systemone');assert.ok(options.signal);const body=JSON.parse(options.body);assert.equal(body.model,'typesafe-ai/jev');return {ok:true,json:async()=>fixture}};
  await jevEvaluator.evaluate({relationship:'夫妻',recent:[]});assert.equal(count,1);
  global.fetch=async()=>({ok:false,status:429});await assert.rejects(()=>jevEvaluator.evaluate({relationship:'',recent:[]}),/http_429/);
  global.fetch=async()=>{throw Error('timeout')};await assert.rejects(()=>jevEvaluator.evaluate({relationship:'',recent:[]}),/timeout/);

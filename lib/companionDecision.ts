@@ -1,5 +1,5 @@
 /** Offline contract only. No network, database writes, or authority over chat. */
-export const DECISION_VERSION = "companion-shadow-v1";
+export const DECISION_VERSION = "companion-gateway-shadow-v2";
 export const EVENT_STATES = ["none", "proposed", "in_progress", "completed", "uncertain"] as const;
 export type EventState = typeof EVENT_STATES[number];
 export interface DecisionResult {
@@ -9,6 +9,8 @@ export interface DecisionResult {
   probabilities: Record<EventState, number>;
   memoryProbability: number;
   inputTokens: number;
+  gatewayCostUsd?: number;
+  generationId?: string;
 }
 export interface DecisionEvaluator {
   evaluate(state: { relationship: string; recent: { role: "user" | "assistant"; content: string }[] }): Promise<DecisionResult>;
@@ -29,7 +31,12 @@ export function parseDecision(value: unknown): DecisionResult {
   if (Math.abs(Object.values(probabilities).reduce((a,b) => a+b,0)-1) > 0.01) throw Error("invalid_response");
   const usage = record(body.usage);
   if (!Number.isSafeInteger(usage.input_tokens) || (usage.input_tokens as number) < 0 || typeof body.model !== "string" || !body.model || body.model.length > 100) throw Error("invalid_response");
-  return { model: body.model, event: event.choice as EventState, probabilities, confidence: probability(event.confidence), memoryProbability: probability(memory.noul), inputTokens: usage.input_tokens as number };
+  const metadata = body.provider_metadata as { gateway?: { cost?: unknown; generationId?: unknown } } | undefined;
+  const cost = metadata?.gateway?.cost;
+  const parsedCost = (typeof cost === "string" && cost.trim() !== "") || typeof cost === "number" ? Number(cost) : NaN;
+  const generationId = metadata?.gateway?.generationId;
+  return { gatewayCostUsd: Number.isFinite(parsedCost) && parsedCost >= 0 ? parsedCost : undefined,
+    generationId: typeof generationId === "string" && generationId.length <= 200 ? generationId : undefined, model: body.model, event: event.choice as EventState, probabilities, confidence: probability(event.confidence), memoryProbability: probability(memory.noul), inputTokens: usage.input_tokens as number };
 }
 /** Recommendations remain review-only, even at high confidence. */
 export function reviewDecision(result: DecisionResult) {
