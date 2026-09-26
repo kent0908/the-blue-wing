@@ -12,7 +12,7 @@ import { sql } from "./db";
 import { canonicalBillingModel } from "./billingModel";
 export { creditCostFromRate, resolutionMultiplier, VIDEO_RESOLUTION_MULTIPLIER } from "./creditFormula";
 
-export type Modality = "image" | "video" | "text";
+export type Modality = "image" | "video" | "text" | "speech";
 
 /** Retail resolution multipliers are pricing policy, not a provider cost guarantee. */
 export interface ModelRate {

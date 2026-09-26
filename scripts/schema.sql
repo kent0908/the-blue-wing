@@ -85,7 +85,7 @@ create table if not exists api_limits (
 create table if not exists model_rates (
   id         bigint generated always as identity primary key,
   model_id   text not null unique,
-  modality   text not null check (modality in ('image','video','text')),
+  modality   text not null check (modality in ('image','video','text','speech')),
   credits    integer not null,
   active     boolean not null default true,
   updated_at timestamptz not null default now()
@@ -522,3 +522,22 @@ create table if not exists companion_decision_evaluations (
  primary key(message_id, policy_version)
 );
 create index if not exists companion_decision_character_idx on companion_decision_evaluations(character_id, created_at desc);
+
+-- 陪聊語音（TTS）。每則角色訊息最多一份音訊：生成一次後永久快取，重播不再扣點。
+-- 音訊本身存在 Blob（generations/<userId>/speech-*.wav），這裡只留指標與計費紀錄。
+-- 'speech' 是 2026-09-26 新增的計費類別（陪聊語音朗讀）；既有資料庫要放寬原本的 check。
+alter table model_rates drop constraint if exists model_rates_modality_check;
+alter table model_rates add constraint model_rates_modality_check check (modality in ('image','video','text','speech'));
+alter table characters add column if not exists voice_name text;
+create table if not exists character_message_audio (
+  message_id   bigint primary key references character_messages(id) on delete cascade,
+  character_id bigint not null references characters(id) on delete cascade,
+  user_id      bigint not null references users(id) on delete cascade,
+  voice_name   text not null,
+  pathname     text not null,
+  seconds      real,
+  chars        integer not null,
+  credits      integer not null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists character_message_audio_user_idx on character_message_audio(user_id, created_at desc);

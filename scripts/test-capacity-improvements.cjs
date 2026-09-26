@@ -17,6 +17,8 @@ function load(file,mocks){const m={exports:{}};new Function('require','module','
  'next/server':{after:fn=>deferred.push(fn),NextResponse:Response},
  // shadow evaluation is opt-in telemetry; keep it off so this test stays offline
  '@/lib/companionDecisionProvider':{decisionEnabled:()=>false},
+ '@/lib/characterAudio':{listMessageAudio:async()=>({})},
+ '@/lib/speech':{speechConfigured:()=>false},
  '@/lib/companionDecisionShadow':{recordDecisionShadow:async()=>{}},
  '@/lib/officialCompanionStory':{openingSuggestions:()=>[],recoverStoryReply:()=>null,STORY_MESSAGE_PREFIX:'[bluewing-story-v1]'+String.fromCharCode(10)},
  '@/lib/creditTransactions':{paidCall:async(u,c,k,r,fn)=>({result:await fn(),chargeId:'test'}),refundCharge:async()=>{}},

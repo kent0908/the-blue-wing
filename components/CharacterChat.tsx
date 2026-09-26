@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconChat, IconTrash, IconArrowRight } from "./Icons";
 import PersonaEditor from "./PersonaEditor";
+import MessageSpeech from "./MessageSpeech";
+import VoicePicker from "./VoicePicker";
 import CharacterBuilder from "./CharacterBuilder";
 import type { CharacterProfile } from "@/lib/characterProfile";
 import CharacterScenes from "./CharacterScenes";
@@ -36,6 +38,8 @@ export interface CharacterData {
   level?: CharacterLevel;
   contentRating?: "all_ages" | "adult";
   officialKey?: string | null;
+  /** the user's TTS voice pick for this character; null = default voice */
+  voiceName?: string | null;
   /** what this character can do — see lib/characters.ts contentRules */
   rules?: { ladder: "romance" | "trust"; scenes: boolean; wardrobe: boolean; idleRegen: boolean; editable: boolean };
 }
@@ -75,6 +79,13 @@ export default function CharacterChat({ character: initial }: { character: Chara
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
   const [scenesOpen, setScenesOpen] = useState(false);
   const [toast, setToast] = useState<AffectionToast | null>(null);
+  // speech: cached audio per message id, whether the feature is switched on
+  // at all, and the opt-in auto-read preference (off by default — reading a
+  // reply aloud costs credits, so it must never start on its own uninvited).
+  const [audio, setAudio] = useState<Record<string, string>>({});
+  const [speechEnabled, setSpeechEnabled] = useState(false);
+  const [autoRead, setAutoRead] = useState(false);
+  const [autoReadId, setAutoReadId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const rules = character.rules ?? { ladder: "romance" as const, scenes: true, wardrobe: true, idleRegen: true, editable: true };
   const isOfficial = !!character.officialKey;
@@ -90,9 +101,23 @@ export default function CharacterChat({ character: initial }: { character: Chara
   useEffect(() => {
     fetch(`/api/characters/${character.id}/messages`)
       .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((j) => { setMessages(j.messages ?? []); setSuggestions(j.suggestions ?? []); })
+      .then((j) => {
+        setMessages(j.messages ?? []);
+        setSuggestions(j.suggestions ?? []);
+        setAudio(j.audio ?? {});
+        setSpeechEnabled(!!j.speechEnabled);
+        setCharacter((current) => ({ ...current, voiceName: j.voiceName ?? null }));
+      })
       .catch(() => setMessages([]));
   }, [character.id]);
+
+  // Read once at mount instead of during render: localStorage is not
+  // available on the server, and the accessor itself throws in a private
+  // window, so the initial state stays false and is corrected here.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot read of a browser-only preference
+    try { setAutoRead(localStorage.getItem("bw_auto_read") === "1"); } catch { /* private mode */ }
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -148,6 +173,8 @@ export default function CharacterChat({ character: initial }: { character: Chara
         ...(cur ?? []).map((m) => (m.id === optimisticId ? { ...m, pending: false } : m)),
         j.reply,
       ]);
+      // only this reply is eligible for auto-read; history never re-reads
+      setAutoReadId(j.reply?.id ? String(j.reply.id) : null);
       setSuggestions(j.suggestions ?? []);
       if (j.affection) {
         setCharacter((cur) => ({
@@ -302,6 +329,17 @@ export default function CharacterChat({ character: initial }: { character: Chara
               >
                 {m.content}
                 {m.failed && <span className="mt-2 block text-xs text-[#ffb4b4]">{tr("未送達 · 請查看下方提示")}</span>}
+                {speechEnabled && m.role === "assistant" && !m.pending && !m.failed && (
+                  <MessageSpeech
+                    characterId={character.id}
+                    messageId={m.id}
+                    content={m.content}
+                    url={audio[m.id] ?? null}
+                    autoPlay={autoRead && autoReadId === m.id}
+                    onGenerated={(id, url) => setAudio((cur) => ({ ...cur, [id]: url }))}
+                    onError={setError}
+                  />
+                )}
               </div>
             </div>
           ))}
@@ -394,6 +432,25 @@ export default function CharacterChat({ character: initial }: { character: Chara
               <progress aria-label={tr("下一個互動里程碑")} max={100} value={growthProgress} className="h-2 w-full accent-[#7ff0cd]" />
               <p className="text-xs text-[#a9bbb7]">{tr("距離 {next} 分里程碑，還有 {left} 分。", { next: growthNext, left: growthNext - growthScore })}</p>
             </div><p className="text-xs text-white/50">{tr("每完成一輪成功對話累積 1 分，傳送失敗不加分。既有分數保留，100 分後持續累積。這是本站的陪伴紀錄，不會把已設定的伴侶變回陌生人。")}</p><p className="text-xs text-white/40">{tr("圖影功能仍依現有方案與功能門檻使用。")}</p></section> : <RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} />}</div>}
+          {relationshipOpen && !personaOpen && <div className="border-t border-white/10">
+            <VoicePicker
+              characterId={character.id}
+              value={character.voiceName ?? null}
+              onChange={(voiceName) => setCharacter((cur) => ({ ...cur, voiceName }))}
+            />
+            {speechEnabled && <label className="flex items-start gap-2 px-4 pb-4 text-xs leading-6 text-[#9aaba3]">
+              <input
+                type="checkbox"
+                className="mt-1.5 shrink-0"
+                checked={autoRead}
+                onChange={(e) => {
+                  setAutoRead(e.target.checked);
+                  try { localStorage.setItem("bw_auto_read", e.target.checked ? "1" : "0"); } catch { /* private mode */ }
+                }}
+              />
+              <span>{tr("新回覆自動朗讀")}<br /><span className="text-[#7f918b]">{tr("每則都會依長度扣點；只朗讀新收到的回覆，不會重讀舊訊息。")}</span></span>
+            </label>}
+          </div>}
           {personaOpen && <PersonaEditor embedded onClose={() => { setPersonaOpen(false); setScenesOpen(false); }} />}
           <div className={styles.scenePanel} hidden={personaOpen || relationshipOpen || wardrobeOpen || !rules.scenes}>{rules.scenes && <CharacterScenes characterId={character.id} refreshKey={character.affection} onClose={() => setScenesOpen(false)} />}</div>
           {wardrobeOpen && rules.wardrobe && <div className="flex min-h-0 flex-1 flex-col"><div className="flex justify-end px-3 pt-2 lg:hidden"><button type="button" onClick={() => { setScenesOpen(false); setWardrobeOpen(false); setRelationshipOpen(true); }} aria-label={tr("關閉衣櫃")}>{tr("關閉")}</button></div><div className="flex min-h-0 flex-1 overflow-y-auto [&>div]:w-full"><CompanionWardrobe key={`${character.id}:${character.affection ?? 0}`} characterId={character.id} /></div></div>}

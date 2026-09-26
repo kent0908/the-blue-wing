@@ -74,11 +74,13 @@ export async function recentLedger(userId: number, limit = 50): Promise<LedgerRo
 import { getRate, creditCostFromRate } from "./rateCard";
 
 export interface CostInput {
-  kind: "image" | "video" | "text";
+  kind: "image" | "video" | "text" | "speech";
   model: string;
   imageCount?: number;
   seconds?: number;
   maxTokens?: number;
+  /** speech only — characters of spoken text */
+  speechChars?: number;
   /** video only — "480p" | "720p" | "1080p" | "4k"; see VIDEO_RESOLUTION_MULTIPLIER */
   resolution?: string;
 }
@@ -102,6 +104,7 @@ export async function creditCost(input: CostInput): Promise<number> {
       imageCount: input.imageCount,
       seconds: input.seconds,
       maxTokens: input.maxTokens,
+      speechChars: input.speechChars,
       resolution: input.resolution,
     });
   }
