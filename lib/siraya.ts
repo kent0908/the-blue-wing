@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { monitoredModelFetch } from "./modelMonitoring";
 import { applyWatermarkDefaults } from "./watermark";
 
 /**
@@ -67,12 +69,19 @@ async function sirayaFetch(path: string, init: RequestInit = {}): Promise<Respon
     .map(key => key?.trim()).filter((key): key is string => Boolean(key)))];
   if (!keys.length) throw new SirayaConfigError("SIRAYA API key is not configured.");
   const isVideoLookup = init.method === "GET" && path.startsWith("/videos/");
+  let model: string | undefined;
+  if (init.method === "POST" && typeof init.body === "string") {
+    try { const body = JSON.parse(init.body); if (typeof body.model === "string") model = body.model; } catch { /* Existing upstream validation remains authoritative. */ }
+  }
+  const requestId = randomUUID();
   for (let index = 0; index < keys.length; index++) {
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${keys[index]}`);
     headers.set("Content-Type", "application/json");
     // Network errors and accepted streaming responses are never replayed.
-    const res = await fetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers });
+    const res = model
+      ? await monitoredModelFetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers }, {model, provider:"siraya", requestId, attempt:index+1})
+      : await fetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers });
     if (res.ok) return res;
     const error = await responseError(res);
     const canReplay = init.body == null || typeof init.body === "string";

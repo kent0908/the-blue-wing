@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 const NAV = [
+  { href: "/crm/monitoring", label: "模型使用監控", hint: "使用量 · HTTP 狀態" },
   { href: "/crm", label: "總覽", hint: "KPI · 活躍 · 營收" },
   { href: "/crm/finance", label: "收入與利潤", hint: "每日 · 每模型" },
   { href: "/crm/costs", label: "成本設定", hint: "牌價 · 折扣" },

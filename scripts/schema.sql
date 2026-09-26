@@ -545,3 +545,18 @@ create table if not exists character_message_audio (
   created_at   timestamptz not null default now()
 );
 create index if not exists character_message_audio_user_idx on character_message_audio(user_id, created_at desc);
+
+-- Upstream generation submissions, one event per HTTP attempt; polls are excluded.
+create table if not exists model_request_events (
+ id bigint generated always as identity primary key,
+ request_id uuid not null,
+ model varchar(160) not null,
+ provider varchar(40) not null,
+ attempt integer not null check (attempt > 0),
+ http_status integer check (http_status between 100 and 599),
+ outcome text not null check (outcome in ('http','timeout','network_error','cancelled')),
+ duration_ms bigint not null check (duration_ms >= 0),
+ created_at timestamptz not null default now()
+);
+create index if not exists model_request_events_date_idx on model_request_events(created_at desc);
+create index if not exists model_request_events_model_date_idx on model_request_events(model,created_at desc);

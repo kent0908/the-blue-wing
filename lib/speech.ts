@@ -1,3 +1,4 @@
+import { monitoredModelFetch } from "./modelMonitoring";
 import { SirayaApiError, SirayaConfigError } from "./siraya";
 import { resolveVoice } from "./voices";
 
@@ -78,7 +79,7 @@ export async function synthesizeSpeech(input: {
   const style = String(input.style ?? "").trim().slice(0, 200);
   const prompt = style ? `${style}：${input.text}` : input.text;
 
-  const res = await fetch(`${ENDPOINT}/${encodeURIComponent(SPEECH_MODEL)}:generateContent`, {
+  const res = await monitoredModelFetch(`${ENDPOINT}/${encodeURIComponent(SPEECH_MODEL)}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     signal: AbortSignal.timeout(60_000),
@@ -91,7 +92,7 @@ export async function synthesizeSpeech(input: {
         },
       },
     }),
-  });
+  }, {model:SPEECH_MODEL,provider:"google"});
 
   if (!res.ok) {
     // Never surface the provider's raw body: it can echo the request back.

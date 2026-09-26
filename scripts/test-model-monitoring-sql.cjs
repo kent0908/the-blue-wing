@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');require('@next/env').loadEnvConfig(process.cwd(),false,{info(){},error(){}});process.env.POSTGRES_URL ||=process.env.DATABASE_URL||process.env.POSTGRES_PRISMA_URL;const{sql}=require('@vercel/postgres');
+(async()=>{const c=await sql.connect();try{await c.query('BEGIN');
+ await c.query('CREATE TEMP TABLE model_request_events(request_id text, model text, provider text, attempt int, http_status int, outcome text, duration_ms int, created_at timestamptz) ON COMMIT DROP');
+ await c.query("INSERT INTO model_request_events VALUES ('a','model-a','siraya',1,402,'http',100,'2026-09-25T16:00:00Z'),('a','model-a','siraya',2,200,'http',200,'2026-09-25T16:00:01Z'),('b','model-b','siraya',1,400,'http',300,'2026-09-26T10:00:00Z'),('c','model-b','siraya',1,502,'http',400,'2026-09-26T10:00:00Z'),('d','model-b','siraya',1,NULL,'timeout',500,'2026-09-26T10:00:00Z'),('outside','model-a','siraya',1,200,'http',1,'2026-09-26T16:00:00Z')");
+ const source=fs.readFileSync('app/api/crm/monitoring/route.ts','utf8');const metrics=source.match(/const metrics = `([\s\S]*?)`;/)[1];const where=source.match(/const where = `([\s\S]*?)`;/)[1];
+ const query=`select ${metrics} ${where}`;const params=['2026-09-25T16:00:00Z','2026-09-26T16:00:00Z',null];
+ const r=(await c.query(query,params)).rows[0];assert.equal(r.attempts,5);assert.equal(r.requests,4);assert.equal(r.retries,1);assert.equal(r.success,1);assert.equal(r.bad_request,1);assert.equal(r.client_error,2);assert.equal(r.server_error,1);assert.equal(r.timeout,1);
+ const filtered=(await c.query(query,[...params.slice(0,2),'MODEL-A'])).rows[0];assert.equal(filtered.attempts,2);assert.equal(filtered.requests,1);
+ const empty=(await c.query(query,[...params.slice(0,2),"' OR 1=1 --"])).rows[0];assert.equal(empty.attempts,0);
+ console.log('PASS real PostgreSQL aggregates: retry deduplication, 400 subset, 502, timeout, model filter, Taiwan day boundary; only temporary rows');
+}finally{await c.query('ROLLBACK');c.release();await sql.end()}})().catch(e=>{console.error(e.message);process.exitCode=1});
