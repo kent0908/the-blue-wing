@@ -31,6 +31,7 @@ export interface SpeechResult {
   contentType: "audio/wav";
   /** decoded from the byte length, so it reflects the audio actually produced */
   seconds: number;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 }
 
 /** Wrap raw PCM16 mono in a 44-byte RIFF/WAVE header. */
@@ -100,6 +101,7 @@ export async function synthesizeSpeech(input: {
   }
 
   const json = (await res.json()) as {
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
     candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[];
   };
   const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
@@ -108,5 +110,5 @@ export async function synthesizeSpeech(input: {
 
   const pcm = Buffer.from(data, "base64");
   const rate = sampleRateOf(part?.inlineData?.mimeType);
-  return { audio: wavFromPcm16(pcm, rate), contentType: "audio/wav", seconds: pcm.length / (rate * 2) };
+  return { audio: wavFromPcm16(pcm, rate), contentType: "audio/wav", seconds: pcm.length / (rate * 2), usage: { prompt_tokens: json.usageMetadata?.promptTokenCount, completion_tokens: json.usageMetadata?.candidatesTokenCount, total_tokens: json.usageMetadata?.totalTokenCount } };
 }

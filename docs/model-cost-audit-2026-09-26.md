@@ -17,7 +17,7 @@ SIRAYA 公開模型 API 本次回傳 HTTP 500，原廠價格是參考基準，�
 - DeepSeek 4.1 Flash 與 Pro 0813：尖峰、離峰及快取分列。舊 v4-flash、v4-flash-0731、v4-pro 不因原廠別名變更而自動換價。
 - Gemini 3.8 Flash／TTS：2026 與 2027 生效費率分列。原廠 Gemini 2.5 Flash Image 公告 2026/10/02 停用，SIRAYA 通道是否續供需確認。
 
-已整合另一工作階段新增的陪聊 TTS：直連 Google，功能維持未配置金鑰時關閉，零售以每 40 字元計算。
+已整合另一工作階段新增的陪聊 TTS：直連 Google，功能維持未配置金鑰時關閉，零售以每 40 字元計算，Google 回傳的 Token 用量會經白名單保存。
 
 完整分項與來源保存在 `lib/sirayaPublicPrices.ts`，後台 `/crm/costs` 逐項展示。
 

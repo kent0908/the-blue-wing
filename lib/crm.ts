@@ -107,9 +107,11 @@ const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 export async function recordUsageEvent(input: { userId: number; chargeId: string | null; kind: string; model: string; credits: number; units?: number; resolution?: string | null; providerResponse?: unknown; quote?: CostQuote | null }): Promise<void> {
   try {
-    const q = input.quote ?? await quoteCost(input.model, input.credits, { units: input.units, resolution: input.resolution });
+    const q: CostQuote = input.quote === null
+      ? { units: input.units ?? 0, unit: "call", resolution: input.resolution ?? null, listCostUsd: 0, actualCostUsd: 0, discountPct: 0, costKnown: false }
+      : input.quote ?? await quoteCost(input.model, input.credits, { units: input.units, resolution: input.resolution });
     const receipt = extractProviderReceipt(input.providerResponse);
-    const snapshot = { tariff: q.tariffSnapshot ?? null, discountPct: q.discountPct, version: "2026-09-26", basis: "official_reference" };
+    const snapshot = { tariff: q.tariffSnapshot ?? null, discountPct: input.quote === null ? null : q.discountPct, version: "2026-09-26", basis: "official_reference" };
     await sql`
       insert into usage_events (user_id, charge_id, kind, model, credits, units, unit, resolution, list_cost_usd, actual_cost_usd, cost_known, pricing_snapshot, provider_cost_usd, provider_usage)
       values (${input.userId}, ${input.chargeId ? Number(input.chargeId) : null}, ${input.kind}, ${input.model}, ${input.credits}, ${q.units}, ${q.unit}, ${q.resolution}, ${q.listCostUsd}, ${q.actualCostUsd}, ${q.costKnown}, ${JSON.stringify(snapshot)}::jsonb, ${receipt?.costUsd ?? null}, ${JSON.stringify(receipt?.usage ?? {})}::jsonb)
