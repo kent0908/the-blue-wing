@@ -41,7 +41,7 @@ async function ev(expression){const r=await send('Runtime.evaluate',{expression,
  }
  await ev(`document.querySelector('svg[aria-label*="每日 HTTP"]')?.scrollIntoView({block:'center'})`);
  fs.writeFileSync('crm-monitoring-desktop.png',Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));
- for(const width of [390,320]){await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await sleep(200);assert.equal(await ev(`document.documentElement.scrollWidth>innerWidth`),false,`overflow ${width}`);fs.writeFileSync(`crm-monitoring-mobile-${width}.png`,Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));}
+ for(const width of [390,320]){await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await sleep(200);await ev(`document.querySelector('svg[aria-label*="每日 HTTP"]')?.scrollIntoView({block:'center'})`);assert.equal(await ev(`document.documentElement.scrollWidth>innerWidth`),false,`overflow ${width}`);fs.writeFileSync(`crm-monitoring-mobile-${width}.png`,Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));}
  await ev(`(()=>{const e=document.querySelector('[aria-label="篩選模型"]');e.value='gpt-image-2';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(350);
  assert.equal(await ev(`document.querySelector('[aria-label="篩選模型"]').value`),'gpt-image-2');
  assert.equal(errors.length,0);console.log('PASS monitoring admin/anonymous/member access, date validation, model filtering, live rendering, desktop/mobile overflow, no JS errors; no paid calls');
