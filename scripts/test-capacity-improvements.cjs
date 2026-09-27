@@ -31,7 +31,7 @@ function load(file,mocks){const m={exports:{}};new Function('require','module','
  assert.equal(response.status,200);assert.equal((await response.json()).reply.content,'reply');assert.equal(memoryCalls,1);assert.equal(deferred.length,1);
  const oldError=console.error;console.error=()=>{};try{await deferred[0]();}finally{console.error=oldError;}assert.equal(memoryCalls,2);
  let stored='old';
- const chars=load('lib/characters.ts',{'./db':{sql:async(strings,summary,id,previous)=>{if(stored===previous)stored=summary;return {rows:[]};}},'./characterProfile':{},'./sceneInteractionPolicy':{},'./promptSafety':{},'./officialCompanionStory':{decodeStoryMessage:()=>null,storyPrompt:()=>''},'./relationshipStages':{},'./companionOfficialSeed':{}});
+ const chars=load('lib/characters.ts',{'./db':{sql:async(strings,summary,id,previous)=>{if(stored===previous)stored=summary;return {rows:[]};}},'./characterProfile':{},'./sceneInteractionPolicy':{},'./promptSafety':{},'./officialCompanionStory':{decodeStoryMessage:()=>null,storyPrompt:()=>''},'./relationshipStages':{},'./companionOfficialSeed':{},'./romanceDepth':{}});
  await chars.updateMemorySummary(7,'newer','old');
  await chars.updateMemorySummary(7,'late older','old');
  assert.equal(stored,'newer');

@@ -105,13 +105,53 @@ export interface ChatCompletionRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  /** override the default below; reasoning is off unless a caller asks for it */
+  reasoning_effort?: "none" | "minimal" | "low" | "medium" | "high";
 }
+
+/**
+ * Reasoning is OFF by default for chat, because its tokens come out of the
+ * SAME max_tokens budget as the reply and are spent FIRST. Measured on the
+ * live gateway 2026-09-26 with an ordinary companion-length prompt:
+ *
+ *   gemini-3.8-flash  baseline: 285 reasoning tokens, finish_reason "length",
+ *                               a 15-character reply — truncated to junk
+ *                     none:     0 reasoning, finish "stop", 138 characters
+ *   deepseek-v4.1-flash  168 -> 0 reasoning, 237 -> 62 output tokens
+ *   gpt-5.4-mini          59 -> 0 reasoning, 167 -> 79 output tokens
+ *
+ * Reproduced end to end against production the same day: a max_tokens=60
+ * request returned HTTP 200 with an empty reply (the charge was correctly
+ * refunded, but the user got nothing). Companion chat runs at 700, which
+ * makes the same failure rarer, not impossible.
+ *
+ * All four curated text models accept the parameter with HTTP 200, and a
+ * model that does not recognise it ignores it (verified: enable_thinking
+ * and thinking_budget were both silently dropped). A caller that genuinely
+ * wants deliberation passes its own reasoning_effort.
+ */
+const CHAT_DEFAULTS = { reasoning_effort: "none" } as const;
+
+/**
+ * Hard ceiling on a chat round trip, below every caller's maxDuration.
+ *
+ * Without it a slow provider outlives the function: the platform kills the
+ * request mid-await, so paidCall's catch never runs and the reserved charge
+ * is never refunded — the user pays for a reply they never get. Measured on
+ * the live gateway 2026-09-26, gemini-3.8-flash answered the SAME prompt in
+ * 3.1s, 146s and 299s on three consecutive tries (the others were all under
+ * 3.5s), and one production call took 51.7s. An abort lands inside the try,
+ * which refunds. Image and video keep their own longer budgets; this is
+ * chat-only on purpose.
+ */
+const CHAT_TIMEOUT_MS = 45_000;
 
 /** POST /chat/completions (non-streaming). */
 export async function createChatCompletion(body: ChatCompletionRequest) {
   const res = await sirayaFetch("/chat/completions", {
     method: "POST",
-    body: JSON.stringify({ ...body, stream: false }),
+    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+    body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: false }),
   });
   return res.json();
 }
@@ -121,7 +161,8 @@ export async function createChatCompletion(body: ChatCompletionRequest) {
 export async function createChatCompletionStream(body: ChatCompletionRequest) {
   return sirayaFetch("/chat/completions", {
     method: "POST",
-    body: JSON.stringify({ ...body, stream: true, stream_options: { include_usage: true } }),
+    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+    body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: true, stream_options: { include_usage: true } }),
   });
 }
 
