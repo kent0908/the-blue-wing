@@ -26,7 +26,7 @@ const story = load('lib/officialCompanionStory.ts');
 const { spokenText, speechUnits, SPEECH_CHARS_PER_UNIT, MAX_SPEECH_CHARS } = load('lib/speechText.ts');
 const voices = load('lib/voices.ts');
 const { creditCostFromRate } = load('lib/creditFormula.ts');
-const speech = load('lib/speech.ts', { './siraya': { SirayaApiError: Error, SirayaConfigError: Error }, './voices': voices, './gcpAuth': { gcpConfigured:()=>false }, './gcpSpeech': {GCP_SPEECH_MODEL:'gemini-2.5-flash-tts'} });
+const speech = load('lib/speech.ts', { './siraya': { SirayaApiError: Error, SirayaConfigError: Error }, './voices': voices, './geminiSpeech38':{}, './gcpAuth': { gcpConfigured:()=>false }, './gcpSpeech': {GCP_SPEECH_MODEL:'gemini-2.5-flash-tts'} });
 
 let checks = 0;
 const check = (fn) => { fn(); checks++; };

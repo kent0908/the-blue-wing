@@ -1,28 +1,15 @@
+import { pcmFromCloudWav } from "./speechWav";
+import { synthesizeGemini38Pcm } from "./geminiSpeech38";
 import { gcpAccessToken } from "./gcpAuth";
 import { monitoredModelFetch } from "./modelMonitoring";
 import { resolveVoice } from "./voices";
 
-export const GCP_SPEECH_MODEL = "gemini-2.5-flash-tts";
-/** Validate Cloud TTS LINEAR16 WAV and extract PCM before wrapping for the shared adapter. */
-export function pcmFromCloudWav(wav: Buffer): Buffer {
-  if (wav.length < 44 || wav.toString("ascii",0,4) !== "RIFF" || wav.toString("ascii",8,12) !== "WAVE" || wav.readUInt32LE(4)+8 !== wav.length) throw new Error("Google Cloud 音訊不是完整 WAV");
-  let validFormat = false;
-  let pcm: Buffer | undefined;
-  for (let offset=12; offset+8<=wav.length;) {
-    const kind=wav.toString("ascii",offset,offset+4), size=wav.readUInt32LE(offset+4), start=offset+8;
-    if (start+size>wav.length) throw new Error("Google Cloud 音訊區塊不完整");
-    if (kind === "fmt ") {
-      validFormat = size>=16 && wav.readUInt16LE(start)===1 && wav.readUInt16LE(start+2)===1 && wav.readUInt32LE(start+4)===24000 && wav.readUInt16LE(start+12)===2 && wav.readUInt16LE(start+14)===16;
-    }
-    if (kind === "data") pcm=wav.subarray(start,start+size);
-    offset=start+size+(size%2);
-  }
-  if (!validFormat || !pcm?.length || pcm.length%2) throw new Error("Google Cloud 音訊格式不支援");
-  return pcm;
-}
+export const GCP_SPEECH_MODEL = process.env.GCP_SPEECH_MODEL === "gemini-3.8-flash-tts" ? "gemini-3.8-flash-tts" : "gemini-2.5-flash-tts";
 export async function synthesizeGcpPcm(input: {text:string;voiceName?:string|null;style?:string|null}) {
   if (!input.text.trim() || Buffer.byteLength(input.text, "utf8") > 4000) throw new Error("語音文字須為 1–4000 UTF-8 bytes");
-  const token = await gcpAccessToken();
+  const modern = GCP_SPEECH_MODEL === "gemini-3.8-flash-tts";
+  const token = await gcpAccessToken(modern ? "gemini" : "cloud");
+  if (modern) return synthesizeGemini38Pcm(input, {Authorization:`Bearer ${token}`, "x-goog-user-project":process.env.GCP_PROJECT_ID!});
   const response = await monitoredModelFetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "x-goog-user-project": process.env.GCP_PROJECT_ID! },

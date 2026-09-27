@@ -3,6 +3,8 @@ function wav(n=48000) {const b=Buffer.alloc(44+n);b.write('RIFF');b.writeUInt32L
 let calls=0,seen,reply=()=>Response.json({audioContent:wav().toString('base64')});
 function load(file,overrides){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(id=>{if(id in overrides)return overrides[id];throw Error('Unexpected dependency '+id)},m,m.exports);return m.exports;}
 const {synthesizeGcpPcm}=load('lib/gcpSpeech.ts',{
+ './speechWav':load('lib/speechWav.ts',{}),
+ './geminiSpeech38':{},
  './gcpAuth':{gcpAccessToken:async()=> 'test-only-token'},
  './voices':{resolveVoice:()=> 'Kore'},
  './modelMonitoring':{monitoredModelFetch:async(url,init,meta)=>{calls++;seen={url,init,meta};return reply();}},

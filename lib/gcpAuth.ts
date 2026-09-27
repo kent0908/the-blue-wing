@@ -5,7 +5,7 @@ import { ExternalAccountClient } from "google-auth-library";
 export function gcpConfigured(): boolean {
   return ["GCP_PROJECT_ID", "GCP_PROJECT_NUMBER", "GCP_SERVICE_ACCOUNT_EMAIL", "GCP_WORKLOAD_IDENTITY_POOL_ID", "GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID"].every(k => !!process.env[k]?.trim());
 }
-export async function gcpAccessToken(): Promise<string> {
+export async function gcpAccessToken(service: "cloud" | "gemini" = "cloud"): Promise<string> {
   if (!gcpConfigured()) throw new Error("GCP identity is not configured");
   const audience = `//iam.googleapis.com/projects/${process.env.GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${process.env.GCP_WORKLOAD_IDENTITY_POOL_ID}/providers/${process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID}`;
   const client = ExternalAccountClient.fromJSON({
@@ -16,7 +16,7 @@ export async function gcpAccessToken(): Promise<string> {
     subject_token_supplier: { getSubjectToken: () => getVercelOidcToken() },
   });
   if (!client) throw new Error("GCP identity configuration is invalid");
-  client.scopes = ["https://www.googleapis.com/auth/cloud-platform"];
+  client.scopes = service === "gemini" ? ["https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/generative-language.retriever"] : ["https://www.googleapis.com/auth/cloud-platform"];
   try {
     const result = await client.getAccessToken();
     if (!result.token) throw new Error("Missing access token");

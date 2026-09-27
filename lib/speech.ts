@@ -1,3 +1,4 @@
+import { synthesizeGemini38Pcm } from "./geminiSpeech38";
 import { gcpConfigured } from "./gcpAuth";
 import { GCP_SPEECH_MODEL, synthesizeGcpPcm } from "./gcpSpeech";
 import { monitoredModelFetch } from "./modelMonitoring";
@@ -79,11 +80,15 @@ export async function synthesizeSpeech(input: {
   if (process.env.SPEECH_PROVIDER === "google-cloud") {
     if (!speechConfigured()) throw new SirayaConfigError("Google Cloud speech is not enabled");
     const result = await synthesizeGcpPcm(input);
-    return {audio:wavFromPcm16(result.pcm),contentType:"audio/wav",seconds:result.seconds};
+    return {audio:wavFromPcm16(result.pcm),contentType:"audio/wav",seconds:result.seconds,usage:"usage" in result ? result.usage : undefined};
   }
   const key = process.env.GOOGLE_AI_API_KEY?.trim();
   if (!key) throw new SirayaConfigError("GOOGLE_AI_API_KEY is not configured.");
 
+  if (["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"].includes(SPEECH_MODEL)) {
+    const result=await synthesizeGemini38Pcm(input,{"x-goog-api-key":key},SPEECH_MODEL);
+    return {audio:wavFromPcm16(result.pcm),contentType:"audio/wav",seconds:result.seconds,usage:result.usage};
+  }
   const style = String(input.style ?? "").trim().slice(0, 200);
   const prompt = style ? `${style}：${input.text}` : input.text;
 
