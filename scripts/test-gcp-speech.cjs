@@ -1,5 +1,6 @@
 const fs=require('node:fs'),ts=require('typescript'),assert=require('node:assert/strict');
-let calls=0,seen,reply=()=>Response.json({audioContent:Buffer.alloc(48000).toString('base64')});
+function wav(n=48000) {const b=Buffer.alloc(44+n);b.write('RIFF');b.writeUInt32LE(36+n,4);b.write('WAVE',8);b.write('fmt ',12);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(24000,24);b.writeUInt32LE(48000,28);b.writeUInt16LE(2,32);b.writeUInt16LE(16,34);b.write('data',36);b.writeUInt32LE(n,40);return b;}
+let calls=0,seen,reply=()=>Response.json({audioContent:wav().toString('base64')});
 function load(file,overrides){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(id=>{if(id in overrides)return overrides[id];throw Error('Unexpected dependency '+id)},m,m.exports);return m.exports;}
 const {synthesizeGcpPcm}=load('lib/gcpSpeech.ts',{
  './gcpAuth':{gcpAccessToken:async()=> 'test-only-token'},
@@ -8,10 +9,10 @@ const {synthesizeGcpPcm}=load('lib/gcpSpeech.ts',{
 });
 (async()=>{
  const a=await synthesizeGcpPcm({text:'晚安，明天見。'});assert.equal(a.seconds,1);assert.equal(a.pcm.length,48000);
- const body=JSON.parse(seen.init.body);assert.equal(body.voice.languageCode,'cmn-TW');assert.equal(body.voice.modelName,'gemini-2.5-flash-tts');assert.equal(body.audioConfig.audioEncoding,'PCM');assert.equal(body.input.text,'晚安，明天見。');assert.equal(seen.meta.provider,'google-cloud');assert.equal(a.usage,undefined);
+ const body=JSON.parse(seen.init.body);assert.equal(body.voice.languageCode,'cmn-TW');assert.equal(body.voice.modelName,'gemini-2.5-flash-tts');assert.equal(body.audioConfig.audioEncoding,'LINEAR16');assert.equal(body.input.text,'晚安，明天見。');assert.equal(seen.meta.provider,'google-cloud');assert.equal(a.usage,undefined);
  await assert.rejects(()=>synthesizeGcpPcm({text:'字'.repeat(1334)}));await assert.rejects(()=>synthesizeGcpPcm({text:' '}));assert.equal(calls,1);
  reply=()=>new Response('private upstream body',{status:429});await assert.rejects(()=>synthesizeGcpPcm({text:'test'}),e=>e.message.includes('429')&&!e.message.includes('private'));
- for(const audioContent of ['', 'not valid!',Buffer.alloc(3).toString('base64')]){reply=()=>Response.json({audioContent});await assert.rejects(()=>synthesizeGcpPcm({text:'test'}));}
+ for(const audioContent of ['', 'not valid!',Buffer.alloc(3).toString('base64'),wav(3).toString('base64'),wav().subarray(0,100).toString('base64')]){reply=()=>Response.json({audioContent});await assert.rejects(()=>synthesizeGcpPcm({text:'test'}));}
  let config;const auth=load('lib/gcpAuth.ts',{'@vercel/oidc':{getVercelOidcToken:async()=> 'test-oidc'},'google-auth-library':{ExternalAccountClient:{fromJSON:c=>{config=c;return {getAccessToken:async()=>({token:'short-lived-test'})}}}}});
  const saved={...process.env};try{
  for(const k of ['GCP_PROJECT_ID','GCP_PROJECT_NUMBER','GCP_SERVICE_ACCOUNT_EMAIL','GCP_WORKLOAD_IDENTITY_POOL_ID','GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID'])delete process.env[k];
