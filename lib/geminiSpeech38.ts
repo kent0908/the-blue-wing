@@ -1,9 +1,10 @@
+import type { CompanionLanguage } from "./companionVoices";
 import { monitoredModelFetch } from "./modelMonitoring";
 import { resolveVoice } from "./voices";
 import { pcmFromCloudWav } from "./speechWav";
 
 /** 3.8 uses structured delivery directions and returns a WAV, unlike older raw-PCM models. */
-export async function synthesizeGemini38Pcm(input: {text:string;voiceName?:string|null;style?:string|null}, authHeaders: Record<string,string>, model="gemini-3.8-flash-tts") {
+export async function synthesizeGemini38Pcm(input: {text:string;voiceName?:string|null;style?:string|null;language?:CompanionLanguage}, authHeaders: Record<string,string>, model="gemini-3.8-flash-tts") {
   if (!input.text.trim() || Buffer.byteLength(input.text,"utf8")>4000) throw new Error("語音文字須為 1–4000 UTF-8 bytes");
   if (!["gemini-3.8-flash-tts","gemini-3.8-flash-lite-tts"].includes(model)) throw new Error("不支援的語音模型");
   const response=await monitoredModelFetch("https://generativelanguage.googleapis.com/v1beta/interactions",{

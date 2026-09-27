@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconChat, IconTrash, IconArrowRight } from "./Icons";
 import PersonaEditor from "./PersonaEditor";
+import { type CompanionLanguage } from "@/lib/companionVoices";
 import MessageSpeech from "./MessageSpeech";
 import VoicePicker from "./VoicePicker";
 import CharacterBuilder from "./CharacterBuilder";
@@ -40,6 +41,7 @@ export interface CharacterData {
   officialKey?: string | null;
   /** the user's TTS voice pick for this character; null = default voice */
   voiceName?: string | null;
+  speechLanguage?: CompanionLanguage;
   /** what this character can do — see lib/characters.ts contentRules */
   rules?: { ladder: "romance" | "trust"; scenes: boolean; wardrobe: boolean; idleRegen: boolean; editable: boolean };
 }
@@ -106,7 +108,6 @@ export default function CharacterChat({ character: initial }: { character: Chara
         setSuggestions(j.suggestions ?? []);
         setAudio(j.audio ?? {});
         setSpeechEnabled(!!j.speechEnabled);
-        setCharacter((current) => ({ ...current, voiceName: j.voiceName ?? null }));
       })
       .catch(() => setMessages([]));
   }, [character.id]);
@@ -436,7 +437,14 @@ export default function CharacterChat({ character: initial }: { character: Chara
             <VoicePicker
               characterId={character.id}
               value={character.voiceName ?? null}
-              onChange={(voiceName) => setCharacter((cur) => ({ ...cur, voiceName }))}
+              officialKey={character.officialKey}
+              language={character.speechLanguage ?? (isOfficial ? "ja-JP" : "zh-TW")}
+              disabled={sending}
+              onChange={(voiceName, speechLanguage) => {
+                settingsRevision.current++;
+                setCharacter((cur) => ({ ...cur, voiceName, speechLanguage }));
+                setSettingsNotice(tr("聲音與語言已儲存，下一則回覆生效。"));
+              }}
             />
             {speechEnabled && <label className="flex items-start gap-2 px-4 pb-4 text-xs leading-6 text-[#9aaba3]">
               <input

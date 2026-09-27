@@ -560,3 +560,7 @@ create table if not exists model_request_events (
 );
 create index if not exists model_request_events_date_idx on model_request_events(created_at desc);
 create index if not exists model_request_events_model_date_idx on model_request_events(model,created_at desc);
+
+-- Companion language: null keeps custom characters Chinese; official defaults to Japanese in code.
+alter table characters add column if not exists speech_language text check (speech_language in ('ja-JP','zh-TW','en-US'));
+alter table character_messages add column if not exists speech_language text check (speech_language in ('ja-JP','zh-TW','en-US'));

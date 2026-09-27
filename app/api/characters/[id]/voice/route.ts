@@ -1,3 +1,4 @@
+import { isCompanionLanguage } from "@/lib/companionVoices";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { setCharacterVoice } from "@/lib/characterAudio";
@@ -33,9 +34,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
       return NextResponse.json({ error: { message: "沒有這個聲音", code: "unknown_voice" } }, { status: 400 });
     }
 
-    const updated = await setCharacterVoice(auth.user.id, id, raw as string | null);
+    const language = (body as {language?:unknown}).language;
+    if (language !== undefined && !isCompanionLanguage(language)) return NextResponse.json({error:{message:"請選擇日文、中文或英文",code:"unknown_language"}},{status:400});
+    const updated = await setCharacterVoice(auth.user.id, id, raw as string | null, language as string | undefined);
     if (!updated) return NextResponse.json({ error: { message: "找不到這個角色", code: "not_found" } }, { status: 404 });
-    return NextResponse.json({ voiceName: raw ?? null });
+    return NextResponse.json({ voiceName: raw ?? null, language });
   } catch (err) {
     return errorResponse(err);
   }

@@ -1,3 +1,4 @@
+import type { CompanionLanguage } from "./companionVoices";
 import { synthesizeGemini38Pcm } from "./geminiSpeech38";
 import { gcpConfigured } from "./gcpAuth";
 import { GCP_SPEECH_MODEL, synthesizeGcpPcm } from "./gcpSpeech";
@@ -76,6 +77,7 @@ export async function synthesizeSpeech(input: {
   text: string;
   voiceName?: string | null;
   style?: string | null;
+  language?: CompanionLanguage;
 }): Promise<SpeechResult> {
   if (process.env.SPEECH_PROVIDER === "google-cloud") {
     if (!speechConfigured()) throw new SirayaConfigError("Google Cloud speech is not enabled");

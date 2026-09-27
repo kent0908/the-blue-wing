@@ -1,3 +1,4 @@
+import { companionVoiceSettings } from "@/lib/companionVoices";
 import { decisionEnabled } from "@/lib/companionDecisionProvider";
 import { recordDecisionShadow } from "@/lib/companionDecisionShadow";
 import { openingSuggestions, recoverStoryReply, STORY_MESSAGE_PREFIX } from "@/lib/officialCompanionStory";
@@ -54,6 +55,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     // priced "read aloud" button without one request per bubble
     audio,
     voiceName: character.voice_name ?? null,
+    speechLanguage: companionVoiceSettings(character).language,
     speechEnabled: speechConfigured(),
     messages: rows.map((m) => ({ id: String(m.id), role: m.role, content: m.content, createdAt: m.created_at })),
   });
@@ -121,7 +123,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     let turnCount: number;
     try {
       await addMessage(id, "user", content);
-      saved = await addMessage(id, "assistant", structured?.suggestions.length === 3 ? STORY_MESSAGE_PREFIX + JSON.stringify({ reply: structured.reply, suggestions: structured.suggestions.map((s) => s.text) }) : String(reply));
+      saved = await addMessage(id, "assistant", structured?.suggestions.length === 3 ? STORY_MESSAGE_PREFIX + JSON.stringify({ reply: structured.reply, suggestions: structured.suggestions.map((s) => s.text) }) : String(reply), companionVoiceSettings(character).language);
       const turn = await recordTurn(id, gain);
       affection = turn.affection;
       turnCount = turn.turnCount;

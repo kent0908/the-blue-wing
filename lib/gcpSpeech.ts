@@ -1,3 +1,4 @@
+import type { CompanionLanguage } from "./companionVoices";
 import { pcmFromCloudWav } from "./speechWav";
 import { synthesizeGemini38Pcm } from "./geminiSpeech38";
 import { gcpAccessToken } from "./gcpAuth";
@@ -5,7 +6,7 @@ import { monitoredModelFetch } from "./modelMonitoring";
 import { resolveVoice } from "./voices";
 
 export const GCP_SPEECH_MODEL = process.env.GCP_SPEECH_MODEL === "gemini-3.8-flash-tts" ? "gemini-3.8-flash-tts" : "gemini-2.5-flash-tts";
-export async function synthesizeGcpPcm(input: {text:string;voiceName?:string|null;style?:string|null}) {
+export async function synthesizeGcpPcm(input: {text:string;voiceName?:string|null;style?:string|null;language?:CompanionLanguage}) {
   if (!input.text.trim() || Buffer.byteLength(input.text, "utf8") > 4000) throw new Error("語音文字須為 1–4000 UTF-8 bytes");
   const modern = GCP_SPEECH_MODEL === "gemini-3.8-flash-tts";
   const token = await gcpAccessToken(modern ? "gemini" : "cloud");
@@ -16,7 +17,7 @@ export async function synthesizeGcpPcm(input: {text:string;voiceName?:string|nul
     signal: AbortSignal.timeout(45_000),
     body: JSON.stringify({
       input: { text: input.text, prompt: input.style?.trim().slice(0,200) || "以自然溫暖的台灣華語說話，語速適中，只朗讀提供的文字。" },
-      voice: { languageCode: "cmn-TW", name: resolveVoice(input.voiceName), modelName: GCP_SPEECH_MODEL },
+      voice: { languageCode: input.language === "ja-JP" ? "ja-JP" : input.language === "en-US" ? "en-US" : "cmn-TW", name: resolveVoice(input.voiceName), modelName: GCP_SPEECH_MODEL },
       audioConfig: {audioEncoding: "LINEAR16", sampleRateHertz: 24000},
     }),
   }, {model:GCP_SPEECH_MODEL,provider:"google-cloud"});

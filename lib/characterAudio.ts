@@ -21,9 +21,9 @@ export async function ownedAssistantMessage(
   userId: number,
   characterId: number,
   messageId: number
-): Promise<{ content: string; voice_name: string | null; personality: string } | null> {
-  const { rows } = await sql<{ content: string; voice_name: string | null; personality: string }>`
-    select m.content, c.voice_name, c.personality
+): Promise<{ content: string; voice_name: string | null; personality: string; official_key: string | null; speech_language: string | null } | null> {
+  const { rows } = await sql<{ content: string; voice_name: string | null; personality: string; official_key: string | null; speech_language: string | null }>`
+    select m.content, c.voice_name, c.personality, c.official_key, m.speech_language
     from character_messages m
     join characters c on c.id = m.character_id
     where m.id = ${messageId}
@@ -71,9 +71,9 @@ export async function saveMessageAudio(input: {
   `;
 }
 
-export async function setCharacterVoice(userId: number, characterId: number, voiceName: string | null): Promise<boolean> {
+export async function setCharacterVoice(userId: number, characterId: number, voiceName: string | null, language?: string): Promise<boolean> {
   const { rowCount } = await sql`
-    update characters set voice_name = ${voiceName} where id = ${characterId} and user_id = ${userId}
+    update characters set voice_name = ${voiceName}, speech_language = coalesce(${language ?? null}, speech_language), updated_at = now() where id = ${characterId} and user_id = ${userId}
   `;
   return !!rowCount;
 }

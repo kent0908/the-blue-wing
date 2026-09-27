@@ -8,7 +8,7 @@ import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { errorResponse } from "@/lib/errors";
 import { SPEECH_MODEL, speechConfigured, synthesizeSpeech } from "@/lib/speech";
 import { spokenText } from "@/lib/speechText";
-import { resolveVoice } from "@/lib/voices";
+import { companionVoiceSettings, companionSpeechDirection, isCompanionLanguage } from "@/lib/companionVoices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +38,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       return NextResponse.json({ error: { message: "角色或訊息編號不正確", code: "bad_id" } }, { status: 400 });
     }
 
+    const message = await ownedAssistantMessage(auth.user.id, characterId, messageId);
+    if (!message) return NextResponse.json({ error: { message: "找不到這則訊息", code: "not_found" } }, { status: 404 });
     const cached = await getMessageAudio(auth.user.id, messageId);
     if (cached) {
       return NextResponse.json({ url: `/api/media/${cached.pathname}`, credits: 0, cached: true, voiceName: cached.voice_name });
@@ -52,13 +54,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       return NextResponse.json({ error: { message: "語音儲存尚未設定，請聯絡管理員", code: "storage_unavailable" } }, { status: 503 });
     }
 
-    const message = await ownedAssistantMessage(auth.user.id, characterId, messageId);
-    if (!message) return NextResponse.json({ error: { message: "找不到這則訊息", code: "not_found" } }, { status: 404 });
 
     const text = spokenText(message.content);
     if (!text) return NextResponse.json({ error: { message: "這則訊息沒有可朗讀的內容", code: "nothing_to_speak" } }, { status: 422 });
 
-    const voiceName = resolveVoice(message.voice_name);
+    const {voiceName} = companionVoiceSettings(message);
+    const language = isCompanionLanguage(message.speech_language) ? message.speech_language : "zh-TW";
+    const style = companionSpeechDirection(message, language);
     const cost = await creditCost({ kind: "speech", model: SPEECH_MODEL, speechChars: text.length });
     const balance = await getBalance(auth.user.id);
     if (balance < cost) {
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     const { result: speech, chargeId } = await paidCall(auth.user.id, cost, "speech", SPEECH_MODEL, () =>
-      synthesizeSpeech({ text, voiceName })
+      synthesizeSpeech({ text, voiceName, language, style })
     );
 
     // Store + record, refunding if either fails — the same gap already fixed
