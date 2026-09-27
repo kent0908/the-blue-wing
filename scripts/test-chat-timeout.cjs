@@ -41,5 +41,38 @@ process.env.SIRAYA_API_KEY='test-key';
     check(()=>assert.ok(m,`${name} must declare maxDuration`));
     check(()=>assert.ok(Number(m[1])*1000 > timeout,`${name} maxDuration must exceed the ${timeout}ms provider timeout`));
   }
+  // 7 of the catalogue's 80 text models reject reasoning_effort:"none" with a
+  // 400 and answer fine without it (swept 2026-09-27). The default must not be
+  // able to break a model outright.
+  const reject=(message,status=400)=>{const e=new client.SirayaApiError(status,message);return e;};
+  check(()=>assert.ok(client.rejectsReasoningDefault(reject("Unsupported value: 'none' is not supported with the 'gpt-5.4-pro' model"),{model:'m',messages:[]})));
+  check(()=>assert.ok(client.rejectsReasoningDefault(reject('The model does not support setting thinking_budget to 0.'),{model:'m',messages:[]})));
+  check(()=>assert.ok(client.rejectsReasoningDefault(reject('This model does not support `reasoning_effort` value `none`.'),{model:'m',messages:[]})));
+  // an unrelated 400, another status, or a caller-chosen effort must never retry
+  check(()=>assert.ok(!client.rejectsReasoningDefault(reject('messages: field required'),{model:'m',messages:[]})));
+  check(()=>assert.ok(!client.rejectsReasoningDefault(reject('reasoning_effort',402),{model:'m',messages:[]})));
+  check(()=>assert.ok(!client.rejectsReasoningDefault(reject('reasoning_effort'),{model:'m',messages:[],reasoning_effort:'high'})));
+  check(()=>assert.ok(!client.rejectsReasoningDefault(new Error('reasoning_effort'),{model:'m',messages:[]})));
+  // end to end: the retry drops the flag and keeps everything else
+  const sent=[];
+  global.fetch=async(url,init)=>{sent.push(JSON.parse(init.body));
+    return sent.length===1
+      ? {ok:false,status:400,json:async()=>({error:{message:"Unsupported value: 'none' is not supported with the 'x' model"}}),headers:new Headers()}
+      : {ok:true,status:200,json:async()=>({ok:true}),headers:new Headers()};};
+  const out=await client.createChatCompletion({model:'grok-4.5',messages:[{role:'user',content:'hi'}],max_tokens:700});
+  global.fetch=original;
+  check(()=>assert.equal(sent.length,2,'a rejected default must be retried exactly once'));
+  check(()=>assert.equal(sent[0].reasoning_effort,'none'));
+  check(()=>assert.equal(sent[1].reasoning_effort,undefined,'the retry must drop the flag'));
+  check(()=>assert.equal(sent[1].max_tokens,700,'the retry must keep the original body'));
+  check(()=>assert.equal(sent[1].model,'grok-4.5'));
+  check(()=>assert.deepEqual(out,{ok:true}));
+  // an unrelated 400 still throws, and only one request is made
+  const once=[];
+  global.fetch=async(url,init)=>{once.push(init);return {ok:false,status:400,json:async()=>({error:{message:'messages: field required'}}),headers:new Headers()};};
+  await assert.rejects(client.createChatCompletion({model:'m',messages:[]}));
+  global.fetch=original;
+  check(()=>assert.equal(once.length,1,'an unrelated 400 must not be retried'));
+
   console.log(`PASS ${checks} chat timeout/reasoning checks; no provider or database calls`);
 })().catch(e=>{console.error(e);process.exitCode=1});
