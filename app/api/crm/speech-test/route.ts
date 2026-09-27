@@ -17,6 +17,9 @@ export async function POST(req: NextRequest) {
   const result=await synthesizeGcpPcm({text:"今天辛苦了，先休息一下吧。我在這裡，慢慢說就好。",voiceName:"Kore"});
   return new Response(new Uint8Array(wavFromPcm16(result.pcm)),{headers:{"Content-Type":"audio/wav","Cache-Control":"private, no-store","Content-Disposition":"inline; filename=blue-wing-gcp-voice-test.wav","X-Audio-Seconds":result.seconds.toFixed(3),"X-Speech-Model":GCP_SPEECH_MODEL}});
  } catch (e) {
+  if (e instanceof Error && /^Gemini 3\.8 語音生成失敗（HTTP 402 [A-Z_]{1,80}）$/.test(e.message)) {
+    return NextResponse.json({error:{code:"payment_required",message:"Gemini API 預付額度不足或尚未完成預付設定，請至 Google AI Studio 的 Billing 頁面確認。"}},{status:402});
+  }
   const safe=e instanceof Error && /^Gemini 3\.8 語音生成失敗（HTTP \d{3} [A-Z_]{1,80}）$/.test(e.message) ? e.message : "GCP 語音測試失敗，請檢查專案權限、配額及身分聯盟設定";
   return NextResponse.json({error:{message:safe}},{status:502});
  }
