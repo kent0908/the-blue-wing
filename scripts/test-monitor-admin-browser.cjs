@@ -29,9 +29,20 @@ async function ev(expression){const r=await send('Runtime.evaluate',{expression,
  for(let i=0;i<40;i++){if(await ev(`!!document.querySelector('option[value="gpt-image-2"]')`))break;await sleep(250);}
  assert.ok(await ev(`document.body.innerText.includes('模型使用量監控')`));
  assert.equal(await ev(`document.documentElement.scrollWidth>innerWidth`),false);
+ assert.ok(await ev(`document.body.innerText.includes('每日用量趨勢') && document.body.innerText.includes('模型用量排行') && document.body.innerText.includes('狀態碼分布圖')`));
+ if(data.series.length){
+  assert.ok(await ev(`!!document.querySelector('svg[aria-label*="每日 HTTP"]')`));
+  await ev(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='長條圖').click()`);
+  await sleep(100);
+  assert.ok(await ev(`!!document.querySelector('svg[aria-label*="長條"] rect')`));
+  await ev(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='折線圖').click()`);
+  await sleep(100);
+  assert.ok(await ev(`!!document.querySelector('svg[aria-label*="折線"] circle')`));
+ }
+ await ev(`document.querySelector('svg[aria-label*="每日 HTTP"]')?.scrollIntoView({block:'center'})`);
  fs.writeFileSync('crm-monitoring-desktop.png',Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));
+ for(const width of [390,320]){await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await sleep(200);assert.equal(await ev(`document.documentElement.scrollWidth>innerWidth`),false,`overflow ${width}`);fs.writeFileSync(`crm-monitoring-mobile-${width}.png`,Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));}
  await ev(`(()=>{const e=document.querySelector('[aria-label="篩選模型"]');e.value='gpt-image-2';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);await sleep(350);
  assert.equal(await ev(`document.querySelector('[aria-label="篩選模型"]').value`),'gpt-image-2');
- for(const width of [390,320]){await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await sleep(200);assert.equal(await ev(`document.documentElement.scrollWidth>innerWidth`),false,`overflow ${width}`);fs.writeFileSync(`crm-monitoring-mobile-${width}.png`,Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));}
  assert.equal(errors.length,0);console.log('PASS monitoring admin/anonymous/member access, date validation, model filtering, live rendering, desktop/mobile overflow, no JS errors; no paid calls');
 }finally{if(session)await send('Network.deleteCookies',{name:'bw_session',url:base}).catch(()=>{});await sql`delete from sessions where token=${token}`;await sql.end();clearTimeout(watchdog);ws.close();}})().catch(e=>{console.error(e.message);process.exitCode=1;ws.close()});
