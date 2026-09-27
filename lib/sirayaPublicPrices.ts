@@ -19,6 +19,7 @@ export const PRICE_CHECKED = "2026-09-26";
 const SIRAYA_API = "https://llm-ext-api.siraya.ai/api/v1/models";
 const BYTEPLUS = "https://docs.byteplus.com/en/docs/modelark/1544106?redirect=1";
 const prices: Record<string, PublicPrice> = {
+  "gemini-2.5-flash-tts": {price:10,inputPrice:.5,unit:"million_output_tokens"},
   "gemini-3.8-flash-tts": { price: 9, inputPrice: .5, unit: "million_output_tokens" },
   "gemini-3.8-flash-lite-tts": { price: 6, inputPrice: .5, unit: "million_output_tokens" },
   "gemini-3.1-flash-lite-image": { price: 30, inputPrice: 0.25, unit: "million_output_tokens", source: "https://ai.google.dev/gemini-api/docs/pricing#gemini-3.1-flash-lite-image", note: "圖片輸出 $30、文字／思考輸出 $1.5、輸入 $0.25／百萬 Token，標準牌價。" },
@@ -115,6 +116,8 @@ for (const id of ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-073
 
 for (const [id, audio] of [["gemini-3.8-flash-tts", 9], ["gemini-3.8-flash-lite-tts", 6]] as const)
   verified(id, GOOGLE, [token("input", "文字輸入・至 2026/12/31", .5), token("cached", "快取輸入・至 2026/12/31", .125), token("output", "音訊輸出・至 2026/12/31", audio), token("input2027", "文字輸入・2027/01/01 起", 1), token("cached2027", "快取輸入・2027/01/01 起", .25), token("output2027", "音訊輸出・2027/01/01 起", audio*2)], "標準線上價；每秒音訊 25 Token。快取儲存另計：2026 年 $0.50／百萬 Token 小時，2027 年 $1。語音直連 Google，未提供金鑰前功能維持關閉；非 SIRAYA 通道。" );
+verified("gemini-2.5-flash-tts", "https://cloud.google.com/text-to-speech/pricing", [token("input", "文字輸入", .5),token("output", "音訊輸出", 10)], "Google Cloud 直連；每秒音訊 25 Token，輸出約 $0.015／分鐘，另加輸入 Token。API 不回傳 Token 用量時不得當作已核實帳單；台灣華語目前為 Preview。");
+prices["gemini-2.5-flash-tts"].checkedAt = "2026-09-27";
 // Mutually exclusive billing conditions cannot be accidentally summed in one quote.
 for (const [id, price] of Object.entries(prices)) for (const c of price.components ?? []) {
   if (id.startsWith("seedance-") || id.startsWith("happyhorse-") || id.startsWith("veo-")) c.scenario = c.id;

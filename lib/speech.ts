@@ -1,3 +1,5 @@
+import { gcpConfigured } from "./gcpAuth";
+import { GCP_SPEECH_MODEL, synthesizeGcpPcm } from "./gcpSpeech";
 import { monitoredModelFetch } from "./modelMonitoring";
 import { SirayaApiError, SirayaConfigError } from "./siraya";
 import { resolveVoice } from "./voices";
@@ -17,12 +19,13 @@ import { resolveVoice } from "./voices";
  */
 
 /** Default voice model. Audio output is billed at 25 tokens per second of audio. */
-export const SPEECH_MODEL = process.env.SPEECH_MODEL?.trim() || "gemini-3.8-flash-tts";
+export const SPEECH_MODEL = process.env.SPEECH_PROVIDER === "google-cloud" ? GCP_SPEECH_MODEL : process.env.SPEECH_MODEL?.trim() || "gemini-3.8-flash-tts";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 /** Gemini TTS emits 24 kHz mono PCM16. */
 const SAMPLE_RATE = 24_000;
 
 export function speechConfigured(): boolean {
+  if (process.env.SPEECH_PROVIDER === "google-cloud") return process.env.GCP_SPEECH_ENABLED === "true" && gcpConfigured();
   return !!process.env.GOOGLE_AI_API_KEY?.trim();
 }
 
@@ -73,6 +76,11 @@ export async function synthesizeSpeech(input: {
   voiceName?: string | null;
   style?: string | null;
 }): Promise<SpeechResult> {
+  if (process.env.SPEECH_PROVIDER === "google-cloud") {
+    if (!speechConfigured()) throw new SirayaConfigError("Google Cloud speech is not enabled");
+    const result = await synthesizeGcpPcm(input);
+    return {audio:wavFromPcm16(result.pcm),contentType:"audio/wav",seconds:result.seconds};
+  }
   const key = process.env.GOOGLE_AI_API_KEY?.trim();
   if (!key) throw new SirayaConfigError("GOOGLE_AI_API_KEY is not configured.");
 

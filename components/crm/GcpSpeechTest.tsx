@@ -1,0 +1,37 @@
+"use client";
+import { useEffect, useState } from "react";
+import { Card, Notice, primaryBtnCls, useApi } from "./ui";
+
+export default function GcpSpeechTest() {
+  const {data, error} = useApi<{enabled:boolean;publicEnabled:boolean;model:string}>("/api/crm/speech-test");
+  const [busy, setBusy] = useState(false);
+  const [audio, setAudio] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  useEffect(() => () => { if (audio) URL.revokeObjectURL(audio); }, [audio]);
+  async function test() {
+    if (busy) return;
+    setBusy(true); setFailure(null);
+    try {
+      const response = await fetch("/api/crm/speech-test", {method:"POST"});
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message || "語音測試失敗");
+      }
+      setAudio(URL.createObjectURL(await response.blob()));
+    } catch (e) {setFailure(e instanceof Error ? e.message : "語音測試失敗");}
+    finally {setBusy(false);}
+  }
+  return <Card title="語音試聽" sub="管理員專用 · Google Cloud 台灣華語測試">
+    <div className="space-y-4 text-[12.5px] leading-relaxed">
+      <p className="text-[#aaa]">先聽一段日常問候，感受語氣與停頓。僅使用下方固定文字，不會讀取陪聊對話。</p>
+      <blockquote className="rounded-xl border border-[#292929] bg-[#151515] p-4 text-[#ddd]">今天辛苦了，先休息一下吧。我在這裡，慢慢說就好。</blockquote>
+      {(failure || error) && <Notice kind="err">{failure || error}</Notice>}
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className={primaryBtnCls} disabled={busy || !data?.enabled} onClick={() => void test()}>{busy ? "正在製作語音…" : "產生試聽"}</button>
+        <span className="text-[#999]">{!data ? "讀取設定中" : data.enabled ? "管理員測試已啟用" : "尚未啟用測試"} · {data?.publicEnabled ? "GCP 用戶語音已開啟" : "GCP 用戶語音未開放"}</span>
+      </div>
+      {audio && <audio aria-label="台灣華語測試音檔" controls src={audio} className="w-full max-w-lg" />}
+      <p className="text-[11.5px] text-[#888]">全站每天最多 3 次測試，失敗也計入次數。不扣用戶點數；生成由 Google 計費。台灣華語目前為預覽版，音訊輸出牌價約 US$0.015／分鐘，文字輸入另計。</p>
+    </div>
+  </Card>;
+}

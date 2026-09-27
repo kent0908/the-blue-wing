@@ -1,5 +1,6 @@
 "use client";
 
+import GcpSpeechTest from "@/components/crm/GcpSpeechTest";
 import { useState } from "react";
 import { Card, Notice, btnCls, fieldCls, primaryBtnCls, useApi } from "@/components/crm/ui";
 
@@ -85,6 +86,7 @@ export default function CrmSettingsPage() {
       {error && <Notice kind="err">{error}</Notice>}
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
 
+      <GcpSpeechTest />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="計價參數" sub="改動只影響之後的試算與報表顯示；歷史成本事件維持當時的快照">
           <div className="space-y-3 text-[12.5px]">
