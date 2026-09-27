@@ -125,10 +125,17 @@ export interface ChatCompletionRequest {
  * refunded, but the user got nothing). Companion chat runs at 700, which
  * makes the same failure rarer, not impossible.
  *
- * All four curated text models accept the parameter with HTTP 200, and a
- * model that does not recognise it ignores it (verified: enable_thinking
- * and thinking_budget were both silently dropped). A caller that genuinely
- * wants deliberation passes its own reasoning_effort.
+ * All four curated text models accept the parameter with HTTP 200, and most
+ * models that do not recognise it drop it silently (verified: enable_thinking
+ * and thinking_budget). But NOT all: a 2026-09-27 sweep of all 80 text models
+ * in the catalogue found 7 that reject it outright with HTTP 400 and answer
+ * normally without it — gemini-2.5-pro ("does not support setting
+ * thinking_budget to 0"), grok-4.5, gpt-5.4-pro, gpt-6-astra and the three
+ * gpt-5.1-codex variants ("'none' is not supported"). None of them is in
+ * today's menu, but an admin adding one, or a companion row pointing at one,
+ * would break every chat turn on that model. chatBody therefore drops the
+ * default and retries once. A caller that genuinely wants deliberation
+ * passes its own reasoning_effort, which is never retried away.
  */
 const CHAT_DEFAULTS = { reasoning_effort: "none" } as const;
 
@@ -146,24 +153,54 @@ const CHAT_DEFAULTS = { reasoning_effort: "none" } as const;
  */
 const CHAT_TIMEOUT_MS = 45_000;
 
+/**
+ * A 400 that is about the reasoning default — the only case worth retrying.
+ *
+ * The three upstream shapes seen in the 2026-09-27 sweep word it differently,
+ * and OpenAI's never names the parameter at all:
+ *   grok-4.5      "This model does not support `reasoning_effort` value `none`."
+ *   gemini-2.5-pro "The model does not support setting thinking_budget to 0."
+ *   gpt-5.4-pro   "Unsupported value: 'none' is not supported with the ... model."
+ * Hence matching the rejected value too. A 400 about anything else (a
+ * malformed body) still throws on the first try.
+ */
+export function rejectsReasoningDefault(error: unknown, body: ChatCompletionRequest): boolean {
+  if (body.reasoning_effort !== undefined) return false; // the caller asked for it; don't silently change the request
+  if (!(error instanceof SirayaApiError) || error.status !== 400) return false;
+  return /reasoning|thinking|['"`]none['"`]/i.test(error.message);
+}
+
 /** POST /chat/completions (non-streaming). */
 export async function createChatCompletion(body: ChatCompletionRequest) {
-  const res = await sirayaFetch("/chat/completions", {
+  const send = (extra: object) => sirayaFetch("/chat/completions", {
     method: "POST",
     signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-    body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: false }),
+    body: JSON.stringify({ ...extra, ...body, stream: false }),
   });
-  return res.json();
+  try {
+    const res = await send(CHAT_DEFAULTS);
+    return res.json();
+  } catch (error) {
+    if (!rejectsReasoningDefault(error, body)) throw error;
+    const res = await send({});
+    return res.json();
+  }
 }
 
 /** POST /chat/completions (streaming) — returns the raw Response so the
  *  route handler can pipe the SSE stream straight through to the client. */
 export async function createChatCompletionStream(body: ChatCompletionRequest) {
-  return sirayaFetch("/chat/completions", {
+  const send = (extra: object) => sirayaFetch("/chat/completions", {
     method: "POST",
     signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-    body: JSON.stringify({ ...CHAT_DEFAULTS, ...body, stream: true, stream_options: { include_usage: true } }),
+    body: JSON.stringify({ ...extra, ...body, stream: true, stream_options: { include_usage: true } }),
   });
+  try {
+    return await send(CHAT_DEFAULTS);
+  } catch (error) {
+    if (!rejectsReasoningDefault(error, body)) throw error;
+    return send({});
+  }
 }
 
 /** GET /models */
