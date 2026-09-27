@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { getCharacter } from "@/lib/characters";
 import { setActiveIdleVideo } from "@/lib/characterIdleVideo";
@@ -17,7 +17,7 @@ function parseId(id: string) {
  * active loop — the "選擇生成過的影片當成待機狀態" picker.
  */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string; videoId: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   try {

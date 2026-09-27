@@ -1,6 +1,6 @@
 import { startIdleVideoGeneration, hasFreeIdleQuota } from "@/lib/characterIdleVideo";
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { validateProfile } from "@/lib/characterProfile";
 import { listCharacters, createCharacter, ownedAssetId, toPublicCharacter } from "@/lib/characters";
 
@@ -14,7 +14,7 @@ const MAX_LIKES = 200;
 
 /** GET /api/characters — the signed-in user's 陪聊角色, most recently chatted-with first. */
 export async function GET(req: NextRequest) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const rows = await listCharacters(r.user.id);
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/characters — body: { name, avatarAssetId?, personality? } */
 export async function POST(req: NextRequest) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const body = await req.json().catch(() => ({}));

@@ -41,6 +41,9 @@ export interface UserRow {
   nickname?: string | null;
   last_seen_at?: string | null;
   signup_source?: Record<string, unknown> | null;
+  /** 陪聊 age gate (lib/adultGate.ts); null on every row created before it existed. */
+  birth_date?: string | null;
+  adult_confirmed_at?: string | null;
 }
 
 /** Public shape sent to the client — never includes password_hash / tokens. */

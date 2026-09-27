@@ -4,7 +4,7 @@ import { recordDecisionShadow } from "@/lib/companionDecisionShadow";
 import { openingSuggestions, recoverStoryReply, STORY_MESSAGE_PREFIX } from "@/lib/officialCompanionStory";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { after as afterResponse, NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { listMessageAudio } from "@/lib/characterAudio";
 import { speechConfigured } from "@/lib/speech";
 import { createChatCompletion } from "@/lib/siraya";
@@ -39,7 +39,7 @@ function parseId(id: string) {
 
 /** GET /api/characters/:id/messages — full chat history with this character. */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const id = parseId((await ctx.params).id);
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
 /** POST /api/characters/:id/messages — body: { content }. Sends the message, returns the character's reply. */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const id = parseId((await ctx.params).id);

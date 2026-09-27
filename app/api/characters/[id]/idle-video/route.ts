@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { getCharacter, contentRules } from "@/lib/characters";
 import {
@@ -26,7 +26,7 @@ function parseId(id: string) {
  * first, so the list is always fresh without a separate poll endpoint.
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   try {
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
  * credit cost from GET first) — never charges without that explicit confirmation.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   try {

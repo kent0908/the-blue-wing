@@ -1,6 +1,6 @@
 import { sql } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { getCharacter, contentRules } from "@/lib/characters";
 import { listIdleVideos, pollIdleVideoJob, hasPendingIdleVideo, toPublicIdleVideo } from "@/lib/characterIdleVideo";
@@ -21,7 +21,7 @@ function parseId(id: string) {
  * can show status/url/retry-availability without a second round trip.
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   try {
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
 /** POST /api/characters/:id/outfits — body: { outfitKey } */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   try {

@@ -564,3 +564,12 @@ create index if not exists model_request_events_model_date_idx on model_request_
 -- Companion language: null keeps custom characters Chinese; official defaults to Japanese in code.
 alter table characters add column if not exists speech_language text check (speech_language in ('ja-JP','zh-TW','en-US'));
 alter table character_messages add column if not exists speech_language text check (speech_language in ('ja-JP','zh-TW','en-US'));
+
+-- Adult gate for the 陪聊 area (lib/adultGate.ts). Self-declared date of
+-- birth, kept rather than thrown away after the check so the threshold can be
+-- re-evaluated (an under-18 signup becomes eligible on their birthday) and so
+-- a stronger assurance step can be layered on later without re-asking everyone.
+-- adult_confirmed_at is the moment the server accepted a >=18 date; it is the
+-- flag every gate reads, never the raw date.
+alter table users add column if not exists birth_date date;
+alter table users add column if not exists adult_confirmed_at timestamptz;

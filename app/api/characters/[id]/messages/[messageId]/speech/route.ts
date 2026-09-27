@@ -1,6 +1,6 @@
 import { put } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { blobConfigured } from "@/lib/assets";
 import { getMessageAudio, ownedAssistantMessage, saveMessageAudio } from "@/lib/characterAudio";
 import { creditCost, getBalance } from "@/lib/credits";
@@ -27,7 +27,7 @@ const parseId = (raw: string) => {
  * who has run out of credits can still replay what they already paid for.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string; messageId: string }> }) {
-  const auth = await requireUser(req);
+  const auth = await requireAdultUser(req);
   if ("error" in auth) return auth.error;
 
   try {

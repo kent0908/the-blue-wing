@@ -19,7 +19,7 @@ for(const l of voices.COMPANION_LANGUAGES){
 (async()=>{
  let allowed=true,saved;
  const route=load('app/api/characters/[id]/voice/route.ts',{
- 'next/server':{NextResponse:Response},'@/lib/apiauth':{requireUser:async()=>allowed?{user:{id:7}}:{error:new Response(null,{status:401})}},
+ 'next/server':{NextResponse:Response},'@/lib/apiauth':{requireAdultUser:async()=>allowed?{user:{id:7}}:{error:new Response(null,{status:401})}},
  '@/lib/characterAudio':{setCharacterVoice:async(...args)=>{saved=args;return args[1]===9}},'@/lib/errors':{errorResponse:()=>new Response(null,{status:500})},
  '@/lib/voices':load('lib/voices.ts'),'@/lib/companionVoices':voices,
  });
@@ -31,7 +31,7 @@ for(const l of voices.COMPANION_LANGUAGES){
  let owned=true,cache=null,synthesis,charges=0;
  const speechRoute=load('app/api/characters/[id]/messages/[messageId]/speech/route.ts',{
  'next/server':{NextResponse:Response},'@vercel/blob':{put:async()=>({pathname:'safe.wav'})},
- '@/lib/apiauth':{requireUser:async()=>({user:{id:7}})},'@/lib/assets':{blobConfigured:()=>true},
+ '@/lib/apiauth':{requireAdultUser:async()=>({user:{id:7}})},'@/lib/assets':{blobConfigured:()=>true},
  '@/lib/characterAudio':{ownedAssistantMessage:async()=>owned?{content:'こんにちは',official_key:'mio',voice_name:null,speech_language:'ja-JP'}:null,getMessageAudio:async()=>cache,saveMessageAudio:async()=>{}},
  '@/lib/credits':{creditCost:async()=>1,getBalance:async()=>100},'@/lib/creditTransactions':{paidCall:async(u,c,k,m,fn)=>{charges++;return {result:await fn(),chargeId:1}},refundCharge:async()=>{}},
  '@/lib/errors':{errorResponse:e=>{throw e}},'@/lib/speech':{SPEECH_MODEL:'test',speechConfigured:()=>true,synthesizeSpeech:async i=>{synthesis=i;return {audio:Buffer.alloc(4),seconds:1,contentType:'audio/wav'}}},

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getTr } from "@/lib/i18n/server";
+import AdultGate from "@/components/AdultGate";
 
 export async function generateMetadata(): Promise<Metadata> {
   const tr = await getTr();
@@ -13,5 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  return children;
+  // Covers /companions, /companions/create and /companions/[id] from one place.
+  // The API-side gate (requireAdultUser) is what actually enforces it.
+  return <AdultGate>{children}</AdultGate>;
 }

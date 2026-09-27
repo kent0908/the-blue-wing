@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { validateProfile, type CharacterProfile } from "@/lib/characterProfile";
 import { getCharacter, updateCharacter, deleteCharacter, ownedAssetId, toPublicCharacter, contentRules } from "@/lib/characters";
 
@@ -13,7 +13,7 @@ function parseId(id: string) {
 
 /** GET /api/characters/:id */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const id = parseId((await ctx.params).id);
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
 /** PATCH /api/characters/:id — body: partial { name, avatarAssetId, personality, likes } */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const id = parseId((await ctx.params).id);
@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
 /** DELETE /api/characters/:id */
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const id = parseId((await ctx.params).id);
