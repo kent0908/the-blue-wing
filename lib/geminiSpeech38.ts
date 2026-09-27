@@ -1,3 +1,4 @@
+import { googleSpeechError } from "./googleSpeechError";
 import type { CompanionLanguage } from "./companionVoices";
 import { monitoredModelFetch } from "./modelMonitoring";
 import { resolveVoice } from "./voices";
@@ -16,10 +17,8 @@ export async function synthesizeGemini38Pcm(input: {text:string;voiceName?:strin
     }),
   },{model,provider:"google"});
   if (!response.ok) {
-    const failure=await response.json().catch(()=>null) as {error?:{status?:string;details?:{reason?:string}[]}} | null;
-    const reason=failure?.error?.details?.find(d=>d.reason)?.reason || failure?.error?.status;
-    const code=reason && /^[A-Z_]{1,80}$/.test(reason) ? reason : "PROVIDER_ERROR";
-    throw new Error(`Gemini 3.8 語音生成失敗（HTTP ${response.status} ${code}）`);
+    const failure=await response.json().catch(()=>null);
+    throw googleSpeechError(response.status, failure, authHeaders);
   }
   const body=await response.json() as {status?:string;model?:string;steps?:{type?:string;content?:{type?:string;mime_type?:string;data?:string}[]}[];usage?:{total_input_tokens?:number;total_output_tokens?:number;total_tokens?:number}};
   if (body.status!=="completed") throw new Error("Gemini 3.8 語音尚未完成");

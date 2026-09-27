@@ -1,3 +1,4 @@
+import { GoogleSpeechError } from "@/lib/googleSpeechError";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/apiauth";
 import { gcpConfigured } from "@/lib/gcpAuth";
@@ -20,6 +21,9 @@ export async function POST(req: NextRequest) {
   if (e instanceof Error && /^Gemini 3\.8 語音生成失敗（HTTP 402 [A-Z_]{1,80}）$/.test(e.message)) {
     return NextResponse.json({error:{code:"payment_required",message:"Gemini API 預付額度不足或尚未完成預付設定，請至 Google AI Studio 的 Billing 頁面確認。"}},{status:402});
   }
+  if (e instanceof GoogleSpeechError) return NextResponse.json({error:{
+    message:e.message,code:e.providerCode,providerStatus:e.httpStatus,detail:e.adminDetail,
+  }},{status:502,headers:{"Cache-Control":"private, no-store"}});
   const safe=e instanceof Error && /^Gemini 3\.8 語音生成失敗（HTTP \d{3} [A-Z_]{1,80}）$/.test(e.message) ? e.message : "GCP 語音測試失敗，請檢查專案權限、配額及身分聯盟設定";
   return NextResponse.json({error:{message:safe}},{status:502});
  }

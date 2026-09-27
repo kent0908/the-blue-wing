@@ -24,7 +24,7 @@ const {synthesizeGcpPcm}=load('lib/gcpSpeech.ts',{
  }finally{for(const k of Object.keys(process.env))if(!(k in saved))delete process.env[k];Object.assign(process.env,saved)}
  let denied=true,allowed=true,generated=0;
  const route=load('app/api/crm/speech-test/route.ts',{
-  'next/server':{NextResponse:Response},
+  'next/server':{NextResponse:Response},'@/lib/googleSpeechError':load('lib/googleSpeechError.ts'),
   '@/lib/apiauth':{requireAdmin:async()=>denied?{error:new Response(null,{status:403})}:{user:{role:'admin'}}},
   '@/lib/gcpAuth':{gcpConfigured:()=>true},
   '@/lib/gcpSpeech':{GCP_SPEECH_MODEL:'gemini-2.5-flash-tts',synthesizeGcpPcm:async(input)=>{generated++;assert.ok(input.text.includes('今天辛苦了'));return {pcm:Buffer.alloc(48000),seconds:1}}},
