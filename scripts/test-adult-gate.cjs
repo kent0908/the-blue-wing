@@ -62,6 +62,20 @@ check(() => assert.equal(gate.isAdultVerified({ adult_confirmed_at: '2026-01-01T
 // postgres hands back a Date, or a timestamp-suffixed string, for a date column
 check(() => assert.equal(gate.isAdultVerified({ birth_date: new Date('1990-01-01T00:00:00Z') }, now), true));
 check(() => assert.equal(gate.isAdultVerified({ birth_date: '1990-01-01T00:00:00.000Z' }, now), true));
+/* @vercel/postgres returns a `date` column as a Date at LOCAL midnight, so its
+   UTC fields are the wrong calendar day — measured from UTC+8, '2008-09-28'
+   arrives as 2008-09-27T16:00Z and '2008-01-01' as 2007-12-31T16:00Z. Reading
+   it with getUTC* let a 17-year-old through the day before their birthday. */
+const pgDate = (y, m, d) => new Date(y, m - 1, d); // local midnight, exactly what pg gives back
+check(() => assert.equal(gate.parseBirthDate(pgDate(2008, 9, 28)).toISOString().slice(0, 10), '2008-09-28'));
+check(() => assert.equal(gate.parseBirthDate(pgDate(2008, 1, 1)).toISOString().slice(0, 10), '2008-01-01'));
+// the day before an eighteenth birthday must still be under age
+check(() => assert.equal(gate.isAdultVerified({ birth_date: pgDate(2008, 9, 28) }, at('2026-09-27')), false));
+check(() => assert.equal(gate.isAdultVerified({ birth_date: pgDate(2008, 9, 28) }, at('2026-09-28')), true));
+// the New Year case, where the UTC misread was a whole year
+check(() => assert.equal(gate.isAdultVerified({ birth_date: pgDate(2008, 1, 1) }, at('2025-12-31')), false));
+check(() => assert.equal(gate.isAdultVerified({ birth_date: pgDate(2008, 1, 1) }, at('2026-01-01')), true));
+check(() => assert.equal(gate.parseBirthDate(new Date('nonsense')), null));
 // the date wins over a stale flag: a row confirmed under a different threshold,
 // or written by an import, must not carry someone under the floor past it
 check(() => assert.equal(gate.isAdultVerified({ birth_date: '2015-01-01', adult_confirmed_at: '2026-01-01T00:00:00Z' }, now), false));

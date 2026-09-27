@@ -45,9 +45,30 @@ export function ageOn(birth: Date, on: Date): number {
   return age;
 }
 
+/**
+ * Postgres `date` → `YYYY-MM-DD`, reading the calendar day the column holds.
+ *
+ * @vercel/postgres hands a `date` column back as a JS Date at LOCAL midnight,
+ * so its UTC fields are not the stored day. Measured on this database from
+ * UTC+8: `'2008-09-28'::date` arrives as 2008-09-27T16:00:00Z, and
+ * `'2008-01-01'::date` as 2007-12-31T16:00:00Z — a day early, and across New
+ * Year a whole year early. Reading that with getUTC* made isAdultVerified
+ * compute an age up to a day too high, which let a 17-year-old through on the
+ * day before their eighteenth birthday. Local getters are the correct ones for
+ * this value; the string form is then re-parsed as UTC like any other.
+ */
+function calendarDay(value: Date): string {
+  const year = String(value.getFullYear()).padStart(4, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /** `YYYY-MM-DD` → a UTC date, or null. Rejects a rolled-over date like 2007-02-30. */
 export function parseBirthDate(value: unknown): Date | null {
-  const text = String(value ?? "").trim();
+  const text = value instanceof Date
+    ? (Number.isNaN(value.getTime()) ? "" : calendarDay(value))
+    : String(value ?? "").trim();
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   if (!match) return null;
   const [year, month, day] = match.slice(1).map(Number);
@@ -84,9 +105,11 @@ export function checkBirthDate(value: unknown, now: Date = new Date()): GateVerd
 export function isAdultVerified(user: AdultGateUser | null | undefined, now: Date = new Date()): boolean {
   if (!user) return false;
   if (user.birth_date) {
-    const birth = user.birth_date instanceof Date
-      ? user.birth_date
-      : parseBirthDate(String(user.birth_date).slice(0, 10));
+    // parseBirthDate handles both shapes: the Date @vercel/postgres returns for
+    // a date column (see calendarDay) and a plain or timestamp-suffixed string.
+    const birth = parseBirthDate(
+      user.birth_date instanceof Date ? user.birth_date : String(user.birth_date).slice(0, 10)
+    );
     if (birth) return ageOn(birth, now) >= ADULT_MIN_AGE;
   }
   return !!user.adult_confirmed_at;

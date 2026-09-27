@@ -31,7 +31,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const verdict = checkBirthDate(body?.birthDate);
   if (!verdict.ok) {
-    return NextResponse.json({ error: { message: tr(verdict.message), code: verdict.code } }, { status: 403 });
+    // A malformed date is the caller's mistake (400); being under age is a
+    // refusal to serve (403). Collapsing both into 403 made a typo look like a
+    // rejection, and the client shows a permanent "under 18" dead end for it.
+    const status = verdict.code === "invalid_date" ? 400 : 403;
+    return NextResponse.json({ error: { message: tr(verdict.message), code: verdict.code } }, { status });
   }
 
   await sql`

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTr } from "@/lib/i18n/client";
 
 /**
@@ -9,41 +10,31 @@ import { useTr } from "@/lib/i18n/client";
  *
  * This is the courtesy half of the gate. The enforcement is
  * requireAdultUser() in lib/apiauth.ts, which every /api/characters route
- * uses — a user who never loads this component still cannot read or write a
- * single companion. So the component is free to fail open on a network error:
- * the worst case is the API answering 403 age_unverified a moment later.
+ * uses — a user who never renders this still cannot read or write a single
+ * companion.
  *
- * Signed-out visitors pass straight through. They have nothing to gate yet,
- * and the pages behind this already handle their own sign-in prompts; showing
- * a date-of-birth form to someone who has not logged in would only collect a
- * birthday we have nowhere to store.
+ * `verified` is resolved on the server by the layout, so there is no loading
+ * state, no blank first paint and no flash of the shelf before the gate.
+ *
+ * Signed-out visitors pass straight through: the public shelf (and its SEO)
+ * has to keep working, the pages behind this handle their own sign-in prompts,
+ * and a birthday typed by someone without an account has nowhere to be stored.
  */
-type State = "loading" | "open" | "gated" | "rejected";
-
-export default function AdultGate({ children }: { children: React.ReactNode }) {
+export default function AdultGate({
+  signedIn,
+  verified,
+  children,
+}: {
+  signedIn: boolean;
+  verified: boolean;
+  children: React.ReactNode;
+}) {
   const tr = useTr();
-  const [state, setState] = useState<State>("loading");
+  const router = useRouter();
   const [birthDate, setBirthDate] = useState("");
   const [error, setError] = useState("");
+  const [rejected, setRejected] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/account/age", { cache: "no-store" });
-        if (cancelled) return;
-        // 401 = signed out: nothing to gate yet. Any other failure opens too;
-        // the API is the real gate.
-        if (!res.ok) return setState("open");
-        const json = await res.json();
-        setState(json?.verified ? "open" : "gated");
-      } catch {
-        if (!cancelled) setState("open");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   const submit = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -57,20 +48,21 @@ export default function AdultGate({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ birthDate }),
       });
       const json = await res.json().catch(() => ({}));
-      if (res.ok && json?.verified) return setState("open");
-      // An under-age answer is final for this visit — no retry field to nudge,
-      // which would just teach the visitor which year to type instead.
-      if (json?.error?.code === "under_age") return setState("rejected");
+      // The layout decides the gate, so re-render from the server rather than
+      // flipping local state — that also refreshes anything else it resolved.
+      if (res.ok && json?.verified) return router.refresh();
+      // An under-age answer is final for this visit. Leaving the field to retry
+      // would only teach the visitor which year to type instead.
+      if (json?.error?.code === "under_age") return setRejected(true);
       setError(json?.error?.message || tr("確認失敗，請稍後再試。"));
     } catch {
       setError(tr("確認失敗，請稍後再試。"));
     } finally {
       setSaving(false);
     }
-  }, [birthDate, saving, tr]);
+  }, [birthDate, saving, tr, router]);
 
-  if (state === "loading") return null;
-  if (state === "open") return <>{children}</>;
+  if (verified || !signedIn) return <>{children}</>;
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -78,7 +70,7 @@ export default function AdultGate({ children }: { children: React.ReactNode }) {
     <div className="mx-auto flex min-h-[60dvh] max-w-md flex-col justify-center px-4 py-10">
       <div className="rounded-2xl border border-[#2a2a2a] bg-[#161616] p-6">
         <h1 className="text-lg font-semibold text-white">{tr("陪聊區限 18 歲以上")}</h1>
-        {state === "rejected" ? (
+        {rejected ? (
           <p className="mt-3 text-sm leading-relaxed text-[#a0a0a0]">
             {tr("你填寫的出生日期未滿 18 歲，無法進入陪聊區。網站的其他功能不受影響。")}
           </p>

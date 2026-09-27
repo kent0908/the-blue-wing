@@ -170,11 +170,27 @@ export function rejectsReasoningDefault(error: unknown, body: ChatCompletionRequ
   return /reasoning|thinking|['"`]none['"`]/i.test(error.message);
 }
 
+/**
+ * One deadline for the whole call, retry included.
+ *
+ * Giving each attempt its own AbortSignal.timeout(CHAT_TIMEOUT_MS) let a
+ * retried call run for 90s against a 60s maxDuration — which is exactly the
+ * stranded-charge failure CHAT_TIMEOUT_MS exists to prevent, reintroduced by
+ * the retry. The remaining budget is shared instead, and a first attempt that
+ * spends it all leaves nothing for a second (rejectsReasoningDefault only
+ * matches a fast 400 anyway, never a timeout).
+ */
+function chatDeadline() {
+  const until = Date.now() + CHAT_TIMEOUT_MS;
+  return () => AbortSignal.timeout(Math.max(1, until - Date.now()));
+}
+
 /** POST /chat/completions (non-streaming). */
 export async function createChatCompletion(body: ChatCompletionRequest) {
+  const remaining = chatDeadline();
   const send = (extra: object) => sirayaFetch("/chat/completions", {
     method: "POST",
-    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+    signal: remaining(),
     body: JSON.stringify({ ...extra, ...body, stream: false }),
   });
   try {
@@ -190,9 +206,10 @@ export async function createChatCompletion(body: ChatCompletionRequest) {
 /** POST /chat/completions (streaming) — returns the raw Response so the
  *  route handler can pipe the SSE stream straight through to the client. */
 export async function createChatCompletionStream(body: ChatCompletionRequest) {
+  const remaining = chatDeadline();
   const send = (extra: object) => sirayaFetch("/chat/completions", {
     method: "POST",
-    signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+    signal: remaining(),
     body: JSON.stringify({ ...extra, ...body, stream: true, stream_options: { include_usage: true } }),
   });
   try {
