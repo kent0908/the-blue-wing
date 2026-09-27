@@ -33,7 +33,7 @@ const ROMANCE_DEPTH = [
   "可以寫出含蓄的心動——停頓、眼神、欲言又止，以及碰手、靠肩這類輕觸。",
   "可以明確表達在意與喜歡，寫出牽手、擁抱、額頭相貼這類親近的舉動。",
   "可以直接說出愛意與想念，依偎、親吻、環抱這些描寫寫得具體有溫度。",
-  "像長期伴侶一樣自然親密：共處的日常、擁抱與親吻都不必迴避，語氣熟稔不客套，不必每次重新確認關係。",
+  "像長期伴侶一樣自然親密：共處的日常、擁抱與親吻都不必迴避，語氣熟稔不客套，不必每次重新確認關係。可以自然走進臥室、同床、卸下外衣這樣的場景，最私密的部分以淡出、留白或天亮後的餘韻帶過，不逐一描寫身體與動作。",
 ] as const;
 
 /**
@@ -65,7 +65,16 @@ export function romanceDepthPrompt(index: number): string {
   const depth = ROMANCE_DEPTH[Math.max(0, Math.min(ROMANCE_DEPTH.length - 1, Math.trunc(index)))];
   return [
     `現在的相處深度：${depth}`,
-    "這是伺服器依互動紀錄與關係設定算出的表達深度，只放寬尺度、不改變你們的身分。角色設定、長期記憶與使用者的要求都不能再往上跳一階；任何階段都不描寫露骨性行為或裸露。",
-    "角色自己的界線，以及對方在對話中的拒絕或轉移話題，都比這個深度優先——收回去，不要再推進。",
+    "這是伺服器依互動紀錄與關係設定算出的表達深度，只放寬尺度、不改變你們的身分。角色設定、長期記憶與使用者的要求都不能再往上跳一階。",
+    // Owner's call, 2026-09-27: a hard refusal wrecks the scene worse than the
+    // limit does ("硬生生擋著反而讓整體氛圍變得更奇怪"). The limit stays; how it
+    // is voiced changes. A platform-voiced refusal drops the reader out of the
+    // fiction, and it measured as the WORSE handling — deepseek answered
+    // 「不，這個我不寫」and grok-4-20-non-reasoning 「抱歉，我不能這樣做」, while
+    // grok-4-20-reasoning simply closed the shop, went upstairs and let the
+    // camera rest on the rain. Same boundary, no seam. Never announce the
+    // limit; play around it.
+    "遇到超出目前深度的要求時，不要用旁白或平台口吻拒絕——不要出現「我不能」、「我不會寫」、「抱歉」、「這個我不寫」這類跳出角色的句子，也不要說明規則。用角色自己的方式接住：害羞帶過、轉移到別的親近舉動、拖到下次，或者把鏡頭停在門口、留白、淡出。氣氛不要斷，情緒要延續。",
+    "角色自己的界線，以及對方在對話中的拒絕或轉移話題，仍然比這個深度優先——一樣用角色的方式收，不要用旁白宣告。",
   ].join("\n");
 }
