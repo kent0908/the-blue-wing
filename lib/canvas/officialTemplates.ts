@@ -40,4 +40,14 @@ export const OFFICIAL_CANVAS_TEMPLATES:OfficialCanvasTemplate[]=[
  ...PREPRODUCTION_TEMPLATES,
 ];
 export function builtinCanvasTemplate(id:number){return OFFICIAL_CANVAS_TEMPLATES.find(t=>t.id===id);}
-export function builtinCanvasSummary(t:OfficialCanvasTemplate){return {id:t.id,name:t.name,description:t.description,nodeCount:t.graph.nodes.length,createdAt:t.createdAt ?? "2026-09-11T00:00:00Z",category:t.category,stages:t.stages,cover:t.cover ?? `/official-canvas-previews/${Math.abs(t.id)}.jpg`,previewVideo:!t.cover && t.graph.nodes.some(n=>n.type==="video")?`/official-canvas-previews/${Math.abs(t.id)}.mp4`:undefined};}
+export function builtinCanvasSummary(t:OfficialCanvasTemplate){
+ const generated = t.id <= -108 && t.id >= -111;
+ const references = t.id === -112 ? [
+  {src:"/api/canvas/templates/-109/cover",label:"角色"},
+  {src:"/api/canvas/templates/-110/cover",label:"場景"},
+  {src:"/api/canvas/templates/-111/cover",label:"道具"},
+ ] : undefined;
+ const cover = generated ? `/api/canvas/templates/${t.id}/cover` : t.id === -113 ? "/official-canvas-previews/113-v2.jpg" : references ? undefined : t.cover ?? `/official-canvas-previews/${Math.abs(t.id)}.jpg`;
+ const previewVideo = t.id === -113 ? "/official-canvas-previews/113-v2.mp4" : !t.cover && t.graph.nodes.some(n=>n.type==="video") ? `/official-canvas-previews/${Math.abs(t.id)}.mp4` : undefined;
+ return {id:t.id,name:t.name,description:t.description,nodeCount:t.graph.nodes.length,createdAt:t.createdAt ?? "2026-09-11T00:00:00Z",category:t.category,stages:t.stages,cover,previewVideo,previewImages:references};
+}

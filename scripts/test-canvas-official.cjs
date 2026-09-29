@@ -10,11 +10,14 @@ const legacy=structuredClone(templates[0].graph);legacy.nodes[0].data.items=[{as
 
 // All advertised media must exist; diagram covers must not imply generated video previews.
 const {builtinCanvasSummary}=load('lib/canvas/officialTemplates.ts');
-for(const t of templates){const summary=builtinCanvasSummary(t);assert.ok(fs.existsSync('public'+summary.cover));if(summary.previewVideo)assert.ok(fs.existsSync('public'+summary.previewVideo));}
+const {publishedCoverPath}=load('lib/canvas/publishedCovers.ts');
+for(const t of templates){const summary=builtinCanvasSummary(t);if(summary.cover?.startsWith('/api/'))assert.ok(publishedCoverPath(String(t.id)));else if(summary.cover)assert.ok(fs.existsSync('public'+summary.cover));else assert.equal(summary.previewImages?.length,3);if(summary.previewVideo)assert.ok(fs.existsSync('public'+summary.previewVideo));}
+for(const id of ['1','-112','-113','__proto__','constructor','../-108','-108?path=secret'])assert.equal(publishedCoverPath(id),undefined);
+
 const added=templates.filter(t=>t.id<=-108);
 assert.equal(added.length,6);
 for(const t of added){
- assert.equal(builtinCanvasSummary(t).previewVideo,undefined);
+ assert.equal(builtinCanvasSummary(t).previewVideo,t.id === -113 ? "/official-canvas-previews/113-v2.mp4" : undefined);
  assert.deepEqual(shareableGraph(t.graph),t.graph);
  assert.ok(t.graph.nodes.find(n=>n.id==='guide').data.text.includes('單點執行包含上游'));
  assert.ok(!t.graph.edges.some(e=>e.fromNode==='guide'),'production notes must not become model prompt');

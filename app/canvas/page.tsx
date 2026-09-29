@@ -25,6 +25,7 @@ interface TemplateSummary {
   createdAt: string;
   cover?: string;
   previewVideo?: string;
+  previewImages?: {src: string; label: string}[];
 }
 
 interface PlazaPost {
@@ -51,6 +52,7 @@ function GalleryCard({
   corner,
   cover,
   previewVideo,
+  previewImages,
   previewHref,
 }: {
   icon: React.ReactNode;
@@ -62,12 +64,13 @@ function GalleryCard({
   corner?: React.ReactNode;
   cover?: string;
   previewVideo?: string;
+  previewImages?: {src: string; label: string}[];
   previewHref?: string;
 }) {
   const tr = useTr();
   return (
     <div className={`group ${styles.card}`}>
-      {previewVideo ? <CanvasVideoPreview src={previewVideo} poster={cover} title={title} /> : cover && <Image width={3840} height={2160} src={cover} alt={title} className={styles.cover} />}
+      {previewImages ? <div className={styles.referencePreview}><div className={styles.referenceImages}>{previewImages.map(item => <figure key={item.src}><Image unoptimized width={1200} height={675} src={item.src} alt={tr(item.label)} /><figcaption>{tr(item.label)}</figcaption></figure>)}</div><p>{tr("參考素材")}</p></div> : previewVideo ? <CanvasVideoPreview src={previewVideo} poster={cover} title={title} /> : cover && <Image width={3840} height={2160} src={cover} unoptimized={cover.startsWith("/api/")} alt={title} className={styles.cover} />}
       <div className="flex items-center gap-2">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">{icon}</span>
         <span className={styles.title}>{title}</span>
@@ -358,6 +361,7 @@ export default function CanvasHomePage() {
                   key={t.id}
                   cover={t.cover}
                   previewVideo={t.previewVideo}
+                  previewImages={t.previewImages}
                   previewHref={t.id < 0 ? `/canvas/templates/${t.id}` : undefined}
                   icon={<IconApps className="h-4 w-4" />}
                   title={tr(t.name)}
