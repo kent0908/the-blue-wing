@@ -13,6 +13,7 @@ import { EN12 } from "./parts/p12";
 import { EN13 } from "./parts/p13";
 import { EN14 } from "./parts/p14";
 import { EN15 } from "./parts/p15";
+import { EN16 } from "./parts/p16";
 
 /** Traditional Chinese source string → English. Split into parts by surface; scripts/check-i18n.cjs reports anything missing. */
-export const EN: Record<string, string> = { ...EN1, ...EN2, ...EN3, ...EN4, ...EN5, ...EN6, ...EN7, ...EN8, ...EN9, ...EN10, ...EN11, ...EN12, ...EN13, ...EN14, ...EN15 };
+export const EN: Record<string, string> = { ...EN1, ...EN2, ...EN3, ...EN4, ...EN5, ...EN6, ...EN7, ...EN8, ...EN9, ...EN10, ...EN11, ...EN12, ...EN13, ...EN14, ...EN15, ...EN16 };

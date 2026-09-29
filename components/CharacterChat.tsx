@@ -10,6 +10,7 @@ import PersonaEditor from "./PersonaEditor";
 import { type CompanionLanguage } from "@/lib/companionVoices";
 import MessageSpeech from "./MessageSpeech";
 import VoicePicker from "./VoicePicker";
+import CompanionModelPicker from "./CompanionModelPicker";
 import CharacterBuilder from "./CharacterBuilder";
 import type { CharacterProfile } from "@/lib/characterProfile";
 import CharacterScenes from "./CharacterScenes";
@@ -434,6 +435,16 @@ export default function CharacterChat({ character: initial }: { character: Chara
               <p className="text-xs text-[#a9bbb7]">{tr("距離 {next} 分里程碑，還有 {left} 分。", { next: growthNext, left: growthNext - growthScore })}</p>
             </div><p className="text-xs text-white/50">{tr("每完成一輪成功對話累積 1 分，傳送失敗不加分。既有分數保留，100 分後持續累積。這是本站的陪伴紀錄，不會把已設定的伴侶變回陌生人。")}</p><p className="text-xs text-white/40">{tr("圖影功能仍依現有方案與功能門檻使用。")}</p></section> : <RelationshipStages affection={character.affection ?? 0} kind={rules.ladder} />}</div>}
           {relationshipOpen && !personaOpen && <div className="border-t border-white/10">
+            <CompanionModelPicker
+              characterId={character.id}
+              value={character.model ?? null}
+              disabled={sending}
+              onChange={(model) => {
+                settingsRevision.current++;
+                setCharacter((cur) => ({ ...cur, model }));
+                setSettingsNotice(tr("對話模型已更換，下一則訊息生效。"));
+              }}
+            />
             <VoicePicker
               characterId={character.id}
               value={character.voiceName ?? null}

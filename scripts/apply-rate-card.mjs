@@ -85,6 +85,23 @@ const TEXT_RATES = {
   "deepseek-v4-flash-0731": 1,
   "deepseek-v4-pro": 2,
   "deepseek-v4-pro-0813": 2,
+  // 2026-09-29 陪聊五階 (lib/companionModels.ts). SIRAYA's price catalogue came
+  // back from its HTTP 500 that day, so these three are derived from its own
+  // published rates, measured at the real prompt depth the chat now sends
+  // (130 messages of history — see lib/chatHistoryBudget.ts), 3 runs each:
+  //   NSFW-Seed-SC     $0.40/$1.60  4004-in/75-out  -> $0.00172  ->  2 credits, 12x
+  //   claude-sonnet-5  $2/$10       4885-in/131-out -> $0.01108  ->  5 credits, 4.5x
+  //   claude-fable-5.1 $10/$50      4887-in/185-out -> $0.05812  -> 24 credits, 4.1x
+  // NSFW-/uncensored- aliases bill at their base model's rate (owner confirmed;
+  // the video card above has paired SIRAYA-/NSFW-Seedance identically since it
+  // was written), so NSFW-Seed-SC takes ByteDance-Seed-SC's price. Both rows
+  // are seeded: the filtered twin is not on the menu but must still price if a
+  // character row points at it.
+  "NSFW-Seed-SC": 1,
+  "ByteDance-Seed-SC": 1,
+  "ByteDance-Seed-1.8": 1, // $0.25/$2.00 -> $0.00112 -> 2 credits, 18x
+  "claude-sonnet-5": 4,
+  "claude-fable-5.1": 23,
 };
 
 // ---- speech (TTS): credits per SPEECH_CHARS_PER_UNIT (40) characters of

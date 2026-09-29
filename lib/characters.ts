@@ -230,6 +230,23 @@ export async function deleteCharacter(userId: number, id: number): Promise<boole
 
 /** +1 per message, +extra for touching a 喜好 topic; bumps turn_count and
  *  updated_at (so the list sorts by "last chatted with") in the same write. */
+/**
+ * Switch which model answers for this character.
+ *
+ * Scoped to the owner's own row, so it is safe for 官方角色 too — it changes
+ * this user's copy and nothing anyone else sees (same reasoning as
+ * setCharacterVoice). The caller validates the id against the allowlist in
+ * lib/companionModels.ts; this function does not, because an admin-side
+ * migration may legitimately move rows to a model that is not on the menu.
+ */
+export async function setCharacterModel(userId: number, characterId: number, model: string): Promise<boolean> {
+  const { rowCount } = await sql`
+    update characters set model = ${model}, updated_at = now()
+    where id = ${characterId} and user_id = ${userId}
+  `;
+  return !!rowCount;
+}
+
 export async function recordTurn(id: number, gain: number): Promise<{ affection: number; turnCount: number }> {
   const { rows } = await sql<{ affection: number; turn_count: number }>`
     update characters

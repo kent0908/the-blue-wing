@@ -1,0 +1,43 @@
+/* 陪聊對話模型五階選擇器 (part 16) — lib/companionModels.ts, components/CompanionModelPicker.tsx. */
+export const EN16: Record<string, string> = {
+  "對話模型": "Chat model",
+  "對話模型已更換，下一則訊息生效。": "Chat model changed. It takes effect from your next message.",
+  "換模型會改變回覆的長度、速度與每則訊息的點數。設定立即生效，不影響已經發生的對話。": "Switching models changes how long the replies are, how fast they arrive, and what each message costs. It applies from now on and leaves earlier conversation untouched.",
+  "儲存失敗，請稍後再試。": "Couldn't save that. Please try again shortly.",
+  "儲存中…": "Saving…",
+  "無過濾": "Unfiltered",
+  "1 點 / 則": "1 credit each",
+  "{n} 點 / 則": "{n} credits each",
+  "「無過濾」指模型端不做內容過濾。角色的相處深度階段、年齡設定與全年齡角色的規則不受影響。": "“Unfiltered” means the model itself applies no content filter. A character's relationship stage, its age settings and the rules for all-ages characters are unaffected.",
+  // tier labels and blurbs
+  "輕量": "Light",
+  "回覆簡短直接，點數最省。適合想聊很多輪的人。": "Short, direct replies at the lowest cost. Good if you want to talk for a long time.",
+  "模型端不做內容過濾，全場回應最快。角色的相處深度階段仍然有效。": "No content filter on the model's side, and the fastest replies of any tier. The character's relationship stage still applies.",
+  "標準": "Standard",
+  "文字最豐富、場景描寫最完整，速度也快。多數人建議從這個開始。": "The richest writing and the fullest scene detail, and still fast. A good place to start.",
+  "深度": "Deep",
+  "情緒層次與長期記憶的連貫性更好，回覆速度較慢。": "Better emotional nuance and more consistent long-term memory, with slower replies.",
+  "創作": "Literary",
+  "專為敘事寫作調校的模型，文字質感最好，但每則明顯較貴、也較慢。": "A model tuned for narrative writing. The best prose here, but noticeably slower and dearer per message.",
+};
+
+export const JA16: Record<string, string> = {
+  "對話模型": "会話モデル",
+  "對話模型已更換，下一則訊息生效。": "会話モデルを変更しました。次のメッセージから反映されます。",
+  "換模型會改變回覆的長度、速度與每則訊息的點數。設定立即生效，不影響已經發生的對話。": "モデルを変えると、返信の長さ・速さ・1通あたりのポイントが変わります。以降のやり取りに適用され、これまでの会話はそのままです。",
+  "儲存失敗，請稍後再試。": "保存できませんでした。しばらくしてからもう一度お試しください。",
+  "儲存中…": "保存中…",
+  "無過濾": "フィルターなし",
+  "1 點 / 則": "1ポイント／通",
+  "{n} 點 / 則": "{n}ポイント／通",
+  "「無過濾」指模型端不做內容過濾。角色的相處深度階段、年齡設定與全年齡角色的規則不受影響。": "「フィルターなし」とは、モデル側で内容のフィルタリングを行わないという意味です。キャラクターの親密度の段階、年齢設定、全年齢キャラクターのルールには影響しません。",
+  "輕量": "ライト",
+  "回覆簡短直接，點數最省。適合想聊很多輪的人。": "短く率直な返信を、もっとも少ないポイントで。長く話したい方に向いています。",
+  "模型端不做內容過濾，全場回應最快。角色的相處深度階段仍然有效。": "モデル側の内容フィルターがなく、返信は全段階で最速です。キャラクターの親密度の段階は引き続き有効です。",
+  "標準": "スタンダード",
+  "文字最豐富、場景描寫最完整，速度也快。多數人建議從這個開始。": "描写がもっとも豊かで場面の書き込みも十分、そのうえ高速です。まずはここから。",
+  "深度": "ディープ",
+  "情緒層次與長期記憶的連貫性更好，回覆速度較慢。": "感情の機微と長期記憶の一貫性に優れますが、返信はやや遅めです。",
+  "創作": "文芸",
+  "專為敘事寫作調校的模型，文字質感最好，但每則明顯較貴、也較慢。": "物語の執筆に最適化されたモデルです。文章の質は最高ですが、1通あたりの料金は明らかに高く、速度も遅めです。",
+};
