@@ -1,7 +1,9 @@
 /* 陪聊 18+ age gate — interstitial and server-side rejections (part 15). */
 export const EN15: Record<string, string> = {
+  "— 從一份構想，走向完整的作品": "— From an idea to a finished piece",
+  "年份":"Year", "月份":"Month", "日期":"Day", "出生年份":"Birth year", "出生月份":"Birth month", "出生日期中的日":"Birth day",
   "陪聊區限 18 歲以上": "Companions are 18+",
-  "這個區域的角色互動包含成人向內容。請填寫你的出生日期，只需要確認一次。": "Character interactions in this area include adult content. Enter your date of birth — you'll only be asked once.",
+  "這個區域的角色互動包含成人向內容。請選擇你的出生日期。": "Character interactions in this area include adult content. Select your date of birth.",
   "出生日期": "Date of birth",
   "確認並進入": "Confirm and enter",
   "確認中…": "Checking…",
@@ -14,8 +16,10 @@ export const EN15: Record<string, string> = {
 };
 
 export const JA15: Record<string, string> = {
+  "— 從一份構想，走向完整的作品": "— ひとつの構想から、ひとつの作品へ",
+  "年份":"年", "月份":"月", "日期":"日", "出生年份":"生年", "出生月份":"生月", "出生日期中的日":"生日",
   "陪聊區限 18 歲以上": "コンパニオンは18歳以上",
-  "這個區域的角色互動包含成人向內容。請填寫你的出生日期，只需要確認一次。": "このエリアのキャラクターとのやり取りには成人向けの内容が含まれます。生年月日をご入力ください。確認は一度だけです。",
+  "這個區域的角色互動包含成人向內容。請選擇你的出生日期。": "このエリアのキャラクターとのやり取りには成人向けの内容が含まれます。生年月日を選択してください。",
   "出生日期": "生年月日",
   "確認並進入": "確認して入る",
   "確認中…": "確認中…",

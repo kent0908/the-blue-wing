@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { birthDateDays, selectedBirthDate } from "@/lib/birthDateInput";
+import styles from "./AdultGate.module.css";
 import { useTr } from "@/lib/i18n/client";
 
 /**
@@ -31,7 +33,16 @@ export default function AdultGate({
 }) {
   const tr = useTr();
   const router = useRouter();
-  const [birthDate, setBirthDate] = useState("");
+  const [year, setYear] = useState("");
+  const [month, setMonth] = useState("");
+  const [day, setDay] = useState("");
+  const birthDate = selectedBirthDate(year, month, day);
+  const dayCount = birthDateDays(year, month);
+  const currentYear = new Date().getUTCFullYear();
+  const changeCalendar = (nextYear: string, nextMonth: string) => {
+    setYear(nextYear); setMonth(nextMonth);
+    if (Number(day) > birthDateDays(nextYear, nextMonth)) setDay("");
+  };
   const [error, setError] = useState("");
   const [rejected, setRejected] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,47 +75,62 @@ export default function AdultGate({
 
   if (verified || !signedIn) return <>{children}</>;
 
-  const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="mx-auto flex min-h-[60dvh] max-w-md flex-col justify-center px-4 py-10">
-      <div className="rounded-2xl border border-[#2a2a2a] bg-[#161616] p-6">
-        <h1 className="text-lg font-semibold text-white">{tr("陪聊區限 18 歲以上")}</h1>
+    <section className={styles.page} aria-labelledby="age-title">
+      <div className={styles.art} aria-hidden="true">
+        <span className={styles.orbit} /><span className={styles.wing} />
+        <span className={styles.artCaption}>THE BLUE WING<br/>A SPACE FOR STORIES</span>
+      </div>
+      <div className={styles.panel}>
+        <p className={styles.eyebrow}>THE BLUE WING <span> / </span> COMPANIONS</p>
+        <h1 id="age-title" className={styles.title}>{tr("陪聊區限 18 歲以上")}</h1>
         {rejected ? (
-          <p className="mt-3 text-sm leading-relaxed text-[#a0a0a0]">
+          <p className={styles.description}>
             {tr("你填寫的出生日期未滿 18 歲，無法進入陪聊區。網站的其他功能不受影響。")}
           </p>
         ) : (
-          <form onSubmit={submit} className="mt-3">
-            <p className="text-sm leading-relaxed text-[#a0a0a0]">
-              {tr("這個區域的角色互動包含成人向內容。請填寫你的出生日期，只需要確認一次。")}
+          <form onSubmit={submit} className={styles.form}>
+            <p className={styles.description}>
+              {tr("這個區域的角色互動包含成人向內容。請選擇你的出生日期。")}
             </p>
-            <label className="mt-5 block text-sm text-[#d0d0d0]" htmlFor="bw-birth-date">
-              {tr("出生日期")}
-            </label>
-            <input
-              id="bw-birth-date"
-              type="date"
-              required
-              max={today}
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-[#2a2a2a] bg-[#1e1e1e] px-3 py-2 text-white outline-none focus:border-[#4a4a4a]"
-            />
-            {error ? <p className="mt-2 text-sm text-[#ff8080]">{error}</p> : null}
+            <fieldset className={styles.dateFields} disabled={saving}>
+              <legend>{tr("出生日期")}</legend>
+              <div className={styles.dateGrid}>
+                <label>{tr("年份")}
+                  <select aria-label={tr("出生年份")} required value={year} onChange={e => changeCalendar(e.target.value, month)}>
+                    <option value="">YYYY</option>
+                    {Array.from({length:121},(_,i)=>currentYear-i).map(y=><option key={y} value={y}>{y}</option>)}
+                  </select>
+                </label>
+                <label>{tr("月份")}
+                  <select aria-label={tr("出生月份")} required value={month} onChange={e => changeCalendar(year,e.target.value)}>
+                    <option value="">MM</option>
+                    {Array.from({length:12},(_,i)=>i+1).map(m=><option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}
+                  </select>
+                </label>
+                <label>{tr("日期")}
+                  <select aria-label={tr("出生日期中的日")} required disabled={!dayCount} value={day} onChange={e => setDay(e.target.value)}>
+                    <option value="">DD</option>
+                    {Array.from({length:dayCount},(_,i)=>i+1).map(d=><option key={d} value={d}>{String(d).padStart(2,"0")}</option>)}
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+            {error ? <p role="alert" className={styles.error}>{error}</p> : null}
             <button
               type="submit"
               disabled={saving || !birthDate}
-              className="mt-5 w-full rounded-xl bg-white px-4 py-2.5 font-medium text-black transition-opacity disabled:opacity-40"
+              className={styles.submit}
             >
               {saving ? tr("確認中…") : tr("確認並進入")}
             </button>
-            <p className="mt-4 text-xs leading-relaxed text-[#707070]">
+            <p className={styles.privacy}>
               {tr("我們只用這個日期判斷是否滿 18 歲，不會公開顯示。")}
             </p>
           </form>
         )}
       </div>
-    </div>
+    </section>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import styles from "./gallery.module.css";
 import CanvasVideoPreview from "@/components/canvas/CanvasVideoPreview";
 
 import { useCallback, useEffect, useState } from "react";
@@ -65,21 +66,21 @@ function GalleryCard({
 }) {
   const tr = useTr();
   return (
-    <div className="group relative flex min-h-[160px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]">
-      {previewVideo ? <CanvasVideoPreview src={previewVideo} poster={cover} title={title} /> : cover && <Image width={3840} height={2160} src={cover} alt={title} className="mb-3 aspect-video w-full rounded-lg bg-white object-contain" />}
+    <div className={`group ${styles.card}`}>
+      {previewVideo ? <CanvasVideoPreview src={previewVideo} poster={cover} title={title} /> : cover && <Image width={3840} height={2160} src={cover} alt={title} className={styles.cover} />}
       <div className="flex items-center gap-2">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">{icon}</span>
-        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{title}</span>
+        <span className={styles.title}>{title}</span>
       </div>
       <div className="min-w-0">
-        <p className="line-clamp-3 text-[11.5px] text-[#8a8a8a]">{subtitle}</p>
-        <div className="mt-2 flex items-center justify-between">
+        <p className={styles.description}>{subtitle}</p>
+        <div className={styles.actions}>
           {previewHref && <Link href={previewHref} className="text-xs text-emerald-300 hover:underline">{tr("預覽節點")}</Link>}
           {badge ? <span className="text-[11px] text-[#7d7d7d]">{badge}</span> : <span />}
           <button
             type="button"
             onClick={onOpen}
-            className="rounded-full bg-[#1f1f1f] px-3 py-1 text-[11px] text-[#c9c9c9] transition-colors hover:bg-[#272727] hover:text-white"
+            className={styles.action}
           >
             {onOpenLabel}
           </button>
@@ -130,7 +131,7 @@ export default function CanvasHomePage() {
       .then((r) => (r.ok ? r.json() : { user: null }))
       .then((j: { user?: { role?: string } | null }) => setIsAdmin(j.user?.role === "admin"))
       .catch(() => {});
-  }, [router]);
+  }, [router, tr]);
 
   useEffect(() => {
     load();
@@ -229,7 +230,7 @@ export default function CanvasHomePage() {
       <div className="mx-auto max-w-[1080px] px-6 py-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[22px] font-semibold tracking-tight">{tr("智慧畫布")}</h1>
+            <h1 className="bw-editorial-title text-[32px] sm:text-[40px]">{tr("智慧畫布")}</h1>
             <p className="mt-1 text-[13px] leading-relaxed text-[#8a8a8a]">
               {tr("把文字、圖片、影片生成節點拉在一起，自由搭建你的工作流。")}
             </p>
@@ -249,10 +250,10 @@ export default function CanvasHomePage() {
 
         {/* 我的畫布 */}
         <section className="mt-8">
-          <h2 className="text-[15px] font-medium">{tr("我的畫布")}</h2>
+          <h2 className="bw-editorial-title text-[23px]">{tr("我的畫布")}</h2>
 
           {workflows === null && !error && (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="bw-shimmer h-[120px] rounded-xl" />
               ))}
@@ -268,7 +269,7 @@ export default function CanvasHomePage() {
           )}
 
           {workflows && workflows.length > 0 && (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {workflows.map((w) => (
                 <Link
                   key={w.id}
@@ -279,7 +280,7 @@ export default function CanvasHomePage() {
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">
                       <IconCanvas className="h-4 w-4" />
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-white">{tr(w.name)}</span>
+                    <span className={styles.title}>{tr(w.name)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-[#7d7d7d]">
                     <span>{w.nodeCount} {tr("個節點")}</span>
@@ -339,11 +340,11 @@ export default function CanvasHomePage() {
         <section className="mt-8">
           <div className="flex items-center gap-2">
             <IconApps className="h-4 w-4 text-[#7ff0cd]" />
-            <h2 className="text-[15px] font-medium">{tr("官方模板")}</h2>
-            <span className="text-[11.5px] text-[#6d6d6d]">{tr("— 直接複製使用，開箱即用的工作流")}</span>
+            <h2 className="bw-editorial-title text-[23px]">{tr("官方模板")}</h2>
+            <span className="text-[11.5px] text-[#6d6d6d]">{tr("— 從一份構想，走向完整的作品")}</span>
           </div>
           {templates === null ? (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
               ))}
@@ -351,7 +352,7 @@ export default function CanvasHomePage() {
           ) : templates.length === 0 ? (
             <p className="mt-3 text-[12.5px] text-[#5c5c5c]">{tr("目前還沒有官方模板")}</p>
           ) : (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {templates.map((t) => (
                 <GalleryCard
                   key={t.id}
@@ -386,11 +387,11 @@ export default function CanvasHomePage() {
         <section className="mt-8">
           <div className="flex items-center gap-2">
             <IconGlobe className="h-4 w-4 text-[#7ff0cd]" />
-            <h2 className="text-[15px] font-medium">{tr("藍翼廣場")}</h2><button type="button" onClick={() => setShareId("")} className="rounded-full bg-[#7ff0cd] px-3 py-2 text-xs text-black">{tr("＋ 上傳工作流")}</button>
+            <h2 className="bw-editorial-title text-[23px]">{tr("藍翼廣場")}</h2><button type="button" onClick={() => setShareId("")} className="rounded-full bg-[#7ff0cd] px-3 py-2 text-xs text-black">{tr("＋ 上傳工作流")}</button>
             <span className="text-[11.5px] text-[#6d6d6d]">{tr("— 大家分享出來的工作流，歡迎拿去用")}</span>
           </div>
           {plaza === null ? (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
               ))}
@@ -398,7 +399,7 @@ export default function CanvasHomePage() {
           ) : plaza.length === 0 ? (
             <p className="mt-3 text-[12.5px] text-[#5c5c5c]">{tr("還沒有人分享工作流，來當第一個吧")}</p>
           ) : (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {plaza.map((p) => (
                 <GalleryCard
                   key={p.id}

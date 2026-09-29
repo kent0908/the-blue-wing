@@ -176,3 +176,7 @@ textarea {
   overflow-wrap: break-word;
 }
 .bw-phrase { display: inline-block; }
+
+/* Shared editorial typography for Blue Wing presentation surfaces. */
+:root { --font-editorial: "Iowan Old Style", "Baskerville", "Palatino Linotype", "Noto Serif TC", "Noto Serif CJK TC", "Songti TC", "PMingLiU", serif; }
+.bw-editorial-title { font-family:var(--font-editorial); font-weight:400; letter-spacing:.04em; line-height:1.55; text-wrap:balance; }
