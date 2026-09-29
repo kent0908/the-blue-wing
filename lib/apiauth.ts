@@ -2,6 +2,7 @@ import { limitRequest } from "./rateLimit";
 /** Route-handler guards. Each returns either { user } or { error: NextResponse }. */
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "./auth";
+import { isAdultVerified } from "./adultGate";
 import type { UserRow } from "./db";
 import { touchActivity } from "./crm";
 
@@ -27,6 +28,22 @@ export async function requireUser(req: NextRequest): Promise<Guarded> {
   } catch {return fail(503,"服務暫時無法使用","unavailable");}
   void touchActivity(user.id); // DAU/WAU/MAU source — fire-and-forget, deduped per day
   return { user };
+}
+
+/**
+ * requireUser, plus the 陪聊 age gate (lib/adultGate.ts).
+ *
+ * Every companion route uses this instead of requireUser, so the gate cannot
+ * be walked around by calling the API directly — the interstitial on
+ * /companions is a courtesy, this is the enforcement. The distinct
+ * `age_unverified` code is what the client uses to show the gate rather than
+ * an error; do not fold it into the generic 403.
+ */
+export async function requireAdultUser(req: NextRequest): Promise<Guarded> {
+  const r = await requireUser(req);
+  if ("error" in r) return r;
+  if (!isAdultVerified(r.user)) return fail(403, "陪聊區限 18 歲以上使用，請先確認你的出生日期。", "age_unverified");
+  return r;
 }
 
 export async function requireAdmin(req: NextRequest): Promise<Guarded> {

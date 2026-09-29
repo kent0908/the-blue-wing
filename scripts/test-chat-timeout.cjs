@@ -74,5 +74,30 @@ process.env.SIRAYA_API_KEY='test-key';
   global.fetch=original;
   check(()=>assert.equal(once.length,1,'an unrelated 400 must not be retried'));
 
+  // the retry must share the one deadline, not start a fresh 45s: two full
+  // budgets outlast the 60s maxDuration, which is the stranded-charge failure
+  // CHAT_TIMEOUT_MS exists to prevent
+  const signals=[];
+  global.fetch=async(url,init)=>{signals.push(init.signal);
+    return signals.length===1
+      ? {ok:false,status:400,json:async()=>({error:{message:"Unsupported value: 'none' is not supported"}}),headers:new Headers()}
+      : {ok:true,status:200,json:async()=>({}),headers:new Headers()};};
+  const before=Date.now();
+  await client.createChatCompletion({model:'m',messages:[]});
+  global.fetch=original;
+  check(()=>assert.equal(signals.length,2));
+  for(const s of signals) check(()=>assert.ok(s && typeof s.aborted==='boolean'));
+  // AbortSignal.timeout exposes no deadline, so assert the shape that enforces
+  // it: the source must derive each attempt's signal from one shared instant.
+  const src=fs.readFileSync('lib/siraya.ts','utf8');
+  check(()=>assert.ok(/function chatDeadline/.test(src),'a shared deadline helper must exist'));
+  check(()=>assert.equal((src.match(/signal: AbortSignal\.timeout\(CHAT_TIMEOUT_MS\)/g)||[]).length,0,
+    'no chat attempt may start its own full-length timeout'));
+  for(const fn of ['createChatCompletion','createChatCompletionStream']){
+    const body=src.slice(src.indexOf('export async function '+fn));
+    check(()=>assert.ok(/const remaining = chatDeadline\(\);/.test(body.slice(0,400)),fn+' must take one deadline for the whole call'));
+  }
+  void before;
+
   console.log(`PASS ${checks} chat timeout/reasoning checks; no provider or database calls`);
 })().catch(e=>{console.error(e);process.exitCode=1});

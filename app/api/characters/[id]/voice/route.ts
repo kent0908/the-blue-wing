@@ -1,6 +1,6 @@
 import { isCompanionLanguage } from "@/lib/companionVoices";
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { setCharacterVoice } from "@/lib/characterAudio";
 import { errorResponse } from "@/lib/errors";
 import { isVoice } from "@/lib/voices";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * so is editable for official and custom characters alike.
  */
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser(req);
+  const auth = await requireAdultUser(req);
   if ("error" in auth) return auth.error;
 
   try {

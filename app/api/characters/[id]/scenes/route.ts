@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { authorizeSceneRequest } from "@/lib/companionGenerationAccess";
 import { k } from "@/lib/i18n/k";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { canUnlockScenes } from "@/lib/plans";
 import { assetsToDataUrls } from "@/lib/assetData";
 import { sql } from "@/lib/db";
@@ -40,7 +40,7 @@ async function ownedAvatar(userId: number, assetId: number | null) {
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser(req);
+  const auth = await requireAdultUser(req);
   if ("error" in auth) return auth.error;
   try {
     const id = parseCharacterId((await ctx.params).id);
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 /** A quote is free. A separate confirmation of its owned, unexpired ID is
  * required before generation; no client-supplied model/prompt/URL is trusted. */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser(req);
+  const auth = await requireAdultUser(req);
   if ("error" in auth) return auth.error;
   try {
     const id = parseCharacterId((await ctx.params).id);

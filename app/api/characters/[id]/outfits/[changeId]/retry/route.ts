@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { getCharacter, contentRules } from "@/lib/characters";
 import { toPublicIdleVideo, hasPendingIdleVideo } from "@/lib/characterIdleVideo";
@@ -19,7 +19,7 @@ function parseId(id: string) {
  * usable once per purchase (character_outfit_changes.retry_used).
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string; changeId: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   try {

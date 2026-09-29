@@ -27,7 +27,7 @@ const crm=load('lib/crm.ts',{'./db':{sql},'./rateCard':{getRate:async()=>({modal
  assert.equal((await crm.quoteCost('NSFW-Seedream-4.0',60,{units:1})).costKnown,true);
  assert.equal(prices.publicPrice('gpt-image-2').inputPrice,2.5);
  let user=null;
- const guard=load('lib/apiauth.ts',{'./rateLimit':{limitRequest:async()=>true},'next/server':require('next/server'),'./auth':{getSessionUser:async()=>user},'./crm':{touchActivity:async()=>{}}});
+ const guard=load('lib/apiauth.ts',{'./rateLimit':{limitRequest:async()=>true},'next/server':require('next/server'),'./auth':{getSessionUser:async()=>user},'./crm':{touchActivity:async()=>{}},'./adultGate':{isAdultVerified:()=>true}});
  const request=new(require('next/server').NextRequest)('https://example.test/api/crm/costs');
  assert.equal((await guard.requireAdmin(request)).error.status,401);
  user={id:1,role:'user',email_verified:true};assert.equal((await guard.requireAdmin(request)).error.status,403);

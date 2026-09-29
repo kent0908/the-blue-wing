@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { errorResponse } from "@/lib/errors";
 import { adoptOfficialCharacter } from "@/lib/officialCharacters";
 import { toPublicCharacter } from "@/lib/characters";
@@ -15,7 +15,7 @@ export const maxDuration = 60;
  * /companions/<id>.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ key: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
   try {
     const { key } = await ctx.params;

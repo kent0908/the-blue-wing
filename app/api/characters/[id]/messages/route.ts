@@ -4,12 +4,13 @@ import { recordDecisionShadow } from "@/lib/companionDecisionShadow";
 import { openingSuggestions, recoverStoryReply, STORY_MESSAGE_PREFIX } from "@/lib/officialCompanionStory";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { after as afterResponse, NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/apiauth";
+import { requireAdultUser } from "@/lib/apiauth";
 import { listMessageAudio } from "@/lib/characterAudio";
 import { speechConfigured } from "@/lib/speech";
 import { createChatCompletion } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { getBalance, creditCost } from "@/lib/credits";
+import { HISTORY_FETCH_LIMIT, withinHistoryBudget } from "@/lib/chatHistoryBudget";
 import {
   getCharacter,
   listMessages,
@@ -28,9 +29,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const MAX_TOKENS = 700;
-// How much prior conversation rides along each turn — plenty for a companion
-// chat without letting the prompt (and its token cost) grow unbounded.
-const HISTORY_TURNS = 20;
+// How much prior conversation rides along each turn. Was a flat 20 messages;
+// now a token budget, because SIRAYA serves prompt caching automatically and a
+// companion chat is the ideal shape for it — see lib/chatHistoryBudget.ts for
+// the measurements and the margin arithmetic that sets the number.
 
 function parseId(id: string) {
   const n = parseInt(id, 10);
@@ -39,7 +41,7 @@ function parseId(id: string) {
 
 /** GET /api/characters/:id/messages — full chat history with this character. */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const id = parseId((await ctx.params).id);
@@ -63,7 +65,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
 /** POST /api/characters/:id/messages — body: { content }. Sends the message, returns the character's reply. */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const r = await requireUser(req);
+  const r = await requireAdultUser(req);
   if ("error" in r) return r.error;
 
   const id = parseId((await ctx.params).id);
@@ -89,7 +91,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   try {
-    const [persona, history] = await Promise.all([getPersona(r.user.id), listMessages(id, HISTORY_TURNS)]);
+    const [persona, allRecent] = await Promise.all([getPersona(r.user.id), listMessages(id, HISTORY_FETCH_LIMIT)]);
+    const history = withinHistoryBudget(allRecent);
 
     const messages = [
       { role: "system" as const, content: buildSystemPrompt(character, persona) },

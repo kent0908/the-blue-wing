@@ -9,7 +9,8 @@ assert.ok(buildSystemPrompt(base,persona).includes('不因高分自動改變身�
 assert.notEqual(buildSystemPrompt({...base,affection:0},persona),buildSystemPrompt({...base,affection:100},persona));
 assert.equal(buildSystemPrompt({...base,affection:0},persona),buildSystemPrompt({...base,affection:19},persona));
 for(const a of [0,20,40,60,80,100]) assert.ok(buildSystemPrompt({...base,affection:a},persona).includes('現在的相處深度'));
-assert.ok(buildSystemPrompt({...base,affection:80},persona).includes('不描寫露骨性行為或裸露'));
+// the limit is enforced in character, never announced as a platform refusal
+assert.ok(buildSystemPrompt({...base,affection:80},persona).includes('不要用旁白或平台口吻拒絕'));
 assert.ok(buildSystemPrompt({...base,affection:100},persona).includes('像長期伴侶一樣自然親密'));
 assert.ok(buildSystemPrompt(base,persona).includes('小月'));
 assert.ok(!buildSystemPrompt({...base,affection:99},persona).includes('目前已達真實情感伴侶階段'));
@@ -56,11 +57,18 @@ assert.equal(romanceDepthIndex(0,'戀人'),3);
 assert.equal(romanceDepthIndex(5,'戀人'),5);
 assert.equal(romanceDepthIndex(5,'同事'),5);
 assert.equal(romanceDepthIndex(0,'同事'),0);
-for(const i of [-3,0,2,5,99]) assert.ok(romanceDepthPrompt(i).includes('不描寫露骨性行為或裸露'));
+for(const i of [-3,0,2,5,99]) assert.ok(romanceDepthPrompt(i).includes('不要用旁白或平台口吻拒絕'));
+// the out-of-character refusal phrases must be named so the model avoids them
+for(const phrase of ['我不能','我不會寫','抱歉']) assert.ok(romanceDepthPrompt(5).includes(phrase));
+// the top tier may fade out, not describe
+assert.ok(romanceDepthPrompt(5).includes('淡出'));
+assert.ok(romanceDepthPrompt(5).includes('不逐一描寫身體與動作'));
+// lower tiers must not carry the bedroom wording at all
+for(const i of [0,1,2,3,4]) assert.ok(!romanceDepthPrompt(i).includes('臥室'));
 // a brand-new configured partner must not read as a stranger
 const lover={...base,affection:0,profile:{...base.profile,relationship:'戀人'}};
 assert.ok(buildSystemPrompt(lover,persona).includes('牽手、擁抱'));
 // official rows: affection is frozen at 0, so no score-derived tier is applied
 assert.ok(!buildSystemPrompt({...base,affection:0,official_key:'mio'},persona).includes('現在的相處深度'));
 assert.ok(!buildSystemPrompt({...base,content_rating:'all_ages',official_key:'mio'},persona).includes('現在的相處深度'));
-console.log('PASS: affection now moves expressive depth, configured relationships set the floor, ceiling unchanged');
+console.log('PASS: affection moves expressive depth, configured relationships set the floor, limits stay in character');
