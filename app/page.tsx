@@ -1,5 +1,6 @@
 "use client";
 
+import styles from "@/components/HomeEditorial.module.css";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -98,18 +99,17 @@ export default function HomePage() {
   };
 
   return (
-    <div className="relative h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1240px] px-6 pb-40 pt-6">
+    <div className={`${styles.home} relative h-full overflow-y-auto`}>
+      <div className={styles.container}>
         <HeroCarousel />
 
-        <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className={styles.models}>
           <Link
             href="/studio?mode=video&model=SIRAYA-Seedance-2.5"
-            className="relative flex flex-col justify-center overflow-hidden rounded-xl p-5"
-            style={{ background: "linear-gradient(115deg,#4fd1c5 0%,#3aa8e0 55%,#1d7fd6 100%)" }}
+            className={styles.featuredModel}
           >
-            <div className="text-[15px] font-semibold text-[#04211d]">{t.home.newVersion}</div>
-            <div className="mt-3 flex items-center gap-1 text-[13px] text-[#04211d]/80">
+            <div className="text-[15px] font-semibold text-[#d4e8e1]">{t.home.newVersion}</div>
+            <div className="mt-3 flex items-center gap-1 text-[13px] text-[#d4e8e1]/80">
               {t.home.tryNow} <IconArrowRight className="h-3.5 w-3.5" />
             </div>
           </Link>
@@ -118,7 +118,7 @@ export default function HomePage() {
             <Link
               key={m.id}
               href={hrefFor(m)}
-              className="group relative flex flex-col overflow-hidden rounded-xl bg-[#141414] text-center transition-colors hover:bg-[#1a1a1a]"
+              className={styles.model}
             >
               {m.badge && (
                 <span
@@ -148,9 +148,9 @@ export default function HomePage() {
           ))}
         </div>
 
-        <section id="canvas-showcase" className="mt-8 rounded-2xl bg-[#0e0e0e] p-6">
-          <h2 className="text-[26px] font-semibold tracking-tight">{t.home.canvasHeading}</h2>
-          <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <section id="canvas-showcase" className={styles.workshop}>
+          <div className={styles.sectionHeading}><div><p>01 / THE WORKSHOP</p><h2>{t.home.canvasHeading}</h2></div><Link href="/canvas">探索工作流 ↗</Link></div>
+          <div className={styles.workshopGrid}>
             {templates.slice(0, 8).map((c, i) => { const preview=CANVAS_PREVIEWS.find(p=>p.title===c.title); return (
               <div key={c.id} className="group">
                 {preview ? <TemplatePreview id={preview.id} revision={preview.revision} title={templateText(c)[0]} active={playingCanvas===preview.id} onToggle={()=>setPlayingCanvas(playingCanvas===preview.id?null:preview.id)}/> : c.imageUrl ? (
