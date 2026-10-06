@@ -36,12 +36,12 @@ function heroHref(b: HeroBlock): string {
   return `/studio?${p.toString()}`;
 }
 
-const FILMS = ["battle", "worlds", "art", "sound"];
+const FILMS = ["worlds", "art", "sound", "door"];
 const SLIDES: Slide[] = [
- { title: k("破夜"), subtitle: k("迎面而來的危機，交給動作與節奏回答。"), href: "/studio?mode=video&model=SIRAYA-Seedance-2.5", gradient: "#16222d" },
  { title: k("一翼，萬象"), subtitle: k("一片藍羽，穿過不同的世界，將故事帶向同一片海。"), href: "/studio?mode=video&model=SIRAYA-Seedance-2.5", gradient: "#192a28" },
  { title: k("美，不只有一種答案"), subtitle: k("從動畫到版畫，再走進畫廊。同一個瞬間，有不同的看法。"), href: "/studio?mode=image", gradient: "#272a1e" },
  { title: k("世界有聲，想像有形"), subtitle: k("循著雨、列車與海風，讓封閉的空間慢慢打開。"), href: "/studio?mode=video", gradient: "#242623" },
+ { title: k("聽見門外"), subtitle: k("一個聲音，一次停頓，然後跨出熟悉的房間。"), href: "/canvas/templates/-113", gradient: "#242623" },
 ];
 
 export default function HeroCarousel() {
@@ -87,7 +87,8 @@ export default function HeroCarousel() {
   const i = rawI % slides.length;
   const current = slides[i];
   const film = FILMS[i % FILMS.length];
-  const poster = `/home-films/${film}.jpg`;
+  const mediaBase = film === "door" ? "/official-canvas-previews/113-v2" : `/home-films/${film}`;
+  const poster = `${mediaBase}.jpg`;
   useEffect(()=>{
     const player = video.current;
     if(!player) return;
@@ -100,7 +101,7 @@ export default function HeroCarousel() {
     <div className={styles.intro}><h1>{tr("讓想像，留下畫面。")}</h1><p>{tr("從一束光、一個角色，到一段值得留下的故事。")}</p></div>
     <div className={styles.stage}>
       <div className={styles.visual}>
-        {!current.image && !failed ? <video ref={video} key={film} src={`/home-films/${film}.mp4`} poster={poster} preload="metadata" muted playsInline onError={()=>{setPlaying(false);setFailed(true)}} onEnded={()=>select((i+1)%slides.length)} aria-label={tr(current.title)+tr("預覽")} /> :
+        {!current.image && !failed ? <video ref={video} key={film} src={`${mediaBase}.mp4`} poster={poster} preload="metadata" muted playsInline onError={()=>{setPlaying(false);setFailed(true)}} onEnded={()=>select((i+1)%slides.length)} aria-label={tr(current.title)+tr("預覽")} /> :
           // eslint-disable-next-line @next/next/no-img-element -- existing public artwork
           <img key={current.image || poster} src={current.image || poster} alt={tr(current.title)} fetchPriority="high" />}
         <div className={styles.caption}><span>BLUE WING / ORIGINAL FILMS</span><span>{tr("靜音預覽")}</span></div>

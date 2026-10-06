@@ -15,3 +15,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 執行 `node scripts/check-worktree-sync.cjs`；它會取得最新 `origin/main` 並檢查祖先與工作目錄狀態。任何不一致或網路錯誤都必須停止，不可跳過守門或強制推送。
 - 建議用 `node scripts/push-synced-main.cjs` 發布；它以共用 Git 目錄鎖防止兩邊同時推送，並執行相同 pre-push 檢查。不要在另一個發布程序持鎖時移除鎖。
 - 管理員一次性設定 `git config core.hooksPath .githooks` 以啟用共用 pre-push 守門。發布後確認 GitHub 提交、Vercel 自動部署和實際網頁。
+
+## 三語介面驗收
+- 每次修改使用者可見文案，繁體中文、日文、英文須同步更新，包含標題、說明、按鈕、錯誤提示及無障礙標籤；以三種語言檢查版面及互動後再發布。

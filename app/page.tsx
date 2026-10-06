@@ -10,7 +10,7 @@ import OfficialTemplates from '@/components/OfficialTemplates';
 import HeroCarousel from "@/components/HeroCarousel";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
 import ModelLogo from "@/components/ModelLogo";
-import { useT } from "@/lib/i18n/client";
+import { useT, useTr } from "@/lib/i18n/client";
 
 interface Block {
   id: number;
@@ -57,6 +57,7 @@ function hrefFor(b: Block): string {
 export default function HomePage() {
   const router = useRouter();
   const t = useT();
+  const tr = useTr();
   // Built-in blocks carry a dictionary key; anything an admin typed is shown as-is.
   const showcaseSub = (b: Block) => (b.tKey && b.tKey in t.home.showcase ? t.home.showcase[b.tKey as keyof typeof t.home.showcase] : b.subtitle);
   const templateText = (b: Block): [string, string] => (b.tKey && b.tKey in t.home.templates ? t.home.templates[b.tKey as keyof typeof t.home.templates] : [b.title, b.subtitle]);
@@ -149,7 +150,7 @@ export default function HomePage() {
         </div>
 
         <section id="canvas-showcase" className={styles.workshop}>
-          <div className={styles.sectionHeading}><div><p>01 / THE WORKSHOP</p><h2>{t.home.canvasHeading}</h2></div><Link href="/canvas">探索工作流 ↗</Link></div>
+          <div className={styles.sectionHeading}><div><p>01 / THE WORKSHOP</p><h2>{t.home.canvasHeading}</h2></div><Link href="/canvas">{tr("探索工作流")} ↗</Link></div>
           <div className={styles.workshopGrid}>
             {templates.slice(0, 8).map((c, i) => { const preview=CANVAS_PREVIEWS.find(p=>p.title===c.title); return (
               <div key={c.id} className="group">
