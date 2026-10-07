@@ -341,7 +341,7 @@ export default function CanvasEditor({
         const currentRates = (await currentRatesResponse.json()).rates ?? [];
         setRates(currentRates);
         if (canvasRunCredits(snapshot, currentRates, order) === null) throw new Error(tr("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行"));
-        if (reuseCompleted && !confirm(`此次執行 ${order.length} 個節點，預估 ${canvasRunCredits(snapshot, currentRates, order)} 點。已完成的上游素材會沿用。確定生成？`)) return;
+        if (reuseCompleted && !confirm(tr("此次執行 {n} 個節點，預估 {c} 點。已完成的上游素材會沿用。確定生成？", { n: order.length, c: canvasRunCredits(snapshot, currentRates, order) ?? 0 }))) return;
         await executeGraph(snapshot, order, (id, patch) => {
           if (!controller.signal.aborted) commitGraph({ ...graphRef.current, nodes: graphRef.current.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
         }, controller.signal);
@@ -354,7 +354,7 @@ export default function CanvasEditor({
 
   const addShot = () => {
     const id = newId("shot");
-    mutate(g => ({...g,nodes:[...g.nodes,{id,type:"video",x:orderedShots(g).length*300,y:360,data:{...defaultNodeData("video"),shotTitle:`分鏡 ${orderedShots(g).length+1}`,shotOrder:orderedShots(g).length},status:"idle"}]}));
+    mutate(g => ({...g,nodes:[...g.nodes,{id,type:"video",x:orderedShots(g).length*300,y:360,data:{...defaultNodeData("video"),shotTitle:tr("分鏡 {n}", {n:orderedShots(g).length+1}),shotOrder:orderedShots(g).length},status:"idle"}]}));
     setSelectedNode(id);
   };
   const connectSource = (id:string, source:string) => mutate(g => ({...g,edges:[...g.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),...(source?[{id:newId("edge"),fromNode:source,fromPort:"out",toNode:id,toPort:"image"}]:[])]}));
@@ -362,8 +362,8 @@ export default function CanvasEditor({
     const g=graphRef.current;
     const source=g.edges.find(e=>e.toNode===id&&e.toPort==="image")?.fromNode;
     if(g.nodes.find(n=>n.id===source)?.type==="director3d") {setDirector3dNodeId(source!);return;}
-    if(g.nodes.length>=200) {setSaveError("畫布已達 200 個節點，請先整理");return;}
-    if(source && !confirm("將建立 3D 構圖並替換此鏡的參考連線。原素材節點會保留，是否繼續？")) return;
+    if(g.nodes.length>=200) {setSaveError(tr("畫布已達 200 個節點，請先整理"));return;}
+    if(source && !confirm(tr("將建立 3D 構圖並替換此鏡的參考連線。原素材節點會保留，是否繼續？"))) return;
     const stageId=newId("stage");
     mutate(current=>({...current,nodes:[...current.nodes,{id:stageId,type:"director3d",x:0,y:0,data:defaultNodeData("director3d")}],edges:[...current.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),{id:newId("edge"),fromNode:stageId,fromPort:"out",toNode:id,toPort:"image"}]}));
     setDirector3dNodeId(stageId);
@@ -402,7 +402,7 @@ export default function CanvasEditor({
         <span className="text-[11.5px] text-[#6d6d6d]">{runningAll ? tr("執行中，請勿關閉") : saving ? tr("儲存中…") : dirty ? tr("尚未儲存") : tr("已儲存")}</span>
 
         <div className="flex rounded-lg border border-[#354047] p-1">
-          {([['canvas','流程畫布'],['director','分鏡導演台']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>{setView(id);setAddMenuOpen(false);}} className={`whitespace-nowrap rounded px-3 py-1.5 text-xs ${view===id?'bg-[#31434f] text-white':'text-[#9aadb9]'}`}>{label}</button>)}
+          {([['canvas','流程畫布'],['director','分鏡導演台']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>{setView(id);setAddMenuOpen(false);}} className={`whitespace-nowrap rounded px-3 py-1.5 text-xs ${view===id?'bg-[#31434f] text-white':'text-[#9aadb9]'}`}>{tr(label)}</button>)}
         </div>
         <div className="relative ml-1">
           <button
@@ -459,7 +459,7 @@ export default function CanvasEditor({
           {tr("全部執行：約")} {totalCredits === null ? tr("費率未設定") : tr("{n} 點", { n: totalCredits })}　{selectedNode && tr("選取節點含上游：約 {n}　", { n: selectedCredits === null ? tr("費率未設定") : tr("{n} 點", { n: selectedCredits }) })}{costDetails ? tr("收合明細 ▴") : tr("查看點數明細 ▾")}
         </button>
         {costDetails && <div className="mt-2 max-h-36 overflow-auto text-[#b1bfbb]">
-          {graph.nodes.map((n, index) => <div key={n.id} className="flex flex-wrap justify-between gap-2 py-1"><span>{index + 1}. {NODE_SPECS[n.type].label} {n.data.model ? modelLabel(String(n.data.model)) : ""}</span><span>{canvasNodeCredits(n, rates) === null ? tr("費率未設定") : `${canvasNodeCredits(n, rates)} 點`}</span></div>)}
+          {graph.nodes.map((n, index) => <div key={n.id} className="flex flex-wrap justify-between gap-2 py-1"><span>{index + 1}. {tr(NODE_SPECS[n.type].label)} {n.data.model ? modelLabel(String(n.data.model)) : ""}</span><span>{canvasNodeCredits(n, rates) === null ? tr("費率未設定") : tr("{n} 點", {n:canvasNodeCredits(n, rates) ?? 0})}</span></div>)}
           <p className="pt-2 text-[#849a93]">{tr("依站內費率估算；圖片以每節點 1 張計算，影片依時長及解析度計算。單點執行包含上游節點；每次重跑重新計費，實際扣點以執行紀錄為準。")}</p>
         </div>}
       </div>
@@ -467,12 +467,12 @@ export default function CanvasEditor({
       {saveError && <p role="alert" className="shrink-0 bg-[#301919] px-4 py-2 text-sm text-red-200">{saveError}</p>}
       {view === "director" && <DirectorBoard graph={graph} selectedId={selectedNode} onSelect={setSelectedNode} onChange={updateNodeData} onAdd={addShot}
         onStoryChange={text=>mutate(g=>{const story=g.nodes.find(n=>n.type==='text'&&n.data.directorStory===true);if(story)return {...g,nodes:g.nodes.map(n=>n.id===story.id?{...n,data:{...n.data,text}}:n)};if(g.nodes.length>=200)return g;return {...g,nodes:[...g.nodes,{id:newId('story'),type:'text',x:0,y:-300,data:{text,directorStory:true}}]};})}
-        onStorySplit={()=>{const g=graphRef.current;const parts=storyParagraphs(String(g.nodes.find(n=>n.data.directorStory===true)?.data.text??''));if(!parts.length||g.nodes.length+parts.length>200)return;if(!confirm(`將新增 ${parts.length} 個分鏡，各段文字會成為分鏡敘事。只建立草稿，不扣點。是否繼續？`))return;const offset=orderedShots(g).length;const added:CanvasNode[]=parts.map((prompt,i)=>({id:newId('shot'),type:'video',x:(i+offset)*300,y:360,data:{...defaultNodeData('video'),prompt,shotTitle:`分鏡 ${offset+i+1}`,shotOrder:offset+i},status:'idle'}));mutate(current=>({...current,nodes:[...current.nodes,...added]}));setSelectedNode(added[0].id);}}
+        onStorySplit={()=>{const g=graphRef.current;const parts=storyParagraphs(String(g.nodes.find(n=>n.data.directorStory===true)?.data.text??''));if(!parts.length||g.nodes.length+parts.length>200)return;if(!confirm(tr("將新增 {n} 個分鏡，各段文字會成為分鏡敘事。只建立草稿，不扣點。是否繼續？", {n:parts.length})))return;const offset=orderedShots(g).length;const added:CanvasNode[]=parts.map((prompt,i)=>({id:newId('shot'),type:'video',x:(i+offset)*300,y:360,data:{...defaultNodeData('video'),prompt,shotTitle:tr("分鏡 {n}", {n:offset+i+1}),shotOrder:offset+i},status:'idle'}));mutate(current=>({...current,nodes:[...current.nodes,...added]}));setSelectedNode(added[0].id);}}
         busy={runningAll || saving} models={videoModels} onSource={connectSource} onStage={openShotStage} onRun={id=>void execute(id,true)}
         quote={id=>{try{return canvasRunCredits(graph,rates,plannedShotRun(graph,id));}catch{return null;}}}
-        onDuplicate={id=>{const original=graphRef.current.nodes.find(n=>n.id===id);if(!original)return;const copyId=newId("shot");mutate(g=>({...g,nodes:[...g.nodes,{...structuredClone(original),id:copyId,x:original.x+280,data:{...structuredClone(original.data),shotTitle:`${original.data.shotTitle||'分鏡'} 副本`,shotOrder:orderedShots(g).length},status:"idle",output:null,error:null}],edges:[...g.edges,...g.edges.filter(e=>e.toNode===id).map(e=>({...e,id:newId("edge"),toNode:copyId}))]}));setSelectedNode(copyId);}}
+        onDuplicate={id=>{const original=graphRef.current.nodes.find(n=>n.id===id);if(!original)return;const copyId=newId("shot");mutate(g=>({...g,nodes:[...g.nodes,{...structuredClone(original),id:copyId,x:original.x+280,data:{...structuredClone(original.data),shotTitle:tr("{name} 副本", {name:String(original.data.shotTitle||tr("分鏡"))}),shotOrder:orderedShots(g).length},status:"idle",output:null,error:null}],edges:[...g.edges,...g.edges.filter(e=>e.toNode===id).map(e=>({...e,id:newId("edge"),toNode:copyId}))]}));setSelectedNode(copyId);}}
         onMove={(id,direction)=>mutate(g=>{const shots=orderedShots(g);const index=shots.findIndex(n=>n.id===id);const target=index+direction;if(target<0||target>=shots.length)return g;[shots[index],shots[target]]=[shots[target],shots[index]];return {...g,nodes:g.nodes.map(n=>n.type==='video'?{...n,data:{...n.data,shotOrder:shots.findIndex(s=>s.id===n.id)}}:n)};})}
-        onDelete={id=>{if(confirm('刪除此分鏡？原始生成紀錄仍保留。'))mutate(g=>({...g,nodes:g.nodes.filter(n=>n.id!==id),edges:g.edges.filter(e=>e.fromNode!==id&&e.toNode!==id)}));}}
+        onDelete={id=>{if(confirm(tr('刪除此分鏡？原始生成紀錄仍保留。')))mutate(g=>({...g,nodes:g.nodes.filter(n=>n.id!==id),edges:g.edges.filter(e=>e.fromNode!==id&&e.toNode!==id)}));}}
       />}
       {/* Keep the canvas mounted so its wheel/viewport bindings survive view switching. */}
       <div
@@ -586,10 +586,10 @@ export default function CanvasEditor({
         </div>
 
         <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#39464e] bg-[#131c22]/95 px-3 py-2 shadow-lg" onPointerDown={e=>e.stopPropagation()}>
-          <button type="button" aria-label="縮小畫布" onClick={()=>setZoom(z=>Math.max(.15,z/1.2))} className="px-2 text-white">−</button>
+          <button type="button" aria-label={tr("縮小畫布")} onClick={()=>setZoom(z=>Math.max(.15,z/1.2))} className="px-2 text-white">−</button>
           <span className="w-12 text-center text-xs text-[#becbd3]">{Math.round(zoom*100)}%</span>
-          <button type="button" aria-label="放大畫布" onClick={()=>setZoom(z=>Math.min(2.5,z*1.2))} className="px-2 text-white">＋</button>
-          <button type="button" onClick={fitCanvas} className="whitespace-nowrap px-2 text-xs text-[#becbd3]">檢視全貌</button>
+          <button type="button" aria-label={tr("放大畫布")} onClick={()=>setZoom(z=>Math.min(2.5,z*1.2))} className="px-2 text-white">＋</button>
+          <button type="button" onClick={fitCanvas} className="whitespace-nowrap px-2 text-xs text-[#becbd3]">{tr("檢視全貌")}</button>
         </div>
         {graph.nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-[13px] text-[#4a4a4a]">
