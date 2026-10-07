@@ -8,6 +8,7 @@ import { officialCharacter } from "./officialCharacters";
 import type { CanvasGraph, CanvasNode, LoadImageItem, NodeOutput } from "./types";
 import { sizeOptionsFor } from "@/lib/imageModels";
 import { videoConstraintFor } from "@/lib/videoModels";
+import { notifyCreditsUpdated } from "@/lib/creditEvents";
 
 /** Kahn's algorithm. Returns null if the graph has a cycle. */
 export function topoOrder(graph: CanvasGraph): string[] | null {
@@ -61,6 +62,7 @@ async function pollVideoUrl(id: string, ctx: { model: string; prompt: string }):
     await new Promise((r) => setTimeout(r, 4000));
     const res = await fetch(`/api/videos/${encodeURIComponent(id)}?${qs.toString()}`);
     const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.status === "completed" || json.status === "failed") notifyCreditsUpdated();
     if (!res.ok) throw new Error(json?.error?.message || "查詢影片狀態失敗");
     if (json.status === "completed" && json.url) return json.url;
     if (json.status === "failed") throw new Error("影片生成失敗");
@@ -126,6 +128,7 @@ export async function runNode(
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
+    notifyCreditsUpdated();
     if (!res.ok) throw new Error(json?.error?.message || "圖片生成失敗");
     const url = json.images?.[0]?.url;
     if (!url) throw new Error("沒有取得圖片結果");
@@ -154,6 +157,7 @@ export async function runNode(
       body: JSON.stringify(body),
     });
     const json = await res.json().catch(() => ({}));
+    notifyCreditsUpdated();
     if (!res.ok) throw new Error(json?.error?.message || "影片生成請求失敗");
     let url = json.url as string | undefined;
     if (!url && json.id) url = await pollVideoUrl(json.id, { model: String(node.data.model), prompt });

@@ -15,6 +15,7 @@ import type { GenSettings, Mode, PendingJob, ResultItem } from "./types";
 import { videoConstraintFor } from "./videoModels";
 import { runningJobCount } from "./jobVisibility";
 import { k } from "./i18n/k";
+import { notifyCreditsUpdated } from "./creditEvents";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function readJson(res: Response): Promise<any> {
@@ -265,6 +266,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
         throw new Error(k("影片生成逾時，請稍後到生成紀錄查看"));
       } finally {
         removePendingVideo(videoId);
+        notifyCreditsUpdated();
       }
     },
     [dismissJob, pushResult, pushToast, updateJob]
@@ -326,6 +328,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
             }),
           });
           const json = await readJson(res);
+          notifyCreditsUpdated();
           if (!res.ok) {
             const message = json?.error?.message || k("影片生成請求失敗");
             updateJob(jobId, { error: message, errorCta: ctaForStatus(res.status, jobMode) });
@@ -406,6 +409,8 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
         const message = e instanceof Error ? e.message : k("發生未預期的錯誤");
         updateJob(jobId, { error: message });
         pushToast({ ok: false, mode: jobMode, title: k("生成失敗"), detail: message });
+      } finally {
+        notifyCreditsUpdated();
       }
     },
     [dismissJob, pollVideoJob, pushResult, pushToast, updateJob]

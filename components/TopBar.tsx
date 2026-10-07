@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CREDITS_UPDATED_EVENT } from "@/lib/creditEvents";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AccountDialog from "./AccountDialog";
@@ -61,21 +62,32 @@ export default function TopBar() {
   const requestedAccount=search.get("account")==="1";
   const [accountOpen,setAccountOpen]=useState(false);
   const [me, setMe] = useState<Me | null>(null);
+  const refreshSequence = useRef(0);
 
-  const refresh = () =>
-    fetch("/api/auth/me")
+  const refresh = useCallback(() => {
+    const sequence = ++refreshSequence.current;
+    return fetch("/api/auth/me", { cache: "no-store" })
       .then((r) => r.json())
-      .then(setMe)
-      .catch(() => setMe({ user: null }));
+      .then((next: Me) => { if (sequence === refreshSequence.current) setMe(next); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     refresh();
 
     const onFocus = () => refresh();
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
     window.addEventListener("focus", onFocus);
     window.addEventListener("profile-updated",onFocus);
-    return () => { window.removeEventListener("focus", onFocus);window.removeEventListener("profile-updated",onFocus); };
-  }, []);
+    window.addEventListener(CREDITS_UPDATED_EVENT, onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("profile-updated",onFocus);
+      window.removeEventListener(CREDITS_UPDATED_EVENT, onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refresh]);
 
   useEffect(()=>{if(requestedAccount)queueMicrotask(()=>setAccountOpen(true));},[requestedAccount]);
 

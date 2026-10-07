@@ -5,6 +5,7 @@ import { Card, Notice, Table, btnCls, fieldCls, pct, td, usd, useApi } from "@/c
 import { modelLabel } from "@/lib/modelLabel";
 import type { PriceComponent } from "@/lib/sirayaPublicPrices";
 import { simulateCost, promotionEconomics } from "@/lib/costEconomics";
+import { useTr } from "@/lib/i18n/client";
 
 type CostRow = { modelId: string; modality: "image" | "video" | "text" | "speech"; active: boolean; credits: number; sellUsd: number; source: string | null; checkedAt: string | null; verification: "official" | "pending"; components: PriceComponent[]; priceNote: string; discountPct: number | null; effectiveDiscountPct: number; notes: string };
 type Receipt = { model: string; kind: string; created_at: string; status: string; credits: number; list_cost_usd: number | null; estimated_cost_usd: number | null; provider_cost_usd: number | null; provider_usage: Record<string, number> | null; discount_pct: number | null };
@@ -12,6 +13,7 @@ type Costs = { settings: { credit_value_usd: number; default_discount_pct: numbe
 const unitLabel = (c: PriceComponent) => c.unit === "million_tokens" ? "百萬 Token" : c.unit === "second" ? "秒" : "張／層";
 
 export default function CrmCostsPage() {
+  const tr = useTr();
   const { data, error, reload } = useApi<Costs>("/api/crm/costs");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -25,8 +27,8 @@ export default function CrmCostsPage() {
       <p className="text-sm leading-7 text-[#aaa]">分開查看原廠牌價、供應商折扣估算與上游回報費用。點數是零售單位，不能直接視為 Token，也不能把贈點當成營收。</p>
     </header>
     {error && <Notice kind="err">{error}</Notice>}
-    <Notice kind="info">2026/09/26 核對：SIRAYA 公開目錄 API 回傳 500，本次以原廠標準線上牌價作參考，SIRAYA 通道實際扣款仍須與帳單核對。未套用額外促銷折扣，期間牌價另列日期；已有折扣設定保留。未確認的舊模型不冒充新版本。</Notice>
-    <div className="grid gap-3 sm:grid-cols-3">{[["成本表模型／通道", data?.rows.length ?? "—"], ["原廠價格已核對", data?.rows.filter(r => r.verification === "official").length ?? "—"], ["待重新核對", data?.rows.filter(r => r.verification !== "official").length ?? "—"]].map(([label,value]) => <div key={label} className="rounded-2xl border border-[#292929] bg-[#121212] p-5"><p className="text-xs text-[#999]">{label}</p><p className="mt-2 text-2xl text-white">{value}</p></div>)}</div>
+    <Notice kind="info">{tr("各模型分別標示價格來源與核對日期。Wan 3.0 已於 2026/10/07 核對 SIRAYA 公開目錄；其他模型沿用各自的核對紀錄。折後成本為估算，實際扣款仍以供應商帳單為準。")}</Notice>
+    <div className="grid gap-3 sm:grid-cols-3">{[["成本表模型／通道", data?.rows.length ?? "—"], [tr("已核對牌價"), data?.rows.filter(r => r.verification === "official").length ?? "—"], ["待重新核對", data?.rows.filter(r => r.verification !== "official").length ?? "—"]].map(([label,value]) => <div key={label} className="rounded-2xl border border-[#292929] bg-[#121212] p-5"><p className="text-xs text-[#999]">{label}</p><p className="mt-2 text-2xl text-white">{value}</p></div>)}</div>
     <div className="flex flex-wrap gap-3">
       <input aria-label="搜尋模型" placeholder="搜尋模型名稱" value={search} onChange={e => setSearch(e.target.value)} className={`${fieldCls} min-w-0 flex-1`} />
       <select aria-label="模型類型" value={filter} onChange={e => setFilter(e.target.value)} className={fieldCls}><option value="all">全部模型</option><option value="image">圖片</option><option value="video">影片</option><option value="text">文字</option><option value="speech">語音</option></select>
@@ -50,6 +52,7 @@ export default function CrmCostsPage() {
 }
 
 function ModelCard({row: r, globalDiscount, onSaved, onCalculate}: {row: CostRow; globalDiscount: number; onSaved: () => void; onCalculate: () => void}) {
+  const tr = useTr();
   const [discount, setDiscount] = useState(r.discountPct === null ? "" : String(r.discountPct));
   const [notes, setNotes] = useState(r.notes);
   const [saving, setSaving] = useState(false);
@@ -67,7 +70,7 @@ function ModelCard({row: r, globalDiscount, onSaved, onCalculate}: {row: CostRow
     } catch(e) {setMessage(e instanceof Error ? e.message : "儲存失敗");} finally {setSaving(false);}
   }
   return <article className="min-w-0 space-y-4 rounded-2xl border border-[#292929] bg-[#121212] p-5">
-    <div><div className="flex flex-wrap items-start justify-between gap-2"><h2 className="text-base font-medium text-white">{modelLabel(r.modelId)}</h2><span className={`text-xs ${r.verification === "official" ? "text-[#7ff0cd]" : "text-amber-300"}`}>{r.verification === "official" ? "原廠參考價" : "舊牌價待核對"}{r.active ? "" : " · 已停用"}</span></div><p className="mt-1 break-all font-mono text-xs text-[#888]">{r.modelId}</p></div>
+    <div><div className="flex flex-wrap items-start justify-between gap-2"><h2 className="text-base font-medium text-white">{modelLabel(r.modelId)}</h2><span className={`text-xs ${r.verification === "official" ? "text-[#7ff0cd]" : "text-amber-300"}`}>{r.verification === "official" ? (/^https:\/\/llm-ext-api\.siraya\.ai\//.test(r.source ?? "") ? tr("SIRAYA 公開牌價") : "原廠參考價") : "舊牌價待核對"}{r.active ? "" : " · 已停用"}</span></div><p className="mt-1 break-all font-mono text-xs text-[#888]">{r.modelId}</p></div>
     <p className="text-xs leading-6 text-[#aaa]">零售基準 {r.credits} 點（{r.modality === "video" ? "480p 每秒；解析度另乘倍率" : r.modality === "image" ? "每張；特殊模式依生成報價" : r.modality === "text" ? "每輪基礎費；另有 Token 預算費" : "每 40 個朗讀字元；重播不再扣點"}）。此數值不等於實收。</p>
     <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-[#888]"><tr><th className="pb-2 font-normal">計費條件／單位</th><th className="pb-2 text-right font-normal">牌價 USD</th><th className="pb-2 text-right font-normal">折後估算</th></tr></thead><tbody>{r.components.map(c => <tr key={c.id} className="border-t border-[#252525]"><td className="py-2 pr-3 leading-5">{c.label}<span className="block text-[#777]">／{unitLabel(c)}</span></td><td className="whitespace-nowrap py-2 pl-2 text-right tabular-nums">{usd(c.price, 4)}</td><td className="whitespace-nowrap py-2 pl-2 text-right tabular-nums text-[#7ff0cd]">{usd(valid ? c.price * (1-value/100) : null, 6)}</td></tr>)}</tbody></table></div>
     <p className="text-xs leading-6 text-[#aaa]">{r.priceNote}</p>

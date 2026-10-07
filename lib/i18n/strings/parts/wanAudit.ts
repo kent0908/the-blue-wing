@@ -1,4 +1,7 @@
 export const WAN_EN: Record<string,string> = {
+  "SIRAYA 公開牌價":"SIRAYA public list price",
+  "已核對牌價":"Verified list prices",
+  "各模型分別標示價格來源與核對日期。Wan 3.0 已於 2026/10/07 核對 SIRAYA 公開目錄；其他模型沿用各自的核對紀錄。折後成本為估算，實際扣款仍以供應商帳單為準。":"Each model shows its price source and verification date. Wan 3.0 was checked against SIRAYA's public catalog on October 7, 2026; other models retain their own verification dates. Discounted costs are estimates; supplier invoices determine actual charges.",
   "Google 回傳原因（管理員診斷）":"Google response details (admin diagnostics)",
   "把故事，一鏡一鏡留下。":"Tell your story, one shot at a time.",
   "共 {n} 鏡 · 規劃 {s} 秒":"{n} shots · {s} seconds planned",
@@ -86,6 +89,9 @@ export const WAN_EN: Record<string,string> = {
   "聲線已配置，實際效果待語音服務啟用後試聽。":"Voice configured. You can listen once the voice service is enabled.",
 };
 export const WAN_JA: Record<string,string> = {
+  "SIRAYA 公開牌價":"SIRAYA公開定価",
+  "已核對牌價":"確認済みの定価",
+  "各模型分別標示價格來源與核對日期。Wan 3.0 已於 2026/10/07 核對 SIRAYA 公開目錄；其他模型沿用各自的核對紀錄。折後成本為估算，實際扣款仍以供應商帳單為準。":"各モデルに価格の出典と確認日を表示しています。Wan 3.0は2026年10月7日にSIRAYAの公開カタログで確認し、他のモデルは個別の確認記録を維持しています。割引後の費用は概算です。実際の請求額は供給元の請求書で確認してください。",
   "Google 回傳原因（管理員診斷）":"Googleの応答詳細（管理者向け診断）",
   "把故事，一鏡一鏡留下。":"物語を、一つひとつのカットに。",
   "共 {n} 鏡 · 規劃 {s} 秒":"{n}カット · 合計{s}秒の予定",
