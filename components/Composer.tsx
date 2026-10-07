@@ -39,7 +39,7 @@ import {
   MAX_REF_IMAGES,
   type ImageControlValues,
 } from "@/lib/imageModels";
-import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput, videoConstraintFor } from "@/lib/videoModels";
+import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput, videoConstraintFor, videoResolutionsForModel } from "@/lib/videoModels";
 import { supportsImageWatermark, supportsVideoWatermark } from "@/lib/watermark";
 import { AUDIO_MODELS } from "@/lib/audioModels";
 import ModelFunctionMenu from "./ModelFunctionMenu";
@@ -173,7 +173,7 @@ export default function Composer({
 
   const modalityForMode = mode === "video" ? "video" : mode === "image" ? "image" : "text";
   const available = useMemo(() => {
-    const live = models.filter((m) => m.modality === modalityForMode && !/nsfw/i.test(m.id));
+    const live = models.filter((m) => m.modality === modalityForMode && !/nsfw/i.test(m.id) && (m.modality !== "video" || videoResolutionsForModel(m.id).length > 0));
     // 語音生成 has no real audio modality on SIRAYA (see lib/audioModels.ts) —
     // it shares "text"'s ~80-model chat-completions list otherwise, which is
     // exactly the "太雜" the curation here fixes.
@@ -323,7 +323,7 @@ export default function Composer({
       alive = false;
       window.removeEventListener("focus", refreshRole);
     };
-  }, []);
+  }, [tr]);
 
   const activeImageModel = modalityForMode === "image" ? getImageModelForControls(resolvedModel) : undefined;
 
@@ -335,7 +335,7 @@ export default function Composer({
     [activeImageModel, imgEdits]
   );
 
-  const effectiveSettings = mode === "video" ? { ...settings, resolution: normalizeVideoResolution(resolvedModel, settings.resolution), seconds: Math.min(settings.seconds, videoConstraintFor(resolvedModel).maxSeconds) } : settings;
+  const effectiveSettings = mode === "video" ? { ...settings, resolution: normalizeVideoResolution(resolvedModel, settings.resolution), seconds: Math.max(videoConstraintFor(resolvedModel).minSeconds, Math.min(settings.seconds, videoConstraintFor(resolvedModel).maxSeconds)) } : settings;
   const imageCount = operation === "layer-separation" ? 17 : activeImageModel ? Number(imgValues.n ?? 1) : settings.imageCount;
 
   const cost = useMemo(
@@ -347,8 +347,9 @@ export default function Composer({
         maxTokens: settings.maxTokens,
         imageCount,
         seconds: effectiveSettings.seconds,
+        resolution: effectiveSettings.resolution,
       }),
-    [resolvedModel, modalityForMode, prompt, settings, imageCount, effectiveSettings.seconds]
+    [resolvedModel, modalityForMode, prompt, settings, imageCount, effectiveSettings.seconds, effectiveSettings.resolution]
   );
 
   const credits =

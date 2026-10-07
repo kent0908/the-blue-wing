@@ -26,6 +26,14 @@ const crm=load('lib/crm.ts',{'./db':{sql},'./rateCard':{getRate:async()=>({modal
  assert.equal(prices.publicPrice('Dola-Seedream-5.0-lite').price,.035);
  assert.equal((await crm.quoteCost('NSFW-Seedream-4.0',60,{units:1})).costKnown,true);
  assert.equal(prices.publicPrice('gpt-image-2').inputPrice,2.5);
+ discount=25;
+ for(const [model,tiers] of Object.entries({'wan3.0-video':[.05,.1,.2],'wan3.0-video-prime':[.068,.14,.28]})) {
+  for(const [i,resolution] of ['480p','720p','1080p'].entries()) {
+   const q=await crm.quoteCost(model,999,{units:2,resolution});
+   assert.equal(q.costKnown,true);assert.equal(q.listCostUsd,Math.round(tiers[i]*2*1e6)/1e6);assert.equal(q.actualCostUsd,Math.round(tiers[i]*2*.75*1e6)/1e6);
+  }
+  assert.equal((await crm.quoteCost(model,999,{units:2})).costKnown,false);
+ }
  let user=null;
  const guard=load('lib/apiauth.ts',{'./rateLimit':{limitRequest:async()=>true},'next/server':require('next/server'),'./auth':{getSessionUser:async()=>user},'./crm':{touchActivity:async()=>{}},'./adultGate':{isAdultVerified:()=>true}});
  const request=new(require('next/server').NextRequest)('https://example.test/api/crm/costs');

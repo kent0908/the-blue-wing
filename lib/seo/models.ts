@@ -29,6 +29,16 @@ export interface ModelPage {
 const D = "2026-09-15";
 
 export const MODEL_PAGES: ModelPage[] = [
+  { slug: "wan-3-0", id: "wan3.0-video", kind: "video", vendor: "Alibaba", updatedAt: "2026-10-07",
+    tagline: k("讓一張畫、一段文字，長成有聲的風景。"),
+    blurb: k("以文字、單張首幀、首尾幀或多張圖片參考創作短片。最長 30 秒，可選擇原生聲音與提示詞潤飾，適合角色短篇、場景氣氛與鏡頭試稿。"),
+    bestFor: [k("文字與圖片生成有聲短片"), k("首尾畫面之間的過渡"), k("多張圖片參考，站內最多 9 張")],
+    notFor: [k("影片、音訊、文件參考與自動時長仍待站內驗證；目前不開放。"), k("4K 輸出")] },
+  { slug: "wan-3-0-prime", id: "wan3.0-video-prime", kind: "video", vendor: "Alibaba", updatedAt: "2026-10-07",
+    tagline: k("讓鏡頭更快成形，為創作留多一點時間。"),
+    blurb: k("Wan 3.0 的速度優先版本，提供相同的文字、圖片參考與首尾幀創作入口。適合反覆比較鏡頭的方向；實際等待時間依上游負載而變。"),
+    bestFor: [k("文字與圖片生成有聲短片"), k("首尾畫面之間的過渡"), k("多張圖片參考，站內最多 9 張")],
+    notFor: [k("影片、音訊、文件參考與自動時長仍待站內驗證；目前不開放。"), k("4K 輸出")] },
   // ---- video ----
   { slug: "seedance-2-5", id: "SIRAYA-Seedance-2.5", kind: "video", vendor: "ByteDance", updatedAt: D,
     tagline: k("讓角色、場景與鏡頭，共同說一段故事。"),
@@ -146,6 +156,7 @@ export interface ModelSpecs {
   resolutions: string[];
   sizes: string[];
   maxSeconds: number | null;
+  minSeconds?: number;
   maxRefs: number;
   videoRef: boolean;
   refImages: boolean;
@@ -159,7 +170,7 @@ export function modelSpecs(page: ModelPage): ModelSpecs {
   if (page.kind === "video") {
     const c = videoConstraintFor(page.id);
     const modes = getGenerationModes(page.id, "video").filter((m) => m.enabled).map((m) => m.label);
-    return { modes: modes.length ? modes : [/i2v/i.test(page.id) ? "圖片生影片" : "文字生影片"], resolutions: c.resolutions, sizes: [], maxSeconds: c.maxSeconds, maxRefs: maxRefsForVideoModel(page.id), videoRef: supportsVideoRefInput(page.id), refImages: maxRefsForVideoModel(page.id) > 0, negativePrompt: false, transparentBg: false, quality: false };
+    return { modes: modes.length ? modes : [/i2v/i.test(page.id) ? "圖片生影片" : "文字生影片"], resolutions: c.resolutions, sizes: [], minSeconds: c.minSeconds, maxSeconds: c.maxSeconds, maxRefs: maxRefsForVideoModel(page.id), videoRef: supportsVideoRefInput(page.id), refImages: maxRefsForVideoModel(page.id) > 0, negativePrompt: false, transparentBg: false, quality: false };
   }
   const m = getImageModel(page.id);
   const keys = new Set(m?.controls.map((c) => c.key) ?? []);
@@ -181,7 +192,7 @@ export function modelPricing(page: ModelPage, rates: ModelRate[]): ModelPricing 
   }
   const specs = modelSpecs(page);
   const examples = specs.resolutions.slice(0, 3).map((res) => ({ label: k("5 秒 {res}"), vars: { res }, credits: creditCostFromRate({ modality: "video", credits: rate.credits, seconds: 5, resolution: res }) }));
-  return { perUnit: rate.credits, unit: "秒", examples };
+  return { perUnit: creditCostFromRate({modality:"video",credits:rate.credits,seconds:1,resolution:specs.resolutions[0]}), unit: "秒", examples };
 }
 
 /** Sanity: every curated image entry should exist in the studio catalogue. */

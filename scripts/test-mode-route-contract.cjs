@@ -58,5 +58,10 @@ mocks['@/lib/providerAssets']={resolveProviderAssetReferences:async(u,ids)=>{ass
  await test('raw asset URI cannot bypass ownership',async()=>{const r=await route.POST(request('videos','SIRAYA-Seedance-2.0-mini',{generationMode:'subject-reference',imageUrls:['asset://foreign'],seconds:4}));assert.equal(r.status,400);assert.equal(counts.paid,0)});
  await test('disabled edit mode fails before billing',async()=>{const r=await route.POST(request('videos','SIRAYA-Seedance-2.0-mini',{generationMode:'video-edit',seconds:4}));assert.equal(r.status,400);assert.equal(counts.paid,0)});
  await test('one frame cannot trigger two-frame generation',async()=>{const r=await route.POST(request('videos','SIRAYA-Seedance-2.5',{generationMode:'first-last-frame',assetIds:[1],seconds:4}));assert.equal(r.status,400);assert.equal(counts.paid,0)});
+ for (const model of ['wan3.0-video','wan3.0-video-prime']) {
+  for(const resolution of ['480p','720p','1080p']) await test(model+' '+resolution+' frame route',async()=>{const r=await route.POST(request('videos',model,{generationMode:'image-to-video',assetIds:[1],seconds:2,resolution,generate_audio:false,prompt_extend:true}));assert.equal(r.status,200);assert.equal(payload.frame_images[0].frame_type,'first_frame');assert.equal(payload.generate_audio,false);assert.equal(payload.prompt_extend,true);assert.equal(counts.paid,1);assert.equal(counts.provider,1)});
+  await test(model+' invalid references never charge',async()=>{const r=await route.POST(request('videos',model,{generationMode:'subject-reference',assetIds:Array.from({length:10},(_,i)=>i+1),seconds:2,resolution:'480p'}));assert.equal(r.status,400);assert.equal(counts.paid,0);assert.equal(counts.provider,0)});
+ }
+ await test('legacy image-to-video retains first image',async()=>{const r=await route.POST(request('videos','SIRAYA-Seedance-1.0-pro-fast',{assetIds:[1],seconds:4,resolution:'480p'}));assert.equal(r.status,200);assert.equal(payload.image_url,'https://trusted.invalid/1')});
  console.log('PASS '+checks.length+' mode route contracts; mocked external effects only');
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -42,10 +42,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (!owned.length) {
       return NextResponse.json({ error: { message: "找不到任務" } }, { status: 404 });
     }
+    // Owned, durable results must survive the provider's job/URL expiry.
+    const { rows: saved } = await sql<{ url: string | null }>`
+      select url from generations where user_id = ${user.id} and ref = ${id} and kind = 'video' limit 1
+    `;
+    if (saved[0]?.url?.startsWith(`/api/media/generations/${user.id}/`)) {
+      return NextResponse.json({ id, status: "completed", url: saved[0].url });
+    }
     const json = await getVideoStatus(id);
     if (["completed", "failed", "succeeded"].includes(String(json?.status))) await recordProviderReceipt(user.id, String(owned[0].id), json);
     const rawUrl = json?.output_url ?? json?.data?.[0]?.url ?? null;
     let status = json?.status ?? (rawUrl ? "completed" : "processing");
+    if (status === "succeeded") status = "completed";
     let url = rawUrl;
 
     // Real case (ledger #520, 2026-09-14, Veo 3.1 4K): SIRAYA reported

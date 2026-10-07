@@ -2,12 +2,12 @@ import { sizeOptionsFor } from "./imageModels";
 import { validateLayerRequest } from "./layerDecomposition";
 ﻿import { assertPromptSafety } from "./promptSafety";
 import { SirayaApiError } from "./siraya";
-import { videoResolutionsForModel, normalizeVideoResolution, videoConstraintFor } from "./videoModels";
+import { videoResolutionsForModel, normalizeVideoResolution, videoConstraintFor, isWanVideo } from "./videoModels";
 const bad=()=>{throw new SirayaApiError(400,"生成參數不正確或包含未支援的欄位");};
 export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text"|"imageEdit") {
   const common=["model","prompt"];
   const keys=kind==="image"?["n","size","quality","style","response_format","negative_prompt","seed","background","output_compression","moderation","watermark","assetIds","image","layer_decomposition","output_format","confirmedMaxCredits"]:
-    kind==="video"?["seconds","resolution","aspect_ratio","generate_audio","negative_prompt","seed","extra_body","assetIds","imageUrls","videoUrl","async","generationMode","providerAssetIds"]:
+    kind==="video"?["seconds","resolution","aspect_ratio","generate_audio","prompt_extend","negative_prompt","seed","extra_body","assetIds","imageUrls","videoUrl","async","generationMode","providerAssetIds"]:
     kind==="imageEdit"?["image","mask"]:
     ["messages","stream","temperature","max_tokens"];
   if(!body || typeof body!=="object" || Object.keys(body).some(k=>![...common,...keys].includes(k)))bad();
@@ -33,7 +33,12 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
   if(kind==="video"){
     if(body.generationMode!==undefined && (typeof body.generationMode!=="string" || body.generationMode.length>40))bad();
     if(body.providerAssetIds!==undefined && (!Array.isArray(body.providerAssetIds)||body.providerAssetIds.length>50||body.providerAssetIds.some((id:unknown)=>typeof id!=="number"||!Number.isSafeInteger(id)||id<1)))bad();
-    integer("seconds",5,1,videoConstraintFor(String(body.model)).maxSeconds);
+    const constraint = videoConstraintFor(String(body.model));
+    integer("seconds",5,constraint.minSeconds,constraint.maxSeconds);
+    if (body.aspect_ratio !== undefined && !["adaptive","16:9","9:16","1:1","4:3","3:4","21:9"].includes(String(body.aspect_ratio))) bad();
+    if (body.seed !== undefined && (typeof body.seed !== "number" || !Number.isSafeInteger(body.seed) || body.seed < -1 || body.seed > 2147483647)) bad();
+    if (body.prompt_extend !== undefined && (!isWanVideo(String(body.model)) || typeof body.prompt_extend !== "boolean")) bad();
+    if (isWanVideo(String(body.model)) && body.negative_prompt !== undefined) bad();
     const resolutions = videoResolutionsForModel(String(body.model));
     if (!resolutions.length) throw new SirayaApiError(400, "此影片模型的解析度尚未完成設定，請選擇其他模型。");
     body.resolution ??= normalizeVideoResolution(String(body.model), "480p");

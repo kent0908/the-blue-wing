@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { monitoredModelFetch } from "./modelMonitoring";
 import { applyWatermarkDefaults } from "./watermark";
+import { wanVideoPayload } from "./wanVideo";
 
 /**
  * SIRAYA Model Router client (server-side only).
@@ -334,6 +335,7 @@ export interface VideoGenerationRequest {
   resolution?: "480p" | "720p" | "1080p" | "4k";
   aspect_ratio?: string;
   generate_audio?: boolean;
+  prompt_extend?: boolean;
   negative_prompt?: string;
   seed?: number;
   async?: boolean;
@@ -368,7 +370,7 @@ export interface VideoGenerationRequest {
 export async function createVideo(body: VideoGenerationRequest) {
   const res = await sirayaFetch("/videos/generations", {
     method: "POST",
-    body: JSON.stringify(applyWatermarkDefaults(body, "video")),
+    body: JSON.stringify(wanVideoPayload(applyWatermarkDefaults(body, "video"))),
   });
   return res.json();
 }

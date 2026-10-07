@@ -11,7 +11,7 @@ export function supportsImageWatermark(modelId: string | null | undefined): bool
 }
 
 export function supportsVideoWatermark(modelId: string | null | undefined): boolean {
-  return /^seedance(?:-|$)/.test(familyId(modelId));
+  return /^(?:seedance(?:-|$)|wan3\.0-video(?:-prime)?$)/.test(familyId(modelId));
 }
 
 /** Generations use a top-level field, while edits/videos use extra_body. */
@@ -25,7 +25,8 @@ export function applyWatermarkDefaults<T extends { model: string; watermark?: bo
   delete extra.watermark;
   delete result.watermark;
   if (supported) {
-    if (kind === "image") result.watermark = typeof body.watermark === "boolean" ? body.watermark : false;
+    if (kind === "video" && /^wan3\.0-video(?:-prime)?$/i.test(body.model)) result.watermark = typeof body.watermark === "boolean" ? body.watermark : typeof body.extra_body?.watermark === "boolean" ? body.extra_body.watermark : false;
+    else if (kind === "image") result.watermark = typeof body.watermark === "boolean" ? body.watermark : false;
     else extra.watermark = typeof body.extra_body?.watermark === "boolean" ? body.extra_body.watermark : false;
   }
   // Avoid an empty provider-specific envelope for providers that reject it.

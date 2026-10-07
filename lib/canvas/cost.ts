@@ -1,13 +1,14 @@
-import { videoResolutionsForModel } from "../videoModels";
+import { videoConstraintFor, videoResolutionsForModel } from "../videoModels";
 import { creditsFromRateCard, type RateCardEntry } from "../pricing";
 import type { CanvasGraph, CanvasNode } from "./types";
 
 export function canvasNodeCredits(node: CanvasNode, rates: RateCardEntry[]): number | null {
   if (node.type !== "image" && node.type !== "video") return 0;
   if (node.type === "video" && !videoResolutionsForModel(String(node.data.model ?? "")).includes(String(node.data.resolution || "480p") as never)) return null;
+  const constraint = videoConstraintFor(String(node.data.model ?? ""));
   return creditsFromRateCard(rates, String(node.data.model ?? ""), {
     imageCount: 1,
-    seconds: Number(node.data.seconds) || 5,
+    seconds: Math.max(constraint.minSeconds, Math.min(Number(node.data.seconds) || 5, constraint.maxSeconds)),
     resolution: String(node.data.resolution || "480p"),
   });
 }

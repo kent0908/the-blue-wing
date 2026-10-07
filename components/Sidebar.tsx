@@ -1,6 +1,7 @@
 "use client";
 
 import { getGenerationModes } from "@/lib/generationModes";
+import { videoResolutionsForModel } from "@/lib/videoModels";
 import { modelLabel } from "@/lib/modelLabel";
 import { isNewModel } from "@/lib/modelNew";
 import { useT, useTr } from "@/lib/i18n/client";
@@ -119,7 +120,7 @@ function ModelFlyoutPortal({
   const t = useT();
   const tr = useTr();
   const [sub, setSub] = useState<{ id: string; top: number } | null>(null);
-  const list = models.filter((m) => m.modality === state.modality && !/nsfw/i.test(m.id));
+  const list = models.filter((m) => m.modality === state.modality && !/nsfw/i.test(m.id) && (m.modality !== "video" || videoResolutionsForModel(m.id).length > 0));
   return createPortal(
     <>
     <div
@@ -298,7 +299,7 @@ function SidebarInner() {
         <NavLink item={{ href: "/landing", label: "landing", icon: IconWing }} active={isActive("/landing")} collapsed={collapsed} />
         {!collapsed && (
           <div className="mb-2 flex items-center gap-1.5 border-t border-[#1e1e1e] px-1 pt-3">
-            {SOCIAL_LINKS.map((s) => (
+            {SOCIAL_LINKS.filter((s) => s.href.startsWith("https://")).map((s) => (
               <a
                 key={s.label}
                 href={s.href}

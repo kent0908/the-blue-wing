@@ -19,6 +19,12 @@ export function getGenerationModes(model: string, kind: GenerationKind): Generat
     return modes;
   }
   const { modern, legacy } = seedanceFamily(model);
+  if (/^wan3\.0-video(?:-prime)?$/i.test(model)) return [
+    { id: "freestyle", label: k("自由創作"), enabled: true },
+    { id: "image-to-video", label: k("圖片生影片"), enabled: true },
+    { id: "first-last-frame", label: k("首尾幀編輯"), enabled: true },
+    { id: "subject-reference", label: k("主體參考"), enabled: true },
+  ];
   if (modern) return [
     { id: "freestyle", label: k("自由創作"), enabled: true },
     { id: "first-last-frame", label: k("首尾幀編輯"), enabled: true },
@@ -63,11 +69,13 @@ export function buildVideoModePayload(input: VideoModeInput): VideoModePayload {
   if (input.seconds !== undefined) out.seconds = input.seconds;
   if (input.aspectRatio !== undefined) out.aspect_ratio = input.aspectRatio;
   const { latest } = seedanceFamily(input.model);
+  const wan = /^wan3\.0-video(?:-prime)?$/i.test(input.model);
   if (input.mode === "text-to-video") {
     if (images.length || refs.length) throw new Error(k("文字生影片不接受參考素材"));
   } else if (input.mode === "image-to-video") {
     if (images.length !== 1 || refs.length) throw new Error(k("圖片生影片需要一張圖片"));
-    out.image_url = images[0];
+    if (wan) out.frame_images = [{ frame_type: "first_frame", image_url: images[0] }];
+    else out.image_url = images[0];
   } else if (input.mode === "first-last-frame") {
     if (images.length !== 2 || refs.length) throw new Error(k("首尾幀模式需要首幀與尾幀各一張圖片"));
     out.frame_images = [{ frame_type: "first_frame", image_url: images[0] }, { frame_type: "last_frame", image_url: images[1] }];
@@ -78,7 +86,7 @@ export function buildVideoModePayload(input: VideoModeInput): VideoModePayload {
     if (refs.length) {
       const counts = { image: 0, video: 0, audio: 0 };
       for (const ref of refs) counts[ref.type]++;
-      if (refs.length > (latest ? 50 : 15) || counts.image > (latest ? 30 : 9) || counts.video > (latest ? 10 : 3) || counts.audio > (latest ? 10 : 3)) throw new Error(k("參考素材數量超過模型上限"));
+      if (refs.length > (wan ? 9 : latest ? 50 : 15) || counts.image > (latest ? 30 : 9) || counts.video > (latest ? 10 : 3) || counts.audio > (latest ? 10 : 3)) throw new Error(k("參考素材數量超過模型上限"));
       if (!latest && !counts.image && !counts.video) throw new Error(k("此模型不支援僅使用音訊參考"));
       // Provider requires seconds:-1 whenever a video is present. Do not
       // silently replace a priced duration with unbounded automatic output.
@@ -86,6 +94,6 @@ export function buildVideoModePayload(input: VideoModeInput): VideoModePayload {
       out.input_references = refs.map(ref => ({ ...ref, role: `reference_${ref.type}` }));
     }
   }
-  if (out.seconds !== undefined && (!Number.isInteger(out.seconds) || out.seconds < 4 || out.seconds > (latest ? 30 : 15))) throw new Error(k("生成時長不在模型支援範圍內"));
+  if (out.seconds !== undefined && (!Number.isInteger(out.seconds) || out.seconds < (wan ? 2 : 4) || out.seconds > (latest || wan ? 30 : 15))) throw new Error(k("生成時長不在模型支援範圍內"));
   return out;
 }

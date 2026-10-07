@@ -22,7 +22,9 @@ function load(file,mocks){const m={exports:{}};new Function('require','module','
  '@/lib/companionDecisionShadow':{recordDecisionShadow:async()=>{}},
  '@/lib/officialCompanionStory':{openingSuggestions:()=>[],recoverStoryReply:()=>null,STORY_MESSAGE_PREFIX:'[bluewing-story-v1]'+String.fromCharCode(10)},
  '@/lib/creditTransactions':{paidCall:async(u,c,k,r,fn)=>({result:await fn(),chargeId:'test'}),refundCharge:async()=>{}},
- '@/lib/apiauth':{requireUser:async()=>({user:{id:7}})},
+ '@/lib/companionVoices':{companionVoiceSettings:()=>({language:'ja-JP'})},
+ '@/lib/chatHistoryBudget':load('lib/chatHistoryBudget.ts',{}),
+ '@/lib/apiauth':{requireAdultUser:async()=>({user:{id:7}})},
  '@/lib/siraya':{createChatCompletion:async()=>{if(memoryCalls++>0)throw Error('summary unavailable');return {choices:[{message:{content:'reply'}}]};}},
  '@/lib/errors':{errorResponse:()=>Response.json({error:true})},
  '@/lib/credits':{getBalance:async()=>100,creditCost:async()=>1},
@@ -31,7 +33,7 @@ function load(file,mocks){const m={exports:{}};new Function('require','module','
  assert.equal(response.status,200);assert.equal((await response.json()).reply.content,'reply');assert.equal(memoryCalls,1);assert.equal(deferred.length,1);
  const oldError=console.error;console.error=()=>{};try{await deferred[0]();}finally{console.error=oldError;}assert.equal(memoryCalls,2);
  let stored='old';
- const chars=load('lib/characters.ts',{'./db':{sql:async(strings,summary,id,previous)=>{if(stored===previous)stored=summary;return {rows:[]};}},'./characterProfile':{},'./sceneInteractionPolicy':{},'./promptSafety':{},'./officialCompanionStory':{decodeStoryMessage:()=>null,storyPrompt:()=>''},'./relationshipStages':{},'./companionOfficialSeed':{},'./romanceDepth':{}});
+ const chars=load('lib/characters.ts',{'./companionVoices':{},'./db':{sql:async(strings,summary,id,previous)=>{if(stored===previous)stored=summary;return {rows:[]};}},'./characterProfile':{},'./sceneInteractionPolicy':{},'./promptSafety':{},'./officialCompanionStory':{decodeStoryMessage:()=>null,storyPrompt:()=>''},'./relationshipStages':{},'./companionOfficialSeed':{},'./romanceDepth':{}});
  await chars.updateMemorySummary(7,'newer','old');
  await chars.updateMemorySummary(7,'late older','old');
  assert.equal(stored,'newer');

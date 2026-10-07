@@ -19,6 +19,8 @@ export const PRICE_CHECKED = "2026-09-26";
 const SIRAYA_API = "https://llm-ext-api.siraya.ai/api/v1/models";
 const BYTEPLUS = "https://docs.byteplus.com/en/docs/modelark/1544106?redirect=1";
 const prices: Record<string, PublicPrice> = {
+  "wan3.0-video": {price:.05,unit:"second"},
+  "wan3.0-video-prime": {price:.068,unit:"second"},
   "gemini-2.5-flash-tts": {price:10,inputPrice:.5,unit:"million_output_tokens"},
   "gemini-3.8-flash-tts": { price: 9, inputPrice: .5, unit: "million_output_tokens" },
   "gemini-3.8-flash-lite-tts": { price: 6, inputPrice: .5, unit: "million_output_tokens" },
@@ -119,7 +121,12 @@ for (const [id, audio] of [["gemini-3.8-flash-tts", 9], ["gemini-3.8-flash-lite-
 verified("gemini-2.5-flash-tts", "https://cloud.google.com/text-to-speech/pricing", [token("input", "文字輸入", .5),token("output", "音訊輸出", 10)], "Google Cloud 直連；每秒音訊 25 Token，輸出約 $0.015／分鐘，另加輸入 Token。API 不回傳 Token 用量時不得當作已核實帳單；台灣華語目前為 Preview。");
 prices["gemini-2.5-flash-tts"].checkedAt = "2026-09-27";
 // Mutually exclusive billing conditions cannot be accidentally summed in one quote.
+for (const [id, tiers] of Object.entries({"wan3.0-video":[.05,.1,.2],"wan3.0-video-prime":[.068,.14,.28]})) {
+  verified(id, SIRAYA_API, ["480p","720p","1080p"].map((r,i)=>component(r,r,tiers[i],"second")), "SIRAYA 公開牌價；含影片參考時，原廠按輸入加輸出秒數計費。站內目前僅開放文字、圖片參考與首尾幀；折扣需核對帳單。");
+  prices[id].checkedAt = "2026-10-07";
+}
 for (const [id, price] of Object.entries(prices)) for (const c of price.components ?? []) {
+  if (id.startsWith("wan3.0-")) c.scenario = c.id;
   if (id.startsWith("seedance-") || id.startsWith("happyhorse-") || id.startsWith("veo-")) c.scenario = c.id;
   if (id === "dola-seedream-5.0-pro" && c.id !== "references") c.scenario = c.id;
   if (["deepseek-v4.1-flash", "deepseek-v4-pro-0813"].includes(id)) c.scenario = c.id.startsWith("peak") ? "peak" : "offpeak";

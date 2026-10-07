@@ -223,7 +223,7 @@ export default function LayerEditorPage() {
       setSaveStatus("error");
       setError(e instanceof Error ? e.message : tr("儲存失敗"));
     }
-  }, [signedIn, projectId, refreshProjects]);
+  }, [signedIn, projectId, refreshProjects, tr]);
   useEffect(() => {
     if (!signedIn) return;
     if (skipSaveRef.current) {
@@ -577,9 +577,9 @@ export default function LayerEditorPage() {
   const tbBtn = "rounded-lg px-2 py-1.5 text-[12px] text-[#c9c9c9] hover:bg-[#1f1f1f] disabled:opacity-30";
 
   return (
-    <div className="flex h-full flex-col bg-[#0a0a0a]">
+    <div className="flex min-h-full min-w-0 flex-col bg-[#0a0a0a] lg:h-full lg:min-h-0">
       {/* toolbar */}
-      <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-[#1c1c1c] bg-black px-3">
+      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-1.5 border-b border-[#1c1c1c] bg-black px-3 py-2">
         <Link href="/" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={tr("返回")}>
           <IconChevronLeft className="h-4 w-4" />
         </Link>
@@ -596,7 +596,7 @@ export default function LayerEditorPage() {
           title={tr("畫布尺寸（已放好的圖層位置不會跟著動）")}
         >
           {CANVAS_SIZES.map((s) => (
-            <option key={tr(s.label)} value={tr(s.label)}>
+            <option key={s.label} value={s.label}>
               {tr(s.label)}
             </option>
           ))}
@@ -649,9 +649,9 @@ export default function LayerEditorPage() {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
         {/* left: projects + sources + layers */}
-        <div className="flex w-[240px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-[#1c1c1c] p-3">
+        <div className="flex w-full min-w-0 shrink-0 flex-col gap-2 border-b border-[#1c1c1c] p-3 lg:w-[220px] lg:overflow-y-auto lg:border-r lg:border-b-0">
           <ProjectsPanel
             projects={projects}
             currentId={projectId}
@@ -706,6 +706,7 @@ export default function LayerEditorPage() {
           <LayerList layers={layers} selectedId={selectedId} onSelect={setSelectedId} onPatch={patchLayer} onMove={moveLayer} onReorder={reorderLayer} onDuplicate={duplicateLayer} onRemove={removeLayer} />
         </div>
 
+        <div className="order-first flex h-[48dvh] min-h-[280px] min-w-0 lg:order-none lg:h-auto lg:min-h-0 lg:flex-1">
         <CanvasStage
           doc={doc}
           selectedId={selectedId}
@@ -721,9 +722,10 @@ export default function LayerEditorPage() {
           onDropFiles={(files) => void handleUpload(files)}
           fitRequest={fitRequest}
         />
+        </div>
 
         {/* right: properties + AI */}
-        <div className="flex w-[290px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-[#1c1c1c] p-3">
+        <div className="flex w-full min-w-0 shrink-0 flex-col gap-4 border-t border-[#1c1c1c] p-3 lg:w-[270px] lg:overflow-y-auto lg:border-t-0 lg:border-l">
           {mode === "annotate" ? (
             <div className="space-y-2">
               <div className="text-[11px] text-[#8a8a8a]">{tr("在畫面上圈出想修改的地方")}</div>

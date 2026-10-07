@@ -143,7 +143,7 @@ export async function runNode(
       model: node.data.model,
       prompt,
       aspect_ratio: node.data.aspect_ratio || "16:9",
-      seconds: Math.min(Number(node.data.seconds) || 5, constraint.maxSeconds),
+      seconds: Math.max(constraint.minSeconds, Math.min(Number(node.data.seconds) || 5, constraint.maxSeconds)),
       resolution: constraint.resolutions.includes(requestedResolution) ? requestedResolution : constraint.resolutions[0],
     };
     if (refAssetIds.length) body.assetIds = refAssetIds;

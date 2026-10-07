@@ -11,7 +11,8 @@ const p={name:'',bio:''};
 // 2026-09-16 (33b9225): the romance ladder deliberately no longer names the level in the system
 // prompt — a custom companion's relationship comes from its settings, not from a score. The
 // trust ladder (all_ages) still does. Both keep untrusted memory ahead of the trailing rules.
-const TAIL='請一律使用繁體中文';
+const {companionLanguagePrompt,companionVoiceSettings}=load('lib/companionVoices.ts');
+const TAIL=companionLanguagePrompt(companionVoiceSettings(c).language);
 const SCORE_DISCLAIMER='數值僅為互動紀錄';
 for(let i=0;i<6;i++){c.affection=AFFECTION_LEVELS[i].min;const sys=buildSystemPrompt(c,p),image=buildScenePrompt(c,'image'),video=buildScenePrompt(c,'video');
   assert.ok(!sys.includes(AFFECTION_LEVELS[i].name),'romance prompt must not name the affection level');

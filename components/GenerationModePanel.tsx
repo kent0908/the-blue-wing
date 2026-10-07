@@ -22,7 +22,7 @@ function ReviewedAssets({ selected, onSelected }: { selected: number[]; onSelect
       .catch(error => { if (alive) setError(error instanceof Error ? error.message : tr("素材載入失敗")); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [page]);
+  }, [page, tr]);
   const navigate = (value:number) => { setLoading(true); setPage(value); };
   return <div className="max-h-[55dvh] overflow-y-auto p-3 text-xs" aria-label={tr("已審核素材清單")}>
     <div className="mb-3 flex items-center justify-between gap-3 text-[#d1d1d1]"><span>{tr("選擇已審核素材")}</span><Link href="/assets" className="shrink-0 text-[#aaa] underline">{tr("管理素材")}</Link></div>
@@ -42,7 +42,7 @@ export default function GenerationModePanel({ model, kind, operation, selected, 
   selected: number[]; onSelected: (ids:number[])=>void;
 }) {
   const tr = useTr();
-  const allowed = kind === 'video' && getGenerationModes(model,kind).some(item => item.id === 'subject-reference' && item.enabled)
+  const allowed = kind === 'video' && /seedance/i.test(model) && getGenerationModes(model,kind).some(item => item.id === 'subject-reference' && item.enabled)
     && !['first-last-frame','text-to-video','image-to-video'].includes(operation);
   if (!allowed) return null;
   return <Popover label={tr("已審核素材")} widthClass="w-[340px]" trigger={()=><span>{tr("已審核素材")}{selected.length?' · '+selected.length:''}</span>}>

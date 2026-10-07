@@ -6,7 +6,7 @@
 const fs=require('node:fs'),ts=require('typescript'),assert=require('node:assert/strict');
 function load(file,mocks){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(id=>{if(id in mocks)return mocks[id];if(String(id).startsWith('node:'))return require(id);return require(id)},m,m.exports);return m.exports;}
 
-const client=load('lib/siraya.ts',{'./modelMonitoring':{monitoredModelFetch:(u,i)=>fetch(u,i),requestOutcome:()=>'network_error'},'./watermark':{applyWatermarkDefaults:b=>b}});
+const client=load('lib/siraya.ts',{'./wanVideo':load('lib/wanVideo.ts',{}),'./modelMonitoring':{monitoredModelFetch:(u,i)=>fetch(u,i),requestOutcome:()=>'network_error'},'./watermark':{applyWatermarkDefaults:b=>b}});
 let checks=0; const check=f=>{f();checks++;};
 
 // the chat helpers must always carry an abort signal

@@ -1,7 +1,7 @@
 "use client";
 
 import Popover from "./Popover";
-import { videoResolutionsForModel, normalizeVideoResolution } from "@/lib/videoModels";
+import { videoResolutionsForModel, normalizeVideoResolution, isWanVideo } from "@/lib/videoModels";
 import { IconRatio, IconReset } from "./Icons";
 import {
   ASPECT_RATIOS,
@@ -133,7 +133,8 @@ export default function SettingsPopover({
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
-                    min={2}
+                    aria-label={tr("時長")}
+                    min={videoConstraint.minSeconds}
                     max={videoConstraint.maxSeconds}
                     step={1}
                     value={Math.min(settings.seconds, videoConstraint.maxSeconds)}
@@ -144,6 +145,11 @@ export default function SettingsPopover({
                     {Math.min(settings.seconds, videoConstraint.maxSeconds)}
                   </div>
                 </div>
+                {isWanVideo(selectedModel) && <div className="mt-4 space-y-3 border-t border-white/10 pt-4 text-xs">
+                  <label className="flex items-center justify-between gap-3"><span>{tr("生成聲音")}</span><input type="checkbox" checked={settings.generateAudio !== false} onChange={e=>set({generateAudio:e.target.checked})} /></label>
+                  <label className="flex items-center justify-between gap-3"><span>{tr("提示詞潤飾")}</span><input type="checkbox" checked={settings.promptExtend === true} onChange={e=>set({promptExtend:e.target.checked})} /></label>
+                  <p className="leading-5 text-[#999]">{tr("關閉潤飾可保留原始分鏡描述；聲音開關不影響費率。")}</p>
+                </div>}
               </>
             )}
 

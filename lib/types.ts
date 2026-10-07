@@ -19,6 +19,8 @@ export interface GenSettings {
   imageCount: number;
   size: string; // for images, e.g. 1024x1024
   maxTokens: number;
+  generateAudio?: boolean;
+  promptExtend?: boolean;
 }
 
 export const DEFAULT_SETTINGS: GenSettings = {

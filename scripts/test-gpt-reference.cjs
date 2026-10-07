@@ -1,6 +1,6 @@
 const fs=require('fs'),ts=require('typescript'),assert=require('assert/strict');
 function load(file,mocks){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(id=>{if(/i18n\/(tr|k)$/.test(String(id)))return {k:(s)=>s};if(id in mocks)return mocks[id];if(String(id).startsWith('node:'))return require(id);throw Error(id)},m,m.exports);return m.exports}
-const wm=load('lib/watermark.ts',{}),client=load('lib/siraya.ts',{'./modelMonitoring':{monitoredModelFetch:(u,i)=>fetch(u,i),requestOutcome:()=>'network_error'},'./watermark':wm});
+const wm=load('lib/watermark.ts',{}),client=load('lib/siraya.ts',{'./wanVideo':load('lib/wanVideo.ts',{}),'./modelMonitoring':{monitoredModelFetch:(u,i)=>fetch(u,i),requestOutcome:()=>'network_error'},'./watermark':wm});
 const models=load('lib/imageModels.ts',{'./modelLabel':{modelLabel:s=>s},'./billingModel':{canonicalBillingModel:s=>s.replace(/^SIRAYA-/,'')}});
 const model=models.getImageModel('gpt-image-2');assert.ok(models.supportsRefImages(model));assert.ok(models.sizeOptionsFor(model.id).includes('2160x3840'));
 const p=models.buildImagePayload(model,'front',{size:'2160x3840',quality:'high'},[12]);assert.deepEqual(p.assetIds,[12]);assert.equal(p.size,'2160x3840');

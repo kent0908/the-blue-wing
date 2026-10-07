@@ -44,7 +44,7 @@ export default async function ModelsIndex() {
       <Link href={`/models/${m.slug}`} className="group block h-full py-7 outline-offset-4 transition-colors hover:bg-[#ffffff03] focus-visible:outline focus-visible:outline-[#b6c7bc] sm:py-8">
        <div className="flex items-center gap-3"><ModelLogo id={m.id} size={30}/><h3 className="min-w-0 flex-1 break-words text-[17px] font-medium tracking-wide">{modelPageName(m)}</h3><span aria-hidden="true" className="text-[#8b9d8e] transition-transform group-hover:translate-x-1">↗</span></div>
        <p className="mt-5 max-w-[38ch] text-[14px] leading-7 text-[#c0c2b7]">{tr(m.tagline)}</p>
-       <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-[#21251f] pt-4 text-[11px] leading-5 text-[#8d968a]"><span>{facts.join(' · ')}</span>{p&&<span className="whitespace-nowrap">{p.perUnit} {tr("點／")}{p.unit} {tr("起")}</span>}</div>
+       <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-[#21251f] pt-4 text-[11px] leading-5 text-[#8d968a]"><span>{facts.join(' · ')}</span>{p&&<span className="whitespace-nowrap">{p.perUnit} {tr("點／")}{tr(p.unit)} {tr("起")}</span>}</div>
       </Link></li>})}
     </ul>
    </section>)}

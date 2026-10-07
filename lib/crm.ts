@@ -93,10 +93,11 @@ export async function quoteCost(model: string, _credits: number, meta: { units?:
   // Credits are a retail policy, not evidence of vendor usage. Unknown costs
   // remain explicitly unknown until a provider usage/cost receipt is available.
   const units = meta.units ?? 0;
-  const costKnown = !!tariff && !tariff.note && tariff.unit !== "million_output_tokens"
+  const wanTier = /^wan3\.0-video(?:-prime)?$/i.test(model) ? tariff?.components?.find(c=>c.id===resolution?.toLowerCase()) : undefined;
+  const costKnown = !!tariff && (!!wanTier || !tariff.note) && tariff.unit !== "million_output_tokens"
     && meta.units !== undefined && Number.isFinite(units) && units >= 0;
   const discountPct = cost?.discount_pct ?? settings.default_discount_pct;
-  const listCostUsd = costKnown ? tariff!.price * units : 0;
+  const listCostUsd = costKnown ? (wanTier?.price ?? tariff!.price) * units : 0;
   const actualCostUsd = listCostUsd * (1 - Math.min(100, Math.max(0, discountPct)) / 100);
   return { units, unit, resolution, listCostUsd: round6(listCostUsd), actualCostUsd: round6(actualCostUsd), discountPct, costKnown, tariffSnapshot: tariff };
 }

@@ -105,6 +105,7 @@ export interface EstimateInput {
   maxTokens?: number;
   imageCount?: number;
   seconds?: number;
+  resolution?: string;
 }
 
 export function estimateCost(input: EstimateInput): number {
@@ -113,6 +114,11 @@ export function estimateCost(input: EstimateInput): number {
     case "image":
       return (rate.perImage ?? FALLBACK.perImage!) * (input.imageCount ?? 1);
     case "video":
+      if (/^wan3\.0-video(?:-prime)?$/i.test(input.model)) {
+        const prime = /-prime$/i.test(input.model);
+        const rates: Record<string, number> = prime ? {"480p":.068,"720p":.14,"1080p":.28} : {"480p":.05,"720p":.1,"1080p":.2};
+        return (rates[input.resolution ?? "720p"] ?? rates["720p"]) * (input.seconds ?? 5);
+      }
       return (rate.perSecond ?? FALLBACK.perSecond!) * (input.seconds ?? 5);
     case "text":
     default: {

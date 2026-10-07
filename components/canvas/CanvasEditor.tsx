@@ -166,7 +166,7 @@ export default function CanvasEditor({
     window.addEventListener("beforeunload", guard);
     document.addEventListener("click", leave, true);
     return () => { window.removeEventListener("beforeunload", guard); document.removeEventListener("click", leave, true); runController.current?.abort(); };
-  }, [saveState, runLock]);
+  }, [saveState, runLock, tr]);
 
   const toWorld = useCallback((clientX: number, clientY: number) => {
     const rect = containerRef.current!.getBoundingClientRect();
@@ -190,7 +190,7 @@ export default function CanvasEditor({
       .then((j: { models: { id: string; modality: string; displayName?: string }[] }) =>
         // /api/models already returns them pre-sorted (grouped by family,
         // admin overrides honoured) — no reason to re-sort here too.
-        setVideoModels(j.models.filter((m) => m.modality === "video" && !/nsfw/i.test(m.id)).map((m) => ({ id: m.id, name: modelLabel(m.displayName ?? m.id) })))
+        setVideoModels(j.models.filter((m) => m.modality === "video" && !/nsfw/i.test(m.id) && videoResolutionsForModel(m.id).length > 0).map((m) => ({ id: m.id, name: modelLabel(m.displayName ?? m.id) })))
       )
       .catch(() => {});
   }, []);
@@ -873,7 +873,7 @@ function NodeCard({
           const currentSeconds = Number(node.data.seconds) || 5;
           return (
           <>
-            <select value={String(node.data.model ?? "")} onChange={(e) => onDataChange({ model: e.target.value, resolution: normalizeVideoResolution(e.target.value, String(node.data.resolution ?? "480p")) })} className={fieldCls}>
+            <select value={String(node.data.model ?? "")} onChange={(e) => { const next = videoConstraintFor(e.target.value); onDataChange({ model: e.target.value, resolution: normalizeVideoResolution(e.target.value, String(node.data.resolution ?? "480p")), seconds: Math.max(next.minSeconds, Math.min(currentSeconds, next.maxSeconds)) }); }} className={fieldCls}>
               {/nsfw/i.test(String(node.data.model ?? "")) && <option value={String(node.data.model)} disabled>{tr("請重新選擇模型")}</option>}
               {videoModels.length === 0 && <option value="">{tr("載入中…")}</option>}
               {videoModels.map((m) => (
@@ -885,9 +885,9 @@ function NodeCard({
             <div className="flex gap-1.5">
               <input
                 type="number"
-                min={1}
+                min={constraint.minSeconds}
                 max={constraint.maxSeconds}
-                value={Math.min(currentSeconds, constraint.maxSeconds)}
+                value={Math.max(constraint.minSeconds,Math.min(currentSeconds, constraint.maxSeconds))}
                 onChange={(e) => onDataChange({ seconds: Number(e.target.value) })}
                 className={fieldCls + " w-1/2"}
               />

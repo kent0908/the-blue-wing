@@ -40,6 +40,9 @@ async function countInFlightVideoJobs(userId: number): Promise<number> {
       and cl.reason = 'video'
       and cl.delta < 0
       and cl.ref not like 'pending:%'
+      -- Provider jobs expire after 24h; abandoned historical rows must not
+      -- permanently consume a concurrent-generation slot. This is not a refund.
+      and cl.created_at > now() - interval '24 hours'
       and not exists (select 1 from generations g where g.user_id = cl.user_id and g.ref = cl.ref)
       and not exists (
         select 1 from credit_ledger r
@@ -95,21 +98,28 @@ export async function POST(req: NextRequest) {
     // this on SIRAYA.
     const { assetIds, imageUrls, videoUrl, providerAssetIds, generationMode, ...videoBody } = body;
     const allowedModes = getGenerationModes(String(body.model), "video");
-    const selectedMode = generationMode || allowedModes.find(m=>m.enabled)?.id;
+    const hasImage = (Array.isArray(assetIds) && assetIds.length) || (Array.isArray(imageUrls) && imageUrls.length);
+    const selectedMode = generationMode || (hasImage && maxRefsForVideoModel(String(body.model)) === 0 && allowedModes.some(m=>m.id==="image-to-video" && m.enabled) ? "image-to-video" : allowedModes.find(m=>m.enabled)?.id);
     if(generationMode && !allowedModes.some(m=>m.id===generationMode && m.enabled)) throw new SirayaApiError(400,"此模型尚未開放所選模式");
     const frameMode = selectedMode === "first-last-frame" || selectedMode === "image-to-video";
+    if (/^wan3\.0-video/i.test(body.model) && providerAssetIds?.length) throw new SirayaApiError(400,"Wan 請直接選擇素材庫圖片，尚未支援已審核素材識別碼");
     const trusted = Array.isArray(providerAssetIds) && providerAssetIds.length ? await resolveProviderAssetReferences(user.id, providerAssetIds) : [];
     if (trusted.length && (!allowedModes.some(m=>m.id==="subject-reference" && m.enabled) || frameMode)) throw new SirayaApiError(400,"此模式不接受已審核素材，請選擇主體參考。");
     const refCap = maxRefsForVideoModel(String(body.model));
-    if (refCap > 0) {
+    if (refCap > 0 || frameMode || allowedModes.length) {
       const refs: { type: "image" | "video"; url: string }[] = [];
+      if (videoUrl && !supportsVideoRefInput(String(body.model))) throw new SirayaApiError(400,"此模型尚未開放影片參考，請使用圖片參考");
       if (Array.isArray(assetIds) && assetIds.length) {
-        const urls = await createGenerationAssetUrls(user.id, assetIds.slice(0, refCap).map(Number), req.nextUrl.origin);
+        if (assetIds.some((id: unknown) => typeof id !== "number" || !Number.isSafeInteger(id) || Number(id) < 1)) throw new SirayaApiError(400,"參考素材格式不正確");
+        const cap = frameMode ? (selectedMode === "image-to-video" ? 1 : 2) : refCap;
+        if (assetIds.length > cap) throw new SirayaApiError(400,"參考素材數量超過模型上限");
+        const urls = await createGenerationAssetUrls(user.id, assetIds, req.nextUrl.origin);
         refs.push(...urls.map((url) => ({ type: "image" as const, url })));
       }
       if (Array.isArray(imageUrls)) {
         for (const u of imageUrls) {
-          if (typeof u === "string" && u.trim()) {
+          if (typeof u !== "string" || !u.trim()) throw new SirayaApiError(400,"參考素材格式不正確");
+          if (u.trim()) {
             if (/^asset:/i.test(u.trim())) throw new SirayaApiError(400,"請從已審核素材選擇參考圖片");
             // data URLs (3D導演台 screenshot / sampled frames) are size-normalised here; signed URLs are normalised by the route that serves them
             refs.push({ type: "image" as const, url: await normalizeReferenceDataUrl(await resolveGenerationImage(user.id, u.trim(), req.nextUrl.origin)) });
@@ -132,6 +142,8 @@ export async function POST(req: NextRequest) {
         if (generationMode || trusted.length) throw new SirayaApiError(400,"此模型尚未支援所選模式");
         if (refs.length) videoBody.input_references = refs.slice(0, refCap);
       }
+    } else if (assetIds?.length || imageUrls?.length || videoUrl || trusted.length) {
+      throw new SirayaApiError(400,"此模型尚未開放所選生成模式");
     }
 
 
@@ -183,7 +195,7 @@ export async function POST(req: NextRequest) {
 
     // Async submissions return { id, status: "processing" }; a provider that
     // completes synchronously returns { data: [{ url }] } instead.
-    const immediateUrl = json?.data?.[0]?.url ?? null;
+    const immediateUrl = json?.output_url ?? json?.data?.[0]?.url ?? null;
     const jobId = json?.id ?? null;
 
     if (!immediateUrl && !jobId) {

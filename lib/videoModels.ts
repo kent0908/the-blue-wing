@@ -27,6 +27,8 @@ interface VideoRefRule {
 }
 
 const RULES: VideoRefRule[] = [
+  // Site reference limit; SIRAYA has not published a Wan 3.0 maximum.
+  { prefix: "wan3.0-video", max: 9 },
   { prefix: "seedance-2.5", max: 50 },
   { prefix: "seedance-1.0-pro-fast", max: 0 },
   { prefix: "seedance-1.0-pro", max: 0 },
@@ -67,7 +69,12 @@ export function supportsVideoRefs(modelId: string | null | undefined): boolean {
 export function supportsVideoRefInput(modelId: string | null | undefined): boolean {
   if (!modelId) return false;
   const id = modelId.toLowerCase();
+  // Wan video inputs are billable too; disabled until duration is measured server-side.
   return /seedance-2\.(0|5)(-|$)/.test(id);
+}
+
+export function isWanVideo(modelId: string | null | undefined): boolean {
+  return /^wan3\.0-video(?:-prime)?$/i.test(modelId ?? "");
 }
 
 export type VideoResolution = "480p" | "720p" | "1080p" | "4k";
@@ -81,6 +88,8 @@ export type VideoResolution = "480p" | "720p" | "1080p" | "4k";
  */
 export function videoResolutionsForModel(modelId: string | null | undefined): readonly VideoResolution[] {
   const id = (modelId ?? "").toLowerCase().replace(/seedance-(\d)-(\d)/, "seedance-$1.$2");
+  // Original Wan docs + SIRAYA output files verified 2026-10-07, including 480p.
+  if (isWanVideo(id)) return ["480p", "720p", "1080p"];
   // 2026-09-15: official ModelArk pricing + SIRAYA accepted 1080p job.
   if (/seedance-2\.5(?:-|$)/.test(id)) return ["480p", "720p", "1080p"];
   if (/seedance-2\.0-(mini|fast)(?:-|$)/.test(id)) return ["480p", "720p"];
@@ -101,8 +110,9 @@ export function normalizeVideoResolution(modelId: string | null | undefined, res
 }
 
 /** Share the reviewed resolution catalog across API and editors. */
-export function videoConstraintFor(modelId: string | null | undefined): { resolutions: string[]; maxSeconds: number } {
+export function videoConstraintFor(modelId: string | null | undefined): { resolutions: string[]; minSeconds: number; maxSeconds: number } {
   const id = (modelId ?? "").toLowerCase();
-  const maxSeconds = /seedance-2\.5/.test(id) ? 30 : /seedance-2\.0/.test(id) ? 15 : 12;
-  return { resolutions: [...videoResolutionsForModel(modelId)], maxSeconds };
+  const maxSeconds = isWanVideo(id) || /seedance-2\.5/.test(id) ? 30 : /seedance-2\.0/.test(id) ? 15 : 12;
+  const minSeconds = /seedance/.test(id) ? 4 : 2;
+  return { resolutions: [...videoResolutionsForModel(modelId)], minSeconds, maxSeconds };
 }

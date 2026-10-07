@@ -41,7 +41,7 @@ function faqFor(t: Dict, tr: Tr, page: ModelPage, name: string, specs: ReturnTyp
   const M = t.models;
   const faq: { question: string; answer: string }[] = [];
   if (page.kind === "video") {
-    faq.push({ question: fmt(M.faqMaxSec.q, { name }), answer: fmt(M.faqMaxSec.a, { name, n: specs.maxSeconds ?? 0 }) });
+    faq.push({ question: fmt(M.faqMaxSec.q, { name }), answer: fmt(M.faqMaxSec.a, { name, n: specs.maxSeconds ?? 0, min: specs.minSeconds ?? 2 }) });
     faq.push({ question: fmt(M.faqRes.q, { name }), answer: fmt(M.faqRes.a, { list: specs.resolutions.join(M.listSep) }) });
     faq.push({ question: fmt(M.faqRefV.q, { name }), answer: specs.maxRefs > 0 ? fmt(M.faqRefV.yes, { n: specs.maxRefs, video: specs.videoRef ? M.faqRefV.video : "" }) : fmt(/i2v/i.test(page.id) ? M.faqRefV.noImage : M.faqRefV.noText, { name }) });
   } else {
@@ -115,7 +115,7 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
             {page.kind === "video" ? (
               <>
                 <Row k={M.resolution} v={specs.resolutions.join(" / ")} />
-                <Row k={M.duration} v={`4 – ${specs.maxSeconds} ${M.sec}`} />
+                <Row k={M.duration} v={`${specs.minSeconds} – ${specs.maxSeconds} ${M.sec}`} />
                 <Row k={M.refMaterials} v={specs.maxRefs > 0 ? `${fmt(M.upTo, { n: specs.maxRefs })}${specs.videoRef ? M.withVideoRef : ""}` : M.unsupported} />
               </>
             ) : (

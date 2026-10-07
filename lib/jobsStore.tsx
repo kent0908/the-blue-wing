@@ -307,7 +307,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           // the actual request sent here is always valid for `model`.
           const constraint = videoConstraintFor(model);
           const resolution = constraint.resolutions.includes(settings.resolution) ? settings.resolution : constraint.resolutions[0];
-          const seconds = Math.min(settings.seconds, constraint.maxSeconds);
+          const seconds = Math.max(constraint.minSeconds, Math.min(settings.seconds, constraint.maxSeconds));
           const res = await fetch("/api/videos", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -316,6 +316,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
               prompt,
               seconds,
               resolution,
+              ...(/^wan3\.0-video(?:-prime)?$/i.test(model) ? {generate_audio:settings.generateAudio !== false,prompt_extend:settings.promptExtend === true} : {}),
               ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
               ...(assetIds?.length ? { assetIds } : {}),
               ...(generationMode ? { generationMode } : {}),
