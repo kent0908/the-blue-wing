@@ -104,7 +104,7 @@ export async function sirayaBillingReport(range: CrmRange, model = "", page = 1,
       from siraya_billing_records b where ${where} group by currency order by currency`,params),
     sql.query(`select to_char(requested_at at time zone 'Asia/Taipei','YYYY-MM-DD') as date,currency,sum(cost)::text as cost,count(*)::int as records from siraya_billing_records b where ${where} group by 1,2 order by 1,2`,params),
     sql.query(`select model,currency,sum(cost)::text as cost,count(*)::int as records from siraya_billing_records b where ${where} group by 1,2 order by sum(cost) desc`,params),
-    sql.query(`select account_id,request_id,requested_at,model,cost::text,currency,status,usage,performance,match_state,b.charge_id::text,
+    sql.query(`select b.account_id,b.request_id,b.requested_at,b.model,b.cost::text,b.currency,b.status,b.usage,b.performance,b.match_state,b.charge_id::text,
       u.status as local_status,case when u.cost_known then u.list_cost_usd::text end as list_estimate,
       case when u.cost_known then u.actual_cost_usd::text end as discount_estimate,
       case when u.cost_known and b.currency='USD' and (select count(*) from siraya_billing_records x where x.scope_account_id=b.scope_account_id and x.charge_id=b.charge_id)=1 then (b.cost-u.actual_cost_usd)::text end as variance
