@@ -22,7 +22,8 @@ function initialFilters():Filters {
 export default function BillingPage(){
   const tr=useTr(),locale=useLocale(),router=useRouter();
   const [filters,setFilters]=useState(initialFilters),[draft,setDraft]=useState(initialFilters);
-  const [data,setData]=useState<Report|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[revision,setRevision]=useState(0);
+  const [data,setData]=useState<Report|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const [notice,setNotice]=useState<{key:string;params?:Record<string,string|number>}|null>(null),[revision,setRevision]=useState(0);
   const [accounts,setAccounts]=useState<{id:string;name:string;isArchived:boolean}[]>([]);
   const [request,setRequest]=useState(""),[chart,setChart]=useState("line");
   const fromInput=useRef<HTMLInputElement>(null),toInput=useRef<HTMLInputElement>(null),modelInput=useRef<HTMLInputElement>(null);
@@ -40,26 +41,26 @@ export default function BillingPage(){
   },[query,revision]);
   async function checkAccounts(){
     setBusy(true);setError("");
-    try{const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"accounts"})});const j=await r.json();if(!r.ok){if(j.error?.schema)setNotice(JSON.stringify(j.error.schema));throw new Error(j.error?.code??"storage_failed");}setAccounts(j.accounts);}
+    try{const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"accounts"})});const j=await r.json();if(!r.ok){if(j.error?.schema)setNotice({key:JSON.stringify(j.error.schema)});throw new Error(j.error?.code??"storage_failed");}setAccounts(j.accounts);}
     catch(e){setError(e instanceof Error?e.message:"storage_failed");}finally{setBusy(false);}
   }
   async function sync(){
     const selected=submittedFilters();setDraft(selected);
-    setBusy(true);setError("");setNotice("");
+    setBusy(true);setError("");setNotice(null);
     try{
       const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"sync",from:selected.from,to:selected.to})});
       const j=await r.json();if(!r.ok)throw new Error(j.error?.code??"storage_failed");
-      setFilters(selected);setRevision(n=>n+1);setNotice(tr("同步完成：{count} 筆，未重新套用折扣。",{count:j.records}));
+      setFilters(selected);setRevision(n=>n+1);setNotice({key:"同步完成：{count} 筆，未重新套用折扣。",params:{count:j.records}});
     }catch(e){setError(e instanceof Error?e.message:"storage_failed");}finally{setBusy(false);}
   }
   async function lookup(){
-    setBusy(true);setError("");setNotice("");
+    setBusy(true);setError("");setNotice(null);
     try{
       const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"lookup",requestId:request.trim()})});
       const j=await r.json();if(!r.ok)throw new Error(j.error?.code??"storage_failed");
       const day=new Date(Date.parse(j.record.timestamp)+8*3600000).toISOString().slice(0,10);
       const next={from:day,to:day,model:"",requestId:request.trim(),page:1};setDraft(next);setFilters(next);setRevision(n=>n+1);
-      setNotice(tr("已查到並保存此 Request ID；單筆查詢不代表整日已完成同步。"));
+      setNotice({key:"已查到並保存此 Request ID；單筆查詢不代表整日已完成同步。"});
     }catch(e){setError(e instanceof Error?e.message:"storage_failed");}finally{setBusy(false);}
   }
   const fmtTime=(value:string)=>new Date(value).toLocaleString(locale==="ja"?"ja-JP":locale==="en"?"en-US":"zh-TW",{timeZone:"Asia/Taipei",hour12:false});
@@ -73,10 +74,10 @@ export default function BillingPage(){
   });
   return <div className="space-y-6">
     <header className="max-w-4xl space-y-3"><select aria-label={tr("介面語言")} value={locale} onChange={e=>{setLocaleCookie(e.target.value as Locale);router.refresh();}} className={fieldCls}><option value="zh-Hant">繁體中文</option><option value="ja">日本語</option><option value="en">English</option></select><p className="text-xs tracking-[.2em] text-[#7ff0cd]">SIRAYA / BILLING</p><h1 className="text-2xl font-semibold text-white">{tr("SIRAYA 實際成本對帳")}</h1><p className="text-sm leading-7 text-[#aaa]">{tr("以供應商折扣後計費金額認列。六位小數精確保存，重複同步不重算；不同幣別分開統計。")}</p></header>
-    {error&&<Notice kind="err">{errorText(error)}</Notice>}{notice&&<p role="status" className="text-sm text-[#7ff0cd]">{notice}</p>}
+    {error&&<Notice kind="err">{errorText(error)}</Notice>}{notice&&<p role="status" className="text-sm text-[#7ff0cd]">{tr(notice.key,notice.params)}</p>}
     {data&&!data.configured&&<Notice kind="err">{tr(BILLING_ERRORS.not_configured)}</Notice>}
     <Card title={tr("帳號與查詢區間")} sub={tr("日期採台北時間。同步包含指定帳號及子帳號，帳號中其他用途的費用也會列入。")}>{data?.accountId&&<p className="mb-4 break-all font-mono text-xs text-[#aaa]">Account ID · {data.accountId}</p>}<button type="button" className={`${btnCls} mb-4`} disabled={busy||!data?.configured} onClick={()=>void checkAccounts()}>{tr("檢查 Console 帳號")}</button>{accounts.map(a=><p key={a.id} className="mb-2 break-all text-xs text-[#aaa]">{a.name} · {a.id}{a.isArchived?" (archived)":""}</p>)}
-      <form onSubmit={e=>{e.preventDefault();setNotice("");const selected=submittedFilters();setDraft(selected);setFilters(selected);setRevision(n=>n+1);}} className="grid gap-3 md:grid-cols-4">
+      <form onSubmit={e=>{e.preventDefault();setNotice(null);const selected=submittedFilters();setDraft(selected);setFilters(selected);setRevision(n=>n+1);}} className="grid gap-3 md:grid-cols-4">
         <label className="text-xs text-[#aaa]">{tr("開始日期")}<input aria-label={tr("開始日期")} ref={fromInput} type="date" value={draft.from} onChange={e=>setDraft(d=>({...d,from:e.target.value}))} className={`${fieldCls} mt-2 w-full min-w-0`} disabled={busy}/></label>
         <label className="text-xs text-[#aaa]">{tr("結束日期")}<input aria-label={tr("結束日期")} ref={toInput} type="date" value={draft.to} onChange={e=>setDraft(d=>({...d,to:e.target.value}))} className={`${fieldCls} mt-2 w-full min-w-0`} disabled={busy}/></label>
         <label className="text-xs text-[#aaa]">{tr("模型代碼（精確篩選）")}<input ref={modelInput} value={draft.model} maxLength={160} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} className={`${fieldCls} mt-2 w-full`} disabled={busy}/></label>
