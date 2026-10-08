@@ -18,6 +18,8 @@ calls=0;global.fetch=async()=>{calls++;return new Response('',{status:429,header
 await assert.rejects(()=>api.fetchUsageWindow('2026-10-06T00:00:00Z','2026-10-07T00:00:00Z',AbortSignal.timeout(1000)),e=>e.retryAfter===60);assert.equal(calls,1);
 global.fetch=async url=>Response.json({isSuccess:true,data:url.pathname.includes('/usage/id')?raw('id'):{data:[],page:1,has_more:false}});
 await assert.rejects(()=>api.fetchUsageRequest('id',AbortSignal.timeout(1000)),e=>e.code==='request_outside_scope');
+global.fetch=async()=>Response.json({isSuccess:true,data:{data:[{id:'fixture-account',name:'TBW',is_archived:false}],default_account_id:'fixture-account'}});
+assert.equal((await api.fetchConsoleAccounts(AbortSignal.timeout(1000)))[0].id,'fixture-account');
 delete process.env.SIRAYA_CONSOLE_TOKEN;delete process.env.SIRAYA_CONSOLE_ACCOUNT_ID;
 console.log('PASS exact money, missing/zero/invalid cost, scope, pagination, 429 no replay, coverage and Taipei boundaries');
 // PostgreSQL fixtures live only in a rollback transaction; no production records are modified.

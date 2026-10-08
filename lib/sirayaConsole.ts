@@ -85,7 +85,9 @@ async function consoleGet(path: string, query: Record<string,string>, signal: Ab
   return data;
 }
 export async function fetchConsoleAccounts(signal:AbortSignal) {
-  const data=await consoleResponse("/accounts",{},signal);
+  const response=await consoleResponse("/accounts",{},signal);
+  // Live API nests the accounts array under data.data; docs show data directly.
+  const data=Array.isArray(response)?response:object(response)?.data;
   if(!Array.isArray(data))throw schemaError({data});
   return data.map(value=>{const a=object(value);
     if(!a||typeof a.id!=="string"||!/^[\w-]{1,160}$/.test(a.id)||typeof a.name!=="string"||typeof a.is_archived!=="boolean")throw schemaError({data:[value]});
