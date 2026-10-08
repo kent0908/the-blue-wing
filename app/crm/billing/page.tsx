@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Locale } from "@/lib/i18n/locale";
 import { Card, Notice, Table, Kpi, LineChart, btnCls, fieldCls, td } from "@/components/crm/ui";
@@ -25,6 +25,9 @@ export default function BillingPage(){
   const [data,setData]=useState<Report|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[revision,setRevision]=useState(0);
   const [accounts,setAccounts]=useState<{id:string;name:string;isArchived:boolean}[]>([]);
   const [request,setRequest]=useState(""),[chart,setChart]=useState("line");
+  const fromInput=useRef<HTMLInputElement>(null),toInput=useRef<HTMLInputElement>(null),modelInput=useRef<HTMLInputElement>(null);
+  // Read committed native date values at submission, including browser date-picker edits.
+  const submittedFilters=():Filters=>({...draft,from:fromInput.current?.value??draft.from,to:toInput.current?.value??draft.to,model:modelInput.current?.value??draft.model,page:1});
   const query=new URLSearchParams({from:filters.from,to:filters.to,model:filters.model,requestId:filters.requestId,page:String(filters.page)}).toString();
   const errorText=(code:string)=>tr(BILLING_ERRORS[code]??"SIRAYA 費用查詢失敗，請稍後重試。");
   useEffect(()=>{
@@ -41,11 +44,12 @@ export default function BillingPage(){
     catch(e){setError(e instanceof Error?e.message:"storage_failed");}finally{setBusy(false);}
   }
   async function sync(){
+    const selected=submittedFilters();setDraft(selected);
     setBusy(true);setError("");setNotice("");
     try{
-      const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"sync",from:draft.from,to:draft.to})});
+      const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"sync",from:selected.from,to:selected.to})});
       const j=await r.json();if(!r.ok)throw new Error(j.error?.code??"storage_failed");
-      setFilters({...draft,page:1});setRevision(n=>n+1);setNotice(tr("同步完成：{count} 筆，未重新套用折扣。",{count:j.records}));
+      setFilters(selected);setRevision(n=>n+1);setNotice(tr("同步完成：{count} 筆，未重新套用折扣。",{count:j.records}));
     }catch(e){setError(e instanceof Error?e.message:"storage_failed");}finally{setBusy(false);}
   }
   async function lookup(){
@@ -72,10 +76,10 @@ export default function BillingPage(){
     {error&&<Notice kind="err">{errorText(error)}</Notice>}{notice&&<p role="status" className="text-sm text-[#7ff0cd]">{notice}</p>}
     {data&&!data.configured&&<Notice kind="err">{tr(BILLING_ERRORS.not_configured)}</Notice>}
     <Card title={tr("帳號與查詢區間")} sub={tr("日期採台北時間。同步包含指定帳號及子帳號，帳號中其他用途的費用也會列入。")}>{data?.accountId&&<p className="mb-4 break-all font-mono text-xs text-[#aaa]">Account ID · {data.accountId}</p>}<button type="button" className={`${btnCls} mb-4`} disabled={busy||!data?.configured} onClick={()=>void checkAccounts()}>{tr("檢查 Console 帳號")}</button>{accounts.map(a=><p key={a.id} className="mb-2 break-all text-xs text-[#aaa]">{a.name} · {a.id}{a.isArchived?" (archived)":""}</p>)}
-      <form onSubmit={e=>{e.preventDefault();setNotice("");setFilters({...draft,page:1});setRevision(n=>n+1);}} className="grid gap-3 md:grid-cols-4">
-        <label className="text-xs text-[#aaa]">{tr("開始日期")}<input aria-label={tr("開始日期")} type="date" value={draft.from} onChange={e=>setDraft(d=>({...d,from:e.target.value}))} className={`${fieldCls} mt-2 w-full min-w-0`} disabled={busy}/></label>
-        <label className="text-xs text-[#aaa]">{tr("結束日期")}<input aria-label={tr("結束日期")} type="date" value={draft.to} onChange={e=>setDraft(d=>({...d,to:e.target.value}))} className={`${fieldCls} mt-2 w-full min-w-0`} disabled={busy}/></label>
-        <label className="text-xs text-[#aaa]">{tr("模型代碼（精確篩選）")}<input value={draft.model} maxLength={160} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} className={`${fieldCls} mt-2 w-full`} disabled={busy}/></label>
+      <form onSubmit={e=>{e.preventDefault();setNotice("");const selected=submittedFilters();setDraft(selected);setFilters(selected);setRevision(n=>n+1);}} className="grid gap-3 md:grid-cols-4">
+        <label className="text-xs text-[#aaa]">{tr("開始日期")}<input aria-label={tr("開始日期")} ref={fromInput} type="date" value={draft.from} onChange={e=>setDraft(d=>({...d,from:e.target.value}))} className={`${fieldCls} mt-2 w-full min-w-0`} disabled={busy}/></label>
+        <label className="text-xs text-[#aaa]">{tr("結束日期")}<input aria-label={tr("結束日期")} ref={toInput} type="date" value={draft.to} onChange={e=>setDraft(d=>({...d,to:e.target.value}))} className={`${fieldCls} mt-2 w-full min-w-0`} disabled={busy}/></label>
+        <label className="text-xs text-[#aaa]">{tr("模型代碼（精確篩選）")}<input ref={modelInput} value={draft.model} maxLength={160} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} className={`${fieldCls} mt-2 w-full`} disabled={busy}/></label>
         <div className="flex flex-wrap items-end gap-2"><button type="submit" disabled={busy||loading} className={btnCls}>{tr("查詢已保存資料")}</button><button type="button" disabled={busy||!data?.configured} onClick={()=>void sync()} className={btnCls}>{tr(busy?"同步中…":"同步此日期區間")}</button></div>
       </form><p className="mt-3 text-xs leading-6 text-[#888]">{tr("單次同步最多 31 天；今天同步到操作當下。每小時重查最近七天，捕捉延遲計費；更早日期請手動同步。")}</p>
       <form onSubmit={e=>{e.preventDefault();void lookup();}} className="mt-4 flex flex-wrap gap-2"><input aria-label="Request ID" placeholder="Request ID" maxLength={160} value={request} onChange={e=>setRequest(e.target.value)} className={`${fieldCls} min-w-0 flex-1`} disabled={busy}/><button disabled={busy||!request.trim()||!data?.configured} className={btnCls}>{tr("向 SIRAYA 查詢單筆")}</button>{filters.requestId&&<button type="button" onClick={()=>{setDraft(d=>({...d,requestId:""}));setFilters(d=>({...d,requestId:"",page:1}));}} className={btnCls}>{tr("清除 Request ID 篩選")}</button>}</form>
