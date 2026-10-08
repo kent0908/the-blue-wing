@@ -1,3 +1,4 @@
+import { BILLING_EN } from "./parts/billingAudit";
 import { HOME_EN } from "./parts/homeEditorial";
 import { WAN_EN } from "./parts/wanAudit";
 import { EN1 } from "./parts/p01";
@@ -18,4 +19,4 @@ import { EN15 } from "./parts/p15";
 import { EN16 } from "./parts/p16";
 
 /** Traditional Chinese source string → English. Split into parts by surface; scripts/check-i18n.cjs reports anything missing. */
-export const EN: Record<string, string> = { ...EN1, ...EN2, ...EN3, ...EN4, ...EN5, ...EN6, ...EN7, ...EN8, ...EN9, ...EN10, ...EN11, ...EN12, ...EN13, ...EN14, ...EN15, ...EN16, ...HOME_EN, ...WAN_EN };
+export const EN: Record<string, string> = { ...EN1, ...EN2, ...EN3, ...EN4, ...EN5, ...EN6, ...EN7, ...EN8, ...EN9, ...EN10, ...EN11, ...EN12, ...EN13, ...EN14, ...EN15, ...EN16, ...HOME_EN, ...WAN_EN, ...BILLING_EN };

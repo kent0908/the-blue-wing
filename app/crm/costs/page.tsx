@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, Notice, Table, btnCls, fieldCls, pct, td, usd, useApi } from "@/components/crm/ui";
 import { modelLabel } from "@/lib/modelLabel";
 import type { PriceComponent } from "@/lib/sirayaPublicPrices";
@@ -25,6 +26,7 @@ export default function CrmCostsPage() {
       <p className="text-xs tracking-[.2em] text-[#7ff0cd]">COST & PRICING</p>
       <h1 className="text-2xl font-semibold text-white">模型成本與活動試算</h1>
       <p className="text-sm leading-7 text-[#aaa]">分開查看原廠牌價、供應商折扣估算與上游回報費用。點數是零售單位，不能直接視為 Token，也不能把贈點當成營收。</p>
+      <Link href="/crm/billing" className="inline-block text-sm text-[#7ff0cd] underline underline-offset-4">{tr("SIRAYA 實際成本對帳")} →</Link>
     </header>
     {error && <Notice kind="err">{error}</Notice>}
     <Notice kind="info">{tr("各模型分別標示價格來源與核對日期。Wan 3.0 已於 2026/10/07 核對 SIRAYA 公開目錄；其他模型沿用各自的核對紀錄。折後成本為估算，實際扣款仍以供應商帳單為準。")}</Notice>

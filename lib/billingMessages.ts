@@ -1,0 +1,17 @@
+export const BILLING_ERRORS: Record<string,string> = {
+  not_configured:"請先設定 SIRAYA Console Token 與帳號 ID。", invalid_dates:"請選擇有效日期，起日不可晚於迄日。",
+  sync_range_limit:"單次同步最多 31 天，請縮小日期區間。", future_sync:"同步區間尚未開始，請選擇已發生的日期。",
+  sync_in_progress:"此帳號正在同步，請稍後重新整理。", invalid_request_id:"Request ID 格式不正確。", invalid_filters:"查詢條件不正確。",
+  console_http_401:"Console Token 無效或已到期，請更新正式環境設定。", console_http_403:"SIRAYA 帳號沒有讀取 Request Logs 的權限。",
+  console_http_404:"找不到此帳號或 Request ID，或 Token 無權存取。", console_http_429:"SIRAYA 查詢額度暫時用完，請依 Retry-After 稍後重試。",
+  sync_timeout:"同步逾時，這次沒有認列完整區間；請縮小範圍重試。", connection_failed:"無法連線 SIRAYA；費用維持未知，請稍後重試。",
+  invalid_response:"SIRAYA 回傳格式不符，這次沒有認列完整區間。", invalid_pagination:"SIRAYA 分頁資料不完整，這次沒有認列完整區間。",
+  unstable_pagination:"分頁紀錄發生重複，這次沒有認列完整區間；請重試。", outside_window:"SIRAYA 回傳了區間外紀錄，請核對資料。",
+  invalid_record:"計費紀錄缺少必要欄位，請核對 SIRAYA 回傳資料。", invalid_cost:"計費金額無效，這次沒有認列完整區間。",
+  invalid_cost_precision:"計費金額超出六位小數規格，請核對供應商資料。", invalid_usage:"供應商用量欄位無效，請核對資料。",
+  window_too_dense:"單秒紀錄超過分頁限制，請聯絡 SIRAYA 提供完整匯出。", duplicate_record:"計費紀錄重複，這次沒有認列完整區間。",
+  previous_records_missing:"先前已計費紀錄在新查詢中消失；已保留原紀錄，請核對供應商帳單。",
+  storage_failed:"費用資料無法保存，這次沒有認列完整區間。", request_id_mismatch:"供應商回傳的 Request ID 不一致。",
+  request_outside_scope:"此 Request ID 不屬於設定的帳號範圍。", invalid_origin:"操作來源不符，請從藍翼後台操作。",
+  interrupted:"前次同步中斷，請重新同步該日期區間。",
+};

@@ -5,6 +5,7 @@ import { replayCredits, type CreditEvent } from "./creditReplay";
 import { SirayaApiError } from "./siraya";
 import { randomUUID } from "node:crypto";
 import { markUsageRefunded, recordUsageEvent, quoteCost } from "./crm";
+import { withBillingCharge } from "./billingContext";
 
 export async function creditTransaction<T>(userId:number, fn:(c:VercelPoolClient)=>Promise<T>):Promise<T> {
   const c=await sql.connect();
@@ -75,7 +76,7 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
   });
   const quote = await quoteCost(ref, cost, usage).catch(() => null);
   let result:T;
-  try {result=await call(chargeId);} catch(e) {
+  try {result=await withBillingCharge(chargeId, () => call(chargeId));} catch(e) {
     await refundCharge(userId,chargeId);
     alertGenerationFailure(kind,ref,e);
     throw e;

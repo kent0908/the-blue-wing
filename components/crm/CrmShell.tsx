@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useTr } from "@/lib/i18n/client";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 const NAV = [
+  { href: "/crm/billing", label: "SIRAYA 實際成本對帳", hint: "供應商帳單 · Request ID" },
   { href: "/crm/monitoring", label: "模型使用監控", hint: "使用量 · HTTP 狀態" },
   { href: "/crm", label: "總覽", hint: "KPI · 活躍 · 營收" },
   { href: "/crm/finance", label: "收入與利潤", hint: "每日 · 每模型" },
@@ -27,6 +29,7 @@ const NAV = [
  * client check only decides what to render.
  */
 export default function CrmLayout({ children }: { children: ReactNode }) {
+  const tr = useTr();
   const path = usePathname();
   const router = useRouter();
   const [me, setMe] = useState<{ email: string; role: string; uid?: string | null } | null | undefined>(undefined);
@@ -79,8 +82,8 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
             const active = ["/crm", "/admin"].includes(n.href) ? path === "/crm" : path.startsWith(n.href);
             return (
               <Link key={n.href} href={n.href} className={`block shrink-0 rounded-lg px-3 py-2 ${active ? "bg-[#1c1c1c] text-white" : "text-[#9a9a9a] hover:bg-[#151515] hover:text-white"}`}>
-                <div className="text-[13px]">{n.label}</div>
-                <div className="hidden md:block text-[10.5px] text-[#6d6d6d]">{n.hint}</div>
+                <div className="text-[13px]">{tr(n.label)}</div>
+                <div className="hidden md:block text-[10.5px] text-[#6d6d6d]">{tr(n.hint)}</div>
               </Link>
             );
           })}

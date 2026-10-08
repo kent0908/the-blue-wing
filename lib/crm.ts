@@ -165,7 +165,7 @@ export async function recordProviderReceipt(userId: number, chargeId: string, va
   const receipt = extractProviderReceipt(value);
   if (!receipt) return;
   try {
-    await sql`update usage_events set provider_cost_usd = coalesce(${receipt.costUsd}, provider_cost_usd),
+    await sql`update usage_events set provider_cost_usd = case when provider_cost_source='siraya_console' then provider_cost_usd else coalesce(${receipt.costUsd}, provider_cost_usd) end,
       provider_usage = coalesce(provider_usage, '{}'::jsonb) || ${JSON.stringify(receipt.usage)}::jsonb
       where user_id = ${userId} and charge_id = ${Number(chargeId)}`;
   } catch { console.error("Provider billing receipt could not be recorded"); }

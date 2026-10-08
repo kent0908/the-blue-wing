@@ -81,7 +81,7 @@ async function sirayaFetch(path: string, init: RequestInit = {}): Promise<Respon
     headers.set("Content-Type", "application/json");
     // Network errors and accepted streaming responses are never replayed.
     const res = model
-      ? await monitoredModelFetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers }, {model, provider:"siraya", requestId, attempt:index+1})
+      ? await monitoredModelFetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers }, {model, provider:"siraya", requestId, attempt:index+1, keySlot:keys[index] === process.env.SIRAYA_API_KEY?.trim() ? "primary" : "backup"})
       : await fetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers });
     if (res.ok) return res;
     const error = await responseError(res);

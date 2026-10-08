@@ -1,0 +1,5 @@
+const fs=require('fs'),vm=require('vm'),ts=require('typescript'),assert=require('assert/strict');
+function load(f,m={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:id=>m[id]??require(id),console,process,Date,fetch:async()=>new Response('',{headers:{'x-request-id':'upstream-fixture'}})});return exports}
+const context=load('lib/billingContext.ts');let writes=[];
+const mon=load('lib/modelMonitoring.ts',{'./db':{sql:async(strings,...values)=>{writes.push(values)}},'./billingContext':context});
+(async()=>{await Promise.all(['11','22'].map(id=>context.withBillingCharge(id,()=>mon.monitoredModelFetch('https://fixture.test',{}, {model:'m',provider:'siraya',keySlot:'backup'}))));assert.deepEqual(writes.map(v=>v[8]).sort(),['11','22']);assert.equal(writes[0][7],'upstream-fixture');assert.equal(writes[0][9],'backup');assert.equal(context.billingChargeId(),null);console.log('PASS concurrent charge attribution, upstream ID, backup slot, context isolation')})().catch(e=>{console.error(e);process.exitCode=1});

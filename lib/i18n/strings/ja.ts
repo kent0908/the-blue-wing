@@ -1,3 +1,4 @@
+import { BILLING_JA } from "./parts/billingAudit";
 import { HOME_JA } from "./parts/homeEditorial";
 import { WAN_JA } from "./parts/wanAudit";
 import { JA1 } from "./parts/p01";
@@ -18,4 +19,4 @@ import { JA15 } from "./parts/p15";
 import { JA16 } from "./parts/p16";
 
 /** Traditional Chinese source string → Japanese. Split into parts by surface; scripts/check-i18n.cjs reports anything missing. */
-export const JA: Record<string, string> = { ...JA1, ...JA2, ...JA3, ...JA4, ...JA5, ...JA6, ...JA7, ...JA8, ...JA9, ...JA10, ...JA11, ...JA12, ...JA13, ...JA14, ...JA15, ...JA16, ...HOME_JA, ...WAN_JA };
+export const JA: Record<string, string> = { ...JA1, ...JA2, ...JA3, ...JA4, ...JA5, ...JA6, ...JA7, ...JA8, ...JA9, ...JA10, ...JA11, ...JA12, ...JA13, ...JA14, ...JA15, ...JA16, ...HOME_JA, ...WAN_JA, ...BILLING_JA };
