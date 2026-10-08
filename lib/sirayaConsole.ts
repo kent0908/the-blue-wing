@@ -2,7 +2,17 @@
 const BASE = "https://console-api.siraya.ai/extapi/v1";
 const DAY = 86_400_000;
 export class BillingError extends Error {
+  diagnostics?: Record<string,unknown>;
   constructor(public code: string, public status = 502, public retryAfter: number | null = null) { super(code); }
+}
+/** Schema-only diagnostics: field names and types, never credential or record values. */
+function schemaError(value:unknown):BillingError {
+  const kind=(v:unknown)=>Array.isArray(v)?"array":v===null?"null":typeof v;
+  const shape=(v:unknown)=>object(v)?Object.fromEntries(Object.entries(object(v)!).slice(0,25).map(([k,x])=>[k,kind(x)])):kind(v);
+  const body=object(value),data=body?.data;
+  const e=new BillingError("invalid_response");
+  e.diagnostics={root:shape(value),data:shape(data),firstRecord:shape(Array.isArray(data)?data[0]:object(data)?.data&&Array.isArray(object(data)?.data)?(object(data)!.data as unknown[])[0]:undefined)};
+  return e;
 }
 export function consoleConfig() {
   const token = process.env.SIRAYA_CONSOLE_TOKEN?.trim();
@@ -66,7 +76,7 @@ async function consoleResponse(path: string, query: Record<string, string>, sign
   }
   let body: Record<string, unknown> | null;
   try { body = object(await response.json()); } catch { throw new BillingError("invalid_response"); }
-  if (body?.isSuccess !== true || body.data === undefined) throw new BillingError("invalid_response");
+  if (body?.isSuccess !== true || body.data === undefined) throw schemaError(body);
   return body.data;
 }
 async function consoleGet(path: string, query: Record<string,string>, signal: AbortSignal) {
@@ -76,9 +86,9 @@ async function consoleGet(path: string, query: Record<string,string>, signal: Ab
 }
 export async function fetchConsoleAccounts(signal:AbortSignal) {
   const data=await consoleResponse("/accounts",{},signal);
-  if(!Array.isArray(data))throw new BillingError("invalid_response");
+  if(!Array.isArray(data))throw schemaError({data});
   return data.map(value=>{const a=object(value);
-    if(!a||typeof a.id!=="string"||!/^[\w-]{1,160}$/.test(a.id)||typeof a.name!=="string"||typeof a.is_archived!=="boolean")throw new BillingError("invalid_response");
+    if(!a||typeof a.id!=="string"||!/^[\w-]{1,160}$/.test(a.id)||typeof a.name!=="string"||typeof a.is_archived!=="boolean")throw schemaError({data:[value]});
     return {id:a.id,name:a.name,isArchived:a.is_archived};
   });
 }

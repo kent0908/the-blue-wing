@@ -10,7 +10,7 @@ export const maxDuration=300;
 const headers = {"Cache-Control":"private, no-store"};
 function failure(error: unknown) {
   const e = error instanceof BillingError ? error : new BillingError("storage_failed",503);
-  return NextResponse.json({error:{code:e.code}}, {status:e.status,headers:{...headers,...(e.retryAfter ? {"Retry-After":String(e.retryAfter)} : {})}});
+  return NextResponse.json({error:{code:e.code,...(e.diagnostics?{schema:e.diagnostics}:{})}}, {status:e.status,headers:{...headers,...(e.retryAfter ? {"Retry-After":String(e.retryAfter)} : {})}});
 }
 export async function GET(req: NextRequest) {
   const auth=await requireAdmin(req); if("error" in auth)return auth.error;

@@ -37,7 +37,7 @@ export default function BillingPage(){
   },[query,revision]);
   async function checkAccounts(){
     setBusy(true);setError("");
-    try{const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"accounts"})});const j=await r.json();if(!r.ok)throw new Error(j.error?.code??"storage_failed");setAccounts(j.accounts);}
+    try{const r=await fetch("/api/crm/billing",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"accounts"})});const j=await r.json();if(!r.ok){if(j.error?.schema)setNotice(JSON.stringify(j.error.schema));throw new Error(j.error?.code??"storage_failed");}setAccounts(j.accounts);}
     catch(e){setError(e instanceof Error?e.message:"storage_failed");}finally{setBusy(false);}
   }
   async function sync(){
