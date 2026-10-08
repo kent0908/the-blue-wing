@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/apiauth";
 import { reportRange } from "@/lib/crmRange";
 import { audit } from "@/lib/crm";
-import { BillingError, validRequestId } from "@/lib/sirayaConsole";
+import { BillingError, validRequestId, fetchConsoleAccounts } from "@/lib/sirayaConsole";
 import { billingCutoff, lookupSirayaBilling, sirayaBillingReport, syncSirayaBilling } from "@/lib/sirayaBilling";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
   try {
     const body=await req.json().catch(()=>null);
     if(!body||typeof body!=="object")throw new BillingError("invalid_filters",400);
+    if(body.action==="accounts")return NextResponse.json({accounts:await fetchConsoleAccounts(AbortSignal.timeout(30000))},{headers});
     if(body.action==="lookup") {
       if(!validRequestId(body.requestId))throw new BillingError("invalid_request_id",400);
       const record=await lookupSirayaBilling(body.requestId);

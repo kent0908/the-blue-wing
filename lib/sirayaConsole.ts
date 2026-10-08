@@ -51,7 +51,7 @@ export function normalizeBillingRecord(value: unknown): BillingRecord {
     usage: numbers(raw.usage, ["prompt_tokens", "completion_tokens", "reasoning_tokens", "cache_read_tokens", "cache_write_tokens", "total_tokens", "video_seconds", "video_pixels", "image_count"]),
     performance: numbers(raw.performance, ["latency_ms", "ttft_ms"]) };
 }
-async function consoleGet(path: string, query: Record<string, string>, signal: AbortSignal) {
+async function consoleResponse(path: string, query: Record<string, string>, signal: AbortSignal) {
   const config = consoleConfig();
   if (!config.configured) throw new BillingError("not_configured", 503);
   const url = new URL(BASE + path);
@@ -66,8 +66,21 @@ async function consoleGet(path: string, query: Record<string, string>, signal: A
   }
   let body: Record<string, unknown> | null;
   try { body = object(await response.json()); } catch { throw new BillingError("invalid_response"); }
-  if (body?.isSuccess !== true || !object(body.data)) throw new BillingError("invalid_response");
-  return object(body.data)!;
+  if (body?.isSuccess !== true || body.data === undefined) throw new BillingError("invalid_response");
+  return body.data;
+}
+async function consoleGet(path: string, query: Record<string,string>, signal: AbortSignal) {
+  const data=object(await consoleResponse(path,query,signal));
+  if(!data)throw new BillingError("invalid_response");
+  return data;
+}
+export async function fetchConsoleAccounts(signal:AbortSignal) {
+  const data=await consoleResponse("/accounts",{},signal);
+  if(!Array.isArray(data))throw new BillingError("invalid_response");
+  return data.map(value=>{const a=object(value);
+    if(!a||typeof a.id!=="string"||!/^[\w-]{1,160}$/.test(a.id)||typeof a.name!=="string"||typeof a.is_archived!=="boolean")throw new BillingError("invalid_response");
+    return {id:a.id,name:a.name,isArchived:a.is_archived};
+  });
 }
 export async function fetchUsageWindow(since: string, until: string, signal: AbortSignal): Promise<BillingRecord[]> {
   const start = Date.parse(since), end = Date.parse(until);

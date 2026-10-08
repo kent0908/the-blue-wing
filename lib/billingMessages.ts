@@ -1,4 +1,5 @@
 export const BILLING_ERRORS: Record<string,string> = {
+  console_http_400:"SIRAYA 拒絕查詢參數，請確認 Account ID 是帳號 ID，而非帳號名稱。",
   not_configured:"請先設定 SIRAYA Console Token 與帳號 ID。", invalid_dates:"請選擇有效日期，起日不可晚於迄日。",
   sync_range_limit:"單次同步最多 31 天，請縮小日期區間。", future_sync:"同步區間尚未開始，請選擇已發生的日期。",
   sync_in_progress:"此帳號正在同步，請稍後重新整理。", invalid_request_id:"Request ID 格式不正確。", invalid_filters:"查詢條件不正確。",
