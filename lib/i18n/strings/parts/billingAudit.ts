@@ -1,4 +1,8 @@
 export const BILLING_EN: Record<string,string> = {
+ "生成失敗，沒有取得文字回覆":"Generation failed: no text reply was returned.",
+ "生成服務暫時沒有回傳完整結果。請先查看生成紀錄，避免重複提交；若持續失敗，請聯絡客服。":"The generation service has not returned a complete result. Check generation history before submitting again; contact support if this continues.",
+ "伺服器回傳格式異常，請稍後再試；若已提交生成，請先查看生成紀錄。":"The server returned an unexpected format. Try again later; if generation was submitted, check generation history first.",
+ "生成失敗，沒有取得可用圖片":"Generation failed: no usable images were returned.", "無效的點數結算":"Invalid credit settlement",
  "一般輸入":"Standard input", "輸出":"Output",
  "檢查 Console 帳號":"Check Console accounts", "SIRAYA 拒絕查詢參數，請確認 Account ID 是帳號 ID，而非帳號名稱。":"SIRAYA rejected the query. Use an account ID, not its display name.",
  "開始日期":"Start date", "結束日期":"End date", "請求數":"Requests", "介面語言":"Interface language",
@@ -79,6 +83,10 @@ export const BILLING_EN: Record<string,string> = {
   "前次同步中斷，請重新同步該日期區間。": "Previous sync interrupted. Sync that range again."
 };
 export const BILLING_JA: Record<string,string> = {
+ "生成失敗，沒有取得文字回覆":"生成に失敗しました。テキストの返答が取得できませんでした。",
+ "生成服務暫時沒有回傳完整結果。請先查看生成紀錄，避免重複提交；若持續失敗，請聯絡客服。":"生成サービスから完全な結果が返されていません。再送信する前に生成履歴を確認し、問題が続く場合はサポートにお問い合わせください。",
+ "伺服器回傳格式異常，請稍後再試；若已提交生成，請先查看生成紀錄。":"サーバーの応答形式が正しくありません。時間をおいて再試行してください。生成を送信済みの場合は、先に生成履歴を確認してください。",
+ "生成失敗，沒有取得可用圖片":"生成に失敗しました。有効な画像が取得できませんでした。", "無效的點數結算":"ポイント精算が無効です",
  "一般輸入":"標準入力", "輸出":"出力",
  "檢查 Console 帳號":"Consoleアカウントを確認", "SIRAYA 拒絕查詢參數，請確認 Account ID 是帳號 ID，而非帳號名稱。":"SIRAYAが照会を拒否しました。表示名ではなくアカウントIDを指定してください。",
  "開始日期":"開始日", "結束日期":"終了日", "請求數":"リクエスト数", "介面語言":"表示言語",

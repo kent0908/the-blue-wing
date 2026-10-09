@@ -1,7 +1,7 @@
 import { validateGeneration } from "@/lib/generationValidation";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
-import { createImageEdit } from "@/lib/siraya";
+import { createImageEdit, SirayaApiError } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, creditCost } from "@/lib/credits";
@@ -45,6 +45,10 @@ export async function POST(req: NextRequest) {
 
     const cost = await creditCost({ kind: "image", model: EDIT_MODEL, imageCount: 1 });
     const balance = await getBalance(user.id);
+    const confirmedCredits=req.headers.get("x-blue-wing-expected-credits");
+    if(confirmedCredits!==null&&(!/^\d+$/.test(confirmedCredits)||Number(confirmedCredits)!==cost)){
+      return NextResponse.json({error:{message:"點數已變更，請重新預覽並確認",code:"stale_quote"}},{status:409});
+    }
     if (balance < cost) {
       return NextResponse.json(
         {
@@ -86,33 +90,21 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    const first = json?.data?.[0];
-    const rawUrl = first?.url
-      ? String(first.url)
-      : first?.b64_json
-        ? `data:${sniffImageMimeFromBase64(String(first.b64_json))};base64,${first.b64_json}`
-        : null;
-    if (!rawUrl) {
-      // HTTP 200 but nothing usable — same real gap as /api/images (see its
-      // comment): paidCall already reserved the charge, no exception was
-      // thrown for it to auto-refund, so this must refund explicitly.
-      await refundCharge(user.id, chargeId);
-      return NextResponse.json({ error: { message: "編輯失敗，沒有取得結果圖片" } }, { status: 502 });
-    }
-
-    // Same gap as /api/images and /api/videos (see their comments, found on
-    // the same 2026-09-07 re-audit): a failure in either call below, after
-    // the charge above already succeeded, previously had no refund path.
-    let url: string;
     try {
-      url = await persistGeneratedMedia(rawUrl, { userId: user.id, kind: "image" });
+      const first = Array.isArray(json?.data) ? json.data[0] : null;
+      const rawUrl = typeof first?.url === "string" && first.url.trim()
+        ? first.url.trim()
+        : typeof first?.b64_json === "string" && first.b64_json.trim()
+          ? `data:${sniffImageMimeFromBase64(first.b64_json)};base64,${first.b64_json}`
+          : null;
+      if (!rawUrl) throw new SirayaApiError(502, "編輯失敗，沒有取得結果圖片");
+      const url = await persistGeneratedMedia(rawUrl, { userId: user.id, kind: "image" });
       await recordGeneration(user.id, { kind: "image", model: EDIT_MODEL, prompt: String(body.prompt), url, durationMs: Date.now() - startedAt });
+      return NextResponse.json({ url, creditsSpent: cost, creditsBalance: await getBalance(user.id) });
     } catch (err) {
       await refundCharge(user.id, chargeId);
       throw err;
     }
-
-    return NextResponse.json({ url, creditsSpent: cost, creditsBalance: balance - cost });
   } catch (err) {
     return errorResponse(err);
   }

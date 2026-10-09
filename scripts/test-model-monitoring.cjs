@@ -1,6 +1,7 @@
 const fs=require('node:fs'),ts=require('typescript'),vm=require('node:vm'),assert=require('node:assert/strict');
 const events=[];let response,dbFails=false;const sql=async(strings,...values)=>{if(dbFails)throw Error('db unavailable');events.push(values)};
-const exportsObject={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/modelMonitoring.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:exportsObject,require:id=>id==='./db'?{sql}:require(id),Date,console:{error(){}},fetch:async()=>{if(response instanceof Error)throw response;return response;}});
+const billingContext={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/billingContext.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:billingContext,require});
+const exportsObject={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/modelMonitoring.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:exportsObject,require:id=>id==='./db'?{sql}:id==='./billingContext'?billingContext:require(id),Date,console:{error(){}},fetch:async()=>{if(response instanceof Error)throw response;return response;}});
 const {monitoredModelFetch,requestOutcome}=exportsObject;
 (async()=>{
  for(const status of [200,202,400,401,429,502]){response=new Response('unchanged',{status});const result=await monitoredModelFetch('https://example.test',{body:'private',headers:{Authorization:'secret'}},{model:'test',provider:'siraya',requestId:'00000000-0000-0000-0000-000000000001',attempt:1});assert.equal(result,response);assert.equal(events.at(-1)[4],status);assert.equal(events.at(-1)[5],'http');}

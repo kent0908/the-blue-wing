@@ -67,7 +67,7 @@ export async function refundCharge(userId:number, chargeId:string) {
  * report — images: count, video: seconds + resolution, text: 1k-token
  * blocks; omitted, units are derived from the credits (see lib/crm.ts).
  */
-export async function paidCall<T>(userId:number,cost:number,kind:string,ref:string,call:(chargeId:string)=>Promise<T>,usage?:{units?:number;resolution?:string|null}):Promise<{result:T,chargeId:string}> {
+export async function paidCall<T>(userId:number,cost:number,kind:string,ref:string,call:(chargeId:string)=>Promise<T>,usage?:{units?:number;resolution?:string|null;chargedCredits?:(result:T)=>number}):Promise<{result:T,chargeId:string}> {
   if(!Number.isSafeInteger(cost)||cost<=0)throw new SirayaApiError(400,"無效的計費數量");
   const chargeId=await creditTransaction(userId,async c=>{
     if(await ledgerBalance(c,userId)<cost)throw new SirayaApiError(402,"點數不足，其他生成可能已預扣點數");
@@ -76,12 +76,17 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
   });
   const quote = await quoteCost(ref, cost, usage).catch(() => null);
   let result:T;
-  try {result=await withBillingCharge(chargeId, () => call(chargeId));} catch(e) {
+  let chargedCredits=cost;
+  try {
+    result=await withBillingCharge(chargeId, () => call(chargeId));
+    chargedCredits=usage?.chargedCredits?.(result)??cost;
+    if(!Number.isSafeInteger(chargedCredits)||chargedCredits<0||chargedCredits>cost)throw new SirayaApiError(500,"無效的點數結算");
+  } catch(e) {
     await refundCharge(userId,chargeId);
     alertGenerationFailure(kind,ref,e);
     throw e;
   }
-  await recordUsageEvent({userId,chargeId,kind,model:ref,credits:cost,units:usage?.units,resolution:usage?.resolution,providerResponse:result,quote});
+  await recordUsageEvent({userId,chargeId,kind,model:ref,credits:chargedCredits,units:usage?.units,resolution:usage?.resolution,providerResponse:result,quote});
   if(kind==="video") {
     const id=(result as {id?:unknown})?.id;
     if(id) {
@@ -102,10 +107,14 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
 export async function settleCharge(userId:number,chargeId:string,actualCost:number) {
  return creditTransaction(userId,async c=>{
   const {rows}=await c.query("SELECT delta FROM credit_ledger WHERE id=$1 AND user_id=$2 AND delta<0",[chargeId,userId]);
-  if(!rows.length||!Number.isSafeInteger(actualCost)||actualCost<0||actualCost>-rows[0].delta)throw new SirayaApiError(500,'無效的圖層結算');
+  if(!rows.length||!Number.isSafeInteger(actualCost)||actualCost<0||actualCost>-rows[0].delta)throw new SirayaApiError(500,'無效的點數結算');
   const refunded=await c.query("SELECT COALESCE(SUM(delta),0) AS total FROM credit_ledger WHERE user_id=$1 AND ref=$2 AND reason IN ('charge_refund','charge_partial_refund')",[userId,chargeId]);
   const difference=-rows[0].delta-actualCost-Number(refunded.rows[0].total);
   if(difference>0)await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref) VALUES($1,$2,'charge_partial_refund',$3)",[userId,difference,chargeId]);
+  // Net retail credits only. Keep vendor receipts, quoted units and cost
+  // snapshots intact: refunding site credits does not refund vendor spend.
+  const netCredits=Math.max(0,-rows[0].delta-Number(refunded.rows[0].total)-Math.max(0,difference));
+  await c.query("UPDATE usage_events SET credits=$1 WHERE charge_id=$2 AND user_id=$3 AND status='charged'",[netCredits,chargeId,userId]);
   return Math.max(0,difference);
  });
 }

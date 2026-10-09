@@ -5,7 +5,8 @@ let assertions=0;const check=(actual,expected)=>{assert.deepEqual(actual,expecte
 (async()=>{
 const oldFetch=global.fetch,oldKey=process.env.SIRAYA_API_KEY,sent=[];
 try{
- process.env.SIRAYA_API_KEY='mock-only-not-a-credential';global.fetch=async(url,init)=>{sent.push({url,body:JSON.parse(init.body)});return {ok:true,json:async()=>({data:[]})}};
+ process.env.SIRAYA_API_KEY='mock-only-not-a-credential';global.fetch=async(url,init)=>{sent.push({url,body:JSON.parse(init.body)});return new Response(JSON.stringify({data:[]}),{status:200,headers:{'content-type':'application/json'}})};
+ cache.set(path.resolve('lib/modelMonitoring.ts'),{monitoredModelFetch:(url,init)=>global.fetch(url,init)});
  const api=load('lib/siraya.ts');
  for(const entry of IMAGE_MODELS){for(const model of [entry.id,'NSFW-'+entry.id]){await api.createImage({model,prompt:'payload regression'});const b=sent.at(-1).body;check(b.watermark,entry.family==='seedream'?false:undefined);check(b.model,model);check(b.extra_body,undefined)}}
  for(const model of ['seedream-5-0-pro-260628','dola-seedream-5-0-pro-260628','NSFW-SIRAYA-Dola-Seedream-5.0-pro']){check(supportsImageWatermark(model),true);await api.createImage({model,prompt:'test'});check(sent.at(-1).body.watermark,false)}

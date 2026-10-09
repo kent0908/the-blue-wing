@@ -5,19 +5,20 @@ import { usePathname } from "next/navigation";
 import { IconChat, IconClose, IconArrowRight, IconDiscord } from "./Icons";
 import { FAQ_CATEGORIES } from "@/lib/supportFaq";
 import { useTr } from "@/lib/i18n/client";
-import type { Tr } from "@/lib/i18n/tr";
 import { k } from "@/lib/i18n/tr";
 
 type Action = { type: "root" } | { type: "category"; id: string } | { type: "question"; categoryId: string; qIndex: number };
 
 interface Option {
   label: string;
+  categoryLabel?: string;
   action: Action;
 }
 
 interface Msg {
   role: "user" | "assistant";
   content: string;
+  categoryLabel?: string;
   /** Clickable follow-up chips attached to an assistant message — the QA
    *  browsing part (lib/supportFaq.ts's FAQ_CATEGORIES) is answered
    *  instantly client-side, no network call. Free-typed text still goes to
@@ -25,7 +26,7 @@ interface Msg {
   options?: Option[];
 }
 
-const rootOptionsFor = (tr: Tr): Option[] => FAQ_CATEGORIES.map((c) => ({ label: tr(c.label), action: { type: "category", id: c.id } }));
+const rootOptionsFor = (): Option[] => FAQ_CATEGORIES.map((c) => ({ label: c.label, action: { type: "category", id: c.id } }));
 
 const GREETING: Msg = {
   role: "assistant",
@@ -42,8 +43,8 @@ export default function SupportChat() {
   const pathname = usePathname();
   const companionChat = /^\/companions\/\d+$/.test(pathname);
   const [open, setOpen] = useState(false);
-  const rootOptions = rootOptionsFor(tr);
-  const [msgs, setMsgs] = useState<Msg[]>([{ ...GREETING, options: rootOptionsFor(tr) }]);
+  const rootOptions = rootOptionsFor();
+  const [msgs, setMsgs] = useState<Msg[]>([{ ...GREETING, options: rootOptionsFor() }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -53,10 +54,10 @@ export default function SupportChat() {
   }, [msgs, open]);
 
   const pickOption = (opt: Option) => {
-    const userMsg: Msg = { role: "user", content: opt.label };
+    const userMsg: Msg = { role: "user", content: opt.label, categoryLabel: opt.categoryLabel };
 
     if (opt.action.type === "root") {
-      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: tr("回到主選單，想看哪個類別？"), options: rootOptions }]);
+      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: k("回到主選單，想看哪個類別？"), options: rootOptions }]);
       return;
     }
 
@@ -64,10 +65,10 @@ export default function SupportChat() {
       const cat = categoryOf(opt.action.id);
       if (!cat) return;
       const options: Option[] = [
-        ...cat.entries.map((e, i) => ({ label: tr(e.question), action: { type: "question" as const, categoryId: cat.id, qIndex: i } })),
-        { label: tr("← 返回主選單"), action: { type: "root" } },
+        ...cat.entries.map((e, i) => ({ label: e.question, action: { type: "question" as const, categoryId: cat.id, qIndex: i } })),
+        { label: k("← 返回主選單"), action: { type: "root" } },
       ];
-      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: tr("「{c}」常見問題：", { c: tr(cat.label) }), options }]);
+      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: k("「{c}」常見問題："), categoryLabel: cat.label, options }]);
       return;
     }
 
@@ -76,10 +77,10 @@ export default function SupportChat() {
     const entry = cat?.entries[opt.action.qIndex];
     if (!cat || !entry) return;
     const followUps: Option[] = [
-      { label: tr("← 「{c}」其他問題", { c: tr(cat.label) }), action: { type: "category", id: cat.id } },
-      { label: tr("← 返回主選單"), action: { type: "root" } },
+      { label: k("← 「{c}」其他問題"), categoryLabel: cat.label, action: { type: "category", id: cat.id } },
+      { label: k("← 返回主選單"), action: { type: "root" } },
     ];
-    setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: tr(entry.answer), options: followUps }]);
+    setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: entry.answer, options: followUps }]);
   };
 
   const send = async () => {
@@ -97,7 +98,7 @@ export default function SupportChat() {
         // and mixing in the pre-scripted QA turns would just pad tokens for
         // no benefit (the LLM already gets the same bank via its own system
         // prompt).
-        body: JSON.stringify({ messages: next.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ messages: next.map((m) => ({ role: m.role, content: tr(m.content, m.categoryLabel ? { c: tr(m.categoryLabel) } : undefined) })) }),
       });
       const j = await res.json().catch(() => ({}));
       setMsgs((cur) => [
@@ -146,7 +147,7 @@ export default function SupportChat() {
                 m.role === "user" ? "bg-[#2a2a2a] text-white" : "bg-[#1a1a1a] text-[#d8d8d8]"
               }`}
             >
-              {tr(m.content)}
+              {tr(m.content, m.categoryLabel ? { c: tr(m.categoryLabel) } : undefined)}
             </div>
             {m.options && (
               <div className="flex flex-wrap gap-1.5">
@@ -157,7 +158,7 @@ export default function SupportChat() {
                     onClick={() => pickOption(opt)}
                     className="rounded-full border border-[#2c2c2c] bg-[#161616] px-2.5 py-1 text-[11.5px] text-[#c9c9c9] transition-colors hover:border-[#4a4a4a] hover:text-white"
                   >
-                    {tr(opt.label)}
+                    {tr(opt.label, opt.categoryLabel ? { c: tr(opt.categoryLabel) } : undefined)}
                   </button>
                 ))}
               </div>

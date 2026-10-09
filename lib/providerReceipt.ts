@@ -21,18 +21,23 @@ export function extractProviderReceipt(value: unknown): ProviderReceipt | null {
 }
 
 /** Observe SSE billing metadata while preserving every byte and backpressure. */
-export function observeBillingStream(source: ReadableStream<Uint8Array>, save: (receipt: unknown) => Promise<void>) {
+export function observeBillingStream(source: ReadableStream<Uint8Array>, save: (receipt: unknown) => Promise<void>, onEmpty?: () => Promise<void>) {
   const decoder = new TextDecoder();
   let pending = "";
   let discarding = false;
+  let deliveredText = false;
   async function line(value: string) {
     if (!value.startsWith("data:")) return;
     try {
       const body = JSON.parse(value.slice(5).trim());
+      if (Array.isArray(body?.choices)) for (const choice of body.choices) {
+        const text = choice?.delta?.content ?? choice?.message?.content ?? choice?.text;
+        if (typeof text === "string" && text.trim()) deliveredText = true;
+      }
       if (extractProviderReceipt(body)) await save(body);
     } catch { /* Malformed/absent metadata must never interrupt paid output. */ }
   }
-  return source.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+  const observed = source.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
     async transform(chunk, controller) {
       controller.enqueue(chunk);
       let text = decoder.decode(chunk, {stream:true});
@@ -51,4 +56,28 @@ export function observeBillingStream(source: ReadableStream<Uint8Array>, save: (
     },
     async flush() { if (!discarding && pending) await line(pending + decoder.decode()); },
   }));
+  if (!onEmpty) return observed;
+  const reader = observed.getReader();
+  let refund: Promise<void> | undefined;
+  const refundEmpty = () => deliveredText ? Promise.resolve() : (refund ??= onEmpty());
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await reader.read();
+        if (next.done) {
+          await refundEmpty();
+          controller.close();
+          reader.releaseLock();
+        } else controller.enqueue(next.value);
+      } catch (error) {
+        try { await refundEmpty(); } catch { console.error("Empty stream refund failed"); }
+        controller.error(error);
+        reader.releaseLock();
+      }
+    },
+    async cancel(reason) {
+      try { await reader.cancel(reason); }
+      finally { try { await refundEmpty(); } finally { reader.releaseLock(); } }
+    },
+  });
 }

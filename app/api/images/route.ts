@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
         const creditsRefunded=await settleCharge(user.id,chargeId,creditsSpent);
         const layerSetId=await saveLayerSet(user.id,String(body.model),String(body.prompt??''),layers,creditsSpent);
         return {layers,layerSetId,creditsSpent,creditsRefunded,created:json.created??null,cost:json.cost,usage:json.usage};
-      });
+      },{chargedCredits:r=>r.creditsSpent});
       return NextResponse.json({...result,images:result.layers.map(l=>({url:l.url})),reservedCredits:cost,creditsBalance:await getBalance(user.id)});
     }
 
@@ -152,32 +152,17 @@ export async function POST(req: NextRequest) {
       () => createImage(applyWatermarkDefaults(payload as unknown as ImageGenerationRequest, "image")),
       { units: Number(body.n) || 1 }
     );
-    const images = (json?.data ?? []).map((d: Record<string, unknown>) => ({
-      url: d.url ? String(d.url) : d.b64_json ? `data:${sniffImageMimeFromBase64(String(d.b64_json))};base64,${d.b64_json}` : null,
-      revisedPrompt: (d.revised_prompt as string) ?? null,
-    }));
-
-    if (!images.some((im: { url: string | null }) => im.url)) {
-      // Upstream returned HTTP 200 but nothing usable — no exception for
-      // paidCall to catch, so nothing was auto-refunded (a real gap found in
-      // a 2026-09-06 audit: the comment here always SAID "don't charge", but
-      // paidCall reserves the charge before this code ever runs, so it was
-      // never actually rolled back). A soft moderation block is the most
-      // likely real cause. Refund explicitly.
-      await refundCharge(user.id, chargeId);
-      return NextResponse.json({ images, created: json?.created ?? null, usage: json?.usage ?? null });
-    }
-
-    // charge only after a successful generation
-    const balanceAfter = balance - cost;
-
-    // Real gap found on re-audit (2026-09-07): a failure in EITHER call below
-    // — after the charge above already succeeded — had no reconciliation
-    // path (no job id to poll later, nothing to catch and refund it). Same
-    // bug class as /api/videos's own immediate-completion branch. Wrapped so
-    // a transient blob/DB failure here refunds instead of silently charging
-    // for nothing.
     try {
+      const requestedCount=Number(body.n)||1;
+      if(!Array.isArray(json?.data))throw new SirayaApiError(502,"生成失敗，沒有取得可用圖片");
+      const images=json.data.flatMap((d:unknown)=>{
+        if(!d||typeof d!=="object")return [];
+        const entry=d as Record<string,unknown>;
+        const url=typeof entry.url==="string"&&entry.url.trim()?entry.url.trim():
+          typeof entry.b64_json==="string"&&entry.b64_json.trim()?`data:${sniffImageMimeFromBase64(entry.b64_json)};base64,${entry.b64_json}`:null;
+        return url?[{url,revisedPrompt:typeof entry.revised_prompt==="string"?entry.revised_prompt:null}]:[];
+      }).slice(0,requestedCount) as {url:string;revisedPrompt:string|null}[];
+      if(!images.length)throw new SirayaApiError(502,"生成失敗，沒有取得可用圖片");
       for (const im of images) {
         if (im.url) {
           // Re-host to our own storage: upstream `url` responses are signed
@@ -188,18 +173,18 @@ export async function POST(req: NextRequest) {
           await recordGeneration(user.id, { kind: "image", model: String(body.model), prompt: String(body.prompt), url: im.url, durationMs: Date.now() - startedAt });
         }
       }
+      const creditsSpent=cost*images.length/requestedCount;
+      // Reserve the requested batch, then refund only undelivered outputs.
+      // Persist and record first so failed delivery still gets a full refund.
+      const creditsRefunded=images.length<requestedCount?await settleCharge(user.id,chargeId,creditsSpent):0;
+      return NextResponse.json({images,created:json?.created??null,usage:json?.usage??null,
+        requestedCount,deliveredCount:images.length,creditsSpent,creditsRefunded,
+        creditsBalance:await getBalance(user.id)});
     } catch (err) {
       await refundCharge(user.id, chargeId);
       throw err;
     }
 
-    return NextResponse.json({
-      images,
-      created: json?.created ?? null,
-      usage: json?.usage ?? null,
-      creditsSpent: cost,
-      creditsBalance: balanceAfter,
-    });
   } catch (err) {
     return errorResponse(err);
   }

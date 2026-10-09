@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconClose, IconTrash } from "../Icons";
 import { loadImage } from "@/lib/layerEditor";
+import { fitMaskPreview } from "@/lib/layerPreview";
 import { prepareSmartSelect, type SmartSelectSession } from "./models";
 import { useTr } from "@/lib/i18n/client";
 import { k } from "@/lib/i18n/tr";
@@ -83,11 +84,7 @@ export default function MaskPainter({
     let alive = true;
     loadImage(imageSrc).then((img) => {
       if (!alive) return;
-      const maxW = Math.min(900, window.innerWidth - 420);
-      const maxH = window.innerHeight - 140;
-      const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
-      const w = Math.round(img.naturalWidth * scale);
-      const h = Math.round(img.naturalHeight * scale);
+      const { w, h } = fitMaskPreview(img.naturalWidth, img.naturalHeight, window.innerWidth, window.innerHeight);
       setSize({ w, h });
       requestAnimationFrame(() => {
         const c = imgCanvasRef.current;
@@ -351,16 +348,16 @@ export default function MaskPainter({
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-black">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[#1c1c1c] px-4">
-        <span className="text-[13px] font-medium text-white">{tr("局部重繪")}</span>
-        <span className="text-[11px] text-[#6d6d6d]">{tr("選出想重畫的區域，其他地方會盡量保持不變")}</span>
-        <button type="button" onClick={onCancel} aria-label={tr("關閉")} className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[#8a8a8a] hover:bg-[#1f1f1f] hover:text-white">
+        <span className="shrink-0 whitespace-nowrap text-[13px] font-medium text-white">{tr("局部重繪")}</span>
+        <span className="min-w-0 flex-1 text-pretty text-[11px] text-[#6d6d6d]">{tr("選出想重畫的區域，其他地方會盡量保持不變")}</span>
+        <button type="button" onClick={onCancel} aria-label={tr("關閉")} className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a8a8a] hover:bg-[#1f1f1f] hover:text-white">
           <IconClose className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         {/* tools */}
-        <div className="flex w-[150px] shrink-0 flex-col gap-1 border-r border-[#1c1c1c] p-3">
+        <div className="flex w-full shrink-0 flex-wrap gap-1 border-b border-[#1c1c1c] p-3 lg:w-[150px] lg:flex-col lg:flex-nowrap lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <div className="mb-1 text-[10.5px] text-[#8a8a8a]">{tr("工具")}</div>
           {TOOLS.map((t) => (
             <button
@@ -402,7 +399,7 @@ export default function MaskPainter({
         </div>
 
         {/* canvas */}
-        <div className="flex min-w-0 flex-1 items-center justify-center overflow-auto p-4">
+        <div className="flex min-w-0 shrink-0 items-center justify-center overflow-auto p-4 lg:min-h-0 lg:flex-1">
           <div className="relative shrink-0" style={{ width: size.w, height: size.h }}>
             <canvas ref={imgCanvasRef} className="absolute inset-0 rounded-lg" />
             <canvas ref={previewRef} className="pointer-events-none absolute inset-0 rounded-lg" />
@@ -418,7 +415,7 @@ export default function MaskPainter({
         </div>
 
         {/* prompt + regions */}
-        <div className="flex w-[300px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-[#1c1c1c] p-3">
+        <div className="flex w-full shrink-0 flex-col gap-3 border-t border-[#1c1c1c] p-3 lg:w-[300px] lg:overflow-y-auto lg:border-t-0 lg:border-l">
           <label className="block">
             <div className="mb-1 text-[11px] text-[#8a8a8a]">{tr("選取的地方要改成什麼")}</div>
             <textarea

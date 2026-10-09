@@ -3,7 +3,7 @@ import { observeBillingStream } from "@/lib/providerReceipt";
 import { validateGeneration } from "@/lib/generationValidation";
 import { paidCall, refundCharge } from "@/lib/creditTransactions";
 import { NextRequest, NextResponse } from "next/server";
-import { createChatCompletion, createChatCompletionStream } from "@/lib/siraya";
+import { createChatCompletion, createChatCompletionStream, SirayaApiError } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { requireUser } from "@/lib/apiauth";
 import { getBalance, creditCost } from "@/lib/credits";
@@ -57,7 +57,11 @@ export async function POST(req: NextRequest) {
 
     if (body.stream) {
       const { result: upstream, chargeId } = await paidCall(user.id, cost, "text", String(body.model), () => createChatCompletionStream(body));
-      return new Response(upstream.body ? observeBillingStream(upstream.body, receipt => recordProviderReceipt(user.id, chargeId, receipt)) : null, {
+      if (!upstream.body) {
+        await refundCharge(user.id, chargeId);
+        throw new SirayaApiError(502,"生成失敗，沒有取得文字回覆");
+      }
+      return new Response(observeBillingStream(upstream.body, receipt => recordProviderReceipt(user.id, chargeId, receipt), () => refundCharge(user.id, chargeId)), {
         headers: {
           "Content-Type": "text/event-stream; charset=utf-8",
           "Cache-Control": "no-cache, no-transform",
@@ -70,13 +74,13 @@ export async function POST(req: NextRequest) {
 
     const replyText = json?.choices?.[0]?.message?.content;
     const lastUserPrompt = [...body.messages].reverse().find((m: { role: string }) => m.role === "user")?.content;
-    if (!replyText) {
+    if (typeof replyText !== "string" || !replyText.trim()) {
       // HTTP 200 but no actual reply content (e.g. a moderation refusal
       // returned as an empty completion rather than an error) — same real
       // gap as /api/images: paidCall already reserved the charge, no
       // exception was thrown for it to auto-refund. Refund explicitly.
       await refundCharge(user.id, chargeId);
-      return NextResponse.json({ ...json, creditsSpent: 0, creditsBalance: balance });
+      return NextResponse.json({ error:{message:"生成失敗，沒有取得文字回覆"}, creditsSpent: 0, creditsBalance: await getBalance(user.id) },{status:502});
     }
     if (lastUserPrompt) {
       // Same class of gap as /api/images (lower stakes here — text costs are
@@ -95,7 +99,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ...json, creditsSpent: cost, creditsBalance: balance - cost });
+    return NextResponse.json({ ...json, creditsSpent: cost, creditsBalance: await getBalance(user.id) });
   } catch (err) {
     return errorResponse(err);
   }
