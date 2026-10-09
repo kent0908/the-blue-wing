@@ -7,6 +7,16 @@ function load(file,mocks={}) {
     {exports,require:id=>mocks[id]??require(id),console,process}); return exports;
 }
 const migration=load('lib/geminiTextModels.ts');
+const formula=load('lib/creditFormula.ts');
+const pricing=load('lib/pricing.ts',{'./billingModel':load('lib/billingModel.ts'),'./creditFormula':formula});
+const tariffs=load('lib/sirayaPublicPrices.ts');
+for (const [id,base] of [['gemini-3.1-pro-preview',4],['gemini-3.5-flash-lite',1]]) {
+  const rate=pricing.rateFor(id), tariff=tariffs.publicPrice(id);
+  assert.equal(rate.inputPerMTok,tariff.inputPrice);assert.equal(rate.outputPerMTok,tariff.price);
+  assert.equal(tariff.checkedAt,'2026-10-09');assert.equal(tariff.source,'https://llm-ext-api.siraya.ai/api/v1/models');
+  const plannedCost=(1500*rate.inputPerMTok+500*rate.outputPerMTok)/1e6;
+  assert.ok(formula.creditCostFromRate({modality:'text',credits:base,maxTokens:1024})*.01/plannedCost>=4);
+}
 const pairs=Object.entries(migration.GEMINI_TEXT_REPLACEMENTS);
 for (const [oldId,newId] of pairs) assert.equal(migration.currentGeminiTextModel(oldId.toUpperCase()),newId);
 for (const id of ['gemini-2.5-flash-image','gemini-2.5-flash-tts','gemini-3.1-flash-lite-image','nano-banana','toString','__proto__']) {
