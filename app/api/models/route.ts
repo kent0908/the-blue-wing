@@ -3,6 +3,7 @@ import { listModels } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { modalityOf } from "@/lib/pricing";
 import { getImageModel } from "@/lib/imageModels";
+import { replacementGeminiTextModel } from "@/lib/geminiTextModels";
 import { listModelDisplayOverrides, resolveModelDisplay, sortByDisplay } from "@/lib/modelDisplay";
 
 export const runtime = "nodejs";
@@ -21,7 +22,7 @@ export async function GET() {
   try {
     const [raw, overrides] = await Promise.all([listModels(), listModelDisplayOverrides().catch(() => new Map())]);
     const data = Array.isArray(raw?.data) ? raw.data : [];
-    const models = data.map((m: Record<string, unknown>) => {
+    const models = data.filter((m: Record<string, unknown>) => !replacementGeminiTextModel(String(m.id))).map((m: Record<string, unknown>) => {
       const id = String(m.id);
       const { displayName, sortOrder } = resolveModelDisplay(id, overrides, getImageModel(id)?.name);
       return {

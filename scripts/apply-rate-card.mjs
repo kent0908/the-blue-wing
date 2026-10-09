@@ -79,6 +79,10 @@ const TEXT_RATES = {
   // in-flight request still prices correctly, but it is no longer offered.
   "gemini-3.5-flash": 2,
   "gemini-3.8-flash": 2, // $0.75/$3.75 -> ~$0.003/msg
+  // 2026-10-09 replacements: public SIRAYA standard input/output per MTok.
+  // Same 1.5K-in/0.5K-out planning assumption; actual bills remain separate.
+  "gemini-3.1-pro-preview": 4, // $2/$12 -> $0.009/msg; +1 token credit = 5 total
+  "gemini-3.5-flash-lite": 1, // $0.30/$2.50 -> $0.0017/msg; +1 = 2 total
   "gpt-5.4-mini": 2, // $0.75/$4.50 -> ~$0.0034/msg
   "claude-haiku-4.5": 2, // $1/$5 -> ~$0.004/msg
   "deepseek-v4-flash": 1,

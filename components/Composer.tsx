@@ -9,6 +9,7 @@ import FrameUploadCards from "./FrameUploadCards";
 import { orderedFrameIds, type FrameSnapshot } from "@/lib/frameSlots";
 import { getGenerationModes } from "@/lib/generationModes";
 import { modelLabel } from "@/lib/modelLabel";
+import { currentGeminiTextModel } from "@/lib/geminiTextModels";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Popover from "./Popover";
@@ -200,13 +201,14 @@ export default function Composer({
   // each time `available` finishes loading (react-hooks/set-state-in-effect).
   const resolvedModel = useMemo(() => {
     if (model && available.some((m) => m.id === model)) return model;
-    const preferred = initialModel
-      ? available.find((m) => m.id === initialModel || m.id.toLowerCase() === initialModel.toLowerCase())
+    const preferredId = initialModel && modalityForMode === "text" ? currentGeminiTextModel(initialModel) : initialModel;
+    const preferred = preferredId
+      ? available.find((m) => m.id.toLowerCase() === preferredId.toLowerCase())
       : undefined;
     const defaultVideo = mode === "video" ? available.find(m => m.id === "SIRAYA-Seedance-2.0-mini") ?? available.find(m => /seedance/i.test(m.id) && !/nsfw/i.test(m.id)) : undefined;
     const defaultImage = mode === "image" ? available.find(m => m.id === "gpt-image-2.5-sunburst") ?? available.find(m => /^gpt-image-/i.test(m.id)) : undefined;
     return (preferred ?? defaultVideo ?? defaultImage ?? available[0])?.id ?? "";
-  }, [model, available, initialModel, mode]);
+  }, [model, available, initialModel, mode, modalityForMode]);
 
   const operations = mode === "image" || mode === "video" ? getGenerationModes(resolvedModel,mode) : [];
   const [layerSize,setLayerSize] = useState("2K");

@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createChatCompletion, type ChatMessage } from "@/lib/siraya";
 import { errorResponse } from "@/lib/errors";
 import { faqAsPlainText } from "@/lib/supportFaq";
+import { SUPPORT_CHAT_MODEL } from "@/lib/geminiTextModels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = SUPPORT_CHAT_MODEL;
 const MAX_TURNS = 20;
 const MAX_CHARS = 1000;
 

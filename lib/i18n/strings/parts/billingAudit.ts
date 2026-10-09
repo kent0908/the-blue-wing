@@ -1,4 +1,5 @@
 export const BILLING_EN: Record<string,string> = {
+ "一般輸入":"Standard input", "輸出":"Output",
  "檢查 Console 帳號":"Check Console accounts", "SIRAYA 拒絕查詢參數，請確認 Account ID 是帳號 ID，而非帳號名稱。":"SIRAYA rejected the query. Use an account ID, not its display name.",
  "開始日期":"Start date", "結束日期":"End date", "請求數":"Requests", "介面語言":"Interface language",
   "SIRAYA 實際成本對帳": "SIRAYA Actual Cost Reconciliation",
@@ -78,6 +79,7 @@ export const BILLING_EN: Record<string,string> = {
   "前次同步中斷，請重新同步該日期區間。": "Previous sync interrupted. Sync that range again."
 };
 export const BILLING_JA: Record<string,string> = {
+ "一般輸入":"標準入力", "輸出":"出力",
  "檢查 Console 帳號":"Consoleアカウントを確認", "SIRAYA 拒絕查詢參數，請確認 Account ID 是帳號 ID，而非帳號名稱。":"SIRAYAが照会を拒否しました。表示名ではなくアカウントIDを指定してください。",
  "開始日期":"開始日", "結束日期":"終了日", "請求數":"リクエスト数", "介面語言":"表示言語",
   "SIRAYA 實際成本對帳": "SIRAYA 実費照合",

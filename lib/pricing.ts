@@ -57,6 +57,9 @@ const RATES: Array<[string, RateCard]> = [
   ["deepseek-v4.1-flash", { inputPerMTok: 0.15, outputPerMTok: 0.6 }],
   ["gemini-3.5-flash", { inputPerMTok: 1.5, outputPerMTok: 9 }],
   ["gemini-3.8-flash", { inputPerMTok: 0.75, outputPerMTok: 3.75 }],
+  // SIRAYA public catalogue, 2026-10-09; token costs, not retail credits.
+  ["gemini-3.1-pro-preview", { inputPerMTok: 2, outputPerMTok: 12 }],
+  ["gemini-3.5-flash-lite", { inputPerMTok: 0.3, outputPerMTok: 2.5 }],
   ["gpt-5.4-mini", { inputPerMTok: 0.75, outputPerMTok: 4.5 }],
   ["claude-haiku-4.5", { inputPerMTok: 1, outputPerMTok: 5 }],
   ["claude-opus", { inputPerMTok: 15, outputPerMTok: 75 }],

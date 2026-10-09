@@ -50,6 +50,8 @@ const prices: Record<string, PublicPrice> = {
   "deepseek-v4.1-flash": { price: 0.6, unit: "million_output_tokens", inputPrice: 0.15, source: SIRAYA_API, note: "離峰牌價；平日 01–04 與 06–10 UTC 尖峰時段輸入 $0.3、輸出 $1.2。快取讀取 $0.015。" },
   "gemini-3.5-flash": { price: 9, unit: "million_output_tokens", inputPrice: 1.5, source: SIRAYA_API, note: "快取讀取 $0.15／百萬 Token；另有每百萬 Token 每小時 $1 的快取儲存費。" },
   "gemini-3.8-flash": { price: 3.75, unit: "million_output_tokens", inputPrice: 0.75, source: SIRAYA_API, note: "快取讀取 $0.075／百萬 Token。" },
+  "gemini-3.1-pro-preview": { price: 12, unit: "million_output_tokens", inputPrice: 2, source: SIRAYA_API },
+  "gemini-3.5-flash-lite": { price: 2.5, unit: "million_output_tokens", inputPrice: .3, source: SIRAYA_API },
   "gpt-5.4-mini": { price: 4.5, unit: "million_output_tokens", inputPrice: 0.75, source: SIRAYA_API, note: "快取讀取 $0.075／百萬 Token。" },
   "claude-haiku-4.5": { price: 5, unit: "million_output_tokens", inputPrice: 1, source: SIRAYA_API, note: "快取讀取 $0.1／百萬 Token。" },
   "gpt-image-2": { price: 15, unit: "million_output_tokens", inputPrice: 2.5 },
@@ -76,6 +78,10 @@ for (const p of Object.values(prices)) {
     ...(p.inputPrice === undefined ? [] : [token("input", "輸入（舊牌價，待核對）", p.inputPrice)]),
     { id: "output", label: "輸出（舊牌價，待核對）", price: p.price, unit: p.unit === "million_output_tokens" ? "million_tokens" : p.unit },
   ];
+}
+for (const [id, input, output] of [["gemini-3.1-pro-preview", 2, 12], ["gemini-3.5-flash-lite", .3, 2.5]] as const) {
+  verified(id, SIRAYA_API, [token("input", "一般輸入", input), token("output", "輸出", output)]);
+  prices[id].checkedAt = "2026-10-09";
 }
 for (const [id, price] of [["bytedance-seedream-4.0", .03], ["bytedance-seedream-4.5", .04], ["dola-seedream-5.0-lite", .035]] as const)
   verified(id, BYTEPLUS, [component("output", "生成圖片", price, "image")]);
