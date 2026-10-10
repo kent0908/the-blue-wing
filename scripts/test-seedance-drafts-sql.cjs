@@ -1,0 +1,30 @@
+/** Rollback-only Postgres fixtures for the actual atomic finalization SQL. No provider calls. */
+const fs=require('node:fs'),ts=require('typescript'),assert=require('node:assert/strict');
+require('@next/env').loadEnvConfig(process.cwd(),false,{info(){},error(){}});
+process.env.POSTGRES_URL ||=process.env.DATABASE_URL||process.env.POSTGRES_PRISMA_URL;
+const {sql}=require('@vercel/postgres');
+const source=fs.readFileSync('app/api/videos/drafts/[id]/finalize/route.ts','utf8');
+const claim=source.match(/const claim = await sql`([\s\S]*?)`;/);assert.ok(claim);
+(async()=>{const c=await sql.connect();try{
+ await c.query('BEGIN');
+ await c.query('create temporary table users(id bigint primary key) on commit drop; create temporary table credit_ledger(id bigint primary key,user_id bigint,reason text,delta integer,ref text) on commit drop; insert into users values(7),(8);');
+ const migration=fs.readFileSync('scripts/migrate-seedance-drafts.sql','utf8').replace('create table if not exists seedance_drafts','create temporary table seedance_drafts');
+ await c.query(migration);
+ const execute=async(strings,...values)=>{let q=strings[0];values.forEach((_,i)=>q+='$'+(i+1)+strings[i+1]);return c.query(q,values);};
+ const fn=new Function('sql',ts.transpileModule('async function claimDraft(user,id,body){'+claim[0]+' return claim;} ',{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+' return claimDraft;')(execute);
+ const uuid='51c1f865-76af-4cd3-a3ce-bf07a8d2cde0';
+ await c.query("insert into seedance_drafts(user_id,request_id,job_id,status,upstream_task_id,prompt,seconds,aspect_ratio,generate_audio) values(7,$1,'video_owned','completed','cgt-fixture','fixture',8,'16:9',true)",[uuid]);
+ assert.equal((await fn({id:8},'video_owned',{clientRequestId:uuid})).rows.length,0,'cross-user claim denied');
+ const claims=await Promise.all([fn({id:7},'video_owned',{clientRequestId:uuid}),fn({id:7},'video_owned',{clientRequestId:uuid})]);
+ assert.equal(claims.reduce((n,r)=>n+r.rows.length,0),1,'only one atomic claim');
+ await c.query("update seedance_drafts set final_status='unknown'");assert.equal((await fn({id:7},'video_owned',{clientRequestId:uuid})).rows.length,0);
+ await c.query("update seedance_drafts set final_status='failed',expires_at=now()-interval '1 second'");assert.equal((await fn({id:7},'video_owned',{clientRequestId:uuid})).rows.length,0);
+ await c.query("update seedance_drafts set expires_at=now()+interval '1 day',status='processing'");assert.equal((await fn({id:7},'video_owned',{clientRequestId:uuid})).rows.length,0);
+ await c.query("update seedance_drafts set status='completed',upstream_task_id=null");assert.equal((await fn({id:7},'video_owned',{clientRequestId:uuid})).rows.length,0);
+ await c.query("update seedance_drafts set upstream_task_id='cgt-fixture'");assert.equal((await fn({id:7},'video_owned',{clientRequestId:uuid})).rows.length,0,'late duplicate of a failed attempt cannot reclaim');assert.equal((await fn({id:7},'video_owned',{clientRequestId:'51c1f865-76af-4cd3-a3ce-bf07a8d2cde1'})).rows.length,1,'new deliberate attempt may reclaim');
+ await c.query("update seedance_drafts set final_status='failed'");for(const pastId of [uuid,'51c1f865-76af-4cd3-a3ce-bf07a8d2cde1'])assert.equal((await fn({id:7},'video_owned',{clientRequestId:pastId})).rows.length,0,'all previous attempt IDs permanently prevent replay');
+ assert.equal((await c.query('select cardinality(final_attempt_ids) as n from seedance_drafts')).rows[0].n,2);
+ assert.equal((await c.query("insert into seedance_drafts(user_id,request_id,prompt,seconds,aspect_ratio,generate_audio) values(7,$1,'another',8,'16:9',true) on conflict(user_id,request_id) do nothing returning id",[uuid])).rows.length,0);
+ console.log('PASS draft schema + actual atomic SQL: ownership, single claim, uncertain outcome lock, expiry, unfinished/native source guards, deliberate failure retry and request deduplication. Temporary fixtures rolled back.');
+ }finally{await c.query('ROLLBACK');c.release();}process.exit(0);
+})().catch(error=>{console.error('Draft SQL verification failed; diagnostic code: '+String(error.code??error.name)+'. No user rows or credentials printed.');process.exit(1);});

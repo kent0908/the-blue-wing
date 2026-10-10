@@ -6,6 +6,7 @@ import { SirayaApiError } from "./siraya";
 import { randomUUID } from "node:crypto";
 import { markUsageRefunded, recordUsageEvent, quoteCost } from "./crm";
 import { withBillingCharge } from "./billingContext";
+import { countInFlightVideoJobs, MAX_CONCURRENT_VIDEO_JOBS } from "./videoConcurrency";
 
 export async function creditTransaction<T>(userId:number, fn:(c:VercelPoolClient)=>Promise<T>):Promise<T> {
   const c=await sql.connect();
@@ -71,6 +72,9 @@ export async function paidCall<T>(userId:number,cost:number,kind:string,ref:stri
   if(!Number.isSafeInteger(cost)||cost<=0)throw new SirayaApiError(400,"無效的計費數量");
   const chargeId=await creditTransaction(userId,async c=>{
     if(await ledgerBalance(c,userId)<cost)throw new SirayaApiError(402,"點數不足，其他生成可能已預扣點數");
+    if(kind==="video" && await countInFlightVideoJobs(userId,c)>=MAX_CONCURRENT_VIDEO_JOBS) {
+      throw new SirayaApiError(429,"同時最多四個影片生成，請等候現有任務完成","rate_limit_error","too_many_concurrent");
+    }
     const {rows}=await c.query("INSERT INTO credit_ledger(user_id,delta,reason,ref) VALUES($1,$2,$3,$4) RETURNING id",[userId,-cost,kind,kind==="video"?"pending:"+randomUUID():ref]);
     return String(rows[0].id);
   });

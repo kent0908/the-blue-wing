@@ -17,6 +17,7 @@ import { recordGeneration } from "@/lib/generations";
 import { maxRefsForVideoModel, supportsVideoRefInput } from "@/lib/videoModels";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
 import { sql } from "@/lib/db";
+import { publicDraft, saveDraftReceipt, type SeedanceDraftRow } from "@/lib/seedanceDraft";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,43 +27,14 @@ export const maxDuration = 60;
 // image and text charge-and-call inside one request/response (see
 // lib/creditTransactions.ts's paidCall), so there's nothing to be "in
 // flight" there. A charged video row counts as in-flight until either
-// history, companion terminal status, or the exact charge refund settles it.
+// history, draft/companion terminal status, or the exact charge refund settles it.
 // The frontend already caps concurrent jobs at the same number
 // (MAX_CONCURRENT_JOBS in lib/jobsStore.tsx) but that's UI-only and doesn't
 // stop a direct API caller from firing far more submissions than that.
-const MAX_CONCURRENT_VIDEO_JOBS = 4;
+// paidCall repeats this guard atomically inside the per-user ledger lock,
+// counting provider-pending reservations as well as submitted jobs.
+import { countInFlightVideoJobs, MAX_CONCURRENT_VIDEO_JOBS } from "@/lib/videoConcurrency";
 
-async function countInFlightVideoJobs(userId: number): Promise<number> {
-  const { rows } = await sql<{ n: number }>`
-    select count(*)::int as n
-    from credit_ledger cl
-    where cl.user_id = ${userId}
-      and cl.reason = 'video'
-      and cl.delta < 0
-      and cl.ref not like 'pending:%'
-      -- Provider jobs expire after 24h; abandoned historical rows must not
-      -- permanently consume a concurrent-generation slot. This is not a refund.
-      and cl.created_at > now() - interval '24 hours'
-      and not exists (select 1 from generations g where g.user_id = cl.user_id and g.ref = cl.ref)
-      and not exists (
-        select 1 from credit_ledger r
-        where r.user_id = cl.user_id
-          and ((r.reason = 'video_refund' and r.ref = cl.ref)
-            or (r.reason = 'charge_refund' and r.ref = cl.id::text))
-      )
-      and not exists (
-        select 1 from character_idle_videos v
-        where v.user_id = cl.user_id and (v.job_id = cl.ref or v.charge_id = cl.id)
-          and v.status in ('completed','failed')
-      )
-      and not exists (
-        select 1 from character_scene_requests s
-        where s.user_id = cl.user_id and s.job_id = cl.ref
-          and s.status in ('completed','failed')
-      )
-  `;
-  return rows[0]?.n ?? 0;
-}
 
 /**
  * POST /api/videos
@@ -87,6 +59,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (body.draft === true) {
+      const { rows: existing } = await sql<SeedanceDraftRow>`select * from seedance_drafts
+        where user_id=${user.id} and request_id=${body.clientRequestId}::uuid limit 1`;
+      if (existing[0]) return NextResponse.json({ id: existing[0].job_id, status: existing[0].status, url: existing[0].url,
+        duplicate: true, creditsSpent: 0, draft: await publicDraft(existing[0]) });
+    }
 
     // reference materials: can come from the user's own asset library
     // (assetIds — resolved to short-lived signed URLs, since the blob store is
@@ -96,7 +74,7 @@ export async function POST(req: NextRequest) {
     // instead). Both can be present at once — combine them, capped at this
     // model's reference limit. Only Seedance models are known to support
     // this on SIRAYA.
-    const { assetIds, imageUrls, videoUrl, providerAssetIds, generationMode, ...videoBody } = body;
+    const { assetIds, imageUrls, videoUrl, providerAssetIds, generationMode, draft, clientRequestId, ...videoBody } = body;
     const allowedModes = getGenerationModes(String(body.model), "video");
     const hasImage = (Array.isArray(assetIds) && assetIds.length) || (Array.isArray(imageUrls) && imageUrls.length);
     const selectedMode = generationMode || (hasImage && maxRefsForVideoModel(String(body.model)) === 0 && allowedModes.some(m=>m.id==="image-to-video" && m.enabled) ? "image-to-video" : allowedModes.find(m=>m.enabled)?.id);
@@ -168,7 +146,7 @@ export async function POST(req: NextRequest) {
     });
     const balance = await getBalance(user.id);
     const confirmedCredits = req.headers.get("x-blue-wing-expected-credits");
-    if (confirmedCredits !== null && (!/^\d+$/.test(confirmedCredits) || Number(confirmedCredits) !== cost)) {
+    if ((draft === true && confirmedCredits === null) || (confirmedCredits !== null && (!/^\d+$/.test(confirmedCredits) || Number(confirmedCredits) !== cost))) {
       return NextResponse.json({ error: { message: "點數已變更，請重新預覽並確認", code: "stale_quote" } }, { status: 409 });
     }
     if (balance < cost) {
@@ -186,26 +164,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Reserve the client request before any paid I/O. Repeated requests return
+    // the original reservation/job rather than replaying a costly provider call.
+    let draftReservation: SeedanceDraftRow | null = null;
+    if (draft === true) {
+      const { rows } = await sql<SeedanceDraftRow>`insert into seedance_drafts
+        (user_id,request_id,prompt,seconds,aspect_ratio,generate_audio,seed)
+        values (${user.id},${clientRequestId}::uuid,${String(videoBody.prompt)},${Number(videoBody.seconds)},${String(videoBody.aspect_ratio || "16:9")},${videoBody.generate_audio !== false},${videoBody.seed ?? null})
+        on conflict (user_id,request_id) do nothing returning *`;
+      if (!rows[0]) {
+        const existing = await sql<SeedanceDraftRow>`select * from seedance_drafts where user_id=${user.id} and request_id=${clientRequestId}::uuid limit 1`;
+        return NextResponse.json({ id: existing.rows[0]?.job_id, status: existing.rows[0]?.status, duplicate: true,
+          draft: existing.rows[0] ? await publicDraft(existing.rows[0]) : null, creditsSpent: 0 }, { status: 200 });
+      }
+      draftReservation = rows[0];
+      videoBody.extra_body = { ...videoBody.extra_body, draft: true };
+    }
+
     const submittedAt = Date.now();
-    const { result: json, chargeId } = await paidCall(
-      user.id, cost, "video", String(body.model),
-      () => createVideo(applyWatermarkDefaults({ ...videoBody, async: true }, "video")),
-      { units: Number(videoBody.seconds) || undefined, resolution: typeof videoBody.resolution === "string" ? videoBody.resolution : null }
-    );
+    let submitted;
+    try {
+      submitted = await paidCall(
+        user.id, cost, "video", String(body.model),
+        async (chargeId) => {
+          if (draftReservation) await sql`update seedance_drafts set charge_id=${chargeId} where id=${draftReservation.id} and user_id=${user.id}`;
+          return createVideo(applyWatermarkDefaults({ ...videoBody, async: true }, "video"));
+        },
+        { units: Number(videoBody.seconds) || undefined, resolution: typeof videoBody.resolution === "string" ? videoBody.resolution : null }
+      );
+    } catch (err) {
+      if (draftReservation) await sql`update seedance_drafts set status='failed' where id=${draftReservation.id} and user_id=${user.id}`;
+      throw err;
+    }
+    const { result: json, chargeId } = submitted;
 
     // Async submissions return { id, status: "processing" }; a provider that
     // completes synchronously returns { data: [{ url }] } instead.
     const immediateUrl = json?.output_url ?? json?.data?.[0]?.url ?? null;
     const jobId = json?.id ?? null;
 
-    if (!immediateUrl && !jobId) {
+    if ((!immediateUrl && !jobId) || (draftReservation && !jobId)) {
       // HTTP 200 but neither a job to poll nor a finished video — no
       // exception was thrown, so paidCall's own refund never fired, and
       // nothing is left to reconcile this against later (no job id means
       // /api/videos/[id] has nothing to poll). Refund explicitly rather
       // than leaving this charged with literally no way to ever complete.
       await refundCharge(user.id, chargeId);
+      if (draftReservation) await sql`update seedance_drafts set status='failed' where id=${draftReservation.id} and user_id=${user.id}`;
       return NextResponse.json({ error: { message: "提交失敗，SIRAYA 沒有回傳任務編號或結果" } }, { status: 502 });
+    }
+
+    if (draftReservation) {
+      // Metadata failure cannot be safely replayed: the ledger still holds
+      // the returned job ID, which can be reconciled by the polling route.
+      await sql`update seedance_drafts set job_id=${jobId ? String(jobId) : null},status='processing'
+        where id=${draftReservation.id} and user_id=${user.id}`;
     }
 
     // Charge on submission, tagged with the job id so /api/videos/[id] can
@@ -228,14 +241,21 @@ export async function POST(req: NextRequest) {
     if (immediateUrl) {
       try {
         persistedUrl = await persistGeneratedMedia(immediateUrl, { userId: user.id, kind: "video" });
+        // Synchronous providers sometimes return only data[].url. Bind the
+        // already finished result to a durable terminal reference rather than
+        // leaving pending:UUID charged and occupying a slot for 24 hours.
+        const generationRef = jobId ? String(jobId) : `completed:sync:${chargeId}`;
+        if (!jobId) await sql`update credit_ledger set ref=${generationRef}
+          where id=${chargeId} and user_id=${user.id} and reason='video' and delta<0`;
         await recordGeneration(user.id, {
           kind: "video",
           model: String(body.model),
           prompt: String(body.prompt),
           url: persistedUrl,
           durationMs: Date.now() - submittedAt,
-          ref: jobId ? String(jobId) : null,
+          ref: generationRef,
         });
+        if (draftReservation && jobId) await saveDraftReceipt(user.id, String(jobId), json, "completed", persistedUrl);
       } catch (err) {
         await refundCharge(user.id, chargeId);
         throw err;
@@ -246,7 +266,7 @@ export async function POST(req: NextRequest) {
       id: jobId,
       status: json?.status ?? (immediateUrl ? "completed" : "processing"),
       url: persistedUrl,
-      raw: json,
+      ...(draftReservation ? { draft: true } : { raw: json }),
       creditsSpent: cost,
       creditsBalance: balance - cost,
     });

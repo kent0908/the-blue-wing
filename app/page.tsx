@@ -8,6 +8,7 @@ import TemplatePreview from '@/components/TemplatePreview';
 import { CANVAS_PREVIEWS } from '@/lib/officialTemplates';
 import OfficialTemplates from '@/components/OfficialTemplates';
 import HeroCarousel from "@/components/HeroCarousel";
+import { SeedanceDraftHomeEntry } from "@/components/SeedanceDraftShowcase";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
 import ModelLogo from "@/components/ModelLogo";
 import { useT, useTr } from "@/lib/i18n/client";
@@ -148,6 +149,8 @@ export default function HomePage() {
             </Link>
           ))}
         </div>
+
+        <SeedanceDraftHomeEntry />
 
         <section id="canvas-showcase" className={styles.workshop}>
           <div className={styles.sectionHeading}><div><p>01 / THE WORKSHOP</p><h2>{t.home.canvasHeading}</h2></div><Link href="/canvas">{tr("探索工作流")} ↗</Link></div>

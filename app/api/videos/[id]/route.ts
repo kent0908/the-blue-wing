@@ -8,6 +8,8 @@ import { sql } from "@/lib/db";
 import { refundCharge } from "@/lib/creditTransactions";
 import { recordGeneration } from "@/lib/generations";
 import { persistGeneratedMedia } from "@/lib/mediaStore";
+import { getOwnedDraftForJob, publicDraft, saveDraftReceipt } from "@/lib/seedanceDraft";
+import { SEEDANCE_DRAFT_MODEL } from "@/lib/seedanceDraftRules";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,12 +44,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     if (!owned.length) {
       return NextResponse.json({ error: { message: "找不到任務" } }, { status: 404 });
     }
+    const linkedDraft = await getOwnedDraftForJob(user.id, id);
     // Owned, durable results must survive the provider's job/URL expiry.
     const { rows: saved } = await sql<{ url: string | null }>`
       select url from generations where user_id = ${user.id} and ref = ${id} and kind = 'video' limit 1
     `;
-    if (saved[0]?.url?.startsWith(`/api/media/generations/${user.id}/`)) {
-      return NextResponse.json({ id, status: "completed", url: saved[0].url });
+    const durableDraftUrl = linkedDraft?.job_id === id ? linkedDraft.url : linkedDraft?.final_url;
+    const savedUrl = saved[0]?.url || durableDraftUrl;
+    const draftNeedsReceipt = linkedDraft && (linkedDraft.job_id === id
+      ? linkedDraft.status !== "completed" || !linkedDraft.upstream_task_id
+      : linkedDraft.final_status !== "completed");
+    if (savedUrl?.startsWith(`/api/media/generations/${user.id}/`) && !draftNeedsReceipt) {
+      return NextResponse.json({ id, status: "completed", url: savedUrl, ...(linkedDraft ? { draft: await publicDraft(linkedDraft) } : {}) });
     }
     const json = await getVideoStatus(id);
     if (["completed", "failed", "succeeded"].includes(String(json?.status))) await recordProviderReceipt(user.id, String(owned[0].id), json);
@@ -63,6 +71,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     // and the charge is never refunded. Treat it as a failure so the refund
     // path below runs (and its alert fires) and the user sees a real error.
     if (status === "completed" && !rawUrl) status = "failed";
+    const draftMismatch = linkedDraft?.final_job_id === id && status === "completed" && json?.vendor_data?.draft_task_id !== linkedDraft.upstream_task_id;
+    if (draftMismatch) status = "failed";
 
     if (status === "completed" && rawUrl) {
       // Re-host to our own storage first — this is a signed upstream URL
@@ -82,8 +92,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       // The submit route only knows the url for synchronous providers; async
       // jobs are recorded here instead, the first time a poll sees "completed"
       // (recordGeneration dedupes on ref, so repeat polls are harmless).
-      const model = req.nextUrl.searchParams.get("model");
-      const prompt = req.nextUrl.searchParams.get("prompt");
+      const model = linkedDraft ? SEEDANCE_DRAFT_MODEL : req.nextUrl.searchParams.get("model");
+      const prompt = linkedDraft ? linkedDraft.prompt : req.nextUrl.searchParams.get("prompt");
       if (model && prompt) {
         // elapsed = from the moment the job was charged (its ledger row) to now
         const charged = await sql<{ created_at: string }>`select created_at from credit_ledger where user_id = ${user.id} and ref = ${id} and delta < 0 order by created_at asc limit 1`;
@@ -96,8 +106,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       void raiseAlert({ key: `video_failed:${req.nextUrl.searchParams.get("model") ?? "unknown"}`, title: "影片任務回報失敗", detail: `模型 ${req.nextUrl.searchParams.get("model") ?? "未知"}，任務 ${id.slice(0, 24)}…，點數已退還`, cooldownMinutes: 30, level: "warn" });
       const { rows } = await sql`select id from credit_ledger where user_id=${user.id} and reason='video' and ref=${id} and delta<0 limit 1`;
       if(rows[0]) await refundCharge(user.id,String(rows[0].id));
+      url = null;
     }
-    return NextResponse.json({ id, status, url, raw: json });
+    if (linkedDraft) await saveDraftReceipt(user.id, id, json, ["completed", "failed"].includes(status) ? status : "processing", url);
+    const updatedDraft = linkedDraft ? await getOwnedDraftForJob(user.id, id) : null;
+    return NextResponse.json({ id, status, url,
+      ...(updatedDraft ? { draft: await publicDraft(updatedDraft), ...(draftMismatch ? { error: { code: "draft_final_mismatch", message: "正式影片與草稿來源不符，點數已返還" } } : {}) } : { raw: json }),
+    });
   } catch (err) {
     return errorResponse(err);
   }

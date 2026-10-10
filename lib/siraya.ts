@@ -375,6 +375,12 @@ export async function createVideo(body: VideoGenerationRequest) {
   return res.json();
 }
 
+/** Draft finalization deliberately omits every parameter inherited from the native draft task. */
+export async function createVideoFromDraft(body: ReturnType<typeof import("./seedanceDraftRules").buildDraftFinalPayload>) {
+  const res = await sirayaFetch("/videos/generations", { method: "POST", body: JSON.stringify(body) });
+  return res.json();
+}
+
 /** GET /videos/{id} — poll for async video job status. */
 export async function getVideoStatus(id: string) {
   const res = await sirayaFetch(`/videos/${encodeURIComponent(id)}`, { method: "GET" });

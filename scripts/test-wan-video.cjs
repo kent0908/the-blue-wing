@@ -10,6 +10,7 @@ const mocks={
  '@/lib/generations':{recordGeneration:async()=>{}},
  '@/lib/mediaStore':{persistGeneratedMedia:async()=>{throw Error('Storage forbidden')}},
  '@/lib/creditTransactions':{refundCharge:async()=>{}},
+ '@/lib/seedanceDraft':{getOwnedDraftForJob:async()=>null,publicDraft:async()=>null,saveDraftReceipt:async()=>{}},
 };
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const m={exports:{}};cache.set(file,m);new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(id=>{if(id in mocks)return mocks[id];const local=id.startsWith('@/')?path.resolve(id.slice(2)):id.startsWith('.')?path.resolve(path.dirname(file),id):null;return local?load(local+'.ts'):require(id)},m,m.exports);return m.exports;}
 const {wanVideoPayload}=load('lib/wanVideo.ts');

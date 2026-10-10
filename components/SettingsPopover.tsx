@@ -48,6 +48,7 @@ export default function SettingsPopover({
   settings,
   onChange,
   model,
+  draft = false,
 }: {
   mode: Mode;
   modelId?: string | null;
@@ -55,6 +56,7 @@ export default function SettingsPopover({
   onChange: (s: GenSettings) => void;
   /** currently selected model id — looks up which resolutions/duration (video, lib/videoModels.ts) or sizes (image, lib/imageModels.ts) it actually supports, instead of one flat list shared by every model. */
   model?: string;
+  draft?: boolean;
 }) {
   const tr = useTr();
   const set = (patch: Partial<GenSettings>) => onChange({ ...settings, ...patch });
@@ -122,7 +124,7 @@ export default function SettingsPopover({
               <>
                 <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">{tr("解析度")}</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {videoResolutionsForModel(selectedModel).map((r) => (
+                  {(draft ? ["480p"] : videoResolutionsForModel(selectedModel)).map((r) => (
                     <Choice key={r} value={r} active={settings.resolution === r} onClick={() => set({ resolution: r })} />
                   ))}
                 </div>
@@ -150,6 +152,7 @@ export default function SettingsPopover({
                   <label className="flex items-center justify-between gap-3"><span>{tr("提示詞潤飾")}</span><input type="checkbox" checked={settings.promptExtend === true} onChange={e=>set({promptExtend:e.target.checked})} /></label>
                   <p className="leading-5 text-[#999]">{tr("關閉潤飾可保留原始分鏡描述；聲音開關不影響費率。")}</p>
                 </div>}
+                {selectedModel === "SIRAYA-Seedance-2.5" && <label className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-4 text-xs"><span>{tr("生成聲音")}</span><input type="checkbox" checked={settings.generateAudio !== false} onChange={e=>set({generateAudio:e.target.checked})} /></label>}
               </>
             )}
 

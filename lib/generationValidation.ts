@@ -7,7 +7,7 @@ const bad=()=>{throw new SirayaApiError(400,"生成參數不正確或包含未�
 export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text"|"imageEdit") {
   const common=["model","prompt"];
   const keys=kind==="image"?["n","size","quality","style","response_format","negative_prompt","seed","background","output_compression","moderation","watermark","assetIds","image","layer_decomposition","output_format","confirmedMaxCredits"]:
-    kind==="video"?["seconds","resolution","aspect_ratio","generate_audio","prompt_extend","negative_prompt","seed","extra_body","assetIds","imageUrls","videoUrl","async","generationMode","providerAssetIds"]:
+    kind==="video"?["seconds","resolution","aspect_ratio","generate_audio","prompt_extend","negative_prompt","seed","extra_body","assetIds","imageUrls","videoUrl","async","generationMode","providerAssetIds","draft","clientRequestId"]:
     kind==="imageEdit"?["image","mask"]:
     ["messages","stream","temperature","max_tokens"];
   if(!body || typeof body!=="object" || Object.keys(body).some(k=>![...common,...keys].includes(k)))bad();
@@ -31,6 +31,11 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
     if(body.layer_decomposition!==true&&body.size!==undefined && (typeof body.size!=="string"|| !sizeOptionsFor(String(body.model)).includes(body.size)))bad();
   }
   if(kind==="video"){
+    if (body.draft !== undefined && typeof body.draft !== "boolean") bad();
+    if (body.clientRequestId !== undefined && (typeof body.clientRequestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.clientRequestId))) bad();
+    if (body.draft === true && (body.model !== "SIRAYA-Seedance-2.5" || body.resolution !== "480p" || !body.clientRequestId)) {
+      throw new SirayaApiError(400, "草稿僅支援 Seedance 2.5、480p，且需要唯一提交編號", "invalid_request_error", "invalid_draft_request");
+    }
     if(body.generationMode!==undefined && (typeof body.generationMode!=="string" || body.generationMode.length>40))bad();
     if(body.providerAssetIds!==undefined && (!Array.isArray(body.providerAssetIds)||body.providerAssetIds.length>50||body.providerAssetIds.some((id:unknown)=>typeof id!=="number"||!Number.isSafeInteger(id)||id<1)))bad();
     const constraint = videoConstraintFor(String(body.model));

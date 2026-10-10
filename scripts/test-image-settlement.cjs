@@ -25,7 +25,7 @@ const query=async(q,p=[])=>{
   if(q.startsWith('UPDATE usage_events')) {if(failSettle)throw Error('settlement write failed');for(const e of events)if(e.chargeId===p[1]&&e.userId===p[2]&&e.status==='charged')e.credits=p[0];return {rows:[]};}
   throw Error('Unexpected SQL '+q);
 };
-const tx=load('lib/creditTransactions.ts',{'./billingContext':context,'./creditReplay':{replayCredits:replay},'./db':{sql:{connect:async()=>({query,release(){}}),query}},'./siraya':{SirayaApiError:ApiError},'./alerts':{alertGenerationFailure(){}},'./crm':{
+const tx=load('lib/creditTransactions.ts',{'./videoConcurrency':{MAX_CONCURRENT_VIDEO_JOBS:4,countInFlightVideoJobs:async()=>0},'./billingContext':context,'./creditReplay':{replayCredits:replay},'./db':{sql:{connect:async()=>({query,release(){}}),query}},'./siraya':{SirayaApiError:ApiError},'./alerts':{alertGenerationFailure(){}},'./crm':{
   quoteCost:async()=>({unitCostUsd:1.25}),recordUsageEvent:async e=>events.push({...e,status:'charged'}),markUsageRefunded:async id=>{for(const e of events)if(e.chargeId===id)e.status='refunded';}
 }});
 const provider=async()=>{providerCalls++;if(concurrentSpend){ledger.push({id:'concurrent',user_id:1,delta:-concurrentSpend,reason:'text',ref:'other-model',created_at:new Date().toISOString(),expires_at:null});}return {data:outputs,cost:1.25,usage:{image_count:Array.isArray(outputs)?outputs.length:0}};};

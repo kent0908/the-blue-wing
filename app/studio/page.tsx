@@ -103,7 +103,7 @@ function StudioInner() {
     return () => {
       alive = false;
     };
-  }, [preset, urlModel, urlPrompt]);
+  }, [preset, urlModel, urlPrompt, tr]);
 
   const [panelOpen, setPanelOpen] = useState(false);
   // Which history item the main viewer shows. null = "the newest one" (the
@@ -138,6 +138,9 @@ function StudioInner() {
   providerAssetIds?: number[];
     extraBody?: Record<string, unknown>;
     videoUrl?: string;
+    draft?: boolean;
+    clientRequestId?: string;
+    expectedCredits?: number;
   }) => {
     startJob(mode, args);
   };

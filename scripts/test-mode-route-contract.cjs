@@ -17,6 +17,7 @@ const mocks = {
   '@/lib/mediaStore': { persistGeneratedMedia: async () => '/mock-media' },
   '@/lib/generations': { recordGeneration: async () => {} },
   '@/lib/db': { sql: async () => { counts.db++; return { rows: [{ n: 0 }] }; } },
+  '@/lib/videoConcurrency': { MAX_CONCURRENT_VIDEO_JOBS: 4, countInFlightVideoJobs: async () => { counts.db++; return 0; } },
 };
 function load(file) {
   file = path.resolve(file);

@@ -1,47 +1,36 @@
 "use client";
 
-import { useRef, useState } from "react";
+import Link from "next/link";
+import { useLocale } from "@/lib/i18n/client";
+import { draftLibraryCopy } from "@/lib/i18n/draftLibrary";
 
-const steps = [
-  { title: "構思與草稿", subtitle: "先看見故事的方向", description: "沿用創作區的提示詞與參考素材，先製作草稿，確認動作、構圖與鏡頭走向。", action: "生成草稿", detail: "草稿規格與點數將在正式開放時公布。" },
-  { title: "播放與審看", subtitle: "留下值得繼續的版本", description: "播放草稿，檢查角色、動作與轉場。滿意後選擇轉成正式影片；想調整故事時，可修改設定再製作新草稿。", action: "選用這份草稿", detail: "開放後，這裡會顯示草稿影片與原始創作設定。" },
-  { title: "正式成片", subtitle: "讓想像完整呈現", description: "以選定的草稿接續生成正式影片。送出前會再次顯示可用規格與所需點數，完成後可在作品紀錄查看與下載。", action: "生成正式影片", detail: "草稿與正式成片的計費方式待確認，不預設為免費或可折抵。" },
-];
-
-export default function SeedanceDraftPreview() {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [step, setStep] = useState(0);
-  const current = steps[step];
+export default function SeedanceDraftPreview({ draftEnabled, onDraftChange, draftCredits, finalCredits }: {
+  draftEnabled: boolean;
+  onDraftChange: (enabled: boolean) => void;
+  draftCredits: number | null;
+  finalCredits: number | null;
+}) {
+  const locale = useLocale();
+  const copy = draftLibraryCopy(locale);
+  const points = (value: number | null) => value === null ? copy.rateUnavailable : `${value.toLocaleString(locale)} ${copy.points}`;
   return (
-    <>
-      <button type="button" onClick={() => { setStep(0); dialog.current?.showModal(); }} className="mx-3 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-[#38434b] bg-[#1b2227] px-3 py-2 text-left text-xs text-[#dce6ed] hover:bg-[#232e36]">
-        <span>Seedance 2.5 · 草稿到成片</span>
-        <span className="whitespace-nowrap text-[#a9becd]">即將開放 · 查看流程 ↗</span>
-      </button>
-      <dialog ref={dialog} aria-labelledby="draft-preview-title" className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl border border-[#35414b] bg-[#151a1e] p-0 text-[#edf0f2] shadow-2xl backdrop:bg-black/75" onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
-        <div className="p-5 sm:p-8">
-          <div className="flex items-start justify-between gap-4">
-            <div><p className="text-xs tracking-widest text-[#a9becd]">SEEDANCE 2.5 · 即將開放</p><h2 id="draft-preview-title" className="mt-3 text-2xl font-medium">先探索，再成片。</h2></div>
-            <button type="button" aria-label="關閉草稿流程" onClick={() => dialog.current?.close()} className="rounded-lg px-3 py-2 text-xl hover:bg-white/10">×</button>
-          </div>
-          <p className="mt-4 text-sm leading-7 text-[#b7c1c8]">SIRAYA 正在開發草稿模式參數。以下為流程預覽，目前不會提交生成任務，也不會扣除點數。</p>
-          <nav aria-label="草稿流程步驟" className="my-6 grid grid-cols-3 gap-2">
-            {steps.map((item, index) => <button key={item.title} type="button" aria-current={step === index ? "step" : undefined} onClick={() => setStep(index)} className={`min-w-0 rounded-xl border px-2 py-3 text-left sm:px-4 ${step === index ? "border-[#94afc1] bg-[#283743]" : "border-[#303a42] hover:bg-white/5"}`}><span className="block text-xs text-[#a9becd]">0{index + 1}</span><span className="mt-2 block text-sm [text-wrap:balance]">{item.title}</span></button>)}
-          </nav>
-          <section aria-live="polite" className="rounded-xl border border-[#303a42] bg-[#101518] p-5 sm:p-7">
-            <p className="text-xs text-[#a9becd]">流程預覽 · {step + 1} / 3</p>
-            <h3 className="mt-3 text-xl [text-wrap:balance]">{current.subtitle}</h3>
-            <p className="mt-4 text-sm leading-7 text-[#c0cad1]">{current.description}</p>
-            <p className="mt-4 text-xs leading-6 text-[#95a4af]">{current.detail}</p>
-            <button type="button" disabled className="mt-6 w-full cursor-not-allowed rounded-xl border border-[#37434c] bg-[#252e35] px-4 py-3 text-sm text-[#9cabb6]">{current.action} · 尚未開放</button>
-          </section>
-          <p className="mt-5 text-xs leading-6 text-[#95a4af]">最終支援的解析度、時長、草稿有效期限與費用，將依 SIRAYA 完成的介接規格更新。現有正式影片生成功能仍可正常使用。</p>
-          <div className="mt-5 flex justify-between gap-3">
-            <button type="button" disabled={step === 0} onClick={() => setStep(value => value - 1)} className="rounded-lg px-3 py-2 text-sm hover:bg-white/5 disabled:opacity-30">上一步</button>
-            {step < 2 ? <button type="button" onClick={() => setStep(value => value + 1)} className="rounded-lg bg-[#dce6ed] px-4 py-2 text-sm text-[#17212a]">下一步 →</button> : <button type="button" onClick={() => dialog.current?.close()} className="rounded-lg bg-[#dce6ed] px-4 py-2 text-sm text-[#17212a]">返回創作</button>}
-          </div>
+    <section aria-label={copy.workflow} className="mx-3 mt-2 shrink-0 border-t border-white/10 pt-2 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div role="radiogroup" aria-label={copy.outputMode} className="flex max-w-full items-center rounded-full border border-white/10 bg-[#0c1416] p-0.5" onKeyDown={event => {
+          if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+            event.preventDefault();
+            event.currentTarget.querySelector<HTMLButtonElement>('button[aria-checked="false"]')?.focus();
+            onDraftChange(!draftEnabled);
+          }
+        }}>
+          {[false, true].map(enabled => <button key={String(enabled)} type="button" role="radio" tabIndex={draftEnabled === enabled ? 0 : -1} aria-checked={draftEnabled === enabled} onClick={() => onDraftChange(enabled)} className={`min-h-10 rounded-full px-3 py-1.5 transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#85e1dc] ${draftEnabled === enabled ? "bg-[#bbe4dc] text-[#142b2b]" : "text-[#9aafae] hover:text-white"}`}>{enabled ? copy.draftMode : copy.directMode}</button>)}
         </div>
-      </dialog>
-    </>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[#b6cbc9]">
+          <Link href="/seedance-draft" className="min-h-8 content-center hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2">{copy.seeDifference} ↗</Link>
+          <Link href="/drafts" className="min-h-8 content-center hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2">{copy.library} ↗</Link>
+        </div>
+      </div>
+      {draftEnabled ? <p className="mt-2 pb-1 leading-5 text-[#9fb3b1] [text-wrap:pretty]">{copy.draftQuote} <span className="text-[#dcece8]">{points(draftCredits)}</span><span aria-hidden="true"> · </span>{copy.finalQuote} <span className="text-[#dcece8]">{points(finalCredits)}</span><span aria-hidden="true"> · </span>{copy.separateChargesShort}</p> : null}
+    </section>
   );
 }

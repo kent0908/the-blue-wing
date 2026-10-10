@@ -45,7 +45,8 @@ import { supportsImageWatermark, supportsVideoWatermark } from "@/lib/watermark"
 import { AUDIO_MODELS } from "@/lib/audioModels";
 import ModelFunctionMenu from "./ModelFunctionMenu";
 import { modelFunctionSelection } from "@/lib/modelFunctionSelection";
-import { useT, useTr } from "@/lib/i18n/client";
+import { useT, useTr, useLocale } from "@/lib/i18n/client";
+import { DRAFT_COMPOSER_COPY } from "@/lib/i18n/draftComposer";
 import { modeLabel } from "@/lib/i18n/dict";
 import { k } from "@/lib/i18n/tr";
 
@@ -112,6 +113,9 @@ export default function Composer({
     extraBody?: Record<string, unknown>;
     /** a recorded 3D導演台 運鏡 clip's URL — video mode + Seedance 2.0/2.5 only */
     videoUrl?: string;
+    draft?: boolean;
+    clientRequestId?: string;
+    expectedCredits?: number;
   }) => void;
   busy: boolean;
   /** model id from ?model= — pre-selects the model when it matches the mode */
@@ -130,6 +134,10 @@ export default function Composer({
   const t = useT();
   const modeRouter = useRouter();
   const modeParams = useSearchParams();
+  const draftCopy = DRAFT_COMPOSER_COPY[useLocale()];
+  const [draftChoice, setDraftChoice] = useState<boolean | null>(null);
+  const draftConfirm = useRef<HTMLDialogElement>(null);
+  const draftSubmission = useRef<{ clientRequestId: string; submitted: boolean } | null>(null);
   const [providerSelection,setProviderSelection] = useState<{model:string;operation:string;ids:number[]}>({model:"",operation:"",ids:[]});
   const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [settings, setSettings] = useState<GenSettings>({...DEFAULT_SETTINGS,...initialSettings});
@@ -337,7 +345,10 @@ export default function Composer({
     [activeImageModel, imgEdits]
   );
 
-  const effectiveSettings = mode === "video" ? { ...settings, resolution: normalizeVideoResolution(resolvedModel, settings.resolution), seconds: Math.max(videoConstraintFor(resolvedModel).minSeconds, Math.min(settings.seconds, videoConstraintFor(resolvedModel).maxSeconds)) } : settings;
+  const draftEnabled = mode === "video" && resolvedModel === "SIRAYA-Seedance-2.5" && (draftChoice ?? modeParams.get("draft") === "1");
+  const effectiveSettings = mode === "video" ? { ...settings, resolution: draftEnabled ? "480p" : normalizeVideoResolution(resolvedModel, settings.resolution), seconds: Math.max(videoConstraintFor(resolvedModel).minSeconds, Math.min(settings.seconds, videoConstraintFor(resolvedModel).maxSeconds)) } : settings;
+  const finalDraftCredits = creditsFromRateCard(rates, resolvedModel, { seconds: effectiveSettings.seconds, resolution: "1080p" });
+  const previewDraftCredits = creditsFromRateCard(rates, resolvedModel, { seconds: effectiveSettings.seconds, resolution: "480p" });
   const imageCount = operation === "layer-separation" ? 17 : activeImageModel ? Number(imgValues.n ?? 1) : settings.imageCount;
 
   const cost = useMemo(
@@ -454,6 +465,19 @@ export default function Composer({
 
   const submit = (confirmed=false) => {
     if (!canSubmit) return;
+    if (draftEnabled && !confirmed) {
+      if (!draftConfirm.current?.open) {
+        draftSubmission.current = { clientRequestId: crypto.randomUUID(), submitted: false };
+        draftConfirm.current?.showModal();
+      }
+      return;
+    }
+    if (draftEnabled) {
+      // A confirmation owns one UUID. Guard synchronously before React rerenders.
+      if (!draftConfirm.current?.open || !draftSubmission.current || draftSubmission.current.submitted) return;
+      draftSubmission.current.submitted = true;
+    }
+    draftConfirm.current?.close();
     if(operation==="layer-separation" && !confirmed){setLayerConfirm(true);return;}
     const assetIds = canUseRefs ? isFramePair ? orderedFrameIds(frameData.slots)! : refs.map((r) => r.id) : [];
     // The image itself already carries the reference — strip the "@Name" tag
@@ -483,6 +507,8 @@ export default function Composer({
       providerAssetIds: mode === "video" ? providerIds : undefined,
       extraBody: mode === "video" && watermarkSupported ? { watermark } : undefined,
       videoUrl: videoRefSupported && videoRef ? videoRef.url : undefined,
+      ...(mode === "video" && credits !== null ? { expectedCredits: credits } : {}),
+      ...(draftEnabled ? { draft: true, clientRequestId: draftSubmission.current!.clientRequestId } : {}),
     });
     setLayerConfirm(false);
     setProviderSelection({model:"",operation:"",ids:[]});
@@ -511,7 +537,15 @@ export default function Composer({
         "flex max-h-[calc(100dvh-152px)] flex-col rounded-2xl border border-[#2a2a2a] bg-[#161616] transition-all",
       ].join(" ")}
     >
-      {mode === "video" && resolvedModel === "SIRAYA-Seedance-2.5" && <SeedanceDraftPreview />}
+      {mode === "video" && resolvedModel === "SIRAYA-Seedance-2.5" && <SeedanceDraftPreview draftEnabled={draftEnabled} onDraftChange={setDraftChoice} draftCredits={previewDraftCredits} finalCredits={finalDraftCredits} />}
+      <dialog ref={draftConfirm} aria-labelledby="draft-cost-title" className="fixed inset-0 m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-[#4a6159] bg-[#111b18] p-6 text-[#e1e9e5] shadow-2xl backdrop:bg-black/80" onClick={event => { if (event.target === event.currentTarget) draftConfirm.current?.close(); }}>
+        <p className="text-[10px] tracking-[.22em] text-[#96b9ac]">SEEDANCE 2.5 · DRAFT</p>
+        <h2 id="draft-cost-title" className="mt-4 font-serif text-2xl [text-wrap:balance]">{draftCopy.confirmTitle}</h2>
+        <p className="mt-4 text-sm leading-7 text-[#b8cac2]">{draftCopy.confirmLead}</p>
+        <dl className="my-5 space-y-3 border-y border-[#3b4943] py-5 text-sm"><div className="flex items-center justify-between gap-4"><dt className="min-w-0">{draftCopy.draftCost}</dt><dd className="shrink-0 text-lg" style={{ textWrap: "nowrap" }}>{credits} {draftCopy.unit}</dd></div><div className="flex items-center justify-between gap-4 text-[#a9bbb3]"><dt className="min-w-0">{draftCopy.finalCost}</dt><dd className="shrink-0" style={{ textWrap: "nowrap" }}>{finalDraftCredits} {draftCopy.unit}</dd></div></dl>
+        <p className="text-xs leading-6 text-[#9aaea5]">{draftCopy.rule}</p>
+        <div className="mt-6 flex flex-wrap justify-end gap-3"><button type="button" onClick={() => draftConfirm.current?.close()} className="rounded-full border border-[#4a6159] px-4 py-3 text-xs">{draftCopy.cancel}</button><button type="button" disabled={!canSubmit} onClick={() => submit(true)} className="rounded-full bg-[#b9dacb] px-5 py-3 text-xs text-[#15201b] disabled:opacity-40">{draftCopy.confirm}</button></div>
+      </dialog>
       {operation==="layer-separation" && <div className="shrink-0 px-4 py-3 text-xs text-[#b2c8c0]"><p>{tr("限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。")}</p><label className="mt-2 block">{tr("輸出解析度")} <select aria-label={tr("圖層解析度")} value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">{tr("查看圖層紀錄")}</Link></div>}
       {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label={tr("確認圖層分離費用")} className="mx-4 my-3 shrink-0 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>{tr("最高預扣")} {credits} {tr("點（底圖與最多 16 個圖層）。每張")} {credits === null ? "—" : credits / 17} {tr("點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。")}</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>{tr("確認預扣並分離")}</button><button type="button" onClick={()=>setLayerConfirm(false)}>{tr("取消")}</button></div></div>}
       {isFramePair && <div className="shrink-0"><FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} /></div>}
@@ -797,7 +831,7 @@ export default function Composer({
         {operation==="layer-separation" ? null : activeImageModel ? (
           <ImageParams model={activeImageModel} values={imgValues} onChange={setImgEdits} />
         ) : (
-          <SettingsPopover mode={mode} modelId={resolvedModel} settings={effectiveSettings} onChange={setSettings} />
+          <SettingsPopover mode={mode} modelId={resolvedModel} settings={effectiveSettings} onChange={setSettings} draft={draftEnabled} />
         )}
 
         <AdvancedParams

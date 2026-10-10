@@ -126,6 +126,9 @@ export interface SubmitArgs {
   extraBody?: Record<string, unknown>;
   /** a recorded 3D導演台 運鏡 clip's URL — video mode + Seedance 2.0/2.5 only, see lib/videoModels.ts */
   videoUrl?: string;
+  draft?: boolean;
+  clientRequestId?: string;
+  expectedCredits?: number;
 }
 
 export interface ToastItem {
@@ -292,7 +295,7 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
    *  several of these run concurrently, each tracked by its own job id, and
    *  none of them depend on any page still being mounted to finish. */
   const runJob = useCallback(
-    async (jobId: string, jobMode: Mode, { prompt, model, settings, imagePayload, assetIds, extraBody, videoUrl, generationMode, providerAssetIds }: SubmitArgs) => {
+    async (jobId: string, jobMode: Mode, { prompt, model, settings, imagePayload, assetIds, extraBody, videoUrl, generationMode, providerAssetIds, draft, clientRequestId, expectedCredits }: SubmitArgs) => {
       const startedAt = Date.now();
       try {
         updateJob(jobId, { stage: 1 });
@@ -312,12 +315,14 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           const seconds = Math.max(constraint.minSeconds, Math.min(settings.seconds, constraint.maxSeconds));
           const res = await fetch("/api/videos", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...(expectedCredits !== undefined ? {"x-blue-wing-expected-credits": String(expectedCredits)} : {}) },
             body: JSON.stringify({
               model,
               prompt,
               seconds,
               resolution,
+              ...(draft ? { draft: true, clientRequestId } : {}),
+              ...(model === "SIRAYA-Seedance-2.5" ? {generate_audio: settings.generateAudio !== false} : {}),
               ...(/^wan3\.0-video(?:-prime)?$/i.test(model) ? {generate_audio:settings.generateAudio !== false,prompt_extend:settings.promptExtend === true} : {}),
               ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
               ...(assetIds?.length ? { assetIds } : {}),

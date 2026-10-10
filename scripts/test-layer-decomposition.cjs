@@ -40,7 +40,7 @@ console.log(`Layer decomposition ${passed} passed, mocked provider and ledger.`)
   if(q.startsWith('INSERT INTO credit_ledger')){refundTotal+=p[1];return {rows:[]}};
   throw Error(q);
  };
- const tx=load('lib/creditTransactions.ts',{'./billingContext':load('lib/billingContext.ts',{}),'./db':{sql:{connect:async()=>({query,release(){}})}},'./creditReplay':{replayCredits:()=>1000},'./siraya':{SirayaApiError:ApiError},'./alerts':{raiseAlert:async()=>{}},'./crm':{markUsageRefunded:async()=>{},recordUsageEvent:async()=>{}}});
+ const tx=load('lib/creditTransactions.ts',{'./videoConcurrency':{MAX_CONCURRENT_VIDEO_JOBS:4,countInFlightVideoJobs:async()=>0},'./billingContext':load('lib/billingContext.ts',{}),'./db':{sql:{connect:async()=>({query,release(){}})}},'./creditReplay':{replayCredits:()=>1000},'./siraya':{SirayaApiError:ApiError},'./alerts':{raiseAlert:async()=>{}},'./crm':{markUsageRefunded:async()=>{},recordUsageEvent:async()=>{}}});
  assert.equal(await tx.settleCharge(1,'1',72),540);
  assert.equal(await tx.settleCharge(1,'1',72),0);
  assert.equal(refundTotal,540);
