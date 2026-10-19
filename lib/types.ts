@@ -46,7 +46,7 @@ export const MODE_LABELS: Record<Mode, string> = {
   image: k("智慧生圖"),
   video: k("智慧影片"),
   text: k("多輪對話"),
-  audio: k("語音"),
+  audio: k("文字創作"),
 };
 
 export interface ResultItem {
