@@ -24,6 +24,9 @@ export function modelBadgeFor(id: string): ModelBadge {
   if (/seedream/.test(stripped)) return { letter: "S", bg: "#241a38", fg: "#c79bff" };
   if (/imagen/.test(stripped)) return { letter: "I", bg: "#16233d", fg: "#7fb0ff" };
   if (/qwen/.test(stripped)) return { letter: "Q", bg: "#1c2f26", fg: "#7fe0ac" };
+  if (/claude/.test(stripped)) return { letter: "C", bg: "#30231f", fg: "#d7b8a8" };
+  if (/deepseek/.test(stripped)) return { letter: "D", bg: "#16233d", fg: "#9bb8e8" };
+  if (/\bseed\b|^seed-/.test(stripped)) return { letter: "S", bg: "#1c2f26", fg: "#b1cbbb" };
   if (/kling/.test(stripped)) return { letter: "K", bg: "#2f1c1c", fg: "#ff9b7f" };
   if (/hailuo|minimax/.test(stripped)) return { letter: "M", bg: "#241a38", fg: "#c79bff" };
   if (/luma/.test(stripped)) return { letter: "L", bg: "#1c2f26", fg: "#7fe0ac" };
