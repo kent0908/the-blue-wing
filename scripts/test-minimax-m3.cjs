@@ -64,6 +64,11 @@ function composerMemo(name) {
 }
 
 (async () => {
+  const { modelLabel } = load('lib/modelLabel.ts');
+  for (const [id,label] of [['minimax-h3','MiniMax H3'],['minimax-h3-max','MiniMax H3 Max'],['minimax-m3','MiniMax M3']]) {
+    assert.equal(modelLabel(id),label);
+    assert.equal(modelLabel(modelLabel(id)),label,'API display names must keep casing in the Composer');
+  }
   const curated = load('lib/audioModels.ts').AUDIO_MODELS;
   const original = ['deepseek-v4.1-flash', 'gemini-3.5-flash', 'gpt-5.4-mini', 'claude-haiku-4.5'];
   assert.deepEqual(curated, [...original, 'minimax-m3']);
