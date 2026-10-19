@@ -53,6 +53,7 @@ export function modelLabel(value: string | null | undefined): string {
     .trim();
   if (!clean) return "模型";
   if (/^wan3\.0-video(?:-prime)?$/i.test(clean)) return /-prime$/i.test(clean) ? "Wan 3.0 Prime" : "Wan 3.0";
+  if (/^minimax-(?:h3(?:-max)?|m3)$/i.test(clean)) return /^minimax-m3$/i.test(clean) ? "MiniMax M3" : /-max$/i.test(clean) ? "MiniMax H3 Max" : "MiniMax H3";
   const nsfw = /^NSFW-/i.test(clean);
   const body = clean.replace(/^NSFW-/i, "");
   // family = the leading letters before the first separator / digit

@@ -3,15 +3,18 @@ const {NextRequest,NextResponse}=require('next/server');
 function load(file,mocks={}) {
   const exports={};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,
-    {exports,require:id=>mocks[id]??require(id),console,process}); return exports;
+    {exports,require:id=>Object.hasOwn(mocks,id)?mocks[id]:id.startsWith('.')?load(path.resolve(path.dirname(file),id+'.ts')):require(id),console,process}); return exports;
 }
 const migration=load('lib/geminiTextModels.ts');
-const picker=load('lib/generationPickerModels.ts');
+const kling=load('lib/klingVideo.ts');
+const minimax=load('lib/minimaxVideo.ts');
+const picker=load('lib/generationPickerModels.ts',{'./klingVideo':kling,'./minimaxVideo':minimax});
 for(const id of ['gemini-embedding-2','qwen3-asr-flash','gemini-3.8-flash-tts','NSFW-gemini-2.5-flash-tts'])assert.equal(picker.isGenerationPickerModel(id),false);
 for(const id of ['gemini-3.8-flash','gemini-2.5-flash-image','SIRAYA-Seedance-2.5','wan3.0-video'])assert.equal(picker.isGenerationPickerModel(id),true);
 const formula=load('lib/creditFormula.ts');
-const pricing=load('lib/pricing.ts',{'./billingModel':load('lib/billingModel.ts'),'./creditFormula':formula});
-const tariffs=load('lib/sirayaPublicPrices.ts');
+const providerPrices=load('lib/videoProviderPrices.ts');
+const pricing=load('lib/pricing.ts',{'./billingModel':load('lib/billingModel.ts'),'./creditFormula':formula,'./klingVideo':kling,'./minimaxVideo':minimax,'./videoProviderPrices':providerPrices});
+const tariffs=load('lib/sirayaPublicPrices.ts',{'./videoProviderPrices':providerPrices});
 for (const [id,base] of [['gemini-3.1-pro-preview',4],['gemini-3.5-flash-lite',1]]) {
   const rate=pricing.rateFor(id), tariff=tariffs.publicPrice(id);
   assert.equal(rate.inputPerMTok,tariff.inputPrice);assert.equal(rate.outputPerMTok,tariff.price);

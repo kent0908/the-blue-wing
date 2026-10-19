@@ -20,6 +20,9 @@
  * "seedance" rule below) rather than inheriting it.
  */
 
+import { getKlingVideoModel } from "./klingVideo";
+import { getMiniMaxVideoModel } from "./minimaxVideo";
+
 interface VideoRefRule {
   /** matched against the lowercased model id, longest match wins */
   prefix: string;
@@ -38,6 +41,10 @@ const RULES: VideoRefRule[] = [
 
 export function maxRefsForVideoModel(modelId: string | null | undefined): number {
   if (!modelId) return 0;
+  const kling = getKlingVideoModel(modelId);
+  if (kling) return kling.omni ? kling.maxReferenceImages : 0;
+  const minimax = getMiniMaxVideoModel(modelId);
+  if (minimax) return minimax.includedImageReferences;
   const id = modelId.toLowerCase();
   let best = 0;
   let bestLen = -1;
@@ -77,7 +84,7 @@ export function isWanVideo(modelId: string | null | undefined): boolean {
   return /^wan3\.0-video(?:-prime)?$/i.test(modelId ?? "");
 }
 
-export type VideoResolution = "480p" | "720p" | "1080p" | "4k";
+export type VideoResolution = "480p" | "720p" | "768p" | "1080p" | "2k" | "4k";
 
 /** Output capabilities checked 2026-09-08. Router/NSFW aliases share the
  * underlying model's limits; unknown models must be reviewed before use.
@@ -87,6 +94,10 @@ export type VideoResolution = "480p" | "720p" | "1080p" | "4k";
  * https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate
  */
 export function videoResolutionsForModel(modelId: string | null | undefined): readonly VideoResolution[] {
+  const kling = getKlingVideoModel(modelId);
+  if (kling) return kling.resolutions;
+  const minimax = getMiniMaxVideoModel(modelId);
+  if (minimax) return minimax.resolutions;
   const id = (modelId ?? "").toLowerCase().replace(/seedance-(\d)-(\d)/, "seedance-$1.$2");
   // Original Wan docs + SIRAYA output files verified 2026-10-07, including 480p.
   if (isWanVideo(id)) return ["480p", "720p", "1080p"];
@@ -95,7 +106,6 @@ export function videoResolutionsForModel(modelId: string | null | undefined): re
   if (/seedance-2\.0-(mini|fast)(?:-|$)/.test(id)) return ["480p", "720p"];
   if (/seedance-2\.0(?:-\d+)?$/.test(id)) return ["480p", "720p", "1080p", "4k"];
   if (/seedance-1\.(0|5)-pro(?:-fast)?(?:-\d+)?$/.test(id)) return ["480p", "720p", "1080p"];
-  if (/happyhorse-1\.0-(t2v|i2v|r2v|video-edit)$/.test(id)) return ["720p", "1080p"];
   if (/happyhorse-1\.1-(t2v|i2v|r2v)$/.test(id)) return ["480p", "720p", "1080p"];
   if (id === "veo-3.1-generate-001") return ["720p", "1080p", "4k"];
   return [];
@@ -111,6 +121,10 @@ export function normalizeVideoResolution(modelId: string | null | undefined, res
 
 /** Share the reviewed resolution catalog across API and editors. */
 export function videoConstraintFor(modelId: string | null | undefined): { resolutions: string[]; minSeconds: number; maxSeconds: number } {
+  const kling = getKlingVideoModel(modelId);
+  if (kling) return { resolutions: [...kling.resolutions], minSeconds: kling.minSeconds, maxSeconds: kling.maxSeconds };
+  const minimax = getMiniMaxVideoModel(modelId);
+  if (minimax) return { resolutions: [...minimax.resolutions], minSeconds: minimax.minSeconds, maxSeconds: minimax.maxSeconds };
   const id = (modelId ?? "").toLowerCase();
   const maxSeconds = isWanVideo(id) || /seedance-2\.5/.test(id) ? 30 : /seedance-2\.0/.test(id) ? 15 : 12;
   const minSeconds = /seedance/.test(id) ? 4 : 2;

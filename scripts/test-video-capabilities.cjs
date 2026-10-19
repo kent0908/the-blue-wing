@@ -7,16 +7,18 @@ function load(file, deps = {}) {
   new Function('require','module','exports',code)(id => {if(/i18n\/(tr|k)$/.test(String(id)))return {k:(s)=>s};if (!(id in deps)) throw Error(id);return deps[id]},m,m.exports);
   return m.exports;
 }
-const caps = load('lib/videoModels.ts');
+const kling = load('lib/klingVideo.ts');
+const minimax = load('lib/minimaxVideo.ts');
+const picker = load('lib/generationPickerModels.ts', {'./klingVideo':kling,'./minimaxVideo':minimax});
+const caps = load('lib/videoModels.ts', {'./klingVideo':kling,'./minimaxVideo':minimax});
 class SirayaApiError extends Error { constructor(status,message) {super(message);this.status=status} }
 const labels=load('lib/modelLabel.ts');
 const billing=load('lib/billingModel.ts');
 const images=load('lib/imageModels.ts',{'./modelLabel':labels,'./billingModel':billing});
 const safety=load('lib/promptSafety.ts');
 const layers=load('lib/layerDecomposition.ts',{'./siraya':{SirayaApiError}});
-const {validateGeneration} = load('lib/generationValidation.ts', {'./imageModels':images,'./layerDecomposition':layers,'./promptSafety':safety,'./siraya':{SirayaApiError},'./videoModels':caps});
+const {validateGeneration} = load('lib/generationValidation.ts', {'./imageModels':images,'./layerDecomposition':layers,'./promptSafety':safety,'./siraya':{SirayaApiError},'./videoModels':caps,'./klingVideo':kling,'./minimaxVideo':minimax,'./generationPickerModels':picker});
 const matrix = [
-  ...['1.0-i2v','1.0-t2v'].map(v=>['happyhorse-'+v,['720p','1080p']]),
   ...['1.1-i2v','1.1-t2v'].map(v=>['happyhorse-'+v,['480p','720p','1080p']]),
   ...['ByteDance','NSFW'].flatMap(p=>['1.0-pro','1.0-pro-fast','1.5-pro'].map(v=>[p+'-Seedance-'+v,['480p','720p','1080p']])),
   ...['SIRAYA','NSFW'].flatMap(p=>[
@@ -37,6 +39,10 @@ for(const [model,expected] of matrix) {
 assert.deepEqual(caps.videoResolutionsForModel('dreamina-seedance-2-0-mini-260615'),['480p','720p']);
 assert.deepEqual(caps.videoResolutionsForModel('dreamina-seedance-2-0-260128'),['480p','720p','1080p','4k']);
 assert.deepEqual(caps.videoResolutionsForModel('new-unreviewed-video-model'),[]);
+for (const model of ['happyhorse-1.0-t2v','happyhorse-1.0-i2v','NSFW-happyhorse-1.0-r2v']) {
+  assert.deepEqual(caps.videoResolutionsForModel(model),[]);
+  assert.throws(()=>validateGeneration({model,prompt:'test',seconds:5,resolution:'720p'},'video'),e=>e.status===400);
+}
 assert.throws(()=>validateGeneration({model:'new-unreviewed-video-model',prompt:'test'},'video'),e=>e.status===400);
 assert.equal(caps.normalizeVideoResolution('SIRAYA-Seedance-2.0-mini','1080p'),'720p');
 assert.equal(caps.normalizeVideoResolution('SIRAYA-Seedance-2.0','4k'),'4k');

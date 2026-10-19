@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { monitoredModelFetch } from "./modelMonitoring";
 import { applyWatermarkDefaults } from "./watermark";
 import { wanVideoPayload } from "./wanVideo";
+import { klingVideoPayload } from "./klingVideo";
+import { minimaxVideoPayload } from "./minimaxVideo";
 
 /**
  * SIRAYA Model Router client (server-side only).
@@ -24,6 +26,9 @@ import { wanVideoPayload } from "./wanVideo";
  */
 
 const SIRAYA_BASE_URL = process.env.SIRAYA_BASE_URL || "https://llm.siraya.ai/v1";
+
+/** Server-only, per-call credentials. Supplying these never enables platform-key fallback. */
+export interface SirayaCredentials { apiKey: string; }
 
 export class SirayaConfigError extends Error {}
 
@@ -65,8 +70,12 @@ async function responseError(res: Response): Promise<SirayaApiError> {
 }
 
 /** Each request starts with Key 1; no shared mutable credential selection. */
-async function sirayaFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const keys = [...new Set([process.env.SIRAYA_API_KEY, process.env.SIRAYA_API_KEY_2]
+async function sirayaFetch(path: string, init: RequestInit = {}, credentials?: SirayaCredentials): Promise<Response> {
+  const byok = credentials !== undefined;
+  if (byok && (typeof credentials?.apiKey !== "string" || !/^sk-[A-Za-z0-9_-]{8,252}$/.test(credentials.apiKey.trim()))) {
+    throw new SirayaConfigError("Invalid business provider credentials.");
+  }
+  const keys = byok ? [credentials!.apiKey.trim()] : [...new Set([process.env.SIRAYA_API_KEY, process.env.SIRAYA_API_KEY_2]
     .map(key => key?.trim()).filter((key): key is string => Boolean(key)))];
   if (!keys.length) throw new SirayaConfigError("SIRAYA API key is not configured.");
   const isVideoLookup = init.method === "GET" && path.startsWith("/videos/");
@@ -80,9 +89,13 @@ async function sirayaFetch(path: string, init: RequestInit = {}): Promise<Respon
     headers.set("Authorization", `Bearer ${keys[index]}`);
     headers.set("Content-Type", "application/json");
     // Network errors and accepted streaming responses are never replayed.
-    const res = model
-      ? await monitoredModelFetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers }, {model, provider:"siraya", requestId, attempt:index+1, keySlot:keys[index] === process.env.SIRAYA_API_KEY?.trim() ? "primary" : "backup"})
-      : await fetch(`${SIRAYA_BASE_URL}${path}`, { ...init, headers });
+    // Business requests use a fixed provider origin and their own request history.
+    // They must never be attributed to the platform's cost ledger or backup key.
+    const baseUrl = byok ? "https://llm.siraya.ai/v1" : SIRAYA_BASE_URL;
+    const requestInit = { ...init, headers, ...(byok && !init.signal ? { signal: AbortSignal.timeout(init.method === "GET" ? 30_000 : path.startsWith("/images/") ? 240_000 : 45_000) } : {}) };
+    const res = model && !byok
+      ? await monitoredModelFetch(`${baseUrl}${path}`, requestInit, {model, provider:"siraya", requestId, attempt:index+1, keySlot:keys[index] === process.env.SIRAYA_API_KEY?.trim() ? "primary" : "backup"})
+      : await fetch(`${baseUrl}${path}`, requestInit);
     if (res.ok) return res;
     const error = await responseError(res);
     const canReplay = init.body == null || typeof init.body === "string";
@@ -187,13 +200,13 @@ function chatDeadline() {
 }
 
 /** POST /chat/completions (non-streaming). */
-export async function createChatCompletion(body: ChatCompletionRequest) {
+export async function createChatCompletion(body: ChatCompletionRequest, credentials?: SirayaCredentials) {
   const remaining = chatDeadline();
   const send = (extra: object) => sirayaFetch("/chat/completions", {
     method: "POST",
     signal: remaining(),
     body: JSON.stringify({ ...extra, ...body, stream: false }),
-  });
+  }, credentials);
   try {
     const res = await send(CHAT_DEFAULTS);
     return res.json();
@@ -206,13 +219,13 @@ export async function createChatCompletion(body: ChatCompletionRequest) {
 
 /** POST /chat/completions (streaming) — returns the raw Response so the
  *  route handler can pipe the SSE stream straight through to the client. */
-export async function createChatCompletionStream(body: ChatCompletionRequest) {
+export async function createChatCompletionStream(body: ChatCompletionRequest, credentials?: SirayaCredentials) {
   const remaining = chatDeadline();
   const send = (extra: object) => sirayaFetch("/chat/completions", {
     method: "POST",
     signal: remaining(),
     body: JSON.stringify({ ...extra, ...body, stream: true, stream_options: { include_usage: true } }),
-  });
+  }, credentials);
   try {
     return await send(CHAT_DEFAULTS);
   } catch (error) {
@@ -222,8 +235,8 @@ export async function createChatCompletionStream(body: ChatCompletionRequest) {
 }
 
 /** GET /models */
-export async function listModels() {
-  const res = await sirayaFetch("/models", { method: "GET" });
+export async function listModels(credentials?: SirayaCredentials) {
+  const res = await sirayaFetch("/models", { method: "GET" }, credentials);
   return res.json();
 }
 
@@ -262,7 +275,7 @@ export interface ImageGenerationRequest {
 }
 
 /** POST /images/generations */
-export async function createImage(body: ImageGenerationRequest) {
+export async function createImage(body: ImageGenerationRequest, credentials?: SirayaCredentials) {
   // GPT reference inputs use edits; generations does not accept image inputs.
   if (/^(?:(?:SIRAYA|NSFW)-)*gpt-image-/i.test(body.model) && body.image) {
     const { image, ...settings } = body;
@@ -270,12 +283,12 @@ export async function createImage(body: ImageGenerationRequest) {
     return createImageEdit({
       ...settings,
       image_urls: Array.isArray(image) ? image : [image],
-    });
+    }, credentials);
   }
   const res = await sirayaFetch("/images/generations", {
     method: "POST",
     body: JSON.stringify(applyWatermarkDefaults(body, "image")),
-  });
+  }, credentials);
   return res.json();
 }
 
@@ -315,11 +328,11 @@ export interface ImageEditRequest {
 }
 
 /** POST /images/edits */
-export async function createImageEdit(body: ImageEditRequest) {
+export async function createImageEdit(body: ImageEditRequest, credentials?: SirayaCredentials) {
   const res = await sirayaFetch("/images/edits", {
     method: "POST",
     body: JSON.stringify({ ...applyWatermarkDefaults(body, "imageEdit"), output_format: "png" }),
-  });
+  }, credentials);
   return res.json();
 }
 
@@ -332,7 +345,7 @@ export interface VideoGenerationRequest {
   model: string;
   prompt: string;
   seconds?: number;
-  resolution?: "480p" | "720p" | "1080p" | "4k";
+  resolution?: "480p" | "720p" | "768p" | "1080p" | "2k" | "4k";
   aspect_ratio?: string;
   generate_audio?: boolean;
   prompt_extend?: boolean;
@@ -367,22 +380,22 @@ export interface VideoGenerationRequest {
 }
 
 /** POST /videos/generations */
-export async function createVideo(body: VideoGenerationRequest) {
+export async function createVideo(body: VideoGenerationRequest, credentials?: SirayaCredentials) {
   const res = await sirayaFetch("/videos/generations", {
     method: "POST",
-    body: JSON.stringify(wanVideoPayload(applyWatermarkDefaults(body, "video"))),
-  });
+    body: JSON.stringify(minimaxVideoPayload(klingVideoPayload(wanVideoPayload(applyWatermarkDefaults(body, "video"))))),
+  }, credentials);
   return res.json();
 }
 
 /** Draft finalization deliberately omits every parameter inherited from the native draft task. */
-export async function createVideoFromDraft(body: ReturnType<typeof import("./seedanceDraftRules").buildDraftFinalPayload>) {
-  const res = await sirayaFetch("/videos/generations", { method: "POST", body: JSON.stringify(body) });
+export async function createVideoFromDraft(body: ReturnType<typeof import("./seedanceDraftRules").buildDraftFinalPayload>, credentials?: SirayaCredentials) {
+  const res = await sirayaFetch("/videos/generations", { method: "POST", body: JSON.stringify(body) }, credentials);
   return res.json();
 }
 
 /** GET /videos/{id} — poll for async video job status. */
-export async function getVideoStatus(id: string) {
-  const res = await sirayaFetch(`/videos/${encodeURIComponent(id)}`, { method: "GET" });
+export async function getVideoStatus(id: string, credentials?: SirayaCredentials) {
+  const res = await sirayaFetch(`/videos/${encodeURIComponent(id)}`, { method: "GET" }, credentials);
   return res.json();
 }

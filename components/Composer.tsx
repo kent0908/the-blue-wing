@@ -41,6 +41,10 @@ import {
   type ImageControlValues,
 } from "@/lib/imageModels";
 import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput, videoConstraintFor, videoResolutionsForModel } from "@/lib/videoModels";
+import { getKlingVideoModel } from "@/lib/klingVideo";
+import { normalizeKlingSettings } from "@/lib/klingSettings";
+import { normalizeMiniMaxSettings } from "@/lib/minimaxSettings";
+import { klingCopy } from "@/lib/i18n/kling";
 import { supportsImageWatermark, supportsVideoWatermark } from "@/lib/watermark";
 import { AUDIO_MODELS } from "@/lib/audioModels";
 import ModelFunctionMenu from "./ModelFunctionMenu";
@@ -135,6 +139,7 @@ export default function Composer({
   const modeRouter = useRouter();
   const modeParams = useSearchParams();
   const draftCopy = DRAFT_COMPOSER_COPY[useLocale()];
+  const klingText = klingCopy(useLocale());
   const [draftChoice, setDraftChoice] = useState<boolean | null>(null);
   const draftConfirm = useRef<HTMLDialogElement>(null);
   const draftSubmission = useRef<{ clientRequestId: string; submitted: boolean } | null>(null);
@@ -346,7 +351,8 @@ export default function Composer({
   );
 
   const draftEnabled = mode === "video" && resolvedModel === "SIRAYA-Seedance-2.5" && (draftChoice ?? modeParams.get("draft") === "1");
-  const effectiveSettings = mode === "video" ? { ...settings, resolution: draftEnabled ? "480p" : normalizeVideoResolution(resolvedModel, settings.resolution), seconds: Math.max(videoConstraintFor(resolvedModel).minSeconds, Math.min(settings.seconds, videoConstraintFor(resolvedModel).maxSeconds)) } : settings;
+  const klingModel = mode === "video" ? getKlingVideoModel(resolvedModel) : undefined;
+  const effectiveSettings = mode === "video" ? normalizeMiniMaxSettings(resolvedModel, normalizeKlingSettings(resolvedModel, { ...settings, resolution: draftEnabled ? "480p" : normalizeVideoResolution(resolvedModel, settings.resolution), seconds: Math.max(videoConstraintFor(resolvedModel).minSeconds, Math.min(settings.seconds, videoConstraintFor(resolvedModel).maxSeconds)) })) : settings;
   const finalDraftCredits = creditsFromRateCard(rates, resolvedModel, { seconds: effectiveSettings.seconds, resolution: "1080p" });
   const previewDraftCredits = creditsFromRateCard(rates, resolvedModel, { seconds: effectiveSettings.seconds, resolution: "480p" });
   const imageCount = operation === "layer-separation" ? 17 : activeImageModel ? Number(imgValues.n ?? 1) : settings.imageCount;
@@ -368,7 +374,7 @@ export default function Composer({
   const credits =
     creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: effectiveSettings.seconds, maxTokens: settings.maxTokens, resolution: effectiveSettings.resolution });
   const modeRefsValid = operation === "layer-separation" ? refs.length===1 : operation === "first-last-frame" ? orderedFrameIds(frameData.slots) !== null && !frameData.uploading.some(Boolean) && !providerIds.length : operation === "image-to-video" ? refs.length === 1 && !providerIds.length : operation === "subject-reference" ? refs.length+providerIds.length>0 : true;
-  const canSubmit = modeRefsValid && !refBusy && (operation === "layer-separation" || !!prompt.trim()) && !!resolvedModel && !busy && credits !== null && (mode !== "video" || !!effectiveSettings.resolution);
+  const canSubmit = modeRefsValid && !refBusy && (operation === "layer-separation" || !!prompt.trim()) && (!klingModel || prompt.length <= 2500) && !!resolvedModel && !busy && credits !== null && (mode !== "video" || !!effectiveSettings.resolution);
 
   // Image mode: seedream/gemini models. Video mode: Seedance models only.
   // When neither applies, stale refs are simply ignored (submit + render both gate on this).
@@ -660,6 +666,7 @@ export default function Composer({
           <textarea
             ref={taRef}
             value={prompt}
+            maxLength={klingModel ? 2500 : undefined}
             onChange={handlePromptChange}
             onKeyDown={(e) => {
               if (mention && e.key === "Escape") {
@@ -707,6 +714,7 @@ export default function Composer({
             // submit button below it never gets pushed off-screen.
             style={{ maxHeight: isExpanded ? "55vh" : 92, overflowY: "auto" }}
           />
+          {klingModel && prompt.length > 2500 ? <p role="alert" className="mt-2 text-xs leading-5 text-[#f0b7a2]">{klingText.promptLimit}</p> : null}
 
           {mention && (
             // Opens upward (bottom-full), same as every other popover anchored to

@@ -13,6 +13,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "./types";
 import { videoConstraintFor } from "./videoModels";
+import { getKlingVideoModel } from "./klingVideo";
+import { normalizeKlingSettings } from "./klingSettings";
+import { getMiniMaxVideoModel } from "./minimaxVideo";
+import { normalizeMiniMaxSettings } from "./minimaxSettings";
 import { runningJobCount } from "./jobVisibility";
 import { k } from "./i18n/k";
 import { notifyCreditsUpdated } from "./creditEvents";
@@ -311,8 +315,11 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
           // in sync when the model was switched. Whatever the UI showed,
           // the actual request sent here is always valid for `model`.
           const constraint = videoConstraintFor(model);
-          const resolution = constraint.resolutions.includes(settings.resolution) ? settings.resolution : constraint.resolutions[0];
-          const seconds = Math.max(constraint.minSeconds, Math.min(settings.seconds, constraint.maxSeconds));
+          const kling = getKlingVideoModel(model);
+          const minimax = getMiniMaxVideoModel(model);
+          const normalized = normalizeMiniMaxSettings(model, normalizeKlingSettings(model, settings));
+          const resolution = constraint.resolutions.includes(normalized.resolution) ? normalized.resolution : constraint.resolutions[0];
+          const seconds = Math.max(constraint.minSeconds, Math.min(normalized.seconds, constraint.maxSeconds));
           const res = await fetch("/api/videos", {
             method: "POST",
             headers: { "Content-Type": "application/json", ...(expectedCredits !== undefined ? {"x-blue-wing-expected-credits": String(expectedCredits)} : {}) },
@@ -324,7 +331,9 @@ export function GenerationJobsProvider({ children }: { children: React.ReactNode
               ...(draft ? { draft: true, clientRequestId } : {}),
               ...(model === "SIRAYA-Seedance-2.5" ? {generate_audio: settings.generateAudio !== false} : {}),
               ...(/^wan3\.0-video(?:-prime)?$/i.test(model) ? {generate_audio:settings.generateAudio !== false,prompt_extend:settings.promptExtend === true} : {}),
-              ...(settings.aspectRatio !== "auto" ? { aspect_ratio: settings.aspectRatio } : {}),
+              ...(kling?.supportsAudio ? { generate_audio: normalized.generateAudio === true } : {}),
+              ...(minimax ? { generate_audio: true } : {}),
+              ...(normalized.aspectRatio !== "auto" ? { aspect_ratio: normalized.aspectRatio } : {}),
               ...(assetIds?.length ? { assetIds } : {}),
               ...(generationMode ? { generationMode } : {}),
               ...(providerAssetIds?.length ? { providerAssetIds } : {}),

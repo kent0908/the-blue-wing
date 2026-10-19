@@ -19,7 +19,7 @@ const zh = {
   },
   modes: {
     freestyle: "自由創作", "text-to-video": "文字生影片", "image-to-video": "圖片生影片", "first-last-frame": "首尾幀編輯", "subject-reference": "主體參考",
-    "video-edit": "影片編輯", "video-extend": "影片續寫", "universal-reference": "通用參考", "layer-separation": "圖層分離",
+    "video-edit": "影片編輯", "video-extend": "影片續寫", "universal-reference": "通用參考", "layer-separation": "圖層分離", "motion-control": "動作控制",
   },
   home: {
     hot: "熱門", new: "新", newVersion: "Seedance 2.5 新版本 🔥", tryNow: "立即體驗", canvasHeading: "用畫布創造更多",
@@ -106,7 +106,7 @@ const en: Dict = {
   },
   modes: {
     freestyle: "Freestyle", "text-to-video": "Text to video", "image-to-video": "Image to video", "first-last-frame": "First & last frame", "subject-reference": "Subject reference",
-    "video-edit": "Video edit", "video-extend": "Video extend", "universal-reference": "Reference", "layer-separation": "Layer separation",
+    "video-edit": "Video edit", "video-extend": "Video extend", "universal-reference": "Reference", "layer-separation": "Layer separation", "motion-control": "Motion control",
   },
   home: {
     hot: "Hot", new: "New", newVersion: "Seedance 2.5 is here 🔥", tryNow: "Try it now", canvasHeading: "Create more on the canvas",
@@ -191,7 +191,7 @@ const ja: Dict = {
   },
   modes: {
     freestyle: "フリー生成", "text-to-video": "テキストから動画", "image-to-video": "画像から動画", "first-last-frame": "始点・終点フレーム", "subject-reference": "被写体リファレンス",
-    "video-edit": "動画編集", "video-extend": "動画延長", "universal-reference": "汎用リファレンス", "layer-separation": "レイヤー分離",
+    "video-edit": "動画編集", "video-extend": "動画延長", "universal-reference": "汎用リファレンス", "layer-separation": "レイヤー分離", "motion-control": "モーション制御",
   },
   home: {
     hot: "人気", new: "NEW", newVersion: "Seedance 2.5 登場 🔥", tryNow: "今すぐ試す", canvasHeading: "キャンバスでもっと作る",

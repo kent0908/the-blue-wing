@@ -1,11 +1,12 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 function load(file, mocks = {}) {
  const exports = {};
  const code = ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
- vm.runInNewContext(code,{exports,require:id=>id in mocks?mocks[id]:require(id),console,Map,Date});
+ vm.runInNewContext(code,{exports,require:id=>Object.hasOwn(mocks,id)?mocks[id]:id.startsWith('.')?load(path.resolve(path.dirname(file),id+'.ts')):require(id),console,Map,Date});
  return exports;
 }
 const prices=load('lib/sirayaPublicPrices.ts');

@@ -2,9 +2,17 @@ import { ProviderAssetError } from "./providerAssets";
 import { PromptSafetyError } from "./promptSafety";
 import { NextResponse } from "next/server";
 import { SirayaApiError, SirayaConfigError } from "./siraya";
+import { KlingVideoParameterError } from "./klingVideo";
+import { MiniMaxVideoParameterError } from "./minimaxVideo";
 
 /** Turn any thrown error into the documented SIRAYA error envelope. */
 export function errorResponse(err: unknown) {
+  if (err instanceof MiniMaxVideoParameterError) {
+    return NextResponse.json({ error: { message: "MiniMax 參數不相容，請檢查時長、解析度與參考素材。", code: err.code } }, { status: 400 });
+  }
+  if (err instanceof KlingVideoParameterError) {
+    return NextResponse.json({ error: { message: "Kling 參數不相容，請檢查時長、解析度與聲音設定。", code: err.code } }, { status: 400 });
+  }
   if (err instanceof ProviderAssetError) {
     return NextResponse.json({error:{message:err.message,code:err.code}}, {status:err.status});
   }

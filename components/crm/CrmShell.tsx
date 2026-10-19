@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useTr } from "@/lib/i18n/client";
+import { useLocale, useTr } from "@/lib/i18n/client";
+import { businessCopy } from "@/lib/i18n/business";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -30,6 +31,7 @@ const NAV = [
  */
 export default function CrmLayout({ children }: { children: ReactNode }) {
   const tr = useTr();
+  const business = businessCopy(useLocale());
   const path = usePathname();
   const router = useRouter();
   const [me, setMe] = useState<{ email: string; role: string; uid?: string | null } | null | undefined>(undefined);
@@ -78,7 +80,7 @@ export default function CrmLayout({ children }: { children: ReactNode }) {
           <div className="mt-0.5 text-[15px] font-semibold text-white">管理後台</div>
         </div>
         <nav className="flex gap-1 overflow-x-auto p-2 md:block md:flex-1 md:space-y-0.5">
-          {NAV.map((n) => {
+          {[...NAV.slice(0, 7), { href: "/admin/business", label: business.adminNav, hint: business.adminHint }, ...NAV.slice(7)].map((n) => {
             const active = ["/crm", "/admin"].includes(n.href) ? path === "/crm" : path.startsWith(n.href);
             return (
               <Link key={n.href} href={n.href} className={`block shrink-0 rounded-lg px-3 py-2 ${active ? "bg-[#1c1c1c] text-white" : "text-[#9a9a9a] hover:bg-[#151515] hover:text-white"}`}>

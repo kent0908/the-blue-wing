@@ -4,7 +4,11 @@ const SPEECH_CHARS_PER_UNIT = 40;
 export const VIDEO_RESOLUTION_MULTIPLIER: Record<string, number> = {
   "480p": 1,
   "720p": 2.25,
+  // Retail policy for MiniMax tiers. Shared by preview and server charge;
+  // these are site credit multipliers, not claims about the vendor's cost.
+  "768p": 2.56,
   "1080p": 5.5,
+  "2k": 9,
   "4k": 11,
 };
 

@@ -1,5 +1,5 @@
-const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const ts=require('typescript');
-function load(f){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,Set,Number,Object,Math,TextDecoder,TransformStream});return exports;}
+const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const vm=require('node:vm');const ts=require('typescript');
+function load(f){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,require:id=>id.startsWith('.')?load(path.resolve(path.dirname(f),id+'.ts')):require(id),Set,Number,Object,Math,TextDecoder,TransformStream});return exports;}
 const {publicPrice}=load('lib/sirayaPublicPrices.ts');const {simulateCost,promotionEconomics}=load('lib/costEconomics.ts');const {extractProviderReceipt}=load('lib/providerReceipt.ts');
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-10,`${a} != ${b}`);
 near(simulateCost(publicPrice('SIRAYA-Seedance-2.5').components,{'1080p-plain':1168425},0).list,13.6705725);

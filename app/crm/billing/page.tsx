@@ -10,7 +10,7 @@ type Total={currency:string;cost:string;records:number;matched:number;ambiguous:
 type RecordRow={account_id:string;request_id:string;requested_at:string;model:string;cost:string;currency:string;status:string;match_state:string;local_status:string|null;charge_id:string|null;list_estimate:string|null;discount_estimate:string|null;variance:string|null;usage:Record<string,number>};
 type Report={configured:boolean;accountId:string|null;totals:Total[];days:{date:string;currency:string;cost:string;records:number}[];models:{model:string;currency:string;cost:string;records:number}[];records:RecordRow[];coverage:{complete:boolean;gaps:{since:string;until:string}[]};syncs:{id:string;state:string;finished_at:string|null;error_code:string|null;record_count:number|null}[];unbilledLocal:number;localUnidentified:number;hasMore:boolean;range:{dates:string[];since:string;until:string}};
 type Filters={from:string;to:string;model:string;requestId:string;page:number};
-export function exactAmount(value:string|null|undefined,currency="USD") {
+function exactAmount(value:string|null|undefined,currency="USD") {
   if(value===null||value===undefined)return "—";
   const [whole,fraction=""] = value.split(".");
   return `${currency} ${whole.replace(/\B(?=(\d{3})+(?!\d))/g,",")}.${fraction.padEnd(6,"0")}`;

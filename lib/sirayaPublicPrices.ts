@@ -1,3 +1,4 @@
+import { VIDEO_PROVIDER_TARIFFS } from "./videoProviderPrices";
 /** Versioned reference tariffs: official standard online prices checked 2026-09-26.
  * SIRAYA's public catalog returned HTTP 500; provider mapping/settlement is not
  * independently verified. Keep legacy variants pending, never reprice history.
@@ -139,6 +140,39 @@ for (const [id, price] of Object.entries(prices)) for (const c of price.componen
   if (id.startsWith("gemini-3.8-flash")) c.scenario = c.id.endsWith("2027") ? "2027" : "2026";
 }
 prices["gemini-2.5-flash-image"].note += " 原廠公告 2026/10/02 停用，SIRAYA 是否繼續提供需確認。";
+
+// Publish every supported tier separately; a card's headline is only the lowest price.
+// These values are SIRAYA-published tariffs, with account discounts and actual invoices separate.
+for (const [id, tiers] of Object.entries(VIDEO_PROVIDER_TARIFFS)) {
+  const ambiguous = tiers.some(tier => tier.min !== tier.max);
+  prices[id] = {
+    price: Math.min(...tiers.map(tier => tier.min)), unit: "second", source: "https://console.siraya.ai/models",
+    checkedAt: "2026-10-19", verification: ambiguous ? "pending" : "official",
+    note: ambiguous ? "SIRAYA 詳細規則存在條件重疊或標籤不一致，保留價格範圍並採上限估算；待供應商確認，不視為實付。只涵蓋站內已開放的文字／圖片輸入。" : "SIRAYA 公布牌價，按解析度與音訊擇一情境；不套用帳號折扣。只涵蓋站內已開放的文字／圖片輸入，實付以對帳為準。",
+    components: tiers.flatMap(tier => {
+      const scenario = `${tier.resolution}-${tier.audio}`;
+      return [{ id: `${scenario}-max`, scenario, label: `${tier.resolution} · ${tier.audio}${tier.min === tier.max ? "" : "（條件待確認，上限）"}`, price: tier.max, unit: "second" as const }];
+    }),
+  };
+}
+prices["minimax-h3"].note += " 原廠圖片輸入首 5 張免費，其後 $0.04／張；一般創作限制 5 張，BYOK 超額圖費由供應商計收。";
+prices["minimax-h3-max"].note += " 原廠圖片輸入首 2 張免費，其後 $0.074／張；一般創作限制 2 張，BYOK 超額圖費由供應商計收。";
+
+// The vendor publishes an output price; SIRAYA's current card omits that field.
+// Keep this an explicitly pending router reference rather than implying a reconciled cost.
+prices["minimax-m3"] = {
+  price: 1.2, inputPrice: .3, unit: "million_output_tokens", source: "https://platform.minimax.io/docs/pricing/overview",
+  checkedAt: "2026-10-19", verification: "pending",
+  note: "MiniMax Standard 原廠參考：≤512k 輸入，輸入 $0.30、輸出 $1.20、快取 $0.06／百萬 Token；>512k 為 $0.60／$2.40／$0.12。SIRAYA 目前未列輸出費率；圖片輸入 $1.20 不等於輸出價格。本站文字輸入上限遠低於長上下文門檻，實付待路由對帳。",
+  components: [
+    {id:"input",scenario:"short",label:"≤512k · 文字輸入（原廠參考）",price:.3,unit:"million_tokens"},
+    {id:"output",scenario:"short",label:"≤512k · 輸出（原廠參考）",price:1.2,unit:"million_tokens"},
+    {id:"cached",scenario:"short",label:"≤512k · 快取讀取（原廠參考）",price:.06,unit:"million_tokens"},
+    {id:"longInput",scenario:"long",label:">512k · 文字輸入（原廠參考）",price:.6,unit:"million_tokens"},
+    {id:"longOutput",scenario:"long",label:">512k · 輸出（原廠參考）",price:2.4,unit:"million_tokens"},
+    {id:"longCached",scenario:"long",label:">512k · 快取讀取（原廠參考）",price:.12,unit:"million_tokens"},
+  ],
+};
 
 export function publicPrice(model: string): PublicPrice | undefined {
   let normalized = model.toLowerCase().replace(/^nsfw-(?=(?:(?:dola|bytedance|siraya)-)?seed(?:ance|ream)-)/, "");

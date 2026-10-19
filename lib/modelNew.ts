@@ -7,6 +7,7 @@
 const NEW_MODEL_PATTERNS: RegExp[] = [
   /(?:^|-)gpt-image-2\.5-sunburst$/i,
   /(?:^|-)seedance-2\.5$/i,
+  /^minimax-(?:m3|h3(?:-max)?)$/i,
 ];
 
 export function isNewModel(modelId: string | null | undefined): boolean {

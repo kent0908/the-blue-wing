@@ -3,6 +3,9 @@ import { validateLayerRequest } from "./layerDecomposition";
 ﻿import { assertPromptSafety } from "./promptSafety";
 import { SirayaApiError } from "./siraya";
 import { videoResolutionsForModel, normalizeVideoResolution, videoConstraintFor, isWanVideo } from "./videoModels";
+import { assertKlingVideoParameters, getKlingVideoModel } from "./klingVideo";
+import { assertMiniMaxVideoParameters, getMiniMaxVideoModel } from "./minimaxVideo";
+import { isGenerationPickerModel } from "./generationPickerModels";
 const bad=()=>{throw new SirayaApiError(400,"生成參數不正確或包含未支援的欄位");};
 export function validateGeneration(body:Record<string,unknown>,kind:"image"|"video"|"text"|"imageEdit") {
   const common=["model","prompt"];
@@ -12,6 +15,9 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
     ["messages","stream","temperature","max_tokens"];
   if(!body || typeof body!=="object" || Object.keys(body).some(k=>![...common,...keys].includes(k)))bad();
   if(typeof body.model!=="string"||!/^[a-zA-Z0-9._:-]{1,150}$/.test(body.model))bad();
+  if (!isGenerationPickerModel(String(body.model))) bad();
+  if (/^kling(?:-|$)/i.test(String(body.model)) && kind !== "video") bad();
+  if (getMiniMaxVideoModel(String(body.model)) && kind !== "video") bad();
   if(kind==="image"&&body.layer_decomposition===true&&body.prompt===undefined)body.prompt="";
   if(kind!=="text" && (typeof body.prompt!=="string"||(!body.prompt.trim()&&body.layer_decomposition!==true)||body.prompt.length>12000))bad();
   if(kind!=="text") assertPromptSafety(body.prompt, body.negative_prompt, body.style, body.background);
@@ -39,7 +45,9 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
     if(body.generationMode!==undefined && (typeof body.generationMode!=="string" || body.generationMode.length>40))bad();
     if(body.providerAssetIds!==undefined && (!Array.isArray(body.providerAssetIds)||body.providerAssetIds.length>50||body.providerAssetIds.some((id:unknown)=>typeof id!=="number"||!Number.isSafeInteger(id)||id<1)))bad();
     const constraint = videoConstraintFor(String(body.model));
-    integer("seconds",5,constraint.minSeconds,constraint.maxSeconds);
+    const minimax = getMiniMaxVideoModel(String(body.model));
+    if ((minimax || getKlingVideoModel(String(body.model))) && Array.isArray(body.providerAssetIds) && body.providerAssetIds.length) bad();
+    integer("seconds",minimax?.defaultSeconds ?? 5,constraint.minSeconds,constraint.maxSeconds);
     if (body.aspect_ratio !== undefined && !["adaptive","16:9","9:16","1:1","4:3","3:4","21:9"].includes(String(body.aspect_ratio))) bad();
     if (body.seed !== undefined && (typeof body.seed !== "number" || !Number.isSafeInteger(body.seed) || body.seed < -1 || body.seed > 2147483647)) bad();
     if (body.prompt_extend !== undefined && (!isWanVideo(String(body.model)) || typeof body.prompt_extend !== "boolean")) bad();
@@ -50,6 +58,8 @@ export function validateGeneration(body:Record<string,unknown>,kind:"image"|"vid
     if (typeof body.resolution !== "string" || !resolutions.some(r => r === body.resolution)) {
       throw new SirayaApiError(400, `此模型僅支援 ${resolutions.join("、")}，請重新選擇解析度。`);
     }
+    if (/^kling(?:-|$)/i.test(String(body.model))) { try { assertKlingVideoParameters(body); } catch { bad(); } }
+    if (minimax) { try { assertMiniMaxVideoParameters(body); } catch { bad(); } }
     if(body.extra_body!==undefined){
       const extra=body.extra_body;
       if(!extra||typeof extra!=="object"||Object.keys(extra).some(k=>k!=="watermark")||("watermark" in extra && typeof extra.watermark!=="boolean"))bad();

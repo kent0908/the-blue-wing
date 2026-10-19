@@ -1,5 +1,8 @@
 import { canonicalBillingModel } from "./billingModel";
 import { creditCostFromRate } from "./creditFormula";
+import { videoProviderPrice, VIDEO_PROVIDER_TARIFFS } from "./videoProviderPrices";
+import { getKlingVideoModel } from "./klingVideo";
+import { getMiniMaxVideoModel } from "./minimaxVideo";
 /**
  * Cost estimation.
  *
@@ -62,6 +65,8 @@ const RATES: Array<[string, RateCard]> = [
   ["gemini-3.5-flash-lite", { inputPerMTok: 0.3, outputPerMTok: 2.5 }],
   ["gpt-5.4-mini", { inputPerMTok: 0.75, outputPerMTok: 4.5 }],
   ["claude-haiku-4.5", { inputPerMTok: 1, outputPerMTok: 5 }],
+  // MiniMax Standard short-context reference, not a verified SIRAYA invoice.
+  ["minimax-m3", { inputPerMTok: .3, outputPerMTok: 1.2 }],
   ["claude-opus", { inputPerMTok: 15, outputPerMTok: 75 }],
   ["claude-sonnet", { inputPerMTok: 3, outputPerMTok: 15 }],
   ["claude-haiku", { inputPerMTok: 0.8, outputPerMTok: 4 }],
@@ -82,6 +87,7 @@ const FALLBACK: RateCard = { inputPerMTok: 1, outputPerMTok: 4, perImage: 0.04, 
 
 export function rateFor(modelId: string): RateCard {
   const id = modelId.toLowerCase();
+  if (VIDEO_PROVIDER_TARIFFS[id]) return { perSecond: Math.max(...VIDEO_PROVIDER_TARIFFS[id].filter(t => t.resolution === VIDEO_PROVIDER_TARIFFS[id][0].resolution).map(t => t.max)) };
   let best: RateCard | null = null;
   let bestLen = -1;
   for (const [prefix, card] of RATES) {
@@ -117,6 +123,12 @@ export function estimateCost(input: EstimateInput): number {
     case "image":
       return (rate.perImage ?? FALLBACK.perImage!) * (input.imageCount ?? 1);
     case "video":
+      if (VIDEO_PROVIDER_TARIFFS[input.model.toLowerCase()]) {
+        const tariff = videoProviderPrice(input.model, input.resolution);
+        // A missing/unsupported tier is not a zero-price generation.
+        if (!tariff) return Number.NaN;
+        return tariff.max * (input.seconds ?? 5);
+      }
       if (/^wan3\.0-video(?:-prime)?$/i.test(input.model)) {
         const prime = /-prime$/i.test(input.model);
         const rates: Record<string, number> = prime ? {"480p":.068,"720p":.14,"1080p":.28} : {"480p":.05,"720p":.1,"1080p":.2};
@@ -136,6 +148,7 @@ export function estimateCost(input: EstimateInput): number {
 }
 
 export function formatUSD(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "—";
   if (n === 0) return "$0.00";
   if (n < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
@@ -166,6 +179,8 @@ export function creditsFromRateCard(
 
 /** Classify a model id into a modality using its id and SIRAYA's model families. */
 export function modalityOf(modelId: string): Modality {
+  if (getKlingVideoModel(modelId)) return "video";
+  if (getMiniMaxVideoModel(modelId)) return "video";
   const id = modelId.toLowerCase();
   if (/veo|sora|seedance|video|wan|kling|hailuo|happyhorse/.test(id)) return "video";
   if (/image|imagen|seedream|nano-banana|flux|dall/.test(id)) return "image";

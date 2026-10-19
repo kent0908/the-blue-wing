@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const moduleValue = { exports: {} };
 const capability = { exports: {} };
 new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/layerCapability.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(capability,capability.exports);
-new Function('module', 'exports', 'require', ts.transpileModule(fs.readFileSync('lib/generationModes.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(moduleValue, moduleValue.exports, id => { if(/i18n\/(tr|k)$/.test(String(id)))return {k:(s)=>s}; if(id === './layerCapability') return capability.exports; throw new Error('Unexpected dependency '+id); });
+function helper(name) { const result={exports:{}};new Function('module','exports','require',ts.transpileModule(fs.readFileSync('lib/'+name+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(result,result.exports,id=>helper(id.replace('./','')));return result.exports; }
+new Function('module', 'exports', 'require', ts.transpileModule(fs.readFileSync('lib/generationModes.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(moduleValue, moduleValue.exports, id => { if(/i18n\/(tr|k)$/.test(String(id)))return {k:(s)=>s}; if(id === './layerCapability') return capability.exports; if(['./klingVideo','./minimaxVideo','./generationPickerModels'].includes(id))return helper(id.slice(2));throw new Error('Unexpected dependency '+id); });
 const { getGenerationModes, buildVideoModePayload: build } = moduleValue.exports;
 const model = 'SIRAYA-Seedance-2.0-mini';
 const base = { model, mode: 'freestyle', prompt: 'A landscape', seconds: 5, aspectRatio: '16:9' };

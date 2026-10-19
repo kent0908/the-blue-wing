@@ -10,8 +10,13 @@ import {
   type Mode,
 } from "@/lib/types";
 import { videoConstraintFor } from "@/lib/videoModels";
+import { getKlingVideoModel } from "@/lib/klingVideo";
+import { normalizeKlingSettings } from "@/lib/klingSettings";
+import { getMiniMaxVideoModel } from "@/lib/minimaxVideo";
+import { normalizeMiniMaxSettings } from "@/lib/minimaxSettings";
+import { klingCopy } from "@/lib/i18n/kling";
 import { sizeOptionsFor } from "@/lib/imageModels";
-import { useTr } from "@/lib/i18n/client";
+import { useLocale, useTr } from "@/lib/i18n/client";
 
 function Choice({
   value,
@@ -59,8 +64,11 @@ export default function SettingsPopover({
   draft?: boolean;
 }) {
   const tr = useTr();
+  const klingText = klingCopy(useLocale());
   const set = (patch: Partial<GenSettings>) => onChange({ ...settings, ...patch });
   const selectedModel = modelId ?? model;
+  const kling = mode === "video" ? getKlingVideoModel(selectedModel) : undefined;
+  const minimax = mode === "video" ? getMiniMaxVideoModel(selectedModel) : undefined;
   const videoConstraint = mode === "video" ? videoConstraintFor(selectedModel) : null;
   const imageSizeOptions = mode === "image" ? sizeOptionsFor(selectedModel) : null;
 
@@ -94,7 +102,7 @@ export default function SettingsPopover({
             </span>
             <button
               type="button"
-              onClick={() => onChange({ ...DEFAULT_SETTINGS, ...(mode === "video" ? { resolution: normalizeVideoResolution(selectedModel, DEFAULT_SETTINGS.resolution), seconds: Math.min(DEFAULT_SETTINGS.seconds, videoConstraintFor(selectedModel).maxSeconds) } : {}) })}
+              onClick={() => onChange(normalizeMiniMaxSettings(selectedModel, normalizeKlingSettings(selectedModel, { ...DEFAULT_SETTINGS, ...(mode === "video" ? { resolution: normalizeVideoResolution(selectedModel, DEFAULT_SETTINGS.resolution), seconds: Math.min(DEFAULT_SETTINGS.seconds, videoConstraintFor(selectedModel).maxSeconds) } : {}) })))}
               className="flex items-center gap-1 text-[12px] text-[#8a8a8a] transition-colors hover:text-white"
             >
               <IconReset className="h-[13px] w-[13px]" />
@@ -107,7 +115,7 @@ export default function SettingsPopover({
               <>
                 <div className="pb-2 text-[12.5px] text-[#a8a8a8]">{tr("畫面比例")}</div>
                 <div className="grid grid-cols-3 gap-2">
-                  {ASPECT_RATIOS.map((r) => (
+                  {(kling?.aspectRatios ?? minimax?.aspectRatios ?? ASPECT_RATIOS).map((r) => (
                     <Choice
                       key={r}
                       value={r}
@@ -132,7 +140,7 @@ export default function SettingsPopover({
                 <div className="pb-2 pt-4 text-[12.5px] text-[#a8a8a8]">
                   {tr("時長")}{videoConstraint.maxSeconds < 30 && <span className="text-[#6d6d6d]">{tr("（此模型最長")} {videoConstraint.maxSeconds} {tr("秒）")}</span>}
                 </div>
-                <div className="flex items-center gap-3">
+                {kling ? <div className="grid grid-cols-2 gap-2">{kling.secondsOptions.map(seconds => <Choice key={seconds} value={`${seconds}s`} active={settings.seconds === seconds} onClick={() => set({ seconds })} />)}</div> : <div className="flex items-center gap-3">
                   <input
                     type="range"
                     aria-label={tr("時長")}
@@ -146,7 +154,9 @@ export default function SettingsPopover({
                   <div className="grid h-9 w-14 place-items-center rounded-lg bg-[#232323] text-[13px]">
                     {Math.min(settings.seconds, videoConstraint.maxSeconds)}
                   </div>
-                </div>
+                </div>}
+                {kling?.supportsAudio ? <div className="mt-4 border-t border-white/10 pt-4 text-xs"><label className="flex items-center justify-between gap-3"><span>{tr("生成聲音")}</span><input type="checkbox" checked={kling.nativeAudioOnly || (kling.nativeAudioResolutions.includes(settings.resolution) && settings.generateAudio !== false)} disabled={kling.nativeAudioOnly || !kling.nativeAudioResolutions.includes(settings.resolution)} onChange={event => set({ generateAudio: event.target.checked })} /></label>{kling.nativeAudioOnly ? <p className="mt-2 leading-5 text-[#999]">{klingText.nativeOnly}</p> : !kling.nativeAudioResolutions.includes(settings.resolution) ? <p className="mt-2 leading-5 text-[#999]">{klingText.audio1080}</p> : null}</div> : null}
+                {minimax ? <div className="mt-4 border-t border-white/10 pt-4 text-xs"><label className="flex items-center justify-between gap-3"><span>{tr("生成聲音")}</span><input type="checkbox" checked disabled /></label><p className="mt-2 leading-5 text-[#999]">{klingText.nativeOnly}</p></div> : null}
                 {isWanVideo(selectedModel) && <div className="mt-4 space-y-3 border-t border-white/10 pt-4 text-xs">
                   <label className="flex items-center justify-between gap-3"><span>{tr("生成聲音")}</span><input type="checkbox" checked={settings.generateAudio !== false} onChange={e=>set({generateAudio:e.target.checked})} /></label>
                   <label className="flex items-center justify-between gap-3"><span>{tr("提示詞潤飾")}</span><input type="checkbox" checked={settings.promptExtend === true} onChange={e=>set({promptExtend:e.target.checked})} /></label>

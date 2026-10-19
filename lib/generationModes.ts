@@ -1,9 +1,12 @@
 import { LAYER_DECOMPOSITION_AVAILABLE, LAYER_DECOMPOSITION_UNAVAILABLE_REASON } from "./layerCapability";
 import { k } from "./i18n/k";
+import { getKlingVideoModel } from "./klingVideo";
+import { getMiniMaxVideoModel } from "./minimaxVideo";
+import { isRetiredGenerationModel } from "./generationPickerModels";
 /** Public workflow catalogue. Provider IDs stay internal; never infer an API
  * parameter from a marketing screenshot. Verified against the provider's
  * Seedance and Seedream API references on 2026-09-08. */
-export type GenerationMode = "freestyle" | "text-to-video" | "image-to-video" | "first-last-frame" | "subject-reference" | "video-edit" | "video-extend" | "universal-reference" | "layer-separation";
+export type GenerationMode = "freestyle" | "text-to-video" | "image-to-video" | "first-last-frame" | "subject-reference" | "video-edit" | "video-extend" | "universal-reference" | "layer-separation" | "motion-control";
 export type GenerationKind = "image" | "video";
 export interface GenerationModeOption { id: GenerationMode; label: string; enabled: boolean; reason?: string }
 
@@ -13,12 +16,27 @@ function seedanceFamily(model: string) {
   return { modern: /seedance-2\.(0(?:-fast|-mini)?|5)$/.test(id), latest: /seedance-2\.5$/.test(id), legacy: /seedance-1\.(0|5)-pro(?:-fast)?$/.test(id) };
 }
 export function getGenerationModes(model: string, kind: GenerationKind): GenerationModeOption[] {
+  if (isRetiredGenerationModel(model)) return [];
   if (kind === "image") {
     const modes: GenerationModeOption[] = [{ id: "universal-reference", label: k("通用參考"), enabled: true }];
     if (/seedream.*5[.-]0.*pro/i.test(model)) modes.push({ id: "layer-separation", label: k("圖層分離"), enabled: LAYER_DECOMPOSITION_AVAILABLE, reason: LAYER_DECOMPOSITION_UNAVAILABLE_REASON });
     return modes;
   }
   const { modern, legacy } = seedanceFamily(model);
+  const kling = getKlingVideoModel(model);
+  if (getMiniMaxVideoModel(model)) return [
+    { id: "freestyle", label: k("自由創作"), enabled: true },
+    { id: "image-to-video", label: k("圖片生影片"), enabled: true },
+    { id: "first-last-frame", label: k("首尾幀編輯"), enabled: true },
+    { id: "subject-reference", label: k("主體參考"), enabled: true },
+  ];
+  if (kling) return [
+    { id: kling.omni ? "freestyle" : "text-to-video", label: kling.omni ? k("自由創作") : k("文字生影片"), enabled: true },
+    { id: "image-to-video", label: k("圖片生影片"), enabled: true },
+    { id: "first-last-frame", label: k("首尾幀編輯"), enabled: true },
+    ...(kling.omni ? [{ id: "subject-reference" as const, label: k("主體參考"), enabled: true }, { id: "video-edit" as const, label: k("影片編輯"), enabled: false, reason: durationReason }] : []),
+    ...(kling.motion ? [{ id: "motion-control" as const, label: k("動作控制"), enabled: false, reason: durationReason }] : []),
+  ];
   if (/^wan3\.0-video(?:-prime)?$/i.test(model)) return [
     { id: "freestyle", label: k("自由創作"), enabled: true },
     { id: "image-to-video", label: k("圖片生影片"), enabled: true },
@@ -70,6 +88,8 @@ export function buildVideoModePayload(input: VideoModeInput): VideoModePayload {
   if (input.aspectRatio !== undefined) out.aspect_ratio = input.aspectRatio;
   const { latest } = seedanceFamily(input.model);
   const wan = /^wan3\.0-video(?:-prime)?$/i.test(input.model);
+  const kling = getKlingVideoModel(input.model);
+  const minimax = getMiniMaxVideoModel(input.model);
   if (input.mode === "text-to-video") {
     if (images.length || refs.length) throw new Error(k("文字生影片不接受參考素材"));
   } else if (input.mode === "image-to-video") {
@@ -86,7 +106,8 @@ export function buildVideoModePayload(input: VideoModeInput): VideoModePayload {
     if (refs.length) {
       const counts = { image: 0, video: 0, audio: 0 };
       for (const ref of refs) counts[ref.type]++;
-      if (refs.length > (wan ? 9 : latest ? 50 : 15) || counts.image > (latest ? 30 : 9) || counts.video > (latest ? 10 : 3) || counts.audio > (latest ? 10 : 3)) throw new Error(k("參考素材數量超過模型上限"));
+      if (refs.length > (minimax ? minimax.includedImageReferences : kling ? kling.maxReferenceImages : wan ? 9 : latest ? 50 : 15) || counts.image > (latest ? 30 : 9) || counts.video > (latest ? 10 : 3) || counts.audio > (latest ? 10 : 3)) throw new Error(k("參考素材數量超過模型上限"));
+      if ((kling || minimax) && refs.some(ref => ref.type !== "image")) throw new Error(durationReason);
       if (!latest && !counts.image && !counts.video) throw new Error(k("此模型不支援僅使用音訊參考"));
       // Provider requires seconds:-1 whenever a video is present. Do not
       // silently replace a priced duration with unbounded automatic output.
@@ -94,6 +115,6 @@ export function buildVideoModePayload(input: VideoModeInput): VideoModePayload {
       out.input_references = refs.map(ref => ({ ...ref, role: `reference_${ref.type}` }));
     }
   }
-  if (out.seconds !== undefined && (!Number.isInteger(out.seconds) || out.seconds < (wan ? 2 : 4) || out.seconds > (latest || wan ? 30 : 15))) throw new Error(k("生成時長不在模型支援範圍內"));
+  if (out.seconds !== undefined && (kling ? !kling.secondsOptions.includes(out.seconds) : !Number.isInteger(out.seconds) || out.seconds < (minimax ? minimax.minSeconds : wan ? 2 : 4) || out.seconds > (minimax ? minimax.maxSeconds : latest || wan ? 30 : 15))) throw new Error(k("生成時長不在模型支援範圍內"));
   return out;
 }

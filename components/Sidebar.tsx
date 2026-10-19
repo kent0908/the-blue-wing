@@ -4,7 +4,8 @@ import { getGenerationModes } from "@/lib/generationModes";
 import { videoResolutionsForModel } from "@/lib/videoModels";
 import { modelLabel } from "@/lib/modelLabel";
 import { isNewModel } from "@/lib/modelNew";
-import { useT, useTr } from "@/lib/i18n/client";
+import { useLocale, useT, useTr } from "@/lib/i18n/client";
+import { businessCopy } from "@/lib/i18n/business";
 import { modeLabel, type Dict } from "@/lib/i18n/dict";
 
 import Link from "next/link";
@@ -214,6 +215,7 @@ function useCanHover(): boolean {
 
 function SidebarInner() {
   const t = useT();
+  const business = businessCopy(useLocale());
   const pathname = usePathname();
   const params = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
@@ -295,6 +297,9 @@ function SidebarInner() {
       </nav>
 
       <div className="px-3 pb-4">
+        <Link href="/business" title={collapsed ? business.nav : undefined} className={`flex items-center gap-3 rounded-lg py-2 text-[13.5px] transition-colors ${collapsed ? "justify-center px-0" : "px-3"} ${pathname === "/business" ? "bg-[#1c1c1c] text-white" : "text-[#a9c2b3] hover:bg-[#161616] hover:text-white"}`}>
+          <IconAssets className="h-[18px] w-[18px] shrink-0" />{!collapsed ? <span className="truncate">{business.nav}</span> : null}
+        </Link>
         <NavLink item={{ href: "/models", label: "models", icon: IconVideo }} active={isActive("/models")} collapsed={collapsed} />
         <NavLink item={{ href: "/landing", label: "landing", icon: IconWing }} active={isActive("/landing")} collapsed={collapsed} />
         {!collapsed && (
