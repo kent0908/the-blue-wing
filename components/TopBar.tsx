@@ -38,7 +38,7 @@ function LanguageMenu() {
   return (
     <div ref={ref} className="relative shrink-0">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open} aria-label={t.top.switchLanguage} title={t.top.switchLanguage}
-        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white">
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white sm:px-2.5">
         <IconGlobe className="h-[17px] w-[17px]" />
         <span className="hidden text-[12.5px] md:inline">{LOCALE_LABEL[locale]}</span>
       </button>
@@ -103,7 +103,7 @@ export default function TopBar() {
       <Link
         href="/help"
         aria-label={t.top.help}
-        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white"
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white sm:px-3"
       >
         <IconHelp className="h-[17px] w-[17px]" />
         <span className="hidden sm:inline">{t.top.help}</span>
@@ -114,15 +114,15 @@ export default function TopBar() {
         <>
           <button
             onClick={()=>setAccountOpen(true)}
-            className="flex items-center gap-1.5 rounded-full border border-[#3a3a3a] px-3 py-1.5 text-[13px] text-white transition-colors hover:border-[#555]"
+            className="flex max-w-[104px] items-center gap-1.5 rounded-full border border-[#3a3a3a] px-2 py-1.5 text-[13px] text-white transition-colors hover:border-[#555] sm:max-w-none sm:px-3"
             title={t.top.credits}
           >
-            <IconSparkle className="h-3.5 w-3.5 text-[#7ff0cd]" />
-            {(me.credits ?? 0).toLocaleString()}
+            <IconSparkle className="h-3.5 w-3.5 shrink-0 text-[#7ff0cd]" />
+            <span className="min-w-0 truncate">{(me.credits ?? 0).toLocaleString()}</span>
           </button>
           {me.user.role === "admin" && (
             <>
-              <Link href="/crm" className="rounded-lg px-2 py-1.5 text-[13px] text-[#d4d4d4] hover:text-white">{t.top.admin}</Link>
+              <Link href="/crm" className="hidden rounded-lg px-2 py-1.5 text-[13px] text-[#d4d4d4] hover:text-white sm:inline-flex">{t.top.admin}</Link>
             </>
           )}
           <button
@@ -135,7 +135,7 @@ export default function TopBar() {
           </button>
           <button
             onClick={logout}
-            className="rounded-lg px-2 py-1.5 text-[13px] text-[#8a8a8a] transition-colors hover:text-white"
+            className="hidden rounded-lg px-2 py-1.5 text-[13px] text-[#8a8a8a] transition-colors hover:text-white sm:inline-flex"
           >
             {t.top.logout}
           </button>
