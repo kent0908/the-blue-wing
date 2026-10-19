@@ -118,6 +118,8 @@ export interface EstimateInput {
 }
 
 export function estimateCost(input: EstimateInput): number {
+  // The original vendor's reference is not a confirmed SIRAYA output tariff.
+  if (input.modality === "text" && canonicalBillingModel(input.model).toLowerCase() === "minimax-m3") return Number.NaN;
   const rate = rateFor(input.model);
   switch (input.modality) {
     case "image":

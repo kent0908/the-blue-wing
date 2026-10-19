@@ -18,6 +18,7 @@ assert.match(pub.publicPrice('minimax-h3-max').note,/0\.074/);
 assert.equal(pricing.estimateCost({model:'minimax-h3',modality:'video',prompt:'test',resolution:'2k',seconds:4}),.52);
 assert.ok(Number.isNaN(pricing.estimateCost({model:'minimax-h3',modality:'video',prompt:'test',resolution:'1080p',seconds:4})));
 assert.equal(pricing.formatUSD(NaN),'—');
+assert.ok(Number.isNaN(pricing.estimateCost({model:'minimax-m3',modality:'text',prompt:'test',maxTokens:1024})),'Do not show an unconfirmed vendor reference as the SIRAYA router cost');
 assert.equal(formula.creditCostFromRate({modality:'video',credits:16,resolution:'768p',seconds:4}),164);
 assert.equal(formula.creditCostFromRate({modality:'video',credits:16,resolution:'2k',seconds:4}),576);
 for(const id of Object.keys(tariffs.VIDEO_PROVIDER_TARIFFS)){const p=pub.publicPrice(id);assert.equal(p.source,'https://console.siraya.ai/models');assert.equal(p.checkedAt,'2026-10-19');assert.ok(p.components.every(c=>c.scenario&&c.unit==='second'));}
