@@ -41,6 +41,7 @@ import {
   type ImageControlValues,
 } from "@/lib/imageModels";
 import { normalizeVideoResolution, maxRefsForVideoModel, supportsVideoRefInput, videoConstraintFor, videoResolutionsForModel } from "@/lib/videoModels";
+import { getSeedanceCapability } from "@/lib/businessSeedance";
 import { getKlingVideoModel } from "@/lib/klingVideo";
 import { normalizeKlingSettings } from "@/lib/klingSettings";
 import { normalizeMiniMaxSettings } from "@/lib/minimaxSettings";
@@ -259,9 +260,9 @@ export default function Composer({
   const setImgEdits = (values:ImageControlValues) => setImageEdits({source:selectionSource,model:resolvedModel,values});
 
   // Image mode: fixed MAX_REF_IMAGES cap, gated by the model's family.
-  // Video mode: only Seedance models support this on SIRAYA, and the cap
-  // varies per model (Seedance 2.5 → 50; see lib/videoModels.ts).
-  const refCap = operation === "layer-separation" ? 1 : operation === "first-last-frame" ? 2 : operation === "image-to-video" ? 1 : mode === "video" ? maxRefsForVideoModel(resolvedModel) : MAX_REF_IMAGES;
+  // This picker contains images only. Seedance's total material allowance
+  // also includes video/audio, so its per-image cap must govern this control.
+  const refCap = operation === "layer-separation" ? 1 : operation === "first-last-frame" ? 2 : operation === "image-to-video" ? 1 : mode === "video" ? getSeedanceCapability(resolvedModel)?.references.image ?? maxRefsForVideoModel(resolvedModel) : MAX_REF_IMAGES;
 
   const addRef = (a: RefAsset) =>
     setRefs((cur) => (cur.some((r) => r.id === a.id) || cur.length >= refCap ? cur : [...cur, a]));
@@ -373,7 +374,7 @@ export default function Composer({
 
   const credits =
     creditsFromRateCard(rates, resolvedModel, { imageCount, seconds: effectiveSettings.seconds, maxTokens: settings.maxTokens, resolution: effectiveSettings.resolution });
-  const modeRefsValid = operation === "layer-separation" ? refs.length===1 : operation === "first-last-frame" ? orderedFrameIds(frameData.slots) !== null && !frameData.uploading.some(Boolean) && !providerIds.length : operation === "image-to-video" ? refs.length === 1 && !providerIds.length : operation === "subject-reference" ? refs.length+providerIds.length>0 : true;
+  const modeRefsValid = (mode !== "video" || !getSeedanceCapability(resolvedModel) || refs.length <= refCap) && (operation === "layer-separation" ? refs.length===1 : operation === "first-last-frame" ? orderedFrameIds(frameData.slots) !== null && !frameData.uploading.some(Boolean) && !providerIds.length : operation === "image-to-video" ? refs.length === 1 && !providerIds.length : operation === "subject-reference" ? refs.length+providerIds.length>0 : true);
   const canSubmit = modeRefsValid && !refBusy && (operation === "layer-separation" || !!prompt.trim()) && (!klingModel || prompt.length <= 2500) && !!resolvedModel && !busy && credits !== null && (mode !== "video" || !!effectiveSettings.resolution);
 
   // Image mode: seedream/gemini models. Video mode: Seedance models only.

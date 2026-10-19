@@ -9,6 +9,9 @@ import { getImageModelForControls, sizeOptionsFor, supportsRefImages } from "./i
 import { videoConstraintFor, maxRefsForVideoModel } from "./videoModels";
 import { getKlingVideoModel } from "./klingVideo";
 import { getMiniMaxVideoModel } from "./minimaxVideo";
+import { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type BusinessSeedanceCapability, type BusinessSeedanceMode } from "./businessSeedance";
+import { resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
+import { createBusinessReferenceUrls } from "./businessReferenceUrls";
 import { isGenerationPickerModel } from "./generationPickerModels";
 import { replacementGeminiTextModel } from "./geminiTextModels";
 import { modelLabel } from "./modelLabel";
@@ -33,6 +36,7 @@ export interface BusinessModel {
   sizes?: string[]; resolutions?: string[]; minSeconds?: number; maxSeconds?: number;
   aspectRatios?: string[]; supportsAudio?: boolean; defaultSeconds?: number; secondsOptions?: number[];
   nativeAudioOnly?: boolean; nativeAudioResolutions?: string[]; maxReferenceImages?: number; promptMaxChars?: number;
+  seedance?: BusinessSeedanceCapability;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const pending = ["submitting", "processing", "unknown"];
@@ -57,6 +61,11 @@ export async function businessModelCatalog(): Promise<BusinessModel[]> {
       if (/-(?:i2v|r2v|video-edit)$/i.test(id)) return [];
       const caps = videoConstraintFor(baseModel(id));
       if (!caps.resolutions.length) return [];
+      const seedance = getSeedanceCapability(id);
+      if (seedance) return [{ ...common, modality: "video" as const,
+        resolutions: [...seedance.resolutions], minSeconds: seedance.minSeconds, maxSeconds: seedance.maxSeconds,
+        supportsReferences: true, aspectRatios: [...seedance.aspectRatios], supportsAudio: true,
+        defaultSeconds: seedance.defaultSeconds, maxReferenceImages: seedance.references.image, seedance }];
       const kling = getKlingVideoModel(id);
       if (kling) return [{ ...common, modality: "video" as const, ...caps, supportsReferences: true,
         aspectRatios: [...kling.aspectRatios], supportsAudio: kling.supportsAudio, nativeAudioOnly: kling.nativeAudioOnly,
@@ -105,7 +114,7 @@ function validateSubmission(value: unknown) {
   const kind = value.kind as BusinessKind;
   const parameters = { ...value.parameters };
   const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds"] :
-    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "assetIds"] :
+    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "assetIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
     ["model", "prompt", "max_tokens", "temperature"];
   if (Object.keys(parameters).some(key => !allowed.includes(key)) || typeof parameters.model !== "string" ||
     !/^[a-zA-Z0-9._:-]{1,150}$/.test(parameters.model) || typeof parameters.prompt !== "string" ||
@@ -116,13 +125,36 @@ function validateSubmission(value: unknown) {
   catch (error) { if (error instanceof PromptSafetyError) fail("prompt_blocked"); throw error; }
   if (parameters.negative_prompt !== undefined && (typeof parameters.negative_prompt !== "string" || parameters.negative_prompt.length > 4000)) fail();
   if (parameters.seed !== undefined && (typeof parameters.seed !== "number" || !Number.isSafeInteger(parameters.seed) || parameters.seed < -1 || parameters.seed > 2147483647)) fail();
-  if (parameters.assetIds !== undefined && (!Array.isArray(parameters.assetIds) || parameters.assetIds.length > (kind === "video" ? 9 : 4) || parameters.assetIds.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) || new Set(parameters.assetIds).size !== parameters.assetIds.length)) fail();
+  if (parameters.assetIds !== undefined && (!Array.isArray(parameters.assetIds) || parameters.assetIds.length > (kind === "video" ? 50 : 4) || parameters.assetIds.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) || new Set(parameters.assetIds).size !== parameters.assetIds.length)) fail();
+  if (parameters.providerAssets !== undefined && (!Array.isArray(parameters.providerAssets) || parameters.providerAssets.length > 50 || parameters.providerAssets.some(ref => !record(ref) || Object.keys(ref).some(key => !["id", "type"].includes(key)) || typeof ref.id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,199}$/.test(ref.id) || !["image", "video", "audio"].includes(String(ref.type))) || new Set(parameters.providerAssets.map(ref => (ref as { id: string }).id)).size !== parameters.providerAssets.length)) fail();
+  if (parameters.referenceOrder !== undefined && (!Array.isArray(parameters.referenceOrder) || parameters.referenceOrder.length > 50 || parameters.referenceOrder.some(key => typeof key !== "string" || !/^(?:local:[1-9]\d*|provider:[a-zA-Z0-9][a-zA-Z0-9_-]{0,199})$/.test(key)) || new Set(parameters.referenceOrder).size !== parameters.referenceOrder.length)) fail();
   return { clientRequestId: value.clientRequestId, kind, parameters };
 }
 
-async function normalizedParameters(kind: BusinessKind, parameters: Record<string, unknown>, model: BusinessModel, userId: number) {
+async function normalizedParameters(kind: BusinessKind, parameters: Record<string, unknown>, model: BusinessModel, userId: number, accountId: string, credential: { id: string; apiKey: string }) {
   const payload = { ...parameters };
   const assetIds = payload.assetIds as number[] | undefined;
+  if (kind === "video" && model.seedance) {
+    const providerAssets = (parameters.providerAssets ?? []) as BusinessProviderAssetReference[];
+    const mode = (parameters.mode ?? "freestyle") as BusinessSeedanceMode;
+    const types = [...(assetIds ?? []).map(() => ({ type: "image" as const })), ...providerAssets];
+    const keys = [...(assetIds ?? []).map(id => `local:${id}`), ...providerAssets.map(ref => `provider:${ref.id}`)];
+    const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
+    if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
+    try {
+      assertBusinessSeedanceReferences(model.seedance, mode, types);
+      // Validate scalar parameters/counts before private storage/provider reads.
+      buildBusinessSeedancePayload(parameters, types.map((ref, index) => ({ type: ref.type, url: `owned-reference-${index}` })));
+    } catch { fail(); }
+    const local = assetIds?.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, assetIds, model.nsfw) : [];
+    const registered = providerAssets.length ? await resolveBusinessProviderAssets(providerAssets, { apiKey: credential.apiKey }) : [];
+    if (local.length !== (assetIds?.length ?? 0) || registered.length !== providerAssets.length) fail("invalid_reference");
+    const resolved = new Map([...local, ...registered].map((ref, index) => [keys[index], ref]));
+    try { return buildBusinessSeedancePayload(parameters, referenceOrder.map(key => resolved.get(key)!)); }
+    catch { fail(); }
+  }
+  // Seedance-only controls must never leak to another adapter or bypass its reviewed contract.
+  if (["mode", "providerAssets", "output_format", "referenceOrder"].some(key => parameters[key] !== undefined)) fail();
   if (model.promptMaxChars && String(payload.prompt).length > model.promptMaxChars) fail();
   if (assetIds && assetIds.length > (model.maxReferenceImages ?? 4)) fail("invalid_reference");
   delete payload.assetIds;
@@ -221,13 +253,13 @@ async function persistBusinessMedia(source: string, row: BusinessGenerationRow, 
     const response = await fetch(source, { signal: AbortSignal.timeout(120000), redirect: "error" });
     if (!response.ok || !response.body || Number(response.headers.get("content-length") ?? 0) > maxBytes) { await response.body?.cancel(); fail("storage_unavailable", 503); }
     contentType = response.headers.get("content-type")?.split(";")[0] ?? "";
-    if (kind === "image" ? !["image/png", "image/jpeg", "image/webp"].includes(contentType) : !["video/mp4", "video/webm"].includes(contentType)) { await response.body.cancel(); fail("storage_unavailable", 503); }
+    if (kind === "image" ? !["image/png", "image/jpeg", "image/webp"].includes(contentType) : !["video/mp4", "video/webm", "video/quicktime"].includes(contentType)) { await response.body.cancel(); fail("storage_unavailable", 503); }
     const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let length = 0;
     try { while (true) { const chunk = await reader.read(); if (chunk.done) break; length += chunk.value.byteLength; if (length > maxBytes) { await reader.cancel(); fail("storage_unavailable", 503); } chunks.push(chunk.value); } }
     finally { reader.releaseLock(); }
     bytes = Buffer.concat(chunks);
   }
-  const ext = contentType === "image/jpeg" ? "jpg" : contentType.split("/")[1];
+  const ext = contentType === "image/jpeg" ? "jpg" : contentType === "video/quicktime" ? "mov" : contentType.split("/")[1];
   const blob = await put(`business/${row.account_id}/${row.nsfw ? "adult" : "standard"}/${row.id}-${randomUUID()}.${ext}`, bytes, { access: "private", contentType, addRandomSuffix: false });
   return `/api/business/media/${blob.pathname.slice("business/".length)}`;
 }
@@ -268,9 +300,9 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
   const model = (await businessModelCatalog()).find(item => item.id === submission.parameters.model && item.modality === submission.kind);
   if (!model) fail("model_unavailable", 400);
   assertBusinessGenerationAge(model, user);
-  const payload = await normalizedParameters(submission.kind, submission.parameters, model, user.id);
   const credential = await getBusinessCredential(user.id, account.id);
   if (!credential) fail("credential_required", 409);
+  const payload = await normalizedParameters(submission.kind, submission.parameters, model, user.id, account.id, credential);
   const reservation = await reserveGeneration(user, account, credential.id, submission, model);
   if (reservation.duplicate) { assertBusinessGenerationAge(reservation.row, user); return reservation; }
   let row = reservation.row;

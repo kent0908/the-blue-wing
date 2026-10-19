@@ -7,9 +7,10 @@ import type { BusinessGeneration, BusinessKind, BusinessModel } from "./types";
 import { modelLabel } from "@/lib/modelLabel";
 import styles from "./BusinessStudio.module.css";
 
-export default function BusinessStage({ copy, business, kind, model, job, onHistory, onRefresh, refreshing }: {
+export default function BusinessStage({ copy, business, kind, model, job, onHistory, onRefresh, refreshing, movNotice }: {
   copy: ReturnType<typeof businessStudioCopy>; business: BusinessCopy; kind: BusinessKind;
   model?: BusinessModel; job?: BusinessGeneration; onHistory: () => void; onRefresh: () => void; refreshing: boolean;
+  movNotice?: string;
 }) {
   const pending = job && ["processing", "submitting", "unknown"].includes(job.status);
   const hasOutput = !!(job?.videoUrl || job?.images?.length || job?.text);
@@ -27,8 +28,10 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
       <h2>{pending ? business[job.status] : copy.previewEmpty}</h2>
       <p>{pending ? business.manualRefresh : copy.previewEmptyText}</p>
     </div>}
+    {job?.videoUrl && /\.mov(?:\?|$)/i.test(job.videoUrl) && movNotice ? <div className={styles.stageCaption}><p>{movNotice}</p></div> : null}
     <div className={styles.stageActions}>
       <p>{job ? <><span>{job.model}</span><br />{business[job.status]}</> : <>{business.providerBilling}<br />{business.noCredits}</>}</p>
+      {job?.videoUrl ? <a href={`${job.videoUrl}?download=1`} download>{business.download} ↗</a> : null}
       <button type="button" onClick={pending ? onRefresh : onHistory} disabled={refreshing}>{refreshing ? business.checking : pending ? business.checkOriginal : copy.viewHistory} <span aria-hidden="true">↗</span></button>
     </div>
   </section>;

@@ -8,12 +8,18 @@ const ts = require('typescript');
 const source = fs.readFileSync('components/business/BusinessWorkspace.tsx', 'utf8');
 const ast = ts.createSourceFile('BusinessWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const handlers = {};
+let preSubmitErrorsSource;
 function visit(node) {
   if (ts.isVariableDeclaration(node) && ['requestConfirmation', 'submitGeneration', 'saveKey'].includes(node.name.getText(ast)) && ts.isArrowFunction(node.initializer)) handlers[node.name.getText(ast)] = node.initializer.getText(ast);
+  if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'PRE_SUBMIT_ERRORS') preSubmitErrorsSource = node.initializer.getText(ast);
   ts.forEachChild(node, visit);
 }
 visit(ast);
 for (const key of ['requestConfirmation', 'submitGeneration', 'saveKey']) assert.ok(handlers[key], `${key} actual handler found`);
+assert.ok(preSubmitErrorsSource, 'Actual pre-submit error set found');
+const seedanceModule = { exports: {} };
+new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessSeedance.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(seedanceModule, seedanceModule.exports);
+const { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSeedancePayload } = seedanceModule.exports;
 const noop = () => {};
 function makeContext() {
   let sequence = 0;
@@ -23,9 +29,9 @@ function makeContext() {
     submitLock: { current: false }, keyLock: { current: false }, unresolvedRequest: { current: null }, uncertain: false, navigationPending: false,
     selected: { id: 'kling-3.0-turbo', supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: ['720p', '1080p'], secondsOptions: [5, 10], defaultSeconds: 5, resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1'], supportsReferences: true, maxReferenceImages: 1, promptMaxChars: 2500, nsfw: false },
     prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
-    access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' },
+    videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', assertBusinessSeedanceReferences, buildBusinessSeedancePayload,
+    access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved', invalidRequest: 'invalid' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' }, d: { referenceLimitError: 'seedance-refs' },
     REQUEST_HEADERS: { 'Content-Type': 'application/json' },
-    PRE_SUBMIT_ERRORS: new Set(['invalid_origin', 'invalid_body', 'invalid_parameters', 'invalid_reference', 'model_unavailable', 'age_unverified', 'credential_required', 'credential_changed', 'prompt_blocked', 'too_many_concurrent', 'business_not_approved', 'business_suspended', 'encryption_unavailable', 'credential_unavailable']),
     businessError: (_copy, code) => code || 'error', confirmation: null, jobs: [],
     apiKey: 'sk-this-is-a-disposable-fixture-key', keyLabel: 'Fixture',
     setError: value => { context.error = value; }, setNotice: noop, setSubmitting: noop, setTab: noop, setKeySaving: noop, setCredential: noop,
@@ -35,8 +41,17 @@ function makeContext() {
     setJobs: update => { context.jobs = typeof update === 'function' ? update(context.jobs) : update; },
     fetch: async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({ generation: { id: 'fixture-job', status: 'processing' }, credential: { last4: 'ture' } }) }; },
   };
+  vm.runInNewContext(`globalThis.PRE_SUBMIT_ERRORS = ${preSubmitErrorsSource};`, context);
   for (const [name, handler] of Object.entries(handlers)) vm.runInNewContext(ts.transpileModule(`globalThis.${name} = ${handler};`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
-  return { context, calls };
+  return { context, calls, uuids: () => sequence };
+}
+function seedanceContext(modelId = 'NSFW-SIRAYA-Seedance-2.5') {
+  const result = makeContext();
+  const capability = getSeedanceCapability(modelId);
+  result.context.selected = { id: modelId, modality: 'video', nsfw: modelId.startsWith('NSFW-'), supportsAudio: true, supportsReferences: true, resolutions: capability.resolutions, aspectRatios: capability.aspectRatios, minSeconds: capability.minSeconds, maxSeconds: capability.maxSeconds, defaultSeconds: capability.defaultSeconds, maxReferenceImages: capability.references.image, seedance: capability };
+  result.context.access.adultVerified = true;
+  result.context.seconds = 8; result.context.aspect = '16:9';
+  return result;
 }
 const event = { preventDefault: noop };
 (async () => {
@@ -109,6 +124,87 @@ const event = { preventDefault: noop };
   assert.equal(context.confirmation.parameters.resolution, '768p', 'MiniMax native resolution is not rewritten as1080p');
   assert.equal(context.confirmation.parameters.generate_audio, true, 'MiniMax native-only audio remains enabled');
 
+  {
+    const result = seedanceContext(); const c = result.context;
+    c.providerAssets = [...Array.from({length:30},(_,i)=>({id:`image-${i}`,name:`Image ${i}`,type:'image',status:'active'})),...Array.from({length:10},(_,i)=>({id:`video-${i}`,type:'video',status:'active'})),...Array.from({length:10},(_,i)=>({id:`audio-${i}`,type:'audio',status:'active'}))];
+    c.referenceOrder = c.providerAssets.map(asset=>`provider:${asset.id}`);
+    c.outputFormat = 'mov'; c.seed = '123'; c.videoMode = 'subject-reference';
+    c.requestConfirmation(event);
+    assert.ok(c.confirmation, 'NSFW Seedance 2.5 accepts the full fifty-material allocation after age verification');
+    assert.equal(c.confirmation.parameters.providerAssets.length,50);
+    assert.equal(c.confirmation.parameters.seconds,-1,'Video material changes the visible BYOK request to automatic duration');
+    assert.equal(c.confirmation.parameters.output_format,'mov'); assert.equal(c.confirmation.parameters.seed,123);
+    assert.deepEqual(Array.from(c.confirmation.parameters.referenceOrder),c.referenceOrder);
+    assert.ok(c.confirmation.parameters.providerAssets.every(ref=>Object.keys(ref).sort().join(',')==='id,type'),'Provider display metadata never enters submission');
+    assert.equal(result.uuids(),1); assert.equal(result.calls.length,0,'Opening a fifty-reference confirmation still has no paid call');
+  }
+  {
+    const result=seedanceContext(); const c=result.context;
+    c.assetIds=[1]; c.providerAssets=[{id:'provider-first',type:'image',status:'active'}]; c.referenceOrder=['provider:provider-first','local:1']; c.videoMode='first-last-frame';
+    c.requestConfirmation(event);
+    assert.equal(c.confirmation.parameters.aspect_ratio,'adaptive','Seedance 2.5 first-last mode uses the documented adaptive ratio');
+    assert.deepEqual(Array.from(c.confirmation.parameters.assetIds),[1]);
+    assert.deepEqual(Array.from(c.confirmation.parameters.referenceOrder),['provider:provider-first','local:1'],'Mixed source first/last order survives confirmation');
+    assert.equal(c.confirmation.parameters.seconds,8);
+  }
+  for(const mode of ['video-edit','video-extend']) {
+    const result=seedanceContext(); const c=result.context;
+    c.providerAssets=[{id:'owned-video',type:'video',status:'active'}]; c.referenceOrder=['provider:owned-video']; c.videoMode=mode;
+    c.requestConfirmation(event);
+    assert.equal(c.confirmation.parameters.mode,mode); assert.equal(c.confirmation.parameters.seconds,-1); assert.equal(c.confirmation.parameters.aspect_ratio,'adaptive');
+    assert.equal(result.calls.length,0);
+  }
+  for(const mode of ['video-edit','video-extend']) {
+    const rejected=seedanceContext(); const c=rejected.context;
+    c.providerAssets=[{id:'owned-video',type:'video',status:'active'}]; c.referenceOrder=['provider:owned-video']; c.videoMode=mode; c.prompt='畫'.repeat(12000);
+    c.requestConfirmation(event);
+    assert.equal(c.confirmation,null,`${mode} includes its provider intent prefix in the 12000-character pre-confirmation limit`);
+    assert.equal(c.error,'invalid'); assert.equal(rejected.uuids(),0,'An invalid effective prompt never allocates a paid request UUID'); assert.equal(rejected.calls.length,0);
+    const accepted=seedanceContext(); const valid=accepted.context;
+    valid.providerAssets=[{id:'owned-video',type:'video',status:'active'}]; valid.referenceOrder=['provider:owned-video']; valid.videoMode=mode; valid.prompt='畫'.repeat(11940);
+    valid.requestConfirmation(event);
+    assert.ok(valid.confirmation,`${mode} accepts 11940 characters when its prefix fits`);
+    assert.equal(valid.confirmation.parameters.prompt,valid.prompt,'Confirmation retains the original user prompt; server applies the prefix once');
+    assert.deepEqual(Array.from(valid.confirmation.parameters.referenceOrder),['provider:owned-video'],'Shared scalar preflight does not change the reference-order DTO');
+    assert.equal(accepted.uuids(),1); assert.equal(accepted.calls.length,0);
+  }
+  {
+    const result=seedanceContext(); const c=result.context; c.seconds=-1; c.requestConfirmation(event);
+    assert.equal(c.confirmation.parameters.seconds,-1,'Explicit automatic duration survives the legacy fixed-duration clamp');
+  }
+  {
+    const result=seedanceContext('SIRAYA-Seedance-2.0'); const c=result.context;
+    c.outputFormat='mov'; c.assetIds=Array.from({length:9},(_,i)=>i+1); c.referenceOrder=c.assetIds.map(id=>`local:${id}`); c.requestConfirmation(event);
+    assert.ok(c.confirmation); assert.equal(c.confirmation.parameters.assetIds.length,9); assert.equal(c.confirmation.parameters.output_format,undefined,'2.0 does not inherit the 2.5-only output format');
+  }
+  for(const [name,configure]of [
+    ['thirty-one image references',c=>{c.assetIds=Array.from({length:31},(_,i)=>i+1);}],
+    ['fifty-one total references',c=>{c.providerAssets=[...Array.from({length:30},(_,i)=>({id:`image-${i}`,type:'image'})),...Array.from({length:10},(_,i)=>({id:`video-${i}`,type:'video'})),...Array.from({length:11},(_,i)=>({id:`audio-${i}`,type:'audio'}))];}],
+    ['mixed sources exceeding thirty images',c=>{c.assetIds=Array.from({length:30},(_,i)=>i+1);c.providerAssets=[{id:'extra-image',type:'image'}];}],
+    ['first-last with one image',c=>{c.videoMode='first-last-frame';c.assetIds=[1];}],
+    ['editing without a video',c=>{c.videoMode='video-edit';c.assetIds=[1];}],
+    ['invalid seed',c=>{c.seed='1.5';}],
+  ]) {
+    const result=seedanceContext(); configure(result.context); result.context.requestConfirmation(event);
+    assert.equal(result.context.confirmation,null,`${name} cannot open paid confirmation`); assert.equal(result.uuids(),0,`${name} cannot allocate a request UUID`); assert.equal(result.calls.length,0);
+  }
+  {
+    const result=seedanceContext('SIRAYA-Seedance-2.0'); const c=result.context;
+    c.providerAssets=[{id:'audio-only',type:'audio'}]; c.referenceOrder=['provider:audio-only']; c.requestConfirmation(event);
+    assert.equal(c.confirmation,null,'2.0 audio-only references fail using the actual shared capability validator'); assert.equal(result.uuids(),0);
+  }
+  {
+    const result=seedanceContext(); const c=result.context; c.access.adultVerified=false; c.requestConfirmation(event);
+    assert.equal(c.confirmation,null,'The expanded NSFW reference allowance never bypasses the age gate'); assert.equal(result.uuids(),0);
+  }
+  {
+    const result=seedanceContext(); const c=result.context; c.requestConfirmation(event);
+    c.fetch=async()=>({ok:false,status:503,json:async()=>({error:{code:'business_asset_unavailable'}})});
+    await c.submitGeneration();
+    assert.equal(c.uncertain,false,'Known asset lookup failure is preflight, not an ambiguous paid submission');
+    assert.equal(c.unresolvedRequest.current,null,'A preflight asset outage releases the pending UI request UUID');
+  }
+
   ({ context, calls } = makeContext());
   await context.saveKey(event);
   assert.equal(calls.length, 1);
@@ -116,5 +212,5 @@ const event = { preventDefault: noop };
   assert.equal(context.catalogReloads, 1, 'Replacing an already connected key refreshes its model permissions');
   assert.ok(Array.isArray(context.models) && context.models.length === 0, 'Old-key catalog is cleared before refreshing');
   assert.ok(!source.includes('localStorage') && !source.includes('sessionStorage'), 'No credential browser-storage path exists');
-  console.log('PASS business UI: actual confirm/cancel/double-click/UUID/unknown/validation/adult/key/audio/duration/aspect/reference handlers; no paid calls.');
+  console.log('PASS business UI: actual confirm/cancel/double-click/UUID/unknown/validation/adult/key/audio/duration/aspect handlers plus Seedance2.5 fifty references, per-type limits,2.0 restrictions, mixed-source frame order,auto duration,MOV and preflight errors; no paid calls.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

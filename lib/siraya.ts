@@ -339,6 +339,7 @@ export async function createImageEdit(body: ImageEditRequest, credentials?: Sira
 export interface VideoInputReference {
   type: "image" | "video" | "audio";
   url: string;
+  role?: "reference_image" | "reference_video" | "reference_audio";
 }
 
 export interface VideoGenerationRequest {
@@ -352,12 +353,14 @@ export interface VideoGenerationRequest {
   negative_prompt?: string;
   seed?: number;
   async?: boolean;
+  frame_images?: { frame_type: "first_frame" | "last_frame"; image_url: string }[];
+  output_format?: "mp4" | "mov";
   /**
    * Multi-reference materials (image/video/audio) for models that support
    * subject/style/scene references — Seedance family. Verified empirically:
    * SIRAYA validates each entry's `url` (rejects images under ~300px) before
    * accepting the job, and accepts both plain URLs and base64 data URLs.
-   * A `role` field is documented but its valid values aren't — omit it.
+   * SIRAYA documents role values reference_image/reference_video/reference_audio.
    */
   input_references?: VideoInputReference[];
   /**

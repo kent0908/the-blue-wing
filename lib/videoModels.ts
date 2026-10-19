@@ -2,11 +2,11 @@
  * Per-model cap on how many reference materials (素材) can be attached to a
  * video generation, via SIRAYA's `input_references` field — see lib/siraya.ts.
  *
- * Only the Seedance family is known to support this on SIRAYA. Seedance 2.5's
- * limit (50) is confirmed by BytePlus's own docs:
- *   https://docs.byteplus.com/en/docs/ModelArk/2607688
- * Other Seedance versions aren't individually documented for SIRAYA, so they
- * get a conservative default rather than assuming the same ceiling. Non-
+ * Seedance 2.5 supports 50 total references (30 image / 10 video / 10 audio).
+ * Seedance 2.0 supports 15 total (9 image / 3 video / 3 audio):
+ *   https://docs.siraya.ai/docs/api-reference/generative-model-api/Seedance/
+ *   https://docs.byteplus.com/en/docs/modelark/seedance-2-5
+ * These are total material counts; per-type limits are validated separately. Non-
  * Seedance models (veo, sora, …) default to 0 — no picker is shown for them
  * until reference support is confirmed.
  *
@@ -33,6 +33,7 @@ const RULES: VideoRefRule[] = [
   // Site reference limit; SIRAYA has not published a Wan 3.0 maximum.
   { prefix: "wan3.0-video", max: 9 },
   { prefix: "seedance-2.5", max: 50 },
+  { prefix: "seedance-2.0", max: 15 },
   { prefix: "seedance-1.0-pro-fast", max: 0 },
   { prefix: "seedance-1.0-pro", max: 0 },
   { prefix: "seedance-1.5-pro", max: 0 },

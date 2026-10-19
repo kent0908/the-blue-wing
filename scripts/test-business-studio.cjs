@@ -7,13 +7,13 @@ const ts = require('typescript');
 const read = file => fs.readFileSync(file, 'utf8');
 const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true };
 function load(file, mocks = {}) {
-  const module = { exports: {} };
+  const fixtureModule = { exports: {} };
   const code = ts.transpileModule(read(file), { compilerOptions }).outputText;
   new Function('require', 'module', 'exports', code)(name => {
     if (Object.hasOwn(mocks, name)) return mocks[name];
     throw new Error(`Unexpected import from ${file}: ${name}`);
-  }, module, module.exports);
-  return module.exports;
+  }, fixtureModule, fixtureModule.exports);
+  return fixtureModule.exports;
 }
 function actualHandlers(file, names) {
   const source = read(file);
@@ -96,12 +96,13 @@ assert.ok(consumerTree.some(node => node.type === consumerSupport), 'Normal stud
 
 // The handlers below run their real function bodies with observed React setters.
 // A network call is a test failure, so changing a model/tab cannot spend money.
-const { source: workspaceSource, handlers } = actualHandlers('components/business/BusinessWorkspace.tsx', ['resetSelection', 'navigate', 'setTab', 'chooseTab', 'chooseKind', 'chooseModel', 'requestConfirmation']);
+const { source: workspaceSource, handlers } = actualHandlers('components/business/BusinessWorkspace.tsx', ['resetSelection', 'navigate', 'setTab', 'chooseTab', 'chooseKind', 'chooseModel', 'requestConfirmation', 'chooseVideoMode', 'toggleLocalReference', 'toggleProviderReference']);
 function context() {
   const pushes = [];
   const state = {
     kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video' },
     size: 'old-size', resolution: '4k', assetIds: [71, 72], audio: true, seconds: 30,
+    videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123',
     apiKey: 'fixture-unsaved-value', prompt: 'A paper garden opens.', error: 'old-error', notice: 'old-notice',
     confirmation: { clientRequestId: 'fixture-stale-confirmation' }, submitLock: { current: false },
     uncertain: true, unresolvedRequest: { current: 'fixture-original-request' }, navigationPending: false,
@@ -115,7 +116,12 @@ function context() {
     router: { push: (...args) => pushes.push(args) },
     setSize: value => { state.size = value; },
     setResolution: value => { state.resolution = value; },
-    setAssetIds: value => { state.assetIds = value; },
+    setAssetIds: value => { state.assetIds = typeof value === 'function' ? value(state.assetIds) : value; },
+    setVideoMode: value => { state.videoMode = value; },
+    setProviderAssets: value => { state.providerAssets = typeof value === 'function' ? value(state.providerAssets) : value; },
+    setReferenceOrder: value => { state.referenceOrder = typeof value === 'function' ? value(state.referenceOrder) : value; },
+    setOutputFormat: value => { state.outputFormat = value; },
+    setSeed: value => { state.seed = value; },
     setAudio: value => { state.audio = value; },
     setSeconds: value => { state.seconds = value; },
     setConfirmation: value => { state.confirmation = value; },
@@ -132,6 +138,11 @@ function assertReset(state) {
   assert.equal(state.size, '');
   assert.equal(state.resolution, '');
   assert.deepEqual(Array.from(state.assetIds), []);
+  assert.equal(state.videoMode, 'freestyle', 'A new model cannot inherit edit mode');
+  assert.deepEqual(Array.from(state.providerAssets), [], 'A new model cannot inherit provider material IDs');
+  assert.deepEqual(Array.from(state.referenceOrder), [], 'Frame order resets together with both material sources');
+  assert.equal(state.outputFormat, 'mp4');
+  assert.equal(state.seed, '');
   assert.equal(state.audio, false);
   assert.equal(state.confirmation, null, 'A stale paid confirmation is removed');
   assert.equal(state.uncertain, true, 'Unknown-request lock survives navigation');
@@ -182,6 +193,29 @@ for (const [method, value] of [['chooseModel', 'minimax-h3'], ['chooseKind', 'im
   state[method](value);
   assert.equal(pushes.length, 0, `An in-flight paid submit cannot be changed by ${method}`);
   assert.ok(state.confirmation, 'An in-flight confirmation remains owned by the original submit');
+}
+{
+  const {state,pushes}=context();
+  state.resetSelection(); state.chooseVideoMode('first-last-frame');
+  assert.equal(state.videoMode,'first-last-frame'); assert.equal(state.seconds,5); assert.equal(state.confirmation,null);
+  state.toggleLocalReference(71); state.toggleProviderReference({id:'provider-image',type:'image',status:'active'}); state.toggleLocalReference(72);
+  assert.deepEqual(Array.from(state.referenceOrder),['local:71','provider:provider-image','local:72'],'Reference order follows actual cross-source click order');
+  state.toggleLocalReference(71); state.toggleLocalReference(71);
+  assert.deepEqual(Array.from(state.referenceOrder),['provider:provider-image','local:72','local:71'],'Removing and reselecting a frame moves it to the end');
+  state.toggleProviderReference({id:'provider-image',type:'image',status:'active'});
+  assert.equal(state.providerAssets.length,0); assert.deepEqual(Array.from(state.referenceOrder),['local:72','local:71']);
+  state.chooseVideoMode('video-edit');
+  assert.equal(state.seconds,-1,'Edit mode starts with provider-determined duration');
+  assert.deepEqual(Array.from(state.assetIds),[]); assert.deepEqual(Array.from(state.providerAssets),[]); assert.deepEqual(Array.from(state.referenceOrder),[]);
+  state.chooseVideoMode('video-extend'); assert.equal(state.seconds,-1);
+  assert.equal(pushes.length,0,'Changing modes and frame references does not navigate, fetch or submit');
+  assert.equal(state.uncertain,true,'Changing modes cannot clear an ambiguous prior paid request');
+}
+{
+  const {state}=context(); state.submitLock.current=true;
+  const before=JSON.stringify({mode:state.videoMode,assets:state.assetIds,provider:state.providerAssets,order:state.referenceOrder,seconds:state.seconds});
+  state.chooseVideoMode('first-last-frame'); state.toggleLocalReference(99); state.toggleProviderReference({id:'inflight-provider',type:'image'});
+  assert.equal(JSON.stringify({mode:state.videoMode,assets:state.assetIds,provider:state.providerAssets,order:state.referenceOrder,seconds:state.seconds}),before,'An in-flight paid submit locks mode and both reference sources');
 }
 {
   const { state, pushes } = context();
