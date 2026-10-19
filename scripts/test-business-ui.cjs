@@ -20,7 +20,7 @@ function makeContext() {
   const calls = [];
   const context = {
     crypto: { randomUUID: () => `fixture-request-${++sequence}` },
-    submitLock: { current: false }, keyLock: { current: false }, unresolvedRequest: { current: null }, uncertain: false,
+    submitLock: { current: false }, keyLock: { current: false }, unresolvedRequest: { current: null }, uncertain: false, navigationPending: false,
     selected: { id: 'kling-3.0-turbo', supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: ['720p', '1080p'], secondsOptions: [5, 10], defaultSeconds: 5, resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1'], supportsReferences: true, maxReferenceImages: 1, promptMaxChars: 2500, nsfw: false },
     prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
     access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' },
@@ -29,7 +29,7 @@ function makeContext() {
     businessError: (_copy, code) => code || 'error', confirmation: null, jobs: [],
     apiKey: 'sk-this-is-a-disposable-fixture-key', keyLabel: 'Fixture',
     setError: value => { context.error = value; }, setNotice: noop, setSubmitting: noop, setTab: noop, setKeySaving: noop, setCredential: noop,
-    setApiKey: value => { context.apiKey = value; }, refreshAccess: async () => {},
+    setApiKey: value => { context.apiKey = value; }, refreshAccess: async () => {}, loadModels: async () => { context.catalogReloads = (context.catalogReloads ?? 0) + 1; }, setModels: value => { context.models = value; },
     setConfirmation: value => { context.confirmation = value; },
     setUncertain: value => { context.uncertain = value; },
     setJobs: update => { context.jobs = typeof update === 'function' ? update(context.jobs) : update; },
@@ -113,6 +113,8 @@ const event = { preventDefault: noop };
   await context.saveKey(event);
   assert.equal(calls.length, 1);
   assert.equal(context.apiKey, '', 'Key input is cleared after saving');
+  assert.equal(context.catalogReloads, 1, 'Replacing an already connected key refreshes its model permissions');
+  assert.ok(Array.isArray(context.models) && context.models.length === 0, 'Old-key catalog is cleared before refreshing');
   assert.ok(!source.includes('localStorage') && !source.includes('sessionStorage'), 'No credential browser-storage path exists');
   console.log('PASS business UI: actual confirm/cancel/double-click/UUID/unknown/validation/adult/key/audio/duration/aspect/reference handlers; no paid calls.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

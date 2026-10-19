@@ -4,14 +4,24 @@ import { useRef, Suspense } from "react";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import SupportChat from "./SupportChat";
-import { useT } from "@/lib/i18n/client";
+import { useLocale, useT } from "@/lib/i18n/client";
+import { businessCopy } from "@/lib/i18n/business";
+import Link from "next/link";
 export default function AppFrame({children}:{children:React.ReactNode}) {
   const path=usePathname();
   const t=useT();
+  const business=businessCopy(useLocale());
   const drawer=useRef<HTMLDialogElement>(null);
   if(path==="/landing") return <main className="h-full overflow-y-auto scroll-smooth motion-reduce:scroll-auto">{children}</main>;
   // the CRM back office has its own shell (app/crm/layout.tsx) — keep the product sidebar out of it
   if(path==="/crm"||path.startsWith("/crm/")||path==="/admin"||path.startsWith("/admin/")) return <>{children}</>;
+  if(path==="/business"||path.startsWith("/business/")) return <div className="flex h-full min-w-0 flex-col bg-[#0b1110]">
+    <div className="flex shrink-0 items-center border-b border-[#293b32] bg-[#080e0c]">
+      <Link href="/business" className="min-w-0 flex-1 truncate pl-4 text-[10px] tracking-[.12em] text-[#bad1c5] sm:pl-6">{business.workspace} <span className="hidden text-[#718e7c] sm:inline">/ BYOK</span></Link>
+      <Suspense fallback={<div className="h-14"/>}><TopBar business/></Suspense>
+    </div>
+    <main className="min-h-0 flex-1">{children}</main>
+  </div>;
   return <><div className="flex h-full">
     <div className="hidden md:block"><Sidebar/></div>
     <dialog ref={drawer} aria-label={t.nav.mainNav} className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none border-0 bg-black p-0 text-white backdrop:bg-black/70" onClick={e=>{if((e.target as HTMLElement).closest("a"))drawer.current?.close();}}>

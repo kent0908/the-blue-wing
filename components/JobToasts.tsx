@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { IconImage, IconVideo, IconChat, IconClose, IconCheck } from "./Icons";
 import { useGenerationJobs } from "@/lib/jobsStore";
 import { useTr } from "@/lib/i18n/client";
@@ -15,8 +16,9 @@ const KIND_ICON = { image: IconImage, video: IconVideo, text: IconChat, audio: I
  */
 export default function JobToasts() {
   const tr = useTr();
+  const pathname = usePathname();
   const { toasts, dismissToast } = useGenerationJobs();
-  if (!toasts.length) return null;
+  if (!toasts.length || pathname === "/business" || pathname.startsWith("/business/")) return null;
 
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-[100] flex w-[300px] flex-col gap-2">

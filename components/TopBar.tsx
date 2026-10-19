@@ -55,7 +55,7 @@ function LanguageMenu() {
   );
 }
 
-export default function TopBar() {
+export default function TopBar({ business = false }: { business?: boolean }) {
   const router = useRouter();
   const t = useT();
   const search=useSearchParams();
@@ -112,14 +112,14 @@ export default function TopBar() {
 
       {me?.user ? (
         <>
-          <button
+          {!business ? <button
             onClick={()=>setAccountOpen(true)}
             className="flex max-w-[104px] items-center gap-1.5 rounded-full border border-[#3a3a3a] px-2 py-1.5 text-[13px] text-white transition-colors hover:border-[#555] sm:max-w-none sm:px-3"
             title={t.top.credits}
           >
             <IconSparkle className="h-3.5 w-3.5 shrink-0 text-[#7ff0cd]" />
             <span className="min-w-0 truncate">{(me.credits ?? 0).toLocaleString()}</span>
-          </button>
+          </button> : null}
           {me.user.role === "admin" && (
             <>
               <Link href="/crm" className="hidden rounded-lg px-2 py-1.5 text-[13px] text-[#d4d4d4] hover:text-white sm:inline-flex">{t.top.admin}</Link>
@@ -142,12 +142,12 @@ export default function TopBar() {
         </>
       ) : (
         <>
-          <Link
+          {!business ? <Link
             href="/pricing"
             className="flex items-center gap-2 rounded-full border border-[#3a3a3a] px-3.5 py-1.5 text-[13px] text-white transition-colors hover:border-[#555]"
           >
             {t.top.pricing}
-          </Link>
+          </Link> : null}
           <Link
             href="/login"
             className="ml-2 rounded-full bg-gradient-to-r from-[#22d3ee] to-[#3b82f6] px-3 sm:px-6 py-2 text-[13.5px] font-medium text-white transition-opacity hover:opacity-90"
