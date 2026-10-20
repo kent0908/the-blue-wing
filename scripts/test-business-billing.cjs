@@ -68,6 +68,15 @@ async function test(name, run) { reset(); await run(); passed++; console.log('PA
   await test('foreign account and user jobs are denied before Console access', async () => {
     job.account_id = 'foreign'; await assert.rejects(sync, error => error.code === 'generation_not_found'); job.account_id = account.id; job.user_id = 99; await assert.rejects(sync, error => error.code === 'generation_not_found'); assert.equal(calls.length, 0);
   });
+  await test('real PostgreSQL bigint session and job IDs both arrive as strings and retain exact ownership', async () => {
+    user.id = '7';
+    const result = await sync(); assert.equal(result.billingStatus, 'matched'); assert.equal(result.providerCost, '0.123456');
+    job.user_id = '8'; await assert.rejects(sync, error => error.code === 'generation_not_found');
+  });
+  await test('large bigint IDs compare without Number rounding or cross-owner collisions', async () => {
+    user.id = '9007199254740992'; job.user_id = '9007199254740992'; assert.equal((await sync()).billingStatus, 'matched');
+    job.user_id = '9007199254740993'; await assert.rejects(sync, error => error.code === 'generation_not_found');
+  });
   await test('adult jobs check current age regardless of admin role or old confirmation flag', async () => {
     job.nsfw = true; user.birth_date = '2015-09-08'; user.adult_confirmed_at = new Date().toISOString(); user.role = 'admin'; await assert.rejects(sync, error => error.code === 'age_unverified'); assert.equal(calls.length, 0);
   });

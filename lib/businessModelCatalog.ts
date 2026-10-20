@@ -74,5 +74,9 @@ export function buildBusinessModelCatalog(raw: unknown) {
     if (kind === "text") { models.push({ ...common, modality: "text", supportsReferences: false }); continue; }
     unavailable(kind === "unknown" ? "unsupported_model" : "adapter_pending");
   }
+  // The upstream grant list is unordered and can change on every request.
+  // Keep the catalogue stable and never place an adult alias before normal models.
+  models.sort((a, b) => Number(a.nsfw) - Number(b.nsfw) || a.displayName.localeCompare(b.displayName, "en") || a.id.localeCompare(b.id, "en"));
+  unavailableModels.sort((a, b) => a.displayName.localeCompare(b.displayName, "en") || a.id.localeCompare(b.id, "en"));
   return { models, unavailableModels, upstreamTotal: seen.size };
 }

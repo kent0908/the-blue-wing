@@ -91,7 +91,10 @@ export default function BusinessWorkspace() {
   const unresolvedRequest = useRef<string | null>(null);
   const selectionContext = useRef<string | null>(null);
   const selectedModels = models.filter(model => model.modality === kind);
-  const selected = selectedModels.find(model => model.id === modelId) ?? selectedModels[0];
+  const selected = selectedModels.find(model => model.id === modelId)
+    ?? selectedModels.find(model => !model.nsfw && (!model.dedicatedVideo || model.dedicatedVideo.capability === "text-to-video"))
+    ?? selectedModels.find(model => !model.nsfw)
+    ?? selectedModels[0];
   const promptLimit = selected?.dedicatedVideo?.cjkPromptMaxChars && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) ? selected.dedicatedVideo.cjkPromptMaxChars : selected?.promptMaxChars ?? 12000;
   const approved = access?.account?.status === "approved";
 

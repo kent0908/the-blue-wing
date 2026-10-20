@@ -29,6 +29,13 @@ interface SourceGrant { v: 1; id: string; uid: number; aid: string; cid: string;
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 function fail(code = "business_asset_upload_invalid", status = 400): never { throw new BusinessError(code, status); }
 function sourceMissing(): never { return fail("not_found", 404); }
+/** pg bigint IDs arrive as decimal strings; grants keep their existing safe-number format. */
+function safeUserId(value: unknown, code = "business_asset_upload_invalid"): number {
+  if (typeof value !== "number" && (typeof value !== "string" || !/^[1-9]\d{0,15}$/.test(value))) fail(code);
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id < 1) fail(code);
+  return id;
+}
 const filename = (value: unknown): string => {
   if (typeof value !== "string" || !value.trim() || value.length > 120 || /[\x00-\x1f\x7f]/.test(value) || /\b(?:sk|csk)-[A-Za-z0-9_-]{16,}/i.test(value)) fail();
   return value.trim();
@@ -40,19 +47,21 @@ export function publicBusinessUpload(row: UploadRow) {
     ...(row.provider_asset_id ? { asset: { id: row.provider_asset_id, uploadId: row.id, storageReady: !!row.blob_etag, name: row.filename, type: row.media_type, status: row.status } } : {}),
     ...(row.error_code ? { errorCode: row.error_code } : {}), createdAt: new Date(row.created_at).toISOString() };
 }
-export async function listBusinessUploads(userId: number, accountId: string) {
+export async function listBusinessUploads(userId: number | string, accountId: string) {
+  userId = safeUserId(userId);
   const { rows } = await sql.query<UploadRow>("select * from business_asset_uploads where user_id=$1 and account_id=$2 order by created_at desc limit 60", [userId, accountId]);
   return rows.filter(validStoredPath).map(publicBusinessUpload);
 }
-async function currentCredential(userId: number, accountId: string) {
-  const credential = await getBusinessCredential(userId, accountId);
+async function currentCredential(userId: number | string, accountId: string) {
+  const credential = await getBusinessCredential(safeUserId(userId), accountId);
   if (!credential) fail("credential_required", 409);
   return credential;
 }
 function validStoredPath(row: UploadRow): boolean {
   return row.pathname === `business-assets/${row.account_id}/${row.id}/source.${BUSINESS_UPLOAD_TYPES[row.content_type]?.ext}`;
 }
-async function ownedUpload(userId: number, accountId: string, id: string): Promise<UploadRow> {
+async function ownedUpload(userId: number | string, accountId: string, id: string): Promise<UploadRow> {
+  userId = safeUserId(userId);
   if (!UUID.test(id)) fail();
   const { rows } = await sql.query<UploadRow>(`select t.* from business_asset_uploads t join business_accounts a on a.id=t.account_id and a.user_id=t.user_id
     where t.id=$1 and t.user_id=$2 and t.account_id=$3 and a.status='approved' limit 1`, [id, userId, accountId]);
@@ -62,7 +71,8 @@ async function ownedUpload(userId: number, accountId: string, id: string): Promi
 }
 
 /** Reserve an idempotent, server-owned private path. Client data never selects the Blob destination. */
-export async function initializeBusinessUpload(userId: number, accountId: string, body: Record<string, unknown>) {
+export async function initializeBusinessUpload(userId: number | string, accountId: string, body: Record<string, unknown>) {
+  userId = safeUserId(userId);
   if (Object.keys(body).some(key => !["action", "clientRequestId", "name", "contentType", "size"].includes(key)) ||
     body.action !== "initialize" || typeof body.clientRequestId !== "string" || !UUID.test(body.clientRequestId) ||
     typeof body.contentType !== "string" || !BUSINESS_UPLOAD_TYPES[body.contentType] || typeof body.size !== "number" || !Number.isSafeInteger(body.size)) fail();
@@ -94,7 +104,8 @@ export async function initializeBusinessUpload(userId: number, accountId: string
 }
 
 /** Called only by the signed-in Blob token handler. No callback or arbitrary prefix is trusted. */
-export async function businessUploadTokenOptions(userId: number, accountId: string, pathname: string, clientPayload: string | null) {
+export async function businessUploadTokenOptions(userId: number | string, accountId: string, pathname: string, clientPayload: string | null) {
+  userId = safeUserId(userId);
   let body: unknown;
   try { body = JSON.parse(clientPayload ?? ""); } catch { fail(); }
   if (!record(body) || Object.keys(body).join(",") !== "uploadId" || typeof body.uploadId !== "string") fail();
@@ -116,7 +127,7 @@ function sourceKey(): Buffer {
 }
 function sourceUrl(row: UploadRow, credentialId = row.credential_id, adult = false): string {
   const iat = Math.floor(Date.now() / 1000);
-  const grant: SourceGrant = { v: 1, id: row.id, uid: Number(row.user_id), aid: row.account_id, cid: credentialId, adult, iat, exp: iat + TTL };
+  const grant: SourceGrant = { v: 1, id: row.id, uid: safeUserId(row.user_id), aid: row.account_id, cid: credentialId, adult, iat, exp: iat + TTL };
   const key = sourceKey(), iv = randomBytes(12), bytes = Buffer.from(JSON.stringify(grant));
   try {
     const cipher = createCipheriv("aes-256-gcm", key, iv); cipher.setAAD(AAD);
@@ -200,7 +211,8 @@ async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSou
 }
 
 /** A completed Blob upload is verified before any provider registration POST. */
-export async function completeBusinessUpload(userId: number, accountId: string, id: string) {
+export async function completeBusinessUpload(userId: number | string, accountId: string, id: string) {
+  userId = safeUserId(userId);
   const row = await ownedUpload(userId, accountId, id);
   const credential = await currentCredential(userId, accountId);
   if (row.credential_id !== credential.id) fail("credential_changed", 409);
@@ -231,7 +243,8 @@ export async function completeBusinessUpload(userId: number, accountId: string, 
   }
 }
 
-export async function refreshBusinessUploadAsset(userId: number, accountId: string, id: string): Promise<BusinessProviderAsset> {
+export async function refreshBusinessUploadAsset(userId: number | string, accountId: string, id: string): Promise<BusinessProviderAsset> {
+  userId = safeUserId(userId);
   const credential = await currentCredential(userId,accountId);
   const asset = await getBusinessProviderAsset(id,{apiKey:credential.apiKey});
   await sql.query("update business_asset_uploads set status=$4,error_code=null,updated_at=now() where user_id=$1 and account_id=$2 and provider_asset_id=$3 and credential_id=$5",[userId,accountId,id,asset.status,credential.id]);
@@ -239,8 +252,9 @@ export async function refreshBusinessUploadAsset(userId: number, accountId: stri
 }
 
 /** Generic image models receive only server-created HTTPS grants, never asset:// IDs. */
-export async function resolveBusinessUploadSources(userId: number, accountId: string, credentialId: string, uploadIds: string[], nsfw: boolean, constraints?: BusinessImageSourceConstraints): Promise<{ type: "image"; url: string }[]> {
-  if (!Number.isSafeInteger(userId) || userId < 1 || !UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" ||
+export async function resolveBusinessUploadSources(userId: number | string, accountId: string, credentialId: string, uploadIds: string[], nsfw: boolean, constraints?: BusinessImageSourceConstraints): Promise<{ type: "image"; url: string }[]> {
+  userId = safeUserId(userId, "invalid_reference");
+  if (!UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" ||
     !Array.isArray(uploadIds) || uploadIds.length > 16 || uploadIds.some(id => typeof id !== "string" || !UUID.test(id)) || new Set(uploadIds).size !== uploadIds.length) fail("invalid_reference");
   if(constraints&&(!Number.isSafeInteger(constraints.minSide)||constraints.minSide<1||constraints.minSide>6000||!Number.isSafeInteger(constraints.maxBytes)||constraints.maxBytes<1||constraints.maxBytes>=30*MiB||!Array.isArray(constraints.mimeTypes)||!constraints.mimeTypes.length||constraints.mimeTypes.some(type=>!BUSINESS_UPLOAD_TYPES[type]||BUSINESS_UPLOAD_TYPES[type].type!=="image")))fail("invalid_reference");
   if (!uploadIds.length) return [];
@@ -273,7 +287,8 @@ export async function businessUploadSourceResponse(token: string, signal?: Abort
   return storedBusinessAssetResponse(row,signal);
 }
 
-export async function businessUploadPreviewResponse(userId:number,accountId:string,id:string,signal?:AbortSignal):Promise<Response>{
+export async function businessUploadPreviewResponse(userId:number|string,accountId:string,id:string,signal?:AbortSignal):Promise<Response>{
+  userId = safeUserId(userId);
   const row=await ownedUpload(userId,accountId,id);
   if(!row.blob_etag||row.media_type!=="image")sourceMissing();
   return storedBusinessAssetResponse(row,signal,true);

@@ -87,6 +87,21 @@ async function denied(token, status = 404, noLookup = false) {
       assert.equal(reference.url.includes('assets/7'), false); assert.equal(reference.url.includes(TEST_KEY), false);
     }
   });
+  await test('PostgreSQL bigint session strings mint numeric-compatible grants and pass actual source GET', async () => {
+    const refs = await create([1], false, '7');
+    assert.equal(queryCalls[0].values[1], 7);
+    assert.equal(queryCalls[1].values[0], 7);
+    const response = await fetchToken(tokenOf(refs[0]));
+    assert.equal(response.status, 200);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), fixture);
+    assert.equal(queryCalls.at(-1).values[0], 7);
+  });
+  await test('noncanonical and unsafe bigint owner IDs fail before database or Blob reads', async () => {
+    for (const id of ['0','07',' 7','7 ','7.0','7e0','9007199254740992',9007199254740992,{},null,Infinity,-1]) {
+      await assert.rejects(() => create([1], false, id), error => error.code === 'invalid_reference');
+    }
+    assert.equal(queryCalls.length, 0); assert.equal(blobCalls.length, 0);
+  });
   await test('30 references and >20MB aggregate real bytes are accepted with sequential preflight and no Base64 batch cap', async () => {
     assets = Array.from({ length: 30 }, (_, index) => ({ ...assets[0], id: String(index + 1), size: String(1024 * 1024) }));
     blobBytes = Buffer.concat([fixture, Buffer.alloc(1024 * 1024 - fixture.length)]); blobSize = blobBytes.length; blobLength = String(blobBytes.length);

@@ -26,7 +26,10 @@ async function ownedJob(user: UserRow, account: BusinessAccount, id: string): Pr
   if (!UUID.test(id)) throw new BusinessError("generation_not_found", 404);
   const { rows } = await sql.query<BillingJob>(`select ${FIELDS} from business_generations where id=$1 and account_id=$2 and user_id=$3`, [id, account.id, user.id]);
   const row = rows[0];
-  if (!row || row.account_id !== account.id || Number(row.user_id) !== user.id) throw new BusinessError("generation_not_found", 404);
+  // PostgreSQL bigint identifiers are canonical decimal strings at runtime, including getSessionUser's user.id.
+  // Compare canonical strings on both sides; Number() would also lose precision for future large IDs.
+  const owner = String(user.id);
+  if (!row || row.account_id !== account.id || !/^[1-9]\d*$/.test(owner) || String(row.user_id) !== owner) throw new BusinessError("generation_not_found", 404);
   if (row.nsfw && !isAdultVerified(user)) throw new BusinessError("age_unverified", 403);
   return row;
 }

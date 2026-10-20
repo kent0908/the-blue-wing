@@ -31,6 +31,13 @@ interface ReferenceAsset {
 export interface BusinessReferenceImage { type: "image"; url: string; role: "reference_image" }
 
 const positiveInt = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+/** Session users are PostgreSQL bigint strings. Preserve v1 numeric grants without rounding IDs. */
+function safeUserId(value: unknown): number {
+  if (typeof value !== "number" && (typeof value !== "string" || !/^[1-9]\d{0,15}$/.test(value))) throw new BusinessError("invalid_reference");
+  const id = Number(value);
+  if (!positiveInt(id)) throw new BusinessError("invalid_reference");
+  return id;
+}
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 function unavailable(): never { throw new BusinessError("not_found", 404); }
 
@@ -107,25 +114,26 @@ function validAsset(asset: ReferenceAsset | undefined, userId: number): asset is
 
 /** Server-owned references only. The opaque grant contains no API key, plaintext account ID or asset URL. */
 export async function createBusinessReferenceUrls(
-  userId: number, accountId: string, credentialId: string, assetIds: number[], nsfw: boolean,
+  userId: number | string, accountId: string, credentialId: string, assetIds: number[], nsfw: boolean,
 ): Promise<BusinessReferenceImage[]> {
-  if (!positiveInt(userId) || !UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" ||
+  const ownerId = safeUserId(userId);
+  if (!UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" ||
     !Array.isArray(assetIds) || assetIds.length > BUSINESS_REFERENCE_MAX_IMAGES || assetIds.some(id => !positiveInt(id)) ||
     new Set(assetIds).size !== assetIds.length) throw new BusinessError("invalid_reference");
   if (!assetIds.length) return [];
-  if (!await authorized(userId, accountId, credentialId, nsfw)) throw new BusinessError("invalid_reference");
+  if (!await authorized(ownerId, accountId, credentialId, nsfw)) throw new BusinessError("invalid_reference");
   const { rows } = await sql.query<ReferenceAsset>(
-    "select id,user_id,pathname,content_type,size from assets where user_id=$1 and id=any($2::bigint[])", [userId, assetIds]);
+    "select id,user_id,pathname,content_type,size from assets where user_id=$1 and id=any($2::bigint[])", [ownerId, assetIds]);
   const byId = new Map(rows.map(asset => [Number(asset.id), asset]));
-  if (rows.length !== assetIds.length || assetIds.some(id => !validAsset(byId.get(id), userId))) throw new BusinessError("invalid_reference");
+  if (rows.length !== assetIds.length || assetIds.some(id => !validAsset(byId.get(id), ownerId))) throw new BusinessError("invalid_reference");
   // Fail invalid dimensions/bytes before the caller reserves or submits a billable task. Sequential reads bound memory to one file.
   try {
     for (const id of assetIds) await readVerifiedReferenceImage(byId.get(id)!);
   } catch { throw new BusinessError("invalid_reference"); }
-  if (!await authorized(userId, accountId, credentialId, nsfw)) throw new BusinessError("invalid_reference");
+  if (!await authorized(ownerId, accountId, credentialId, nsfw)) throw new BusinessError("invalid_reference");
   const iat = nowSeconds();
   return assetIds.map(sid => ({ type: "image", role: "reference_image", url: new URL(
-    `/api/business/references/${seal({ v: 1, uid: userId, aid: accountId, cid: credentialId, sid, adult: nsfw, iat, exp: iat + BUSINESS_REFERENCE_TTL_SECONDS })}`,
+    `/api/business/references/${seal({ v: 1, uid: ownerId, aid: accountId, cid: credentialId, sid, adult: nsfw, iat, exp: iat + BUSINESS_REFERENCE_TTL_SECONDS })}`,
     SITE_URL,
   ).toString() }));
 }
