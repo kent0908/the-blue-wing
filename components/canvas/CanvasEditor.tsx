@@ -471,13 +471,13 @@ export default function CanvasEditor({
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <button type="button" onClick={exportDraft} className="whitespace-nowrap text-xs text-[#7ff0cd]">{tr("匯出草稿")}</button>
           <button
             type="button"
             onClick={runAll}
             disabled={runningAll || saving || graph.nodes.length === 0}
-            className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[12.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[12.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <IconPlay className="h-3.5 w-3.5" />
             {runningAll ? tr("執行中…") : tr("全部執行")}
@@ -486,7 +486,7 @@ export default function CanvasEditor({
             type="button"
             onClick={save}
             disabled={saving || runningAll}
-            className="h-8 rounded-full border border-[#3a3a3a] px-4 text-[12.5px] text-white transition-colors hover:border-[#555] disabled:opacity-50"
+            className="h-8 shrink-0 whitespace-nowrap rounded-full border border-[#3a3a3a] px-4 text-[12.5px] text-white transition-colors hover:border-[#555] disabled:opacity-50"
           >
             {tr("儲存")}
           </button>
