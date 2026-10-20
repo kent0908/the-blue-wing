@@ -129,7 +129,7 @@ export default function BusinessWorkflowEditor({ id }: { id: string }) {
   }, [workspace, t, rememberJob]);
   if (!workspace || workspace.workflow.id !== id || !runtime) return <section className={styles.status}><p role={error ? "alert" : "status"}>{error || t.loading}</p>{error && <button className={styles.button} onClick={() => void load()}>{t.retry}</button>}<Link href="/business?tab=workflows">{t.goStudio}</Link></section>;
   return <div className={styles.editor}>
-    <CanvasEditor key={workspace.workflow.id} workflowId={id} initialName={workspace.workflow.name} initialGraph={workspace.workflow.graph} initialVersion={workspace.workflow.version} runtime={runtime} />
+    <div className={styles.stage}><CanvasEditor key={workspace.workflow.id} workflowId={id} initialName={workspace.workflow.name} initialGraph={workspace.workflow.graph} initialVersion={workspace.workflow.version} runtime={runtime} /></div>
     <aside className={styles.ledger} aria-label={t.nodeRun}><details><summary>{t.nodeRun}{jobs.length ? ` · ${jobs.length}` : ""}</summary><p>{t.draftOnly}</p><nav><Link href="/business?tab=history">{t.history} ↗</Link><Link href="/business?tab=usage">{t.costs} ↗</Link></nav>{jobs.map(job => <div className={styles.receipt} key={job.id}><p>{job.model} · {job.id}</p><BusinessGenerationReceipt job={job} onUpdated={rememberJob} /></div>)}</details></aside>
   </div>;
 }
