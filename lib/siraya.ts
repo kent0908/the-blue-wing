@@ -27,8 +27,13 @@ import { minimaxVideoPayload } from "./minimaxVideo";
 
 const SIRAYA_BASE_URL = process.env.SIRAYA_BASE_URL || "https://llm.siraya.ai/v1";
 
+export interface SirayaRequestMetadata { requestId: string | null; httpStatus: number }
 /** Server-only, per-call credentials. Supplying these never enables platform-key fallback. */
-export interface SirayaCredentials { apiKey: string; }
+export interface SirayaCredentials {
+  apiKey: string;
+  /** Transport metadata only; never a response body, task ID, key or provider prose. */
+  onRequestMetadata?: (metadata: SirayaRequestMetadata) => void | Promise<void>;
+}
 
 export class SirayaConfigError extends Error {}
 
@@ -96,6 +101,13 @@ async function sirayaFetch(path: string, init: RequestInit = {}, credentials?: S
     const res = model && !byok
       ? await monitoredModelFetch(`${baseUrl}${path}`, requestInit, {model, provider:"siraya", requestId, attempt:index+1, keySlot:keys[index] === process.env.SIRAYA_API_KEY?.trim() ? "primary" : "backup"})
       : await fetch(`${baseUrl}${path}`, requestInit);
+    if (byok && init.method === "POST" && credentials?.onRequestMetadata) {
+      const upstreamId = res.headers.get("x-request-id");
+      const providerRequestId = upstreamId && /^[A-Za-z0-9_.:-]{1,160}$/.test(upstreamId) && !/^(?:sk|csk)-/i.test(upstreamId) ? upstreamId : null;
+      // A receipt failure must not discard an accepted result or replay a paid POST.
+      // The caller keeps the metadata in its durable generation update as well.
+      try { await credentials.onRequestMetadata({ requestId: providerRequestId, httpStatus: res.status }); } catch { /* Caller reconciliation retains the generation result. */ }
+    }
     if (res.ok) return res;
     const error = await responseError(res);
     const canReplay = init.body == null || typeof init.body === "string";
@@ -313,6 +325,7 @@ export interface ImageEditRequest {
   background?: string;
   output_compression?: number;
   moderation?: string;
+  output_format?: "png" | "jpeg";
   /**
    * Same Seedream "AI generated" watermark quirk as /images/generations
    * (see ImageGenerationRequest) — but for THIS endpoint specifically, the
@@ -331,7 +344,7 @@ export interface ImageEditRequest {
 export async function createImageEdit(body: ImageEditRequest, credentials?: SirayaCredentials) {
   const res = await sirayaFetch("/images/edits", {
     method: "POST",
-    body: JSON.stringify({ ...applyWatermarkDefaults(body, "imageEdit"), output_format: "png" }),
+    body: JSON.stringify({ ...applyWatermarkDefaults(body, "imageEdit"), output_format: credentials ? body.output_format ?? "png" : "png" }),
   }, credentials);
   return res.json();
 }
@@ -388,6 +401,15 @@ export async function createVideo(body: VideoGenerationRequest, credentials?: Si
     method: "POST",
     body: JSON.stringify(minimaxVideoPayload(klingVideoPayload(wanVideoPayload(applyWatermarkDefaults(body, "video"))))),
   }, credentials);
+  return res.json();
+}
+
+/** Reviewed BYOK builders already emit their provider's exact wire contract.
+ * An explicit customer credential is mandatory; C-end adapters stay separate.
+ */
+export async function createBusinessVideo(body: Record<string, unknown>, credentials: SirayaCredentials) {
+  if (credentials === undefined) throw new SirayaConfigError();
+  const res = await sirayaFetch("/videos/generations", { method: "POST", body: JSON.stringify(body) }, credentials);
   return res.json();
 }
 

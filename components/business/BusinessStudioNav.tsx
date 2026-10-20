@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
-import { IconImage, IconVideo, IconChat, IconHistory, IconWing } from "@/components/Icons";
+import { IconImage, IconVideo, IconChat, IconHistory, IconWing, IconAssets, IconApps } from "@/components/Icons";
+import { useLocale } from "@/lib/i18n/client";
+import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
+import type { BusinessStudioTab } from "@/lib/businessStudio";
 import ModelLogo from "@/components/ModelLogo";
 import type { BusinessCopy } from "@/lib/i18n/business";
 import type { businessStudioCopy } from "@/lib/i18n/businessStudio";
@@ -18,10 +21,10 @@ export interface BusinessStudioNavProps {
   models: BusinessModel[];
   kind: BusinessKind;
   selectedId: string;
-  tab: "create" | "key" | "history";
+  tab: BusinessStudioTab;
   onKind: (kind: BusinessKind) => void;
   onModel: (id: string) => void;
-  onTab: (tab: "create" | "key" | "history") => void;
+  onTab: (tab: BusinessStudioTab) => void;
 }
 
 const KINDS = [
@@ -31,6 +34,7 @@ const KINDS = [
 ] as const;
 
 export default function BusinessStudioNav({ copy, business, approved, keyConfigured, modelsLoading, models, kind, selectedId, tab, onKind, onModel, onTab }: BusinessStudioNavProps) {
+  const operations = businessOperationsCopy(useLocale());
   const [search, setSearch] = useState("");
   const mobileModels = useRef<HTMLDetailsElement>(null);
   const searchId = useId();
@@ -53,7 +57,7 @@ export default function BusinessStudioNav({ copy, business, approved, keyConfigu
     </> : <p className={styles.navEmpty}>{approved ? copy.keyNotConnected : copy.approvalNeeded}</p>}
   </div>;
 
-  return <aside className={styles.nav} aria-label={copy.navigationLabel}>
+  return <aside className={styles.nav} aria-label={copy.navigationLabel} data-view={tab}>
     <div className={styles.navBrand}><IconWing className={styles.brandWing} /><div><span className={styles.brandName}>THE BLUE WING</span><span className={styles.brandCaption}>{copy.studioLabel}</span></div></div>
     <nav className={styles.navSections} aria-label={business.createTab}>
       {KINDS.map(item => <button key={item.kind} type="button" className={styles.kindButton} aria-pressed={tab === "create" && kind === item.kind} disabled={!approved} onClick={() => chooseKind(item.kind)}><item.icon className={styles.navIcon} /><span>{copy[item.title]}</span><span className={styles.kindNumber} aria-hidden="true">{item.number}</span></button>)}
@@ -62,8 +66,11 @@ export default function BusinessStudioNav({ copy, business, approved, keyConfigu
     <details ref={mobileModels} className={styles.mobileModels}><summary><span><span className={styles.mobileModelLabel}>{copy.modelsTitle}</span><span className={styles.mobileModelValue}>{selected?.displayName ?? copy.modelsTitle}</span></span><svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5 7 5 5 5-5" /></svg></summary>{modelContents("mobile")}</details>
     <div className={styles.navFooter}>
       <nav className={styles.utilityNav} aria-label={business.workspace}>
-        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "history"} onClick={() => onTab("history")}><IconHistory className={styles.navIcon} /><span>{business.historyTab}</span></button>
-        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "key"} onClick={() => onTab("key")}><svg viewBox="0 0 24 24" className={styles.navIcon} aria-hidden="true"><circle cx="8.5" cy="9" r="4" /><path d="m11.5 12 7 7 2-2-2-2 1.5-1.5" /></svg><span>{business.keyTab}</span><span className={styles.keyDot} data-connected={keyConfigured} aria-label={keyConfigured ? copy.keyConnected : business.notConfigured} /></button>
+        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "assets"} onClick={() => onTab("assets")}><IconAssets className={styles.navIcon} /><span>{operations.assets}</span></button>
+        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "history"} onClick={() => onTab("history")}><IconHistory className={styles.navIcon} /><span>{operations.work}</span></button>
+        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "usage"} onClick={() => onTab("usage")}><svg viewBox="0 0 24 24" className={styles.navIcon} aria-hidden="true"><path d="M4 19h16M6 16V9m6 7V4m6 12v-5" /></svg><span>{operations.usage}</span></button>
+        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "models"} onClick={() => onTab("models")}><IconApps className={styles.navIcon} /><span>{operations.models}</span></button>
+        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "key"} onClick={() => onTab("key")}><svg viewBox="0 0 24 24" className={styles.navIcon} aria-hidden="true"><circle cx="8.5" cy="9" r="4" /><path d="m11.5 12 7 7 2-2-2-2 1.5-1.5" /></svg><span>{operations.keys}</span><span className={styles.keyDot} data-connected={keyConfigured} aria-label={keyConfigured ? copy.keyConnected : business.notConfigured} /></button>
       </nav>
       <div className={styles.billingNote}><span aria-hidden="true">↗</span><p>{copy.ownKeyLabel}<br /><span>{business.noCredits}</span></p></div>
       <Link href="/studio" className={styles.returnLink}><span aria-hidden="true">←</span>{copy.returnConsumer}</Link>

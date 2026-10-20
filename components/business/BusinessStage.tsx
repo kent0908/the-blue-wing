@@ -5,13 +5,18 @@ import type { BusinessCopy } from "@/lib/i18n/business";
 import type { businessStudioCopy } from "@/lib/i18n/businessStudio";
 import type { BusinessGeneration, BusinessKind, BusinessModel } from "./types";
 import { modelLabel } from "@/lib/modelLabel";
+import BusinessGenerationReceipt from "./BusinessGenerationReceipt";
+import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
+import { useLocale } from "@/lib/i18n/client";
 import styles from "./BusinessStudio.module.css";
 
-export default function BusinessStage({ copy, business, kind, model, job, onHistory, onRefresh, refreshing, movNotice }: {
+export default function BusinessStage({ copy, business, kind, model, job, onHistory, onRefresh, refreshing, movNotice, onJobUpdated }: {
   copy: ReturnType<typeof businessStudioCopy>; business: BusinessCopy; kind: BusinessKind;
   model?: BusinessModel; job?: BusinessGeneration; onHistory: () => void; onRefresh: () => void; refreshing: boolean;
   movNotice?: string;
+  onJobUpdated?: (job: BusinessGeneration) => void;
 }) {
+  const operations = businessOperationsCopy(useLocale());
   const pending = job && ["processing", "submitting", "unknown"].includes(job.status);
   const hasOutput = !!(job?.videoUrl || job?.images?.length || job?.text);
   return <section className={styles.stage} aria-label={copy.previewTitle}>
@@ -32,7 +37,9 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
     <div className={styles.stageActions}>
       <p>{job ? <><span>{job.model}</span><br />{business[job.status]}</> : <>{business.providerBilling}<br />{business.noCredits}</>}</p>
       {job?.videoUrl ? <a href={`${job.videoUrl}?download=1`} download>{business.download} ↗</a> : null}
+      {job?.images?.map((image, index) => <a key={image.url} href={`${image.url}?download=1`} download>{operations.downloadImage} {index + 1} ↗</a>)}
       <button type="button" onClick={pending ? onRefresh : onHistory} disabled={refreshing}>{refreshing ? business.checking : pending ? business.checkOriginal : copy.viewHistory} <span aria-hidden="true">↗</span></button>
     </div>
+    {job ? <div className={styles.stageCaption}><BusinessGenerationReceipt job={job} onUpdated={onJobUpdated} /></div> : null}
   </section>;
 }

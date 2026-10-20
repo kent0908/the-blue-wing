@@ -4,23 +4,19 @@ import { sql } from "./db";
 import { blobConfigured } from "./assets";
 import { assetsToDataUrls } from "./assetData";
 import { BusinessError, getBusinessCredential, type BusinessAccount } from "./business";
-import { listRates } from "./rateCard";
-import { getImageModelForControls, sizeOptionsFor, supportsRefImages } from "./imageModels";
-import { videoConstraintFor, maxRefsForVideoModel } from "./videoModels";
-import { getKlingVideoModel } from "./klingVideo";
-import { getMiniMaxVideoModel } from "./minimaxVideo";
-import { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type BusinessSeedanceCapability, type BusinessSeedanceMode } from "./businessSeedance";
+import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type BusinessSeedanceCapability, type BusinessSeedanceMode } from "./businessSeedance";
+import { assertBusinessImageParameters, getBusinessImageCapability, type BusinessImageControl } from "./businessImageCapabilities";
+import { buildBusinessModelCatalog } from "./businessModelCatalog";
+import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
 import { resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
-import { isGenerationPickerModel } from "./generationPickerModels";
-import { replacementGeminiTextModel } from "./geminiTextModels";
-import { modelLabel } from "./modelLabel";
+import { resolveBusinessUploadSources } from "./businessAssetUploads";
 import { validateGeneration } from "./generationValidation";
 import { assertPromptSafety, PromptSafetyError } from "./promptSafety";
 import { isAdultVerified } from "./adultGate";
 import type { UserRow } from "./db";
 import { sniffImageMimeFromBase64 } from "./imageMime";
-import { createImage, createVideo, createChatCompletion, getVideoStatus, listModels, SirayaApiError, type ImageGenerationRequest, type VideoGenerationRequest } from "./siraya";
+import { createImage, createVideo, createBusinessVideo, createChatCompletion, getVideoStatus, listModels, SirayaApiError, type ImageGenerationRequest, type VideoGenerationRequest } from "./siraya";
 
 export type BusinessKind = "image" | "video" | "text";
 export type BusinessGenerationStatus = "submitting" | "processing" | "completed" | "failed" | "unknown";
@@ -29,6 +25,12 @@ export interface BusinessGenerationRow {
   kind: BusinessKind; model: string; prompt: string; nsfw: boolean; status: BusinessGenerationStatus;
   provider_task_id: string | null; provider_output: BusinessOutput | null; output: BusinessOutput | null;
   error_code: string | null; created_at: string; updated_at: string;
+  provider_request_id: string | null; provider_http_status: number | null;
+  provider_request_ids: string[]; provider_receipt_count: number;
+  submitted_at: string | null; completed_at: string | null; duration_ms: number | string | null;
+  provider_cost: string | null; provider_currency: string | null;
+  billing_status: "pending" | "matched" | "unavailable"; billing_checked_at: string | null;
+  provider_billing_outcome: string | null; provider_duration_ms: string | number | null;
 }
 interface BusinessOutput { images?: { url: string }[]; videoUrl?: string; text?: string }
 export interface BusinessModel {
@@ -37,6 +39,8 @@ export interface BusinessModel {
   aspectRatios?: string[]; supportsAudio?: boolean; defaultSeconds?: number; secondsOptions?: number[];
   nativeAudioOnly?: boolean; nativeAudioResolutions?: string[]; maxReferenceImages?: number; promptMaxChars?: number;
   seedance?: BusinessSeedanceCapability;
+  dedicatedVideo?: BusinessDedicatedVideoCapability;
+  maxImageCount?: number; imageControls?: BusinessImageControl[];
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const pending = ["submitting", "processing", "unknown"];
@@ -44,63 +48,32 @@ function fail(code = "invalid_parameters", status = 400): never { throw new Busi
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const baseModel = (model: string) => model.replace(/^NSFW-/i, "");
 
-/** Only enabled, locally reviewed capabilities. Unreviewed API models cannot be sent by guessing an ID. */
-export async function businessModelCatalog(): Promise<BusinessModel[]> {
-  const rates = await listRates();
-  return rates.flatMap<BusinessModel>(rate => {
-    const id = rate.modelId;
-    if (!rate.active || !isGenerationPickerModel(id) || replacementGeminiTextModel(id) || /happyhorse[-.]1[.-]0/i.test(id) || /kling.*(?:avatar|face-recognition|lip-sync|tts)/i.test(id) || !/^[a-zA-Z0-9._:-]{1,150}$/.test(id)) return [];
-    const common = { id, displayName: modelLabel(id), nsfw: /nsfw/i.test(id) };
-    if (rate.modality === "image") {
-      const image = getImageModelForControls(id);
-      if (!image) return [];
-      return [{ ...common, modality: "image" as const, sizes: sizeOptionsFor(id), supportsReferences: supportsRefImages(image) }];
-    }
-    if (rate.modality === "video") {
-      // Dedicated HappyHorse I2V/R2V/edit endpoints are outside this initial contract.
-      if (/-(?:i2v|r2v|video-edit)$/i.test(id)) return [];
-      const caps = videoConstraintFor(baseModel(id));
-      if (!caps.resolutions.length) return [];
-      const seedance = getSeedanceCapability(id);
-      if (seedance) return [{ ...common, modality: "video" as const,
-        resolutions: [...seedance.resolutions], minSeconds: seedance.minSeconds, maxSeconds: seedance.maxSeconds,
-        supportsReferences: true, aspectRatios: [...seedance.aspectRatios], supportsAudio: true,
-        defaultSeconds: seedance.defaultSeconds, maxReferenceImages: seedance.references.image, seedance }];
-      const kling = getKlingVideoModel(id);
-      if (kling) return [{ ...common, modality: "video" as const, ...caps, supportsReferences: true,
-        aspectRatios: [...kling.aspectRatios], supportsAudio: kling.supportsAudio, nativeAudioOnly: kling.nativeAudioOnly,
-        nativeAudioResolutions: [...kling.nativeAudioResolutions], defaultSeconds: 5, secondsOptions: [...kling.secondsOptions], maxReferenceImages: kling.maxReferenceImages, promptMaxChars: 2500 }];
-      const minimax = getMiniMaxVideoModel(id);
-      if (minimax) return [{ ...common, modality: "video" as const, ...caps, supportsReferences: true,
-        aspectRatios: [...minimax.aspectRatios], supportsAudio: true, nativeAudioOnly: true,
-        nativeAudioResolutions: [...minimax.nativeAudioResolutions], defaultSeconds: minimax.defaultSeconds, maxReferenceImages: 9 }];
-      const veo = /veo-3\.1/.test(id);
-      return [{ ...common, modality: "video" as const, ...caps, supportsReferences: maxRefsForVideoModel(baseModel(id)) > 0,
-        aspectRatios: veo ? ["16:9", "9:16"] : ["16:9", "9:16", "1:1"],
-        supportsAudio: /seedance-2\.[05]|veo-3\.1|^wan3\.0/i.test(id), defaultSeconds: veo ? 8 : 5,
-        maxReferenceImages: 4,
-        ...(veo ? { secondsOptions: [4, 6, 8] } : {}) }];
-    }
-    if (rate.modality === "text") return [{ ...common, modality: "text" as const, supportsReferences: false }];
-    return [];
-  });
+/** The customer's live grants, independent of C-end prices and availability. */
+export async function businessModelCatalog(raw: unknown) {
+  return buildBusinessModelCatalog(raw);
 }
 
 /** A read-only upstream catalogue lookup uses this account's exact key and never the platform credentials. */
 export async function availableBusinessModels(userId: number, accountId: string) {
   const credential = await getBusinessCredential(userId, accountId);
-  if (!credential) return { models: [] as BusinessModel[], needsKey: true };
+  if (!credential) return { models: [] as BusinessModel[], unavailableModels: [], upstreamTotal: 0, needsKey: true };
   let raw: unknown;
   try { raw = await listModels({ apiKey: credential.apiKey }); }
   catch { throw new BusinessError("credential_validation_failed", 502); }
-  const data = record(raw) && Array.isArray(raw.data) ? raw.data : [];
-  const enabled = new Set(data.flatMap(model => record(model) && typeof model.id === "string" ? [model.id.toLowerCase()] : []));
-  return { models: (await businessModelCatalog()).filter(model => enabled.has(model.id.toLowerCase())), needsKey: false };
+  try { return { ...(await businessModelCatalog(raw)), needsKey: false }; }
+  catch { throw new BusinessError("credential_validation_failed", 502); }
 }
 
 export function publicBusinessGeneration(row: BusinessGenerationRow) {
   return { id: row.id, clientRequestId: row.client_request_id, kind: row.kind, model: row.model, prompt: row.prompt,
     nsfw: row.nsfw, status: row.status, createdAt: row.created_at,
+    providerRequestId: row.provider_request_id ?? null, providerHttpStatus: row.provider_http_status ?? null,
+    submittedAt: row.submitted_at ?? null, completedAt: row.completed_at ?? null,
+    durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
+    providerCost: row.provider_cost ?? null, providerCurrency: row.provider_currency ?? null,
+    billingStatus: row.billing_status ?? "pending", billingCheckedAt: row.billing_checked_at ?? null,
+    providerBillingOutcome: row.provider_billing_outcome ?? null,
+    providerDurationMs: row.provider_duration_ms === null || row.provider_duration_ms === undefined ? null : Number(row.provider_duration_ms),
     ...(row.output ?? {}), ...(row.error_code ? { errorCode: row.error_code } : {}) };
 }
 export function assertBusinessGenerationAge(row: { nsfw: boolean }, user: UserRow) {
@@ -113,8 +86,8 @@ function validateSubmission(value: unknown) {
     !["image", "video", "text"].includes(String(value.kind)) || !record(value.parameters)) fail();
   const kind = value.kind as BusinessKind;
   const parameters = { ...value.parameters };
-  const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds"] :
-    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "assetIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
+  const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "background", "output_format", "output_compression", "moderation"] :
+    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "businessAssetIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
     ["model", "prompt", "max_tokens", "temperature"];
   if (Object.keys(parameters).some(key => !allowed.includes(key)) || typeof parameters.model !== "string" ||
     !/^[a-zA-Z0-9._:-]{1,150}$/.test(parameters.model) || typeof parameters.prompt !== "string" ||
@@ -125,7 +98,8 @@ function validateSubmission(value: unknown) {
   catch (error) { if (error instanceof PromptSafetyError) fail("prompt_blocked"); throw error; }
   if (parameters.negative_prompt !== undefined && (typeof parameters.negative_prompt !== "string" || parameters.negative_prompt.length > 4000)) fail();
   if (parameters.seed !== undefined && (typeof parameters.seed !== "number" || !Number.isSafeInteger(parameters.seed) || parameters.seed < -1 || parameters.seed > 2147483647)) fail();
-  if (parameters.assetIds !== undefined && (!Array.isArray(parameters.assetIds) || parameters.assetIds.length > (kind === "video" ? 50 : 4) || parameters.assetIds.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) || new Set(parameters.assetIds).size !== parameters.assetIds.length)) fail();
+  if (parameters.assetIds !== undefined && (!Array.isArray(parameters.assetIds) || parameters.assetIds.length > (kind === "video" ? 50 : 16) || parameters.assetIds.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) || new Set(parameters.assetIds).size !== parameters.assetIds.length)) fail();
+  if (parameters.businessAssetIds !== undefined && (!Array.isArray(parameters.businessAssetIds) || parameters.businessAssetIds.length > 16 || parameters.businessAssetIds.some(id => typeof id !== "string" || !UUID.test(id)) || new Set(parameters.businessAssetIds).size !== parameters.businessAssetIds.length)) fail();
   if (parameters.providerAssets !== undefined && (!Array.isArray(parameters.providerAssets) || parameters.providerAssets.length > 50 || parameters.providerAssets.some(ref => !record(ref) || Object.keys(ref).some(key => !["id", "type"].includes(key)) || typeof ref.id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,199}$/.test(ref.id) || !["image", "video", "audio"].includes(String(ref.type))) || new Set(parameters.providerAssets.map(ref => (ref as { id: string }).id)).size !== parameters.providerAssets.length)) fail();
   if (parameters.referenceOrder !== undefined && (!Array.isArray(parameters.referenceOrder) || parameters.referenceOrder.length > 50 || parameters.referenceOrder.some(key => typeof key !== "string" || !/^(?:local:[1-9]\d*|provider:[a-zA-Z0-9][a-zA-Z0-9_-]{0,199})$/.test(key)) || new Set(parameters.referenceOrder).size !== parameters.referenceOrder.length)) fail();
   return { clientRequestId: value.clientRequestId, kind, parameters };
@@ -134,7 +108,32 @@ function validateSubmission(value: unknown) {
 async function normalizedParameters(kind: BusinessKind, parameters: Record<string, unknown>, model: BusinessModel, userId: number, accountId: string, credential: { id: string; apiKey: string }) {
   const payload = { ...parameters };
   const assetIds = payload.assetIds as number[] | undefined;
+  if (kind === "image") {
+    const ownUploads = (parameters.businessAssetIds ?? []) as string[];
+    let caps: ReturnType<typeof getBusinessImageCapability>;
+    try { caps = assertBusinessImageParameters(parameters, (assetIds?.length ?? 0) + ownUploads.length); }
+    catch { fail(); }
+    payload.n ??= 1; payload.size ??= caps.sizes[0];
+    delete payload.assetIds; delete payload.businessAssetIds;
+    const refs: string[] = [];
+    if (assetIds?.length) {
+      const { rows } = await sql.query<{ id: number; content_type: string; size: number }>(
+        "select id,content_type,size from assets where user_id=$1 and id=any($2::bigint[])", [userId, assetIds]);
+      if (rows.length !== assetIds.length || rows.some(asset => !["image/png", "image/jpeg", "image/webp"].includes(asset.content_type) || Number(asset.size) > 10 * 1024 * 1024) || rows.reduce((sum, asset) => sum + Number(asset.size), 0) > 20 * 1024 * 1024) fail("invalid_reference");
+      refs.push(...await assetsToDataUrls(userId, assetIds, caps.maxReferenceImages));
+      if (refs.length !== assetIds.length) fail("invalid_reference");
+    }
+    if (ownUploads.length) {
+      const resolved = await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw);
+      if (resolved.length !== ownUploads.length || resolved.some(ref => ref.type !== "image")) fail("invalid_reference");
+      refs.push(...resolved.map(ref => ref.url));
+    }
+    if (refs.length) payload.image = refs.length === 1 ? refs[0] : refs;
+    if (caps.family === "seedream") payload.sequential_image_generation = "disabled";
+    return payload;
+  }
   if (kind === "video" && model.seedance) {
+    if (parameters.businessAssetIds !== undefined) fail();
     const providerAssets = (parameters.providerAssets ?? []) as BusinessProviderAssetReference[];
     const mode = (parameters.mode ?? "freestyle") as BusinessSeedanceMode;
     const types = [...(assetIds ?? []).map(() => ({ type: "image" as const })), ...providerAssets];
@@ -153,21 +152,23 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     try { return buildBusinessSeedancePayload(parameters, referenceOrder.map(key => resolved.get(key)!)); }
     catch { fail(); }
   }
+  if (kind === "video" && model.dedicatedVideo) {
+    // These dedicated providers need HTTPS media, not Seedance's asset:// IDs.
+    // B-native immutable uploads have an independent account-scoped resolver.
+    if (["assetIds", "providerAssets", "referenceOrder", "output_format"].some(key => parameters[key] !== undefined)) fail();
+    const ids = (parameters.businessAssetIds ?? []) as string[];
+    const types = ids.map((_, index) => ({ type: "image" as const, url: `https://owned.invalid/reference-${index}.png` }));
+    try { buildBusinessDedicatedVideoPayload(parameters, types); } catch { fail(); }
+    const refs = ids.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ids, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
+    if (refs.length !== ids.length || refs.some(ref => ref.type !== "image")) fail("invalid_reference");
+    try { return buildBusinessDedicatedVideoPayload(parameters, refs); } catch { fail(); }
+  }
   // Seedance-only controls must never leak to another adapter or bypass its reviewed contract.
-  if (["mode", "providerAssets", "output_format", "referenceOrder"].some(key => parameters[key] !== undefined)) fail();
+  if (["mode", "providerAssets", "output_format", "referenceOrder", "businessAssetIds"].some(key => parameters[key] !== undefined)) fail();
   if (model.promptMaxChars && String(payload.prompt).length > model.promptMaxChars) fail();
   if (assetIds && assetIds.length > (model.maxReferenceImages ?? 4)) fail("invalid_reference");
   delete payload.assetIds;
-  if (kind === "image") {
-    payload.n ??= 1;
-    if (typeof payload.n !== "number" || !Number.isSafeInteger(payload.n) || payload.n < 1 || payload.n > 4) fail();
-    payload.size ??= model.sizes?.[0];
-    const controls = getImageModelForControls(model.id)?.controls ?? [];
-    for (const key of ["quality", "negative_prompt", "seed"]) {
-      if (payload[key] !== undefined && !controls.some(control => control.key === key)) fail();
-    }
-    if (payload.quality !== undefined && !["low", "medium", "high"].includes(String(payload.quality))) fail();
-  } else if (kind === "video") {
+  if (kind === "video") {
     payload.seconds ??= model.defaultSeconds;
     payload.resolution ??= model.resolutions?.includes("720p") ? "720p" : model.resolutions?.[0];
     payload.aspect_ratio ??= model.aspectRatios?.[0] ?? "16:9";
@@ -195,8 +196,7 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     if (rows.length !== assetIds.length || rows.some(asset => !["image/png", "image/jpeg", "image/webp"].includes(asset.content_type) || Number(asset.size) > 10 * 1024 * 1024) || rows.reduce((sum, asset) => sum + Number(asset.size), 0) > 20 * 1024 * 1024) fail("invalid_reference");
     const refs = await assetsToDataUrls(userId, assetIds, model.maxReferenceImages ?? 4);
     if (refs.length !== assetIds.length) fail("invalid_reference");
-    if (kind === "image") payload.image = refs.length === 1 ? refs[0] : refs;
-    else if (kind === "video") payload.input_references = refs.map(url => ({ type: "image", url }));
+    if (kind === "video") payload.input_references = refs.map(url => ({ type: "image", url }));
   }
   if (kind === "video") payload.async = true;
   return payload;
@@ -265,10 +265,17 @@ async function persistBusinessMedia(source: string, row: BusinessGenerationRow, 
 }
 
 async function updateGeneration(row: BusinessGenerationRow, status: BusinessGenerationStatus, output: BusinessOutput | null, errorCode: string | null, providerOutput?: BusinessOutput | null, taskId?: string | null) {
+  const completedAt = ["completed", "failed"].includes(status) ? new Date().toISOString() : null;
+  const started = row.submitted_at ? new Date(row.submitted_at).getTime() : NaN;
+  const duration = completedAt && Number.isFinite(started) ? Math.max(0, new Date(completedAt).getTime() - started) : null;
   const result = await sql.query<BusinessGenerationRow>(`update business_generations set status=$1,output=$2::jsonb,error_code=$3,
-    provider_output=coalesce($4::jsonb,provider_output),provider_task_id=coalesce($5,provider_task_id),updated_at=now()
+    provider_output=coalesce($4::jsonb,provider_output),provider_task_id=coalesce($5,provider_task_id),
+    provider_request_id=coalesce($9,provider_request_id),provider_http_status=coalesce($10,provider_http_status),
+    provider_request_ids=$11::text[],provider_receipt_count=$12,
+    completed_at=coalesce(completed_at,$13::timestamptz),duration_ms=coalesce(duration_ms,$14::bigint),updated_at=now()
     where id=$6 and account_id=$7 and user_id=$8 returning *`, [status, output ? JSON.stringify(output) : null, errorCode,
-    providerOutput ? JSON.stringify(providerOutput) : null, taskId ?? null, row.id, row.account_id, row.user_id]);
+    providerOutput ? JSON.stringify(providerOutput) : null, taskId ?? null, row.id, row.account_id, row.user_id,
+    row.provider_request_id ?? null, row.provider_http_status ?? null, row.provider_request_ids ?? [], row.provider_receipt_count ?? 0, completedAt, duration]);
   return result.rows[0];
 }
 
@@ -297,11 +304,14 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
   // Durable replay before credential lookup/model catalog changes; never call a model twice for the same UUID.
   const existing = await sql.query<BusinessGenerationRow>("select * from business_generations where account_id=$1 and user_id=$2 and client_request_id=$3", [account.id, user.id, submission.clientRequestId]);
   if (existing.rows[0]) { assertBusinessGenerationAge(existing.rows[0], user); return { row: existing.rows[0], duplicate: true }; }
-  const model = (await businessModelCatalog()).find(item => item.id === submission.parameters.model && item.modality === submission.kind);
-  if (!model) fail("model_unavailable", 400);
-  assertBusinessGenerationAge(model, user);
   const credential = await getBusinessCredential(user.id, account.id);
   if (!credential) fail("credential_required", 409);
+  let catalog: Awaited<ReturnType<typeof businessModelCatalog>>;
+  try { catalog = await businessModelCatalog(await listModels({ apiKey: credential.apiKey })); }
+  catch { throw new BusinessError("credential_validation_failed", 502); }
+  const model = catalog.models.find(item => item.id === submission.parameters.model && item.modality === submission.kind);
+  if (!model) fail("model_unavailable", 400);
+  assertBusinessGenerationAge(model, user);
   const payload = await normalizedParameters(submission.kind, submission.parameters, model, user.id, account.id, credential);
   const reservation = await reserveGeneration(user, account, credential.id, submission, model);
   if (reservation.duplicate) { assertBusinessGenerationAge(reservation.row, user); return reservation; }
@@ -309,11 +319,28 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
   // Recheck approval/revocation immediately before paid I/O, while pinning this job's original key version.
   const pinned = await getBusinessCredential(user.id, account.id, row.credential_id);
   if (!pinned) return { row: await updateGeneration(row, "failed", null, "credential_missing"), duplicate: false };
+  // Use a stable local timestamp immediately before the paid POST. It measures
+  // observed end-to-end completion, never a claim about provider inference time.
+  const submittedAt = new Date().toISOString();
+  const marked = await sql.query<BusinessGenerationRow>(`update business_generations set submitted_at=coalesce(submitted_at,$1::timestamptz),updated_at=now()
+    where id=$2 and account_id=$3 and user_id=$4 returning *`, [submittedAt, row.id, row.account_id, row.user_id]);
+  if (!marked.rows[0]) fail("generation_not_found", 404);
+  row = marked.rows[0];
   let result: unknown;
   try {
-    const options = { apiKey: pinned.apiKey };
+    const options = { apiKey: pinned.apiKey, onRequestMetadata: async (metadata: { requestId: string | null; httpStatus: number }) => {
+      row.provider_request_id = metadata.requestId; row.provider_http_status = metadata.httpStatus;
+      row.provider_receipt_count = (row.provider_receipt_count ?? 0) + 1;
+      row.provider_request_ids = [...new Set([...(row.provider_request_ids ?? []), ...(metadata.requestId ? [metadata.requestId] : [])])].slice(0, 3);
+      // This is the HTTP request receipt, not the asynchronous generation task.
+      // Preserve it even if JSON decoding or the model's own request fails.
+      await sql.query(`update business_generations set provider_request_id=$1,provider_http_status=$2,
+        provider_request_ids=$6::text[],provider_receipt_count=$7,updated_at=now()
+        where id=$3 and account_id=$4 and user_id=$5`, [metadata.requestId, metadata.httpStatus, row.id, row.account_id, row.user_id,
+        row.provider_request_ids, row.provider_receipt_count]);
+    } };
     if (row.kind === "image") result = await createImage(payload as unknown as ImageGenerationRequest, options);
-    else if (row.kind === "video") result = await createVideo(payload as unknown as VideoGenerationRequest, options);
+    else if (row.kind === "video") result = model.seedance || model.dedicatedVideo ? await createBusinessVideo(payload, options) : await createVideo(payload as unknown as VideoGenerationRequest, options);
     else result = await createChatCompletion(payload as unknown as Parameters<typeof createChatCompletion>[0], options);
   } catch (error) {
     const code = providerErrorCode(error);

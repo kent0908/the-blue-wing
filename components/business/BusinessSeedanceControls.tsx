@@ -22,6 +22,7 @@ interface Props {
   onOutputFormat: (value: "mp4" | "mov") => void;
   seed?: string;
   onSeed?: (value: string) => void;
+  onOpenAssets?: () => void;
 }
 const modeKeys: Record<BusinessSeedanceMode, readonly [keyof BusinessSeedanceCopy, keyof BusinessSeedanceCopy]> = {
   freestyle: ["freestyle", "freestyleInfo"], "text-to-video": ["textToVideo", "textToVideoInfo"],
@@ -143,7 +144,7 @@ export default function BusinessSeedanceControls(props: Props) {
               <span>{asset.name}</span><small>{chosen ? t.selected : t.select}</small>
             </button>;
           })}</div> : <p className={styles.empty}>{t.noLocalAssets}</p>}
-          <a className={styles.link} href="/assets" target="_blank" rel="noopener noreferrer">{t.openLibrary} ↗</a>
+          <button type="button" className={styles.loadButton} onClick={props.onOpenAssets}>{t.openLibrary} ↗</button>
         </div> : <div role="tabpanel" id={`${id}-provider`} aria-labelledby={`${id}-provider-tab`}>
           <p className={styles.quiet}>{t.providerDescription}</p>
           <div className={styles.searchRow}>
@@ -162,7 +163,7 @@ export default function BusinessSeedanceControls(props: Props) {
           {loaded && <p className={styles.quiet} role="status">{interpolate(t.resultCount, { count: catalog.length, total })}</p>}
           {loaded && page < totalPages && <button type="button" disabled={loading} className={styles.loadButton} onClick={() => { void loadProvider(page + 1, committedQuery.current); }}>{loading ? t.loading : t.more}</button>}
           <p className={styles.quiet}>{t.providerAccessNotice}</p>
-          <a className={styles.link} href="https://console.siraya.ai/assets" target="_blank" rel="noopener noreferrer">{t.openProvider} ↗</a>
+          <button type="button" className={styles.loadButton} onClick={props.onOpenAssets}>{t.openProvider} ↗</button>
         </div>}
         <p className={styles.readOnly}>{t.readOnly}</p>
       </div>

@@ -40,7 +40,7 @@ const { parseBusinessStudioLocation, businessStudioHref } = load('lib/businessSt
 const parse = query => parseBusinessStudioLocation(new URLSearchParams(query));
 assert.deepEqual(parse(''), { kind: 'image', modelId: '', tab: 'create' }, 'An empty URL starts in the image studio');
 for (const kind of ['image', 'video', 'text']) {
-  for (const tab of ['create', 'key', 'history']) {
+  for (const tab of ['create', 'key', 'history', 'assets', 'usage', 'models']) {
     const location = { kind, modelId: 'minimax-h3', tab };
     const href = businessStudioHref(location);
     const url = new URL(href, 'https://bluewing.example');
@@ -96,16 +96,19 @@ assert.ok(consumerTree.some(node => node.type === consumerSupport), 'Normal stud
 
 // The handlers below run their real function bodies with observed React setters.
 // A network call is a test failure, so changing a model/tab cannot spend money.
-const { source: workspaceSource, handlers } = actualHandlers('components/business/BusinessWorkspace.tsx', ['resetSelection', 'navigate', 'setTab', 'chooseTab', 'chooseKind', 'chooseModel', 'requestConfirmation', 'chooseVideoMode', 'toggleLocalReference', 'toggleProviderReference']);
+const { source: workspaceSource, handlers } = actualHandlers('components/business/BusinessWorkspace.tsx', ['resetSelection', 'navigate', 'setTab', 'chooseTab', 'chooseKind', 'chooseModel', 'requestConfirmation', 'chooseVideoMode', 'toggleLocalReference', 'toggleProviderReference', 'chooseDedicatedOptions', 'selectManagedAsset']);
 function context() {
   const pushes = [];
   const state = {
     kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video' },
     size: 'old-size', resolution: '4k', assetIds: [71, 72], audio: true, seconds: 30,
-    videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123',
+    videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123', imageCount:3, imageQuality:'high', imageNegative:'old', imageBusinessAssets:[{id:'old-b',uploadId:'fixture-old-upload'}], selectionContext:{current:'video:previous-model'},
     apiKey: 'fixture-unsaved-value', prompt: 'A paper garden opens.', error: 'old-error', notice: 'old-notice',
     confirmation: { clientRequestId: 'fixture-stale-confirmation' }, submitLock: { current: false },
     uncertain: true, unresolvedRequest: { current: 'fixture-original-request' }, navigationPending: false,
+    dedicatedOptions:{mode:'first-last-frame',watermark:true,seed:'77',negativePrompt:'old-negative',promptExtend:true},
+    DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS:{mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
+    d:{referenceLimitError:'reference-limit'},
     models: [
       { id: 'fixture-image', modality: 'image', displayName: 'Image' },
       { id: 'minimax-h3', modality: 'video', displayName: 'H3', minSeconds: 4, maxSeconds: 15, defaultSeconds: 6 },
@@ -122,7 +125,9 @@ function context() {
     setReferenceOrder: value => { state.referenceOrder = typeof value === 'function' ? value(state.referenceOrder) : value; },
     setOutputFormat: value => { state.outputFormat = value; },
     setSeed: value => { state.seed = value; },
+    setImageCount: value => { state.imageCount = value; }, setImageQuality: value => {state.imageQuality=value;}, setImageNegative:value=>{state.imageNegative=value;}, setImageBusinessAssets:value=>{state.imageBusinessAssets=value;},
     setAudio: value => { state.audio = value; },
+    setDedicatedOptions:value=>{state.dedicatedOptions=value;},
     setSeconds: value => { state.seconds = value; },
     setConfirmation: value => { state.confirmation = value; },
     setApiKey: value => { state.apiKey = value; },
@@ -144,6 +149,7 @@ function assertReset(state) {
   assert.equal(state.outputFormat, 'mp4');
   assert.equal(state.seed, '');
   assert.equal(state.audio, false);
+  assert.deepEqual({...state.dedicatedOptions},{mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},'Dedicated settings reset across model changes');
   assert.equal(state.confirmation, null, 'A stale paid confirmation is removed');
   assert.equal(state.uncertain, true, 'Unknown-request lock survives navigation');
   assert.equal(state.unresolvedRequest.current, 'fixture-original-request', 'The original recovery UUID survives navigation');
@@ -164,10 +170,13 @@ for (const kind of ['image', 'video', 'text']) {
   state.requestConfirmation({ preventDefault() {} });
   assert.equal(state.confirmation, null, 'Choosing a new modality cannot bypass an unknown submission');
 }
-for (const tab of ['create', 'key', 'history']) {
+for (const tab of ['create', 'key', 'history', 'assets', 'usage', 'models']) {
   const { state, pushes } = context();
   state.chooseTab(tab);
-  assertReset(state);
+  assert.equal(state.confirmation,null,'Switching utility panels removes paid confirmation');
+  assert.deepEqual(Array.from(state.assetIds),[71,72],'Asset management preserves the current reference draft');
+  assert.equal(state.videoMode,'video-edit');
+  assert.equal(state.uncertain,true,'Utility navigation retains ambiguous paid-request protection');
   assert.equal(state.apiKey, '');
   assert.equal(state.error, '');
   assert.equal(state.notice, '');
@@ -274,18 +283,23 @@ assert.ok(generateDisabled, 'The actual generate control includes the URL-transi
 // its real button handlers. Both responsive copies are tested without a DOM.
 const { businessStudioCopy } = load('lib/i18n/businessStudio.ts');
 const { businessCopy } = load('lib/i18n/business.ts');
+const { businessOperationsCopy } = load('lib/i18n/businessOperations.ts');
+let navLocale='en';
 let currentSearch = '';
 let detailsRef = { current: { open: true } };
-const icons = Object.fromEntries(['IconImage', 'IconVideo', 'IconChat', 'IconHistory', 'IconWing'].map(name => [name, function fixtureIcon() {}]));
+const icons = Object.fromEntries(['IconImage', 'IconVideo', 'IconChat', 'IconHistory', 'IconWing', 'IconAssets', 'IconApps'].map(name => [name, function fixtureIcon() {}]));
 const { default: BusinessStudioNav } = load('components/business/BusinessStudioNav.tsx', {
   react: { useId: () => 'fixture-search', useState: () => [currentSearch, value => { currentSearch = value; }], useRef: () => detailsRef },
   'react/jsx-runtime': jsxRuntime,
   'next/link': function fixtureLink() {},
   '@/components/Icons': icons,
   '@/components/ModelLogo': function fixtureModelLogo() {},
+  '@/lib/i18n/client': {useLocale:()=>navLocale},
+  '@/lib/i18n/businessOperations': {businessOperationsCopy},
   './BusinessStudio.module.css': new Proxy({}, { get: (_target, name) => String(name) }),
 });
 function navProps(locale = 'en') {
+  navLocale=locale;
   const events = [];
   const props = {
     copy: businessStudioCopy(locale), business: businessCopy(locale), approved: true, keyConfigured: true, modelsLoading: false,
@@ -317,7 +331,7 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
     assert.equal(currentSearch, '', 'Choosing another modality clears the old model search');
     assert.equal(detailsRef.current.open, false, 'Choosing another modality closes the mobile model menu');
   }
-  for (const [label, tab] of [[props.business.keyTab, 'key'], [props.business.historyTab, 'history']]) {
+  for (const [label, tab] of [[businessOperationsCopy(locale).keys,'key'],[businessOperationsCopy(locale).work,'history'],[businessOperationsCopy(locale).assets,'assets'],[businessOperationsCopy(locale).usage,'usage'],[businessOperationsCopy(locale).models,'models']]) {
     events.length = 0;
     buttonFor(tree, label).props.onClick();
     assert.deepEqual(events, [['tab', tab]], 'Utility controls open only their matching business view');
@@ -356,7 +370,7 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
   const noKey = BusinessStudioNav({ ...props, keyConfigured: false });
   assert.equal(flatten(noKey).filter(node => node.type === 'button' && node.props.title).length, 0, 'No key means no usable catalog is invented');
   assert.ok(flatten(noKey).includes(props.copy.keyNotConnected), 'No-key state explains how to unlock the catalog');
-  assert.equal(buttonFor(noKey, props.business.keyTab).props.disabled, false, 'An approved account can still open key setup');
+  assert.equal(buttonFor(noKey, businessOperationsCopy(navLocale).keys).props.disabled, false, 'An approved account can still open key setup');
 }
 
 const { default: JobToasts } = load('components/JobToasts.tsx', {
@@ -372,5 +386,24 @@ for (const path of ['/business', '/business/project']) {
 }
 pathname = '/studio';
 assert.ok(JobToasts(), 'Consumer job notifications continue working in the normal studio');
+{
+  const {state,pushes}=context();state.dedicatedOptions={...state.DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS};state.imageBusinessAssets=[];state.assetIds=[];
+  state.selected={id:'happyhorse-1.1-i2v',supportsReferences:true,dedicatedVideo:{capability:'image-to-video',maxReferenceImages:1}};
+  state.selectManagedAsset({id:'upload:first',uploadId:'first',type:'image',status:'processing',storageReady:true});
+  assert.equal(state.imageBusinessAssets.length,1,'Native business source is selectable while its separate Seedance review is pending');
+  assert.equal(pushes.length,1,'Selecting a native source returns to creation within the same business studio');
+  assert.equal(state.confirmation,null,'Selecting a source invalidates stale paid confirmation');
+  state.selectManagedAsset({id:'upload:second',uploadId:'second',type:'image',status:'active',storageReady:true});
+  assert.equal(state.imageBusinessAssets.length,1,'Single-frame mode cannot acquire a second source');
+  assert.equal(state.error,'reference-limit');
+  state.selectManagedAsset({id:'registered:first',uploadId:'first',type:'image',status:'active',storageReady:true});
+  assert.equal(state.imageBusinessAssets.length,0,'The same upload can be deselected after a provider ID appears');
+  state.selectManagedAsset({id:'upload:unready',uploadId:'unready',type:'image',status:'processing',storageReady:false});
+  assert.equal(state.imageBusinessAssets.length,0,'Incomplete native uploads are not selectable');
+  state.imageBusinessAssets=[{id:'old',uploadId:'old'}];state.confirmation={clientRequestId:'old'};
+  state.chooseDedicatedOptions({...state.dedicatedOptions,mode:'first-last-frame'});
+  assert.equal(state.imageBusinessAssets.length,0,'Changing first-frame mode clears prior source order');assert.equal(state.confirmation,null);
+  state.submitLock.current=true;state.imageBusinessAssets=[{id:'locked'}];state.chooseDedicatedOptions({...state.dedicatedOptions,watermark:true});
+  assert.equal(state.dedicatedOptions.watermark,false,'In-flight paid confirmation locks dedicated controls');assert.equal(state.imageBusinessAssets.length,1);
+}
 console.log('PASS business studio: URL validation/roundtrip, actual model/kind/tab actions, back-forward reset, unknown-request preservation, in-flight and URL-transition confirmation/button locks, responsive nav, real search, three-language labels, approval/key states and consumer-shell/toast isolation; no network or paid calls.');
-

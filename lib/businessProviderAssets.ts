@@ -1,5 +1,6 @@
 import "server-only";
 import { BusinessError } from "./businessTypes";
+import { SITE_URL } from "./seo/site";
 
 // Assets belong to the account behind this exact inference key. This module must
 // never use platform credentials or follow the signed download URLs in replies.
@@ -67,33 +68,39 @@ export function parseBusinessProviderAssetQuery(query: URLSearchParams): Busines
   return validatedOptions({
     page: integer("page", 1), pageSize: integer("pageSize", 50),
     ...(query.has("assetType") ? { assetType: query.get("assetType") as BusinessProviderAssetType } : {}),
-    status: (query.get("status") ?? "active") as BusinessProviderAssetStatus,
+    ...(query.get("status") === "all" ? {} : { status: (query.get("status") ?? "active") as BusinessProviderAssetStatus }),
     ...(query.has("name") ? { name: query.get("name")! } : {}),
   });
 }
 
-async function assetRequest(path: string, credentials: Credentials): Promise<Record<string, unknown>> {
+export class BusinessProviderAssetSubmitError extends BusinessError {
+  constructor(readonly uncertain: boolean) { super(uncertain ? "business_asset_upload_uncertain" : "business_asset_upload_rejected", uncertain ? 502 : 400); }
+}
+
+async function assetRequest(path: string, credentials: Credentials, registration?: Record<string, string>): Promise<Record<string, unknown>> {
   if (!credentials || typeof credentials.apiKey !== "string" || !/^sk-[A-Za-z0-9_-]{16,200}$/.test(credentials.apiKey)) {
     throw new BusinessError("credential_unavailable", 503);
   }
   let response: Response;
   try {
     response = await fetch(ASSET_API + path, {
-      method: "GET", headers: { Authorization: `Bearer ${credentials.apiKey}`, Accept: "application/json" },
-      cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000),
+      method: registration ? "POST" : "GET", headers: { Authorization: `Bearer ${credentials.apiKey}`, Accept: "application/json", ...(registration ? { "Content-Type": "application/json" } : {}) },
+      ...(registration ? { body: JSON.stringify(registration) } : {}),
+      cache: "no-store", redirect: "error", signal: AbortSignal.timeout(registration ? 60_000 : 15_000),
     });
   } catch {
-    throw unavailable();
+    throw registration ? new BusinessProviderAssetSubmitError(true) : unavailable();
   }
   // Never return upstream prose, response bodies, request IDs, signed URLs or keys.
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
+    if (registration) throw new BusinessProviderAssetSubmitError(response.status >= 500 || response.status >= 300 && response.status < 400);
     if (response.status === 404) throw new BusinessError("invalid_reference", 400);
     if (response.status === 401) throw new BusinessError("credential_unavailable", 503);
     throw unavailable(); // Includes FEATURE_INACTIVE and account permission errors.
   }
   const reader = response.body?.getReader();
-  if (!reader) throw unavailable();
+  if (!reader) throw registration ? new BusinessProviderAssetSubmitError(true) : unavailable();
   const chunks: Uint8Array[] = [];
   let bytes = 0;
   try {
@@ -111,10 +118,31 @@ async function assetRequest(path: string, credentials: Credentials): Promise<Rec
     if (!record(body) || body.isSuccess !== true || !record(body.data)) throw unavailable();
     return body;
   } catch {
-    throw unavailable();
+    throw registration ? new BusinessProviderAssetSubmitError(true) : unavailable();
   } finally {
     reader.releaseLock();
   }
+}
+
+export async function getBusinessProviderAsset(id: string, credentials: Credentials): Promise<BusinessProviderAsset> {
+  if (!validId(id)) throw new BusinessError("invalid_reference");
+  const body = await assetRequest(`/${encodeURIComponent(id)}`, credentials);
+  const asset = publicAsset(body.data);
+  if (asset.id !== id) throw unavailable();
+  return asset;
+}
+
+/** The upload service creates this grant. Caller URLs are never forwarded. */
+export async function registerBusinessProviderAsset(source: { url: string; type: BusinessProviderAssetType; name: string }, credentials: Credentials): Promise<BusinessProviderAsset> {
+  let url: URL;
+  try { url = new URL(source.url); } catch { throw new BusinessError("invalid_reference"); }
+  if (url.origin !== new URL(SITE_URL).origin || url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||
+    !/^\/api\/business\/provider-assets\/source\/[A-Za-z0-9_-]{80,1500}$/.test(url.pathname) || !TYPES.includes(source.type) ||
+    typeof source.name !== "string" || !source.name.trim() || source.name.length > 120 || /[\x00-\x1F\x7F]/.test(source.name)) throw new BusinessError("invalid_reference");
+  const body = await assetRequest("", credentials, { url: url.toString(), assetType: source.type, name: source.name });
+  const data = body.data as Record<string, unknown>;
+  if (!validId(data.assetId) || !STATUSES.includes(data.status as BusinessProviderAssetStatus)) throw new BusinessProviderAssetSubmitError(true);
+  return { id: data.assetId, type: source.type, name: source.name, status: data.status as BusinessProviderAssetStatus };
 }
 
 function publicAsset(value: unknown): BusinessProviderAsset {

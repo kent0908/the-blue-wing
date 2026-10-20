@@ -20,6 +20,9 @@ assert.ok(preSubmitErrorsSource, 'Actual pre-submit error set found');
 const seedanceModule = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessSeedance.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(seedanceModule, seedanceModule.exports);
 const { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSeedancePayload } = seedanceModule.exports;
+const dedicatedModule = { exports: {} };
+new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessDedicatedVideo.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(dedicatedModule, dedicatedModule.exports);
+const { getBusinessDedicatedVideoCapability, buildBusinessDedicatedVideoPayload } = dedicatedModule.exports;
 const noop = () => {};
 function makeContext() {
   let sequence = 0;
@@ -29,13 +32,14 @@ function makeContext() {
     submitLock: { current: false }, keyLock: { current: false }, unresolvedRequest: { current: null }, uncertain: false, navigationPending: false,
     selected: { id: 'kling-3.0-turbo', supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: ['720p', '1080p'], secondsOptions: [5, 10], defaultSeconds: 5, resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1'], supportsReferences: true, maxReferenceImages: 1, promptMaxChars: 2500, nsfw: false },
     prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
-    videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', assertBusinessSeedanceReferences, buildBusinessSeedancePayload,
+    videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', assertBusinessSeedanceReferences, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload,
+    dedicatedOptions: {mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
     access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved', invalidRequest: 'invalid' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' }, d: { referenceLimitError: 'seedance-refs' },
     REQUEST_HEADERS: { 'Content-Type': 'application/json' },
     businessError: (_copy, code) => code || 'error', confirmation: null, jobs: [],
     apiKey: 'sk-this-is-a-disposable-fixture-key', keyLabel: 'Fixture',
     setError: value => { context.error = value; }, setNotice: noop, setSubmitting: noop, setTab: noop, setKeySaving: noop, setCredential: noop,
-    setApiKey: value => { context.apiKey = value; }, refreshAccess: async () => {}, loadModels: async () => { context.catalogReloads = (context.catalogReloads ?? 0) + 1; }, setModels: value => { context.models = value; },
+    resetSelection:noop, setUnavailableModels:noop,setUpstreamTotal:noop, setApiKey: value => { context.apiKey = value; }, refreshAccess: async () => {}, loadModels: async () => { context.catalogReloads = (context.catalogReloads ?? 0) + 1; }, setModels: value => { context.models = value; },
     setConfirmation: value => { context.confirmation = value; },
     setUncertain: value => { context.uncertain = value; },
     setJobs: update => { context.jobs = typeof update === 'function' ? update(context.jobs) : update; },
@@ -51,6 +55,13 @@ function seedanceContext(modelId = 'NSFW-SIRAYA-Seedance-2.5') {
   result.context.selected = { id: modelId, modality: 'video', nsfw: modelId.startsWith('NSFW-'), supportsAudio: true, supportsReferences: true, resolutions: capability.resolutions, aspectRatios: capability.aspectRatios, minSeconds: capability.minSeconds, maxSeconds: capability.maxSeconds, defaultSeconds: capability.defaultSeconds, maxReferenceImages: capability.references.image, seedance: capability };
   result.context.access.adultVerified = true;
   result.context.seconds = 8; result.context.aspect = '16:9';
+  return result;
+}
+function dedicatedContext(modelId, referenceCount = 0) {
+  const result = makeContext(); const c = result.context; const capability = getBusinessDedicatedVideoCapability(modelId);
+  c.selected = { id:modelId,modality:'video',nsfw:false,supportsAudio:capability.supportsAudio,supportsReferences:capability.maxReferenceImages>0,resolutions:capability.resolutions,aspectRatios:capability.aspectRatios,minSeconds:capability.minSeconds,maxSeconds:capability.maxSeconds,defaultSeconds:capability.defaultSeconds,maxReferenceImages:capability.maxReferenceImages,promptMaxChars:capability.promptMaxChars,dedicatedVideo:capability };
+  c.seconds=5;c.resolution='720p';c.aspect='16:9';
+  c.imageBusinessAssets=Array.from({length:referenceCount},(_,index)=>({id:`upload:${index}`,uploadId:`10000000-0000-4000-8000-${String(index).padStart(12,'0')}`,name:`Own image ${index+1}`,type:'image',status:'processing'}));
   return result;
 }
 const event = { preventDefault: noop };
@@ -115,7 +126,7 @@ const event = { preventDefault: noop };
   context.requestConfirmation(event);
   assert.equal(context.confirmation.parameters.generate_audio, false, 'Kling2.6 at720p cannot request native audio');
   context.assetIds = [1, 2]; context.requestConfirmation(event);
-  assert.equal(context.error, 'refs', 'Reference count validates reviewed maximum');
+  assert.equal(context.error, 'seedance-refs', 'Reference count validates reviewed maximum');
 
   ({ context, calls } = makeContext());
   context.selected = { ...context.selected, id: 'minimax-h3-max', minSeconds: 5, maxSeconds: 15, defaultSeconds: 5, secondsOptions: undefined, resolutions: ['480p', '768p'], nativeAudioResolutions: ['480p', '768p'], maxReferenceImages: 4 };
@@ -204,6 +215,38 @@ const event = { preventDefault: noop };
     assert.equal(c.uncertain,false,'Known asset lookup failure is preflight, not an ambiguous paid submission');
     assert.equal(c.unresolvedRequest.current,null,'A preflight asset outage releases the pending UI request UUID');
   }
+
+  for (const [modelId, count] of [['wan2.7-t2v',0],['wan2.7-i2v',1],['wan2.7-r2v',5],['happyhorse-1.1-t2v',0],['happyhorse-1.1-i2v',1],['happyhorse-1.1-r2v',9]]) {
+    const result=dedicatedContext(modelId,count);const c=result.context;c.requestConfirmation(event);
+    assert.ok(c.confirmation,`${modelId} opens the actual confirmation using native B uploads`);
+    assert.equal(result.calls.length,0);assert.equal(result.uuids(),1);
+    assert.equal(c.confirmation.parameters.mode,c.selected.dedicatedVideo.capability);
+    assert.equal(c.confirmation.parameters.watermark,false);
+    assert.equal(c.confirmation.parameters.businessAssetIds?.length??0,count);
+    assert.equal(c.confirmation.parameters.assetIds,undefined);
+    assert.equal(c.confirmation.parameters.providerAssets,undefined);
+    assert.equal(c.confirmation.parameters.referenceOrder,undefined);
+    assert.equal(c.confirmation.parameters.output_format,undefined);
+    if(modelId.includes('i2v'))assert.equal(c.confirmation.parameters.aspect_ratio,undefined,'First frame controls the actual output ratio');
+    if(modelId.startsWith('happyhorse')){assert.equal(c.confirmation.parameters.generate_audio,undefined);assert.equal(c.confirmation.parameters.prompt_extend,undefined);}
+  }
+  {
+    const result=dedicatedContext('wan2.7-i2v',2);const c=result.context;c.dedicatedOptions={mode:'first-last-frame',seed:'-1',watermark:true,promptExtend:true,negativePrompt:'blurry frames'};c.requestConfirmation(event);
+    assert.ok(c.confirmation);assert.equal(c.confirmation.parameters.mode,'first-last-frame');assert.equal(c.confirmation.parameters.seed,-1);assert.equal(c.confirmation.parameters.prompt_extend,true);assert.equal(c.confirmation.parameters.watermark,true);assert.equal(c.confirmation.parameters.negative_prompt,'blurry frames');
+    assert.deepEqual(Array.from(c.confirmation.parameters.businessAssetIds),c.imageBusinessAssets.map(asset=>asset.uploadId),'First-last native B source order is preserved');
+    assert.equal(result.calls.length,0);
+  }
+  for(const [name,model,count,configure]of[
+    ['missing first frame','happyhorse-1.1-i2v',0,()=>{}],
+    ['two first frames without first-last mode','wan2.7-i2v',2,()=>{}],
+    ['nine-image overflow','happyhorse-1.1-r2v',10,()=>{}],
+    ['five-image overflow','wan2.7-r2v',6,()=>{}],
+    ['consumer reference IDs','wan2.7-r2v',1,c=>{c.assetIds=[1];}],
+    ['Seedance asset handle','wan2.7-r2v',1,c=>{c.providerAssets=[{id:'asset-only',type:'image'}];}],
+    ['invalid seed','happyhorse-1.1-t2v',0,c=>{c.dedicatedOptions.seed='-1';}],
+    ['CJK prompt exceeds actual router cap','happyhorse-1.1-t2v',0,c=>{c.prompt='景'.repeat(2501);}],
+    ['image on text model','happyhorse-1.1-t2v',1,()=>{}],
+  ]) {const result=dedicatedContext(model,count);configure(result.context);result.context.requestConfirmation(event);assert.equal(result.context.confirmation,null,`${name} cannot open paid confirmation`);assert.equal(result.uuids(),0);assert.equal(result.calls.length,0);}
 
   ({ context, calls } = makeContext());
   await context.saveKey(event);

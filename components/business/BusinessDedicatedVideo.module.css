@@ -1,0 +1,21 @@
+.controls{min-width:0;max-width:100%;border:0;border-top:1px solid #304738;padding:20px 0 0;margin:4px 0 0;color:#c5d7c9;display:grid;gap:12px}
+.controls legend{font-family:var(--font-editorial),Georgia,serif;color:#d2dfd2;font-size:18px;padding:0 14px 0 0;max-width:100%;text-wrap:balance}
+.field{display:grid;gap:8px;min-width:0;font-size:12px;line-height:1.8;color:#b6ccbb}
+.field input,.field select,.field textarea{display:block;width:100%;max-width:100%;min-width:0;border:1px solid #405d49;border-radius:2px;background:#0b1710;color:#dfebe1;font:inherit;font-size:13px;line-height:1.7;padding:10px 11px;min-height:44px;box-sizing:border-box}
+.field textarea{min-height:96px;resize:vertical}
+.field input:focus-visible,.field select:focus-visible,.field textarea:focus-visible,.controls button:focus-visible,.controls summary:focus-visible,.controls a:focus-visible,.check input:focus-visible{outline:2px solid #c2dfc7;outline-offset:3px}
+.mode{font-size:15px;line-height:1.7;margin:0;color:#d1e0d3}
+.note{font-size:12px;line-height:1.9;margin:0;color:#9eb7a5;min-width:0;text-wrap:pretty;overflow-wrap:anywhere}
+.references{display:grid;gap:10px;min-width:0;padding:12px 13px;border-left:1px solid #66856c;background:#14221980}
+.count{font:15px/1.7 Georgia,serif;color:#d0dfd1;max-width:100%;overflow-wrap:anywhere}
+.references button{justify-self:start;max-width:100%;border:1px solid #516f57;background:transparent;color:#c3d9c9;padding:9px 13px;border-radius:2px;min-height:44px;font:inherit;font-size:12px;line-height:1.7;cursor:pointer;text-wrap:balance;overflow-wrap:anywhere}
+.warning{margin:0;color:#e6b5a5;font-size:12px;line-height:1.9;text-wrap:pretty}
+.advanced{border-top:1px solid #2b4333;padding-top:6px;min-width:0}
+.advanced summary{padding:8px 0;min-height:28px;cursor:pointer;font-size:12px;line-height:1.8;color:#bfd6c6}
+.body{display:grid;gap:12px;padding:12px 0 2px;min-width:0}
+.check{display:flex;align-items:flex-start;gap:10px;min-width:0;cursor:pointer;font-size:13px;line-height:1.8;min-height:28px}
+.check input{margin:4px 0 0;accent-color:#badac2;min-width:16px;width:16px;height:16px;flex-shrink:0}
+.check span{min-width:0;text-wrap:pretty;overflow-wrap:anywhere}
+.docs{justify-self:start;max-width:100%;color:#adcbb6;font-size:12px;line-height:1.9;text-decoration:underline;text-underline-offset:4px;overflow-wrap:anywhere}
+.controls:disabled{opacity:.6}.controls:disabled button,.controls:disabled input,.controls:disabled textarea,.controls:disabled select{cursor:not-allowed}
+@media(max-width:500px){.field input,.field select,.field textarea{font-size:16px}.references{padding:11px}.controls{padding-top:17px}}
