@@ -11,6 +11,7 @@ import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapabili
 import { resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
 import { resolveBusinessUploadSources } from "./businessAssetUploads";
+import { resolveBusinessGeneratedImageSources } from "./businessGeneratedReferences";
 import { validateGeneration } from "./generationValidation";
 import { assertPromptSafety, PromptSafetyError } from "./promptSafety";
 import { isAdultVerified } from "./adultGate";
@@ -86,8 +87,8 @@ function validateSubmission(value: unknown) {
     !["image", "video", "text"].includes(String(value.kind)) || !record(value.parameters)) fail();
   const kind = value.kind as BusinessKind;
   const parameters = { ...value.parameters };
-  const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "background", "output_format", "output_compression", "moderation"] :
-    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "businessAssetIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
+  const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "referenceGenerationIds", "background", "output_format", "output_compression", "moderation"] :
+    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "businessAssetIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
     ["model", "prompt", "max_tokens", "temperature"];
   if (Object.keys(parameters).some(key => !allowed.includes(key)) || typeof parameters.model !== "string" ||
     !/^[a-zA-Z0-9._:-]{1,150}$/.test(parameters.model) || typeof parameters.prompt !== "string" ||
@@ -99,19 +100,37 @@ function validateSubmission(value: unknown) {
   if (parameters.negative_prompt !== undefined && (typeof parameters.negative_prompt !== "string" || parameters.negative_prompt.length > 4000)) fail();
   if (parameters.seed !== undefined && (typeof parameters.seed !== "number" || !Number.isSafeInteger(parameters.seed) || parameters.seed < -1 || parameters.seed > 2147483647)) fail();
   if (parameters.assetIds !== undefined && (!Array.isArray(parameters.assetIds) || parameters.assetIds.length > (kind === "video" ? 50 : 16) || parameters.assetIds.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) || new Set(parameters.assetIds).size !== parameters.assetIds.length)) fail();
-  if (parameters.businessAssetIds !== undefined && (!Array.isArray(parameters.businessAssetIds) || parameters.businessAssetIds.length > 16 || parameters.businessAssetIds.some(id => typeof id !== "string" || !UUID.test(id)) || new Set(parameters.businessAssetIds).size !== parameters.businessAssetIds.length)) fail();
+  if (parameters.businessAssetIds !== undefined) {
+    if (!Array.isArray(parameters.businessAssetIds) || parameters.businessAssetIds.length > 16 || parameters.businessAssetIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
+      new Set(parameters.businessAssetIds.map(id => id.toLowerCase())).size !== parameters.businessAssetIds.length) fail("invalid_reference");
+    parameters.businessAssetIds = parameters.businessAssetIds.map(id => id.toLowerCase());
+  }
+  if (parameters.referenceGenerationIds !== undefined) {
+    if (!Array.isArray(parameters.referenceGenerationIds) || parameters.referenceGenerationIds.length > 16 || parameters.referenceGenerationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
+      new Set(parameters.referenceGenerationIds.map(id => id.toLowerCase())).size !== parameters.referenceGenerationIds.length) fail("invalid_reference");
+    parameters.referenceGenerationIds = parameters.referenceGenerationIds.map(id => id.toLowerCase());
+  }
   if (parameters.providerAssets !== undefined && (!Array.isArray(parameters.providerAssets) || parameters.providerAssets.length > 50 || parameters.providerAssets.some(ref => !record(ref) || Object.keys(ref).some(key => !["id", "type"].includes(key)) || typeof ref.id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,199}$/.test(ref.id) || !["image", "video", "audio"].includes(String(ref.type))) || new Set(parameters.providerAssets.map(ref => (ref as { id: string }).id)).size !== parameters.providerAssets.length)) fail();
-  if (parameters.referenceOrder !== undefined && (!Array.isArray(parameters.referenceOrder) || parameters.referenceOrder.length > 50 || parameters.referenceOrder.some(key => typeof key !== "string" || !/^(?:local:[1-9]\d*|provider:[a-zA-Z0-9][a-zA-Z0-9_-]{0,199})$/.test(key)) || new Set(parameters.referenceOrder).size !== parameters.referenceOrder.length)) fail();
+  if (parameters.referenceOrder !== undefined && (!Array.isArray(parameters.referenceOrder) || parameters.referenceOrder.length > 50 || parameters.referenceOrder.some(key => typeof key !== "string" || !/^(?:local:[1-9]\d*|provider:[a-zA-Z0-9][a-zA-Z0-9_-]{0,199}|(?:business|generated):[0-9a-fA-F-]{36})$/.test(key)) || new Set(parameters.referenceOrder).size !== parameters.referenceOrder.length)) fail();
+  if (Array.isArray(parameters.referenceOrder)) {
+    const order = parameters.referenceOrder.map(key => /^(?:business|generated):/.test(key) ? key.toLowerCase() : key);
+    if (new Set(order).size !== order.length) fail("invalid_reference");
+    parameters.referenceOrder = order;
+  }
   return { clientRequestId: value.clientRequestId, kind, parameters };
 }
 
 async function normalizedParameters(kind: BusinessKind, parameters: Record<string, unknown>, model: BusinessModel, userId: number, accountId: string, credential: { id: string; apiKey: string }) {
   const payload = { ...parameters };
   const assetIds = payload.assetIds as number[] | undefined;
+  const ownUploads = (parameters.businessAssetIds ?? []) as string[];
+  const generatedIds = (parameters.referenceGenerationIds ?? []) as string[];
+  // Workflow IDs are server-only routing data, never native provider fields.
+  const adapterParameters = { ...parameters }; delete adapterParameters.referenceGenerationIds;
+  delete payload.referenceGenerationIds;
   if (kind === "image") {
-    const ownUploads = (parameters.businessAssetIds ?? []) as string[];
     let caps: ReturnType<typeof getBusinessImageCapability>;
-    try { caps = assertBusinessImageParameters(parameters, (assetIds?.length ?? 0) + ownUploads.length); }
+    try { caps = assertBusinessImageParameters(adapterParameters, (assetIds?.length ?? 0) + ownUploads.length + generatedIds.length); }
     catch { fail(); }
     payload.n ??= 1; payload.size ??= caps.sizes[0];
     delete payload.assetIds; delete payload.businessAssetIds;
@@ -128,42 +147,51 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
       if (resolved.length !== ownUploads.length || resolved.some(ref => ref.type !== "image")) fail("invalid_reference");
       refs.push(...resolved.map(ref => ref.url));
     }
+    if (generatedIds.length) {
+      const resolved = await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw);
+      if (resolved.length !== generatedIds.length || resolved.some(ref => ref.type !== "image")) fail("invalid_reference");
+      refs.push(...resolved.map(ref => ref.url));
+    }
     if (refs.length) payload.image = refs.length === 1 ? refs[0] : refs;
     if (caps.family === "seedream") payload.sequential_image_generation = "disabled";
     return payload;
   }
   if (kind === "video" && model.seedance) {
-    if (parameters.businessAssetIds !== undefined) fail();
+    delete adapterParameters.businessAssetIds;
     const providerAssets = (parameters.providerAssets ?? []) as BusinessProviderAssetReference[];
     const mode = (parameters.mode ?? "freestyle") as BusinessSeedanceMode;
-    const types = [...(assetIds ?? []).map(() => ({ type: "image" as const })), ...providerAssets];
-    const keys = [...(assetIds ?? []).map(id => `local:${id}`), ...providerAssets.map(ref => `provider:${ref.id}`)];
+    const types = [...[...(assetIds ?? []), ...ownUploads, ...generatedIds].map(() => ({ type: "image" as const })), ...providerAssets];
+    const keys = [...(assetIds ?? []).map(id => `local:${id}`), ...ownUploads.map(id => `business:${id}`), ...generatedIds.map(id => `generated:${id}`), ...providerAssets.map(ref => `provider:${ref.id}`)];
     const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
     if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
     try {
       assertBusinessSeedanceReferences(model.seedance, mode, types);
       // Validate scalar parameters/counts before private storage/provider reads.
-      buildBusinessSeedancePayload(parameters, types.map((ref, index) => ({ type: ref.type, url: `owned-reference-${index}` })));
+      buildBusinessSeedancePayload(adapterParameters, types.map((ref, index) => ({ type: ref.type, url: `owned-reference-${index}` })));
     } catch { fail(); }
     const local = assetIds?.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, assetIds, model.nsfw) : [];
+    const constraints = { minSide: 300, maxBytes: 30 * 1024 * 1024 - 1, mimeTypes: ["image/png", "image/jpeg", "image/webp"] };
+    const originals = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, constraints) : [];
+    const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, { ...constraints, minAspectRatio: 0.4, maxAspectRatio: 2.5 }) : [];
     const registered = providerAssets.length ? await resolveBusinessProviderAssets(providerAssets, { apiKey: credential.apiKey }) : [];
-    if (local.length !== (assetIds?.length ?? 0) || registered.length !== providerAssets.length) fail("invalid_reference");
-    const resolved = new Map([...local, ...registered].map((ref, index) => [keys[index], ref]));
-    try { return buildBusinessSeedancePayload(parameters, referenceOrder.map(key => resolved.get(key)!)); }
+    if (local.length !== (assetIds?.length ?? 0) || originals.length !== ownUploads.length || generated.length !== generatedIds.length || registered.length !== providerAssets.length) fail("invalid_reference");
+    const resolved = new Map([...local, ...originals, ...generated, ...registered].map((ref, index) => [keys[index], ref]));
+    try { return buildBusinessSeedancePayload(adapterParameters, referenceOrder.map(key => resolved.get(key)!)); }
     catch { fail(); }
   }
   if (kind === "video" && model.dedicatedVideo) {
     // These dedicated providers need HTTPS media, not Seedance's asset:// IDs.
     // B-native immutable uploads have an independent account-scoped resolver.
     if (["assetIds", "providerAssets", "referenceOrder", "output_format"].some(key => parameters[key] !== undefined)) fail();
-    const ids = (parameters.businessAssetIds ?? []) as string[];
-    const types = ids.map((_, index) => ({ type: "image" as const, url: `https://owned.invalid/reference-${index}.png` }));
-    try { buildBusinessDedicatedVideoPayload(parameters, types); } catch { fail(); }
-    const refs = ids.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ids, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
-    if (refs.length !== ids.length || refs.some(ref => ref.type !== "image")) fail("invalid_reference");
-    try { return buildBusinessDedicatedVideoPayload(parameters, refs); } catch { fail(); }
+    const types = [...ownUploads, ...generatedIds].map((_, index) => ({ type: "image" as const, url: `https://owned.invalid/reference-${index}.png` }));
+    try { buildBusinessDedicatedVideoPayload(adapterParameters, types); } catch { fail(); }
+    const refs = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
+    const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
+    if (refs.length !== ownUploads.length || generated.length !== generatedIds.length || [...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
+    try { return buildBusinessDedicatedVideoPayload(adapterParameters, [...refs, ...generated]); } catch { fail(); }
   }
   // Seedance-only controls must never leak to another adapter or bypass its reviewed contract.
+  if (generatedIds.length) fail("invalid_reference");
   if (["mode", "providerAssets", "output_format", "referenceOrder", "businessAssetIds"].some(key => parameters[key] !== undefined)) fail();
   if (model.promptMaxChars && String(payload.prompt).length > model.promptMaxChars) fail();
   if (assetIds && assetIds.length > (model.maxReferenceImages ?? 4)) fail("invalid_reference");

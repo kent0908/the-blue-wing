@@ -33,6 +33,13 @@ interface CredentialRow {
 }
 
 const MESSAGES: Record<string, readonly [string, string, string]> = {
+  workflow_invalid_graph: ["畫布格式不正確，請檢查節點與素材。", "The canvas is invalid. Check its nodes and sources.", "画布の形式が不正です。ノードと素材を確認してください。"],
+  workflow_invalid_name: ["工作流名稱須為 1–120 字。", "Workflow names must contain 1–120 characters.", "ワークフロー名は1〜120文字で入力してください。"],
+  workflow_not_found: ["找不到這張商務畫布，或你沒有存取權限。", "This business canvas was not found or is inaccessible.", "このビジネス画布が見つからないか、アクセスできません。"],
+  workflow_conflict: ["畫布已在其他頁面更新，請先匯出草稿再重新載入。", "This canvas changed in another tab. Export your draft and reload.", "別の画面で更新されました。草稿を書き出して再読み込みしてください。"],
+  workflow_version_required: ["缺少畫布版本，請重新載入後再儲存。", "The canvas version is missing. Reload before saving.", "画布のバージョンがありません。再読み込みしてから保存してください。"],
+  workflow_invalid_id: ["工作流編號不正確。", "The workflow ID is invalid.", "ワークフローIDが正しくありません。"],
+  workflow_limit: ["每個商務帳號最多可建立 60 張個人畫布。", "You can create up to 60 personal canvases per business account.", "ビジネスアカウントごとに個人用画布を最大60件作成できます。"],
   invalid_origin: ["操作來源不符，請從藍翼企業工作區操作。", "Invalid origin. Use the Blue Wing business workspace.", "操作元が一致しません。Blue Wing のビジネスワークスペースから操作してください。"],
   invalid_body: ["資料格式不正確，請檢查後重試。", "Invalid request. Check the submitted fields.", "入力形式が正しくありません。内容を確認してください。"],
   invalid_application: ["請填寫公司名稱（最多 120 字）與用途（10–2,000 字）。", "Enter a company name (up to 120 characters) and a use case (10–2,000 characters).", "会社名（120 文字以内）と用途（10〜2,000 文字）を入力してください。"],

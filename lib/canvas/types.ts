@@ -17,6 +17,9 @@ export type RunStatus = "idle" | "running" | "done" | "error";
 
 export interface ImageRef {
   url: string;
+  /** Business references resolve on the server; never forward their display URL. */
+  businessAssetId?: string;
+  businessGenerationId?: string;
   /** present when this image came from the user's own asset library (Load
    *  Image node) — lets the server resolve it via the private blob store
    *  instead of needing a public URL. Absent for a chained node's own
@@ -132,6 +135,12 @@ export const DEFAULT_TEXT_HEIGHT = 96;
 
 export interface LoadImageItem {
   assetId: number;
+  src: string;
+  name: string;
+}
+
+export interface BusinessCanvasImageItem {
+  uploadId: string;
   src: string;
   name: string;
 }

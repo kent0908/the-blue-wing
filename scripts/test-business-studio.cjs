@@ -40,7 +40,7 @@ const { parseBusinessStudioLocation, businessStudioHref } = load('lib/businessSt
 const parse = query => parseBusinessStudioLocation(new URLSearchParams(query));
 assert.deepEqual(parse(''), { kind: 'image', modelId: '', tab: 'create' }, 'An empty URL starts in the image studio');
 for (const kind of ['image', 'video', 'text']) {
-  for (const tab of ['create', 'key', 'history', 'assets', 'usage', 'models']) {
+  for (const tab of ['create', 'key', 'history', 'assets', 'usage', 'models', 'workflows']) {
     const location = { kind, modelId: 'minimax-h3', tab };
     const href = businessStudioHref(location);
     const url = new URL(href, 'https://bluewing.example');
@@ -170,7 +170,7 @@ for (const kind of ['image', 'video', 'text']) {
   state.requestConfirmation({ preventDefault() {} });
   assert.equal(state.confirmation, null, 'Choosing a new modality cannot bypass an unknown submission');
 }
-for (const tab of ['create', 'key', 'history', 'assets', 'usage', 'models']) {
+for (const tab of ['create', 'key', 'history', 'assets', 'usage', 'models', 'workflows']) {
   const { state, pushes } = context();
   state.chooseTab(tab);
   assert.equal(state.confirmation,null,'Switching utility panels removes paid confirmation');
@@ -284,10 +284,11 @@ assert.ok(generateDisabled, 'The actual generate control includes the URL-transi
 const { businessStudioCopy } = load('lib/i18n/businessStudio.ts');
 const { businessCopy } = load('lib/i18n/business.ts');
 const { businessOperationsCopy } = load('lib/i18n/businessOperations.ts');
+const { businessWorkflowsCopy } = load('lib/i18n/businessWorkflows.ts');
 let navLocale='en';
 let currentSearch = '';
 let detailsRef = { current: { open: true } };
-const icons = Object.fromEntries(['IconImage', 'IconVideo', 'IconChat', 'IconHistory', 'IconWing', 'IconAssets', 'IconApps'].map(name => [name, function fixtureIcon() {}]));
+const icons = Object.fromEntries(['IconImage', 'IconVideo', 'IconChat', 'IconHistory', 'IconWing', 'IconAssets', 'IconApps', 'IconCanvas'].map(name => [name, function fixtureIcon() {}]));
 const { default: BusinessStudioNav } = load('components/business/BusinessStudioNav.tsx', {
   react: { useId: () => 'fixture-search', useState: () => [currentSearch, value => { currentSearch = value; }], useRef: () => detailsRef },
   'react/jsx-runtime': jsxRuntime,
@@ -296,6 +297,7 @@ const { default: BusinessStudioNav } = load('components/business/BusinessStudioN
   '@/components/ModelLogo': function fixtureModelLogo() {},
   '@/lib/i18n/client': {useLocale:()=>navLocale},
   '@/lib/i18n/businessOperations': {businessOperationsCopy},
+  '@/lib/i18n/businessWorkflows': {businessWorkflowsCopy},
   './BusinessStudio.module.css': new Proxy({}, { get: (_target, name) => String(name) }),
 });
 function navProps(locale = 'en') {
@@ -331,7 +333,7 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
     assert.equal(currentSearch, '', 'Choosing another modality clears the old model search');
     assert.equal(detailsRef.current.open, false, 'Choosing another modality closes the mobile model menu');
   }
-  for (const [label, tab] of [[businessOperationsCopy(locale).keys,'key'],[businessOperationsCopy(locale).work,'history'],[businessOperationsCopy(locale).assets,'assets'],[businessOperationsCopy(locale).usage,'usage'],[businessOperationsCopy(locale).models,'models']]) {
+  for (const [label, tab] of [[businessWorkflowsCopy(locale).nav,'workflows'],[businessOperationsCopy(locale).keys,'key'],[businessOperationsCopy(locale).work,'history'],[businessOperationsCopy(locale).assets,'assets'],[businessOperationsCopy(locale).usage,'usage'],[businessOperationsCopy(locale).models,'models']]) {
     events.length = 0;
     buttonFor(tree, label).props.onClick();
     assert.deepEqual(events, [['tab', tab]], 'Utility controls open only their matching business view');
@@ -371,6 +373,7 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
   assert.equal(flatten(noKey).filter(node => node.type === 'button' && node.props.title).length, 0, 'No key means no usable catalog is invented');
   assert.ok(flatten(noKey).includes(props.copy.keyNotConnected), 'No-key state explains how to unlock the catalog');
   assert.equal(buttonFor(noKey, businessOperationsCopy(navLocale).keys).props.disabled, false, 'An approved account can still open key setup');
+  assert.equal(buttonFor(noKey, businessWorkflowsCopy(navLocale).nav).props.disabled, false, 'An approved account can draft workflows without a key');
 }
 
 const { default: JobToasts } = load('components/JobToasts.tsx', {

@@ -1,0 +1,17 @@
+.port { position: absolute; z-index: 5; display: grid; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; place-items: center; cursor: crosshair; touch-action: none; }
+.output { right: -16px; top: 4px; }
+.input { left: -16px; top: 50%; transform: translateY(-50%); }
+.dot { display: block; width: 11px; height: 11px; border: 2px solid #151b1b; border-radius: 50%; background: var(--port-color); box-shadow: 0 0 0 1px #ffffff35; transition: box-shadow .15s ease, transform .15s ease; pointer-events: none; }
+.port:hover .dot, .port:focus-visible .dot { transform: scale(1.28); box-shadow: 0 0 0 5px #ffffff18; }
+.port:focus-visible { outline: 1px dashed #d2eee5; outline-offset: -2px; border-radius: 50%; }
+.connected .dot { box-shadow: 0 0 0 2px #080f0e, 0 0 0 3px var(--port-color); }
+.compatible .dot { box-shadow: 0 0 0 5px #7ff0cd26, 0 0 12px #7ff0cd25; }
+.incompatible .dot { opacity: .24; }
+.snapped .dot, .active .dot { transform: scale(1.4); box-shadow: 0 0 0 6px #7ff0cd38, 0 0 18px #7ff0cd55; }
+.stillDot { display: none; }
+.edgeHit { cursor: pointer; pointer-events: stroke; }
+.edgeHit:focus { outline: none; stroke: #ffffff18; }
+.toolbar { position: absolute; left: 16px; bottom: 68px; z-index: 10; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: min(540px, calc(100% - 32px)); padding: 8px 12px; border: 1px solid #31463f; border-radius: 10px; color: #aac7bc; background: #101b18ed; font-size: 11px; line-height: 1.5; }
+.toolbar button { min-height: 30px; padding: 3px 8px; border: 1px solid #4c6f62; border-radius: 6px; color: #c6f4e5; white-space: nowrap; }
+.toolbar p { margin: 0; flex: 1 1 200px; }
+@media (prefers-reduced-motion: reduce) { .movingDot { display: none; } .stillDot { display: block; } .dot { transition: none; } }

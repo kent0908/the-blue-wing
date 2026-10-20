@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
-import { IconImage, IconVideo, IconChat, IconHistory, IconWing, IconAssets, IconApps } from "@/components/Icons";
+import { IconImage, IconVideo, IconChat, IconHistory, IconWing, IconAssets, IconApps, IconCanvas } from "@/components/Icons";
 import { useLocale } from "@/lib/i18n/client";
 import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
+import { businessWorkflowsCopy } from "@/lib/i18n/businessWorkflows";
 import type { BusinessStudioTab } from "@/lib/businessStudio";
 import ModelLogo from "@/components/ModelLogo";
 import type { BusinessCopy } from "@/lib/i18n/business";
@@ -34,7 +35,7 @@ const KINDS = [
 ] as const;
 
 export default function BusinessStudioNav({ copy, business, approved, keyConfigured, modelsLoading, models, kind, selectedId, tab, onKind, onModel, onTab }: BusinessStudioNavProps) {
-  const operations = businessOperationsCopy(useLocale());
+  const locale = useLocale(), operations = businessOperationsCopy(locale), workflows = businessWorkflowsCopy(locale);
   const [search, setSearch] = useState("");
   const mobileModels = useRef<HTMLDetailsElement>(null);
   const searchId = useId();
@@ -66,6 +67,7 @@ export default function BusinessStudioNav({ copy, business, approved, keyConfigu
     <details ref={mobileModels} className={styles.mobileModels}><summary><span><span className={styles.mobileModelLabel}>{copy.modelsTitle}</span><span className={styles.mobileModelValue}>{selected?.displayName ?? copy.modelsTitle}</span></span><svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5 7 5 5 5-5" /></svg></summary>{modelContents("mobile")}</details>
     <div className={styles.navFooter}>
       <nav className={styles.utilityNav} aria-label={business.workspace}>
+        <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "workflows"} onClick={() => onTab("workflows")}><IconCanvas className={styles.navIcon} /><span>{workflows.nav}</span></button>
         <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "assets"} onClick={() => onTab("assets")}><IconAssets className={styles.navIcon} /><span>{operations.assets}</span></button>
         <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "history"} onClick={() => onTab("history")}><IconHistory className={styles.navIcon} /><span>{operations.work}</span></button>
         <button type="button" className={styles.utilityButton} disabled={!approved} aria-pressed={tab === "usage"} onClick={() => onTab("usage")}><svg viewBox="0 0 24 24" className={styles.navIcon} aria-hidden="true"><path d="M4 19h16M6 16V9m6 7V4m6 12v-5" /></svg><span>{operations.usage}</span></button>

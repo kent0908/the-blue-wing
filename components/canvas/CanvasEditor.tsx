@@ -6,7 +6,7 @@ import { OFFICIAL_CHARACTERS, officialCharacter } from "@/lib/canvas/officialCha
 
 import { modelLabel } from "@/lib/modelLabel";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { IconChevronLeft, IconPlus, IconPlay, IconTrash, IconImage, IconVideo, IconChat, IconAssets, IconAvatar } from "../Icons";
@@ -16,7 +16,6 @@ import {
   NODE_SPECS,
   NODE_TYPES,
   NODE_WIDTH,
-  NODE_HEADER_H,
   NODE_PORT_ROW_H,
   MIN_NODE_WIDTH,
   MAX_NODE_WIDTH,
@@ -28,7 +27,6 @@ import {
   type CanvasGraph,
   type CanvasNode,
   type CanvasNodeType,
-  type PortType,
 } from "@/lib/canvas/types";
 import { topoOrder, upstreamOrder, executeGraph } from "@/lib/canvas/engine";
 import { CanvasSaveState, CanvasRunLock } from "@/lib/canvas/saveState";
@@ -38,13 +36,12 @@ import type { RateCardEntry } from "@/lib/pricing";
 import { IMAGE_MODELS, sizeOptionsFor } from "@/lib/imageModels";
 import { isNewModel } from "@/lib/modelNew";
 import { videoResolutionsForModel, normalizeVideoResolution, videoConstraintFor } from "@/lib/videoModels";
-import { useTr } from "@/lib/i18n/client";
-
-const PORT_COLOR: Record<PortType, string> = {
-  text: "#7ea8ff",
-  image: "#7ff0cd",
-  video: "#f0b37f",
-};
+import { useLocale, useTr } from "@/lib/i18n/client";
+import { canvasConnectionsCopy } from "@/lib/i18n/canvasConnections";
+import { canvasPortKey, connectCanvasPorts, connectionRejection, type ConnectionSource, type ConnectionTarget } from "@/lib/canvas/connections";
+import type { CanvasEditorRuntime } from "@/lib/canvas/runtime";
+import CanvasConnections, { CONNECTION_COLORS, type ConnectionSession, type PortOffsets } from "./CanvasConnections";
+import connectionStyles from "./connections.module.css";
 
 const NODE_ICON: Record<CanvasNodeType, (p: { className?: string }) => React.ReactElement> = {
   text: IconChat,
@@ -63,55 +60,36 @@ interface AssetLite {
 type Interaction =
   | { kind: "pan"; startClientX: number; startClientY: number; startPan: { x: number; y: number } }
   | { kind: "dragNode"; id: string; offsetX: number; offsetY: number }
-  | { kind: "connect"; fromNode: string; fromPort: string; portType: PortType; x: number; y: number }
   | { kind: "resizeNode"; id: string; startClientX: number; startClientY: number; startWidth: number; startHeight: number }
   | null;
-
-function outputPos(n: CanvasNode) {
-  return { x: n.x + (n.width ?? NODE_WIDTH), y: n.y + NODE_HEADER_H / 2 };
-}
-function inputPos(n: CanvasNode, portId: string) {
-  const idx = NODE_SPECS[n.type].inputs.findIndex((p) => p.id === portId);
-  return { x: n.x, y: n.y + NODE_HEADER_H + Math.max(0, idx) * NODE_PORT_ROW_H + NODE_PORT_ROW_H / 2 };
-}
-function bezier(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const dx = Math.max(50, Math.abs(b.x - a.x) / 2);
-  return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
-}
-
-function findInputPortAt(clientX: number, clientY: number): { nodeId: string; portId: string; type: PortType } | null {
-  const els = document.elementsFromPoint(clientX, clientY);
-  for (const el of els) {
-    const target = (el as HTMLElement).closest?.('[data-port-kind="in"]') as HTMLElement | null;
-    if (target?.dataset.nodeId && target.dataset.portId) {
-      return { nodeId: target.dataset.nodeId, portId: target.dataset.portId, type: target.dataset.portType as PortType };
-    }
-  }
-  return null;
-}
 
 export default function CanvasEditor({
   workflowId,
   initialName,
   initialGraph,
   initialVersion,
+  runtime,
 }: {
   workflowId: string;
   initialName: string;
   initialGraph: CanvasGraph;
   initialVersion: string;
+  runtime?: CanvasEditorRuntime;
 }) {
   const tr = useTr();
+  const locale = useLocale();
+  const connectionCopy = canvasConnectionsCopy[locale];
   const [rates, setRates] = useState<RateCardEntry[]>([]);
-  const [view, setView] = useState<"canvas" | "director">("director");
+  const [view, setView] = useState<"canvas" | "director">(runtime?.initialView ?? (runtime ? "canvas" : "director"));
   const [costDetails, setCostDetails] = useState(false);
   useEffect(() => {
+    if (runtime) return;
     let alive = true;
     const refresh = () => fetch("/api/rates", { cache: "no-store" }).then(r => r.ok ? r.json() : { rates: [] }).then(j => { if (alive) setRates(j.rates ?? []); }).catch(() => { if (alive) setRates([]); });
     void refresh();
     window.addEventListener("focus", refresh);
     return () => { alive = false; window.removeEventListener("focus", refresh); };
-  }, []);
+  }, [runtime]);
   const [name, setName] = useState(initialName);
   const [graph, setGraph] = useState<CanvasGraph>(() => ({ ...initialGraph, nodes: initialGraph.nodes.map(n => n.status === "running" ? { ...n, status: "error", output: null, error: tr("上次執行已中斷，請確認生成紀錄後再執行") } : n) }));
   const [dirty, setDirty] = useState(initialGraph.nodes.some(n => n.status === "running"));
@@ -126,10 +104,17 @@ export default function CanvasEditor({
   const [pan, setPan] = useState({ x: 80, y: 60 });
   const [zoom, setZoom] = useState(1);
   const [interaction, setInteraction] = useState<Interaction>(null);
+  const [connection, setConnection] = useState<ConnectionSession | null>(null);
+  const connectionRef = useRef<ConnectionSession | null>(null);
+  const connectionSequence = useRef(0);
+  const [hoveredPort, setHoveredPort] = useState<string | null>(null);
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
+  const [portOffsets, setPortOffsets] = useState<Map<string, PortOffsets>>(() => new Map());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
-  const [assetLibrary, setAssetLibrary] = useState<AssetLite[] | null>(null);
-  const [videoModels, setVideoModels] = useState<{ id: string; name: string }[]>([]);
+  const [assetLibrary, setAssetLibrary] = useState<AssetLite[] | null>(runtime ? [] : null);
+  const [consumerVideoModels, setVideoModels] = useState<{ id: string; name: string }[]>([]);
+  const videoModels = runtime?.videoModels ?? consumerVideoModels;
   const [director3dNodeId, setDirector3dNodeId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -177,14 +162,15 @@ export default function CanvasEditor({
   }, []);
 
   const ensureAssets = useCallback(() => {
-    if (assetLibrary !== null) return;
+    if (runtime || assetLibrary !== null) return;
     fetch("/api/assets")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
       .then((j: { assets: AssetLite[] }) => setAssetLibrary(j.assets))
       .catch(() => setAssetLibrary([]));
-  }, [assetLibrary]);
+  }, [assetLibrary, runtime]);
 
   useEffect(() => {
+    if (runtime) return;
     fetch("/api/models")
       .then((r) => (r.ok ? r.json() : { models: [] }))
       .then((j: { models: { id: string; modality: string; displayName?: string }[] }) =>
@@ -193,7 +179,7 @@ export default function CanvasEditor({
         setVideoModels(j.models.filter((m) => m.modality === "video" && !/nsfw/i.test(m.id) && videoResolutionsForModel(m.id).length > 0).map((m) => ({ id: m.id, name: modelLabel(m.displayName ?? m.id) })))
       )
       .catch(() => {});
-  }, []);
+  }, [runtime]);
 
   /* ---- pan / zoom / drag-node / connect-edge: one set of window listeners ---- */
   useEffect(() => {
@@ -210,9 +196,6 @@ export default function CanvasEditor({
         const nx = w.x - interaction.offsetX;
         const ny = w.y - interaction.offsetY;
         mutate((g) => ({ ...g, nodes: g.nodes.map((n) => (n.id === interaction.id ? { ...n, x: nx, y: ny } : n)) }));
-      } else if (interaction.kind === "connect") {
-        const w = toWorld(e.clientX, e.clientY);
-        setInteraction({ ...interaction, x: w.x, y: w.y });
       } else if (interaction.kind === "resizeNode") {
         // Divide by zoom — the drag happens in screen pixels, but width/textHeight
         // are stored in the canvas's own (unzoomed) world units.
@@ -224,27 +207,15 @@ export default function CanvasEditor({
       }
     };
 
-    const onUp = (e: PointerEvent) => {
-      if (interaction.kind === "connect") {
-        const hit = findInputPortAt(e.clientX, e.clientY);
-        if (hit && hit.type === interaction.portType && hit.nodeId !== interaction.fromNode) {
-          mutate((g) => ({
-            ...g,
-            edges: [
-              ...g.edges.filter((ed) => !(ed.toNode === hit.nodeId && ed.toPort === hit.portId)),
-              { id: newId("edge"), fromNode: interaction.fromNode, fromPort: interaction.fromPort, toNode: hit.nodeId, toPort: hit.portId },
-            ],
-          }));
-        }
-      }
-      setInteraction(null);
-    };
+    const onUp = () => setInteraction(null);
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [interaction, toWorld, mutate]);
 
@@ -282,11 +253,12 @@ export default function CanvasEditor({
       } else if (selectedEdge) {
         mutate((g) => ({ ...g, edges: g.edges.filter((ed) => ed.id !== selectedEdge) }));
         setSelectedEdge(null);
+        setConnectionMessage(connectionCopy.removed);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedNode, selectedEdge, mutate, view]);
+  }, [selectedNode, selectedEdge, mutate, view, connectionCopy]);
 
   /* ---- save ---- */
   const save = async () => {
@@ -296,7 +268,7 @@ export default function CanvasEditor({
     try {
       validateGraph(snapshot.graph);
       await saveState.save(async version => {
-        const res = await fetch(`/api/canvas/${workflowId}`, {
+        const res = await fetch(`${runtime?.apiBasePath ?? "/api/canvas"}/${workflowId}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...snapshot, version }),
         });
@@ -316,11 +288,22 @@ export default function CanvasEditor({
 
   /* ---- node ops ---- */
   const addNode = (type: CanvasNodeType, at?: { x: number; y: number }) => {
-    const pos = at ?? { x: (200 - panRef.current.x) / zoomRef.current, y: (120 - panRef.current.y) / zoomRef.current };
-    const node: CanvasNode = { id: newId("node"), type, x: pos.x, y: pos.y, data: defaultNodeData(type), status: "idle" };
+    const pos = at ?? { x: (40 - panRef.current.x) / zoomRef.current, y: (60 - panRef.current.y) / zoomRef.current };
+    if (!at) {
+      let attempts = 0;
+      while (attempts++ < 200 && graphRef.current.nodes.some(node => {
+        const bounds = portOffsets.get(node.id)?.__bounds;
+        return pos.x < node.x + (node.width ?? NODE_WIDTH) + 32 && pos.x + NODE_WIDTH + 32 > node.x && pos.y < node.y + (bounds?.y ?? 300) + 32 && pos.y + 280 > node.y;
+      })) pos.x += NODE_WIDTH + 56;
+      const box = containerRef.current?.getBoundingClientRect();
+      if (box && (pos.x * zoomRef.current + panRef.current.x + NODE_WIDTH * zoomRef.current > box.width - 24)) {
+        setPan({ x: 40 - pos.x * zoomRef.current, y: 60 - pos.y * zoomRef.current });
+      }
+    }
+    const node: CanvasNode = { id: newId("node"), type, x: pos.x, y: pos.y, data: runtime?.defaultNodeData(type) ?? defaultNodeData(type), status: "idle" };
     mutate((g) => ({ ...g, nodes: [...g.nodes, node] }));
     setAddMenuOpen(false);
-    if (type === "loadImage") ensureAssets();
+    if (!runtime && type === "loadImage") ensureAssets();
   };
 
   const updateNodeData = (id: string, patch: Record<string, unknown>) => {
@@ -336,15 +319,20 @@ export default function CanvasEditor({
         const snapshot = structuredClone(validateGraph(graphRef.current));
         const order = nodeId ? (reuseCompleted ? plannedShotRun(snapshot, nodeId) : upstreamOrder(snapshot, nodeId)) : topoOrder(snapshot);
         if (!order || (nodeId && !order.length)) throw new Error(tr("圖裡有循環連接，請先移除循環連線"));
-        const currentRatesResponse = await fetch("/api/rates", { cache: "no-store" });
-        if (!currentRatesResponse.ok) throw new Error(tr("無法取得點數費率，請稍後再試"));
-        const currentRates = (await currentRatesResponse.json()).rates ?? [];
-        setRates(currentRates);
-        if (canvasRunCredits(snapshot, currentRates, order) === null) throw new Error(tr("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行"));
-        if (reuseCompleted && !confirm(tr("此次執行 {n} 個節點，預估 {c} 點。已完成的上游素材會沿用。確定生成？", { n: order.length, c: canvasRunCredits(snapshot, currentRates, order) ?? 0 }))) return;
+        if (runtime) {
+          if (!(await runtime.confirmRun(snapshot, order))) return;
+        } else {
+          const currentRatesResponse = await fetch("/api/rates", { cache: "no-store" });
+          if (!currentRatesResponse.ok) throw new Error(tr("無法取得點數費率，請稍後再試"));
+          const currentRates = (await currentRatesResponse.json()).rates ?? [];
+          setRates(currentRates);
+          const credits = canvasRunCredits(snapshot, currentRates, order);
+          if (credits === null) throw new Error(tr("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行"));
+          if (!confirm(connectionCopy.run.replace("{n}", String(order.length)).replace("{c}", String(credits)))) return;
+        }
         await executeGraph(snapshot, order, (id, patch) => {
           if (!controller.signal.aborted) commitGraph({ ...graphRef.current, nodes: graphRef.current.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
-        }, controller.signal);
+        }, controller.signal, runtime ? (node, inputs) => runtime.runNode(node, inputs, controller.signal) : undefined);
       } catch (e) { if (!controller.signal.aborted) setSaveError(e instanceof Error ? e.message : tr("執行失敗")); }
       finally { if (!controller.signal.aborted) setRunningAll(false); runController.current = null; }
     });
@@ -368,25 +356,56 @@ export default function CanvasEditor({
     mutate(current=>({...current,nodes:[...current.nodes,{id:stageId,type:"director3d",x:0,y:0,data:defaultNodeData("director3d")}],edges:[...current.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),{id:newId("edge"),fromNode:stageId,fromPort:"out",toNode:id,toPort:"image"}]}));
     setDirector3dNodeId(stageId);
   };
-  const fitCanvas = () => {
+  const fitCanvas = useCallback(() => {
     const nodes=graphRef.current.nodes; const box=containerRef.current?.getBoundingClientRect();
     if(!nodes.length||!box) return;
     const left=Math.min(...nodes.map(n=>n.x)), top=Math.min(...nodes.map(n=>n.y));
-    const right=Math.max(...nodes.map(n=>n.x+(n.width??NODE_WIDTH))), bottom=Math.max(...nodes.map(n=>n.y+500));
+    const right=Math.max(...nodes.map(n=>n.x+(n.width??NODE_WIDTH))), bottom=Math.max(...nodes.map(n=>n.y+(portOffsets.get(n.id)?.__bounds.y ?? 300)));
     const scale=Math.max(.15,Math.min(1,(box.width-80)/(right-left),(box.height-80)/(bottom-top)));
     setZoom(scale);setPan({x:(box.width-(right-left)*scale)/2-left*scale,y:40-top*scale});
-  };
+  }, [portOffsets]);
+  const initiallyFitted = useRef(false);
+  useEffect(() => {
+    if (view !== "canvas" || initiallyFitted.current || !graphRef.current.nodes.length || portOffsets.size < graphRef.current.nodes.length) return;
+    const frame = requestAnimationFrame(() => { fitCanvas(); initiallyFitted.current = true; });
+    return () => cancelAnimationFrame(frame);
+  }, [view, portOffsets, fitCanvas]);
 
   const totalCredits = canvasRunCredits(graph, rates);
   const selectedCredits = selectedNode ? canvasRunCredits(graph, rates, upstreamOrder(graph, selectedNode)) : null;
   const directorNode = graph.nodes.find(n => n.id === director3dNodeId);
-  const nodeById = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph.nodes]);
+  const reportPorts = useCallback((nodeId: string, offsets: PortOffsets | null) => {
+    setPortOffsets(current => {
+      if (offsets === null) { if (!current.has(nodeId)) return current; const next = new Map(current); next.delete(nodeId); return next; }
+      if (JSON.stringify(current.get(nodeId)) === JSON.stringify(offsets)) return current;
+      const next = new Map(current); next.set(nodeId, offsets); return next;
+    });
+  }, []);
+  const cancelConnection = useCallback(() => {
+    connectionRef.current = null; setConnection(null); setHoveredPort(null);
+    setConnectionMessage(current => current === connectionCopy.connecting ? connectionCopy.cancelled : current);
+  }, [connectionCopy]);
+  const completeConnection = useCallback((source: ConnectionSource, target: ConnectionTarget) => {
+    const rejection = connectionRejection(graphRef.current, source, target);
+    if (rejection) { setConnectionMessage(connectionCopy[rejection]); cancelConnection(); return; }
+    mutate(current => connectCanvasPorts(current, source, target, newId("edge")));
+    setConnectionMessage(connectionCopy.connected); cancelConnection();
+  }, [mutate, cancelConnection, connectionCopy]);
+  const startConnection = (node: CanvasNode, event?: React.PointerEvent, reconnectEdgeId?: string) => {
+    if (runLock.busy) return;
+    setInteraction(null); setSelectedNode(null); setSelectedEdge(null); setHoveredPort(null);
+    const session: ConnectionSession = { fromNode: node.id, fromPort: NODE_SPECS[node.type].output.id, portType: NODE_SPECS[node.type].output.type,
+      startedAt: { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }, pointerId: event?.pointerId, sequence: ++connectionSequence.current, reconnectEdgeId };
+    connectionRef.current = session; setConnection(session); setConnectionMessage(connectionCopy.connecting);
+  };
+  const deleteEdge = (id: string) => { mutate(current => ({ ...current, edges: current.edges.filter(edge => edge.id !== id) })); setSelectedEdge(null); setConnectionMessage(connectionCopy.removed); };
+
 
   return (
     <div className="flex h-full flex-col bg-[#0a0a0a]">
       {/* toolbar */}
       <div className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-[#1c1c1c] bg-black px-4 py-2">
-        <Link href="/canvas" className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={tr("返回")}>
+        <Link href={runtime?.backHref ?? "/canvas"} className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={runtime?.backLabel ?? tr("返回")} title={runtime?.backLabel ?? tr("返回")}>
           <IconChevronLeft className="h-4 w-4" />
         </Link>
         <input
@@ -401,9 +420,9 @@ export default function CanvasEditor({
         />
         <span className="text-[11.5px] text-[#6d6d6d]">{runningAll ? tr("執行中，請勿關閉") : saving ? tr("儲存中…") : dirty ? tr("尚未儲存") : tr("已儲存")}</span>
 
-        <div className="flex rounded-lg border border-[#354047] p-1">
+        {runtime?.showDirector !== false && <div className="flex rounded-lg border border-[#354047] p-1">
           {([['canvas','流程畫布'],['director','分鏡導演台']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>{setView(id);setAddMenuOpen(false);}} className={`whitespace-nowrap rounded px-3 py-1.5 text-xs ${view===id?'bg-[#31434f] text-white':'text-[#9aadb9]'}`}>{tr(label)}</button>)}
-        </div>
+        </div>}
         <div className="relative ml-1">
           <button
             type="button"
@@ -416,7 +435,7 @@ export default function CanvasEditor({
           </button>
           {addMenuOpen && (
             <div className="bw-menu absolute left-0 top-[calc(100%+6px)] z-40 w-[200px] p-1.5">
-              {NODE_TYPES.map((t) => {
+              {(runtime?.allowedNodeTypes ?? NODE_TYPES).map((t) => {
                 const Icon = NODE_ICON[t];
                 return (
                   <button key={t} type="button" className="bw-menu-item" onClick={() => addNode(t)}>
@@ -454,7 +473,7 @@ export default function CanvasEditor({
         </div>
       </div>
 
-      <div className="shrink-0 border-b border-[#252525] bg-[#101817] px-4 py-2 text-xs text-[#9ce9d5]">
+      {runtime ? <div className="shrink-0 border-b border-[#252525] bg-[#101817] px-4 py-2 text-xs text-[#9ce9d5]">{runtime.billingNotice}</div> : <div className="shrink-0 border-b border-[#252525] bg-[#101817] px-4 py-2 text-xs text-[#9ce9d5]">
         <button type="button" onClick={() => setCostDetails(v => !v)} aria-expanded={costDetails} className="text-left">
           {tr("全部執行：約")} {totalCredits === null ? tr("費率未設定") : tr("{n} 點", { n: totalCredits })}　{selectedNode && tr("選取節點含上游：約 {n}　", { n: selectedCredits === null ? tr("費率未設定") : tr("{n} 點", { n: selectedCredits }) })}{costDetails ? tr("收合明細 ▴") : tr("查看點數明細 ▾")}
         </button>
@@ -464,8 +483,9 @@ export default function CanvasEditor({
         </div>}
       </div>
 
+      }
       {saveError && <p role="alert" className="shrink-0 bg-[#301919] px-4 py-2 text-sm text-red-200">{saveError}</p>}
-      {view === "director" && <DirectorBoard graph={graph} selectedId={selectedNode} onSelect={setSelectedNode} onChange={updateNodeData} onAdd={addShot}
+      {runtime?.showDirector !== false && view === "director" && <DirectorBoard graph={graph} selectedId={selectedNode} onSelect={setSelectedNode} onChange={updateNodeData} onAdd={addShot}
         onStoryChange={text=>mutate(g=>{const story=g.nodes.find(n=>n.type==='text'&&n.data.directorStory===true);if(story)return {...g,nodes:g.nodes.map(n=>n.id===story.id?{...n,data:{...n.data,text}}:n)};if(g.nodes.length>=200)return g;return {...g,nodes:[...g.nodes,{id:newId('story'),type:'text',x:0,y:-300,data:{text,directorStory:true}}]};})}
         onStorySplit={()=>{const g=graphRef.current;const parts=storyParagraphs(String(g.nodes.find(n=>n.data.directorStory===true)?.data.text??''));if(!parts.length||g.nodes.length+parts.length>200)return;if(!confirm(tr("將新增 {n} 個分鏡，各段文字會成為分鏡敘事。只建立草稿，不扣點。是否繼續？", {n:parts.length})))return;const offset=orderedShots(g).length;const added:CanvasNode[]=parts.map((prompt,i)=>({id:newId('shot'),type:'video',x:(i+offset)*300,y:360,data:{...defaultNodeData('video'),prompt,shotTitle:tr("分鏡 {n}", {n:offset+i+1}),shotOrder:offset+i},status:'idle'}));mutate(current=>({...current,nodes:[...current.nodes,...added]}));setSelectedNode(added[0].id);}}
         busy={runningAll || saving} models={videoModels} onSource={connectSource} onStage={openShotStage} onRun={id=>void execute(id,true)}
@@ -485,7 +505,8 @@ export default function CanvasEditor({
           backgroundPosition: `${pan.x}px ${pan.y}px`,
         }}
         onPointerDown={(e) => {
-          if (e.target !== e.currentTarget) return;
+          if (e.target !== e.currentTarget || (e.button !== 0 && e.button !== 1)) return;
+          cancelConnection();
           setSelectedNode(null);
           setSelectedEdge(null);
           setInteraction({ kind: "pan", startClientX: e.clientX, startClientY: e.clientY, startPan: pan });
@@ -495,51 +516,35 @@ export default function CanvasEditor({
           className="absolute left-0 top-0"
           style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}
         >
-          <svg style={{ position: "absolute", left: 0, top: 0, width: 1, height: 1, overflow: "visible", pointerEvents: "none" }}>
-            {graph.edges.map((edge) => {
-              const from = nodeById.get(edge.fromNode);
-              const to = nodeById.get(edge.toNode);
-              if (!from || !to) return null;
-              const a = outputPos(from);
-              const b = inputPos(to, edge.toPort);
-              const spec = NODE_SPECS[from.type];
-              const color = PORT_COLOR[spec.output.type];
-              return (
-                <path
-                  key={edge.id}
-                  d={bezier(a, b)}
-                  fill="none"
-                  stroke={selectedEdge === edge.id ? "#ff6b6b" : color}
-                  strokeWidth={selectedEdge === edge.id ? 2.5 : 1.8}
-                  style={{ pointerEvents: "stroke", cursor: "pointer" }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    setSelectedEdge(edge.id);
-                    setSelectedNode(null);
-                  }}
-                />
-              );
-            })}
-            {interaction?.kind === "connect" && (() => {
-              const from = nodeById.get(interaction.fromNode);
-              if (!from) return null;
-              return (
-                <path
-                  d={bezier(outputPos(from), { x: interaction.x, y: interaction.y })}
-                  fill="none"
-                  stroke={PORT_COLOR[interaction.portType]}
-                  strokeWidth={1.8}
-                  strokeDasharray="4 3"
-                />
-              );
-            })()}
-          </svg>
+          <CanvasConnections graph={graph} offsets={portOffsets} session={connection} zoom={zoom} selectedEdge={selectedEdge} toWorld={toWorld}
+            onComplete={completeConnection} onCancel={cancelConnection} onHover={setHoveredPort}
+            onSelect={id => { setSelectedEdge(id); setSelectedNode(null); cancelConnection(); setConnectionMessage(connectionCopy.selected); }}
+            onDelete={deleteEdge} edgeLabel={connectionCopy.edge} />
 
           {graph.nodes.map((node) => (
             <NodeCard
               key={node.id}
               node={node}
               selected={selectedNode === node.id}
+              connection={connection}
+              hoveredPort={hoveredPort}
+              connectedInputs={graph.edges.filter(edge => edge.toNode === node.id).map(edge => edge.toPort)}
+              outputConnected={graph.edges.some(edge => edge.fromNode === node.id)}
+              graph={graph}
+              onMeasurePorts={reportPorts}
+              renderNodeSettings={runtime?.renderNodeSettings}
+              onOutputActivate={() => startConnection(node)}
+              onInputActivate={target => {
+                const active = connectionRef.current;
+                if (active) completeConnection(active, target);
+              }}
+              onInputPortDown={(event, target) => {
+                event.stopPropagation();
+                if (connectionRef.current) return;
+                const existing = graphRef.current.edges.find(edge => edge.toNode === target.nodeId && edge.toPort === target.portId);
+                const source = existing && graphRef.current.nodes.find(candidate => candidate.id === existing.fromNode);
+                if (source) startConnection(source, event, existing!.id);
+              }}
               assetLibrary={assetLibrary}
               videoModels={videoModels}
               onEnsureAssets={ensureAssets}
@@ -549,6 +554,7 @@ export default function CanvasEditor({
               }}
               onHeaderPointerDown={(e) => {
                 e.stopPropagation();
+                cancelConnection();
                 setSelectedNode(node.id);
                 setSelectedEdge(null);
                 const w = toWorld(e.clientX, e.clientY);
@@ -576,15 +582,16 @@ export default function CanvasEditor({
                   startHeight: node.textHeight ?? DEFAULT_TEXT_HEIGHT,
                 });
               }}
-              onOutputPortDown={(e) => {
-                e.stopPropagation();
-                const w = toWorld(e.clientX, e.clientY);
-                setInteraction({ kind: "connect", fromNode: node.id, fromPort: NODE_SPECS[node.type].output.id, portType: NODE_SPECS[node.type].output.type, x: w.x, y: w.y });
-              }}
+              onOutputPortDown={event => { event.stopPropagation(); if (event.button === 0) startConnection(node, event); }}
             />
           ))}
         </div>
 
+        <div className={connectionStyles.toolbar} onPointerDown={event => event.stopPropagation()}>
+          <p role="status" aria-live="polite">{connection ? connectionCopy.connecting : connectionMessage ?? connectionCopy.help}</p>
+          {connection && <button type="button" onClick={cancelConnection}>{connectionCopy.cancel}</button>}
+          {selectedEdge && <button type="button" onClick={() => deleteEdge(selectedEdge)}>{connectionCopy.remove}</button>}
+        </div>
         <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#39464e] bg-[#131c22]/95 px-3 py-2 shadow-lg" onPointerDown={e=>e.stopPropagation()}>
           <button type="button" aria-label={tr("縮小畫布")} onClick={()=>setZoom(z=>Math.max(.15,z/1.2))} className="px-2 text-white">−</button>
           <span className="w-12 text-center text-xs text-[#becbd3]">{Math.round(zoom*100)}%</span>
@@ -614,6 +621,7 @@ export default function CanvasEditor({
 function NodeCard({
   node,
   selected,
+  connection, hoveredPort, connectedInputs, outputConnected, graph, onMeasurePorts, renderNodeSettings, onInputPortDown, onInputActivate, onOutputActivate,
   assetLibrary,
   videoModels,
   onEnsureAssets,
@@ -628,6 +636,16 @@ function NodeCard({
 }: {
   node: CanvasNode;
   selected: boolean;
+  connection: ConnectionSession | null;
+  hoveredPort: string | null;
+  connectedInputs: string[];
+  outputConnected: boolean;
+  graph: CanvasGraph;
+  onMeasurePorts: (id: string, offsets: PortOffsets | null) => void;
+  renderNodeSettings?: CanvasEditorRuntime["renderNodeSettings"];
+  onInputPortDown: (event: React.PointerEvent, target: ConnectionTarget) => void;
+  onInputActivate: (target: ConnectionTarget) => void;
+  onOutputActivate: () => void;
   assetLibrary: AssetLite[] | null;
   videoModels: { id: string; name: string }[];
   onEnsureAssets: () => void;
@@ -641,7 +659,28 @@ function NodeCard({
   onResizePointerDown: (e: React.PointerEvent) => void;
 }) {
   const tr = useTr();
+  const locale = useLocale();
+  const connectionCopy = canvasConnectionsCopy[locale];
+  const cardRef = useRef<HTMLDivElement>(null);
   const spec = NODE_SPECS[node.type];
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const measure = () => {
+      const rect = card.getBoundingClientRect();
+      const scale = rect.width / Number.parseFloat(getComputedStyle(card).width);
+      if (!(scale > 0)) return;
+      const offsets: PortOffsets = { __bounds: { x: rect.width / scale, y: rect.height / scale } };
+      card.querySelectorAll<HTMLButtonElement>("[data-port-id]").forEach(port => {
+        const bounds = port.getBoundingClientRect();
+        offsets[port.dataset.portId!] = { x: (bounds.left + bounds.width / 2 - rect.left) / scale, y: (bounds.top + bounds.height / 2 - rect.top) / scale };
+      });
+      onMeasurePorts(node.id, offsets);
+    };
+    measure(); const observer = new ResizeObserver(measure); observer.observe(card);
+    return () => { observer.disconnect(); onMeasurePorts(node.id, null); };
+  }, [node.id, node.width, node.type, onMeasurePorts]);
+  const settingsOverride = renderNodeSettings?.(node, onDataChange);
   const Icon = NODE_ICON[node.type];
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   // Screen position for the portaled asset picker below — see its own
@@ -653,6 +692,8 @@ function NodeCard({
 
   return (
     <div
+      ref={cardRef}
+      data-canvas-node={node.id}
       onPointerDown={onSelect}
       className={[
         "absolute overflow-visible rounded-xl border bg-[#161616] shadow-lg",
@@ -663,6 +704,7 @@ function NodeCard({
       {/* header */}
       <div
         onPointerDown={onHeaderPointerDown}
+        style={{ touchAction: "none" }}
         className="flex h-10 cursor-grab items-center gap-1.5 rounded-t-xl border-b border-[#232323] px-2.5 active:cursor-grabbing"
       >
         <Icon className="h-3.5 w-3.5 shrink-0 text-[#9a9a9a]" />
@@ -687,33 +729,35 @@ function NodeCard({
           <IconTrash className="h-3 w-3" />
         </button>
 
-        {/* output port */}
-        <div
-          data-port-kind="out"
-          onPointerDown={onOutputPortDown}
-          title={tr(spec.output.label)}
-          className="absolute -right-[7px] top-1/2 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-[#161616]"
-          style={{ background: PORT_COLOR[spec.output.type] }}
-        />
+        {/* The hit target is larger than the visible dot; geometry is measured from this button. */}
+        <button type="button" data-port-kind="out" data-node-id={node.id} data-port-id={spec.output.id} data-port-type={spec.output.type}
+          aria-label={`${connectionCopy.output}${String(node.data.title || tr(spec.label))} · ${tr(spec.output.label)}`} title={`${connectionCopy.output}${tr(spec.output.label)}`}
+          aria-pressed={connection?.fromNode === node.id} onPointerDown={onOutputPortDown}
+          onClick={event => { if (event.detail === 0) onOutputActivate(); }}
+          className={[connectionStyles.port, connectionStyles.output, outputConnected ? connectionStyles.connected : "", connection?.fromNode === node.id ? connectionStyles.active : ""].join(" ")}
+          style={{ "--port-color": CONNECTION_COLORS[spec.output.type] } as React.CSSProperties}>
+          <span className={connectionStyles.dot} />
+        </button>
       </div>
 
-      {/* input port rows */}
-      {spec.inputs.map((inp) => (
-        <div key={inp.id} className="relative flex items-center px-2.5 text-[11px] text-[#8a8a8a]" style={{ height: NODE_PORT_ROW_H }}>
-          <div
-            data-port-kind="in"
-            data-node-id={node.id}
-            data-port-id={inp.id}
-            data-port-type={inp.type}
-            className="absolute -left-[7px] h-3 w-3 rounded-full border-2 border-[#161616]"
-            style={{ background: PORT_COLOR[inp.type] }}
-          />
-          <span className="ml-1.5">{tr(inp.label)}</span>
-        </div>
-      ))}
+      {spec.inputs.map(input => {
+        const target = { nodeId: node.id, portId: input.id, type: input.type };
+        const compatible = connection ? !connectionRejection(graph, connection, target) : false;
+        return <div key={input.id} className="relative flex items-center px-2.5 text-[11px] text-[#8a8a8a]" style={{ height: NODE_PORT_ROW_H }}>
+          <button type="button" data-port-kind="in" data-node-id={node.id} data-port-id={input.id} data-port-type={input.type}
+            aria-label={`${connectionCopy.input}${String(node.data.title || tr(spec.label))} · ${tr(input.label)}`} title={`${connectionCopy.input}${tr(input.label)}`}
+            onPointerDown={event => onInputPortDown(event, target)} onClick={() => onInputActivate(target)}
+            className={[connectionStyles.port, connectionStyles.input, connectedInputs.includes(input.id) ? connectionStyles.connected : "", connection ? compatible ? connectionStyles.compatible : connectionStyles.incompatible : "", hoveredPort === canvasPortKey(node.id, input.id) ? connectionStyles.snapped : ""].join(" ")}
+            style={{ "--port-color": CONNECTION_COLORS[input.type] } as React.CSSProperties}>
+            <span className={connectionStyles.dot} />
+          </button>
+          <span className="ml-1.5">{tr(input.label)}</span>
+        </div>;
+      })}
 
       {/* body */}
       <div className="space-y-2 p-2.5 pt-1.5" onPointerDown={(e) => e.stopPropagation()}>
+        {settingsOverride !== undefined ? settingsOverride : <>
         {node.type === "text" && (
           <textarea
             value={String(node.data.text ?? "")}
@@ -931,6 +975,8 @@ function NodeCard({
           </>
         )}
 
+        </>}
+
         {/* output preview — loadImage/director3d render their own thumbnails above instead */}
         {node.output?.kind === "image" && node.type !== "loadImage" && node.type !== "director3d" && (
           <div className={node.output.items.length > 1 ? "grid grid-cols-2 gap-1" : undefined}>
@@ -957,6 +1003,7 @@ function NodeCard({
       {/* resize handle — drags width + the text area's height together, see the "resizeNode" interaction in CanvasEditor */}
       <div
         onPointerDown={onResizePointerDown}
+        style={{ touchAction: "none" }}
         title={tr("拖曳調整節點大小")}
         className="absolute -bottom-1 -right-1 h-4 w-4 cursor-nwse-resize rounded-tl-md text-[#5c5c5c] hover:text-[#7ff0cd]"
       >
