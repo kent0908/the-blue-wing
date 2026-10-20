@@ -8,15 +8,29 @@ const ts = require('typescript');
 const source = fs.readFileSync('components/business/BusinessWorkspace.tsx', 'utf8');
 const ast = ts.createSourceFile('BusinessWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const handlers = {};
+const videoDownloadAnchors = [];
 let preSubmitErrorsSource;
 function visit(node) {
   if (ts.isVariableDeclaration(node) && ['requestConfirmation', 'submitGeneration', 'saveKey'].includes(node.name.getText(ast)) && ts.isArrowFunction(node.initializer)) handlers[node.name.getText(ast)] = node.initializer.getText(ast);
   if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'PRE_SUBMIT_ERRORS') preSubmitErrorsSource = node.initializer.getText(ast);
+  if (ts.isJsxOpeningElement(node) && node.tagName.getText(ast) === 'a') {
+    const attributes = node.attributes.properties;
+    const href = attributes.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'href');
+    if (attributes.some(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'download') && href?.initializer && ts.isJsxExpression(href.initializer) && href.initializer.expression?.getText(ast).includes('job.videoUrl')) videoDownloadAnchors.push(node);
+  }
   ts.forEachChild(node, visit);
 }
 visit(ast);
 for (const key of ['requestConfirmation', 'submitGeneration', 'saveKey']) assert.ok(handlers[key], `${key} actual handler found`);
 assert.ok(preSubmitErrorsSource, 'Actual pre-submit error set found');
+assert.equal(videoDownloadAnchors.length, 1, 'The history exposes exactly one original-video download link');
+{
+  const node = videoDownloadAnchors[0];
+  const href = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'href');
+  const outputPath = '/api/business/media/fixture-account/standard/fixture-video.mp4';
+  assert.equal(vm.runInNewContext(href.initializer.expression.getText(ast), { job: { videoUrl: outputPath } }), `${outputPath}?download=1`, 'Actual history link requests authenticated Content-Disposition: attachment rather than navigating to the inline sandboxed video');
+  assert.ok(!node.attributes.properties.some(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'target'), 'History download does not open an inline-media tab');
+}
 const seedanceModule = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessSeedance.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(seedanceModule, seedanceModule.exports);
 const { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSeedancePayload } = seedanceModule.exports;
