@@ -31,10 +31,11 @@ const graph={nodes:[
  {id:'reference',type:'loadImage',x:0,y:290,data:{items:[],title:'Reference'}},
  {id:'video',type:'video',x:700,y:330,data:{...defaultNodeData('video'),title:'Video'}}
 ],edges:[{id:'text-a',fromNode:'text',fromPort:'out',toNode:'imageA',toPort:'prompt'},{id:'reference-a',fromNode:'reference',fromPort:'out',toNode:'imageA',toPort:'image'},{id:'a-b',fromNode:'imageA',fromPort:'out',toNode:'imageB',toPort:'image'}]};
+if(params.get('scenario')==='text'){graph.nodes=graph.nodes.filter(node=>node.type==='text');graph.edges=[];}
 const requests=[];window.fetch=async(input,init={})=>{
  const url=String(input);requests.push({url,method:init.method||'GET'});
  document.getElementById('requests').textContent=JSON.stringify(requests);
- if(url==='/api/rates')return Response.json({rates:[]});
+ if(url==='/api/rates')return Response.json({rates:[{modelId:'ByteDance-Seedream-4.0',modality:'image',credits:12},{modelId:'SIRAYA-Seedance-2.0-mini',modality:'video',credits:15}]});
  if(url==='/api/models')return Response.json({models:[]});
  if(url==='/api/assets')return Response.json({assets:[]});
  if(init.method==='PUT')return Response.json({workflow:{id:'local-qa',version:'fixture-v2'}});

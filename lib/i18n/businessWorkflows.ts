@@ -1,6 +1,7 @@
 import type { Locale } from "./locale";
 
 const zh = {
+  start: "確認並開始生成", cancel: "返回調整", reviewTitle: "執行前審閱",
   invalidSettings: "請檢查整條流程的秒數、音訊與描述長度；尚未送出這次生成。",
   sourceLimit: "每個原檔節點最多 16 張，實際參照數量仍依下游模型規格。",
   nav: "工作流", title: "把一個想法，接成一段作品。", subtitle: "文字、素材、畫面與鏡頭，在同一張商務畫布裡銜接。",
@@ -17,6 +18,7 @@ const zh = {
 };
 export type BusinessWorkflowsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessWorkflowsCopy = {
+  start: "Confirm and generate", cancel: "Back to editing", reviewTitle: "Review this run",
   invalidSettings: "Check duration, audio settings and prompt length across this run. No generation was submitted.",
   sourceLimit: "Up to 16 originals per source node, within the downstream model's reference limit.",
   nav:"Workflows", title:"Connect an idea into a finished piece.",subtitle:"Bring text, source material, images and shots together on one business canvas.",create:"New workflow",name:"Workflow name",untitled:"Untitled workflow",empty:"Start with one node.",emptyText:"Connect text and source material to image or video nodes, then build your piece step by step.",open:"Open canvas",loading:"Preparing your canvas…",error:"Workflows could not be loaded. Try again later.",retry:"Reload",back:"Back to business workflows",nodes:"{n} nodes",updated:"Updated",search:"Search workflows",
@@ -24,6 +26,7 @@ const en: BusinessWorkflowsCopy = {
   model:"Model",size:"Image size",resolution:"Resolution",seconds:"Seconds",aspect:"Aspect ratio",audio:"Generate native audio",prompt:"Describe your work",promptHint:"Connect a text node or add your description here.",references:"Business image sources",choose:"Select or upload material",done:"Finish selection",remove:"Remove source",sourceHint:"Use business originals. Chained generated images use the first image from each completed job.",none:"No sources selected",originalRequired:"Upload the original image in business assets first.",unavailableModel:"Choose a model available to your current key.",missingPrompt:"Enter a description or connect a text node.",invalidReference:"Use business originals or completed images from this business studio.",missingCapture:"Capture an image in the 3D director first.",uncertain:"The result is unconfirmed. Check the original job in business work before submitting again.",failed:"Generation did not finish. Check this job in business work.",noOutput:"No usable result was returned.",captureUploadFailed:"The 3D capture was not saved. No generation was submitted.",draftOnly:"Editing a canvas does not spend generation credits. Model requests start only after you run and confirm.",feesUnknown:"Awaiting billing",blank:"Blank canvas",imageVideo:"Text → image → video",sourceTemplate:"Source → image",age:"Confirm your age in the business studio before using adult models.",noModels:"No generation models are available.",newTab:"View in studio",nodeRun:"Jobs from this run",conflict:"This canvas changed in another tab. Export your draft and reload before saving over it.",
 };
 const ja: BusinessWorkflowsCopy = {
+  start: "確認して生成", cancel: "編集に戻る", reviewTitle: "実行前の確認",
   invalidSettings: "実行全体の秒数・音声設定・説明の長さを確認してください。生成はまだ送信されていません。",
   sourceLimit: "原本ノードごとに最大16枚。接続先モデルの参考数制限も適用されます。",
   nav:"ワークフロー",title:"ひとつの発想を、作品へつなぐ。",subtitle:"文章・素材・画像・ショットを、ひとつのビジネス画布でつなぎます。",create:"ワークフローを作成",name:"ワークフロー名",untitled:"無題のワークフロー",empty:"最初のノードから。",emptyText:"文章や素材を画像・映像ノードへつなぎ、一歩ずつ作品に仕上げます。",open:"画布を開く",loading:"画布を準備しています…",error:"ワークフローを取得できません。後ほどお試しください。",retry:"再読み込み",back:"ビジネスワークフローへ戻る",nodes:"{n}個のノード",updated:"更新日時",search:"ワークフローを検索",

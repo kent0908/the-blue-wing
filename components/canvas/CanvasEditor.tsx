@@ -41,6 +41,7 @@ import { canvasConnectionsCopy } from "@/lib/i18n/canvasConnections";
 import { canvasPortKey, connectCanvasPorts, connectionRejection, type ConnectionSource, type ConnectionTarget } from "@/lib/canvas/connections";
 import type { CanvasEditorRuntime } from "@/lib/canvas/runtime";
 import CanvasConnections, { CONNECTION_COLORS, type ConnectionSession, type PortOffsets } from "./CanvasConnections";
+import CanvasRunConfirmation from "./CanvasRunConfirmation";
 import connectionStyles from "./connections.module.css";
 
 const NODE_ICON: Record<CanvasNodeType, (p: { className?: string }) => React.ReactElement> = {
@@ -97,6 +98,24 @@ export default function CanvasEditor({
   const [saveState] = useState(() => { const state = new CanvasSaveState(initialVersion); if (initialGraph.nodes.some(n => n.status === "running")) state.edit(); return state; });
   const [runLock] = useState(() => new CanvasRunLock());
   const runController = useRef<AbortController | null>(null);
+  const [runConfirmation, setRunConfirmation] = useState<string | null>(null);
+  const runConfirmationResolver = useRef<((confirmed: boolean) => void) | null>(null);
+  const requestRunConfirmation = useCallback((message: string) => new Promise<boolean>(resolve => {
+    runConfirmationResolver.current?.(false);
+    runConfirmationResolver.current = resolve;
+    setRunConfirmation(message);
+  }), []);
+  const settleRunConfirmation = useCallback((confirmed: boolean) => {
+    const resolve = runConfirmationResolver.current;
+    if (!resolve) return;
+    runConfirmationResolver.current = null;
+    setRunConfirmation(null);
+    resolve(confirmed);
+  }, []);
+  useEffect(() => () => {
+    runConfirmationResolver.current?.(false);
+    runConfirmationResolver.current = null;
+  }, []);
   const nameRef = useRef(initialName);
   const [saving, setSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -325,10 +344,11 @@ export default function CanvasEditor({
           const currentRatesResponse = await fetch("/api/rates", { cache: "no-store" });
           if (!currentRatesResponse.ok) throw new Error(tr("無法取得點數費率，請稍後再試"));
           const currentRates = (await currentRatesResponse.json()).rates ?? [];
+          if (controller.signal.aborted) return;
           setRates(currentRates);
           const credits = canvasRunCredits(snapshot, currentRates, order);
           if (credits === null) throw new Error(tr("部分模型尚未設定有效點數費率或解析度，請更換設定後再執行"));
-          if (!confirm(connectionCopy.run.replace("{n}", String(order.length)).replace("{c}", String(credits)))) return;
+          if (!(await requestRunConfirmation(connectionCopy.run.replace("{n}", String(order.length)).replace("{c}", String(credits))))) return;
         }
         await executeGraph(snapshot, order, (id, patch) => {
           if (!controller.signal.aborted) commitGraph({ ...graphRef.current, nodes: graphRef.current.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
@@ -609,6 +629,7 @@ export default function CanvasEditor({
         )}
       </div>
 
+      {!runtime && runConfirmation !== null && <CanvasRunConfirmation message={runConfirmation} onDecision={settleRunConfirmation} />}
       {directorNode && <Director3DPanel
         initial={directorNode.data as unknown as Director3DSceneData}
         onSave={data => updateNodeData(directorNode.id, data as unknown as Record<string, unknown>)}

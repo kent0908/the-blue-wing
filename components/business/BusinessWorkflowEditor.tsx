@@ -67,6 +67,11 @@ export default function BusinessWorkflowEditor({ id }: { id: string }) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [error, setError] = useState("");
   const [jobs, setJobs] = useState<BusinessGeneration[]>([]);
+  const [runPlan, setRunPlan] = useState<{ message: string; resolve: (value: boolean) => void } | null>(null);
+  const finishReview = useCallback((approved: boolean) => {
+    runPlan?.resolve(approved); setRunPlan(null);
+  }, [runPlan]);
+  useEffect(() => () => { runPlan?.resolve(false); }, [id, runPlan]);
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const accessResponse = await fetch("/api/business/access", { cache: "no-store", signal });
@@ -121,14 +126,17 @@ export default function BusinessWorkflowEditor({ id }: { id: string }) {
       confirmRun: (graph, order) => {
         assertBusinessCanvasPreflight(graph, order, models, t);
         const paid = order.map(id => graph.nodes.find(node => node.id === id)!).filter(node => node.type === "image" || node.type === "video");
-        if (paid.length && !workspace.access.keyConfigured) { window.alert(t.keyRequired); return false; }
-        if (paid.some(node => !models.some(model => model.id === node.data.model && model.modality === node.type))) { window.alert(t.unavailableModel); return false; }
-        return !paid.length || window.confirm(workflowText(t.confirm, { n: order.length, paid: paid.length, models: paid.map(node => `${models.find(model => model.id === node.data.model)?.displayName} · ${node.type === "video" ? `${node.data.seconds}s · ${node.data.resolution}` : node.data.size}`).join("\n") }));
+        if (paid.length && !workspace.access.keyConfigured) throw new Error(t.keyRequired);
+        if (paid.some(node => !models.some(model => model.id === node.data.model && model.modality === node.type))) throw new Error(t.unavailableModel);
+        if (!paid.length) return true;
+        const message = workflowText(t.confirm, { n: order.length, paid: paid.length, models: paid.map(node => `${models.find(model => model.id === node.data.model)?.displayName} · ${node.type === "video" ? `${node.data.seconds}s · ${node.data.resolution}` : node.data.size}`).join("\n") });
+        return new Promise<boolean>(resolve => { setRunPlan({ message, resolve }); });
       },
     };
   }, [workspace, t, rememberJob]);
   if (!workspace || workspace.workflow.id !== id || !runtime) return <section className={styles.status}><p role={error ? "alert" : "status"}>{error || t.loading}</p>{error && <button className={styles.button} onClick={() => void load()}>{t.retry}</button>}<Link href="/business?tab=workflows">{t.goStudio}</Link></section>;
   return <div className={styles.editor}>
+    {runPlan && <BusinessDialog title={t.reviewTitle} onClose={() => finishReview(false)}><p className={styles.plan}>{runPlan.message}</p><div className={styles.actions}><button type="button" autoFocus className={styles.button} onClick={() => finishReview(false)}>{t.cancel}</button><button type="button" className={styles.button} onClick={() => finishReview(true)}>{t.start}</button></div></BusinessDialog>}
     <div className={styles.stage}><CanvasEditor key={workspace.workflow.id} workflowId={id} initialName={workspace.workflow.name} initialGraph={workspace.workflow.graph} initialVersion={workspace.workflow.version} runtime={runtime} /></div>
     <aside className={styles.ledger} aria-label={t.nodeRun}><details><summary>{t.nodeRun}{jobs.length ? ` · ${jobs.length}` : ""}</summary><p>{t.draftOnly}</p><nav><Link href="/business?tab=history">{t.history} ↗</Link><Link href="/business?tab=usage">{t.costs} ↗</Link></nav>{jobs.map(job => <div className={styles.receipt} key={job.id}><p>{job.model} · {job.id}</p><BusinessGenerationReceipt job={job} onUpdated={rememberJob} /></div>)}</details></aside>
   </div>;
