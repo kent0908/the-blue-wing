@@ -18,7 +18,7 @@ function load(file) {
   }, mod, mod.exports);
   cache.set(file, mod.exports); return mod.exports;
 }
-const { connectionRejection: reject, connectCanvasPorts: connect, nearestCanvasPort: nearest, canvasConnectionPath: path, canvasPortKey: key } = load('lib/canvas/connections.ts');
+const { connectionRejection: reject, connectCanvasPorts: connect, nearestCanvasPort: nearest, nearestConnectionTarget: nearestTarget, canvasConnectionPath: path, canvasPortKey: key } = load('lib/canvas/connections.ts');
 const { default: Connections, measuredPortPosition: position } = load('components/canvas/CanvasConnections.tsx');
 const { canvasConnectionsCopy: copy } = load('lib/i18n/canvasConnections.ts');
 const node = (id, type, x = 0, y = 0) => ({ id, type, x, y, data: {} });
@@ -58,6 +58,17 @@ for (const zoom of [.15, .3, 1, 2.5]) {
 }
 check(() => assert.equal(nearest(ports, { x: 100, y: 50 }, 0), null));
 check(() => assert.equal(nearest(ports, { x: 100, y: 50 }, NaN), null));
+check(() => assert.equal(nearest(ports, { x: 100, y: 50 }, 1, -1), null));
+check(() => assert.equal(nearest(ports, { x: Infinity, y: 50 }, 1), null));
+const mixedPorts = [{ ...target, x: 100, y: 50 }, { ...target, portId: 'prompt', type: 'text', x: 100, y: 43 }];
+check(() => assert.deepEqual(nearestTarget(graph, source, mixedPorts, { x: 100, y: 43 }, 1), { hit: mixedPorts[0], rejection: null }));
+check(() => assert.deepEqual(nearestTarget(graph, source, [mixedPorts[1]], { x: 100, y: 43 }, 1), { hit: mixedPorts[1], rejection: 'type' }));
+check(() => assert.deepEqual(nearestTarget(graph, source, mixedPorts, { x: 100, y: 43 }, 0), { hit: null, rejection: null }));
+check(() => assert.deepEqual(nearestTarget(graph, source, mixedPorts, { x: 100, y: 43 }, NaN), { hit: null, rejection: null }));
+for (const zoom of [.15, .3, 1, 2.5]) {
+  check(() => assert.equal(nearestTarget(graph, source, [mixedPorts[0]], { x: 100 - 35 / zoom, y: 50 }, zoom, 36).hit?.nodeId, 'imageB'));
+  check(() => assert.equal(nearestTarget(graph, source, [mixedPorts[0]], { x: 100 - 37 / zoom, y: 50 }, zoom, 36).hit, null));
+}
 check(() => assert.notEqual(key('a,b', 'c'), key('a', 'b,c')));
 check(() => assert.equal(path({ x: 10, y: 20 }, { x: 100, y: 50 }), 'M 10 20 C 60 20, 50 50, 100 50'));
 check(() => assert.deepEqual(position(nodes[1], 'out', { out: { x: 240.5, y: 20.5 } }), { x: 540.5, y: 30.5 }));
@@ -73,5 +84,5 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
 }
 const css = fs.readFileSync('components/canvas/connections.module.css', 'utf8');
 check(() => assert.ok(css.includes('prefers-reduced-motion: reduce') && css.includes('.movingDot { display: none; }')));
-check(() => assert.ok(css.includes('width: 32px; height: 32px;')));
+check(() => assert.ok(css.includes('width: 44px; height: 44px;')));
 console.log(`PASS ${checks} canvas connection checks: cycles, replacement, safe reconnect, zoom-independent snapping, real offset geometry, accessible SVG and three-language copy.`);

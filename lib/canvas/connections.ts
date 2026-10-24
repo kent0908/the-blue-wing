@@ -39,13 +39,23 @@ export function connectCanvasPorts(graph: CanvasGraph, source: ConnectionSource,
 
 /** Distances are screen pixels, so magnetism stays consistent at every zoom. */
 export function nearestCanvasPort<T extends CanvasPoint>(ports: readonly T[], point: CanvasPoint, zoom: number, radius = 28): T | null {
-  if (!(zoom > 0) || !Number.isFinite(zoom)) return null;
+  if (!(zoom > 0) || !Number.isFinite(zoom) || !(radius >= 0) || !Number.isFinite(radius)
+    || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
   let nearest: T | null = null; let distance = radius * radius;
   for (const port of ports) {
     const squared = ((port.x - point.x) * zoom) ** 2 + ((port.y - point.y) * zoom) ** 2;
     if (squared <= distance) { distance = squared; nearest = port; }
   }
   return nearest;
+}
+
+/** A nearby incompatible socket must not mask a socket that can accept the wire. */
+export function nearestConnectionTarget<T extends ConnectionTarget & CanvasPoint>(graph: CanvasGraph, source: ConnectionSource,
+  ports: readonly T[], point: CanvasPoint, zoom: number, radius = 28): { hit: T | null; rejection: ConnectionRejection | null } {
+  const nearby = ports.filter(port => Math.hypot(port.x - point.x, port.y - point.y) * zoom <= radius);
+  const allowed = nearby.filter(port => !connectionRejection(graph, source, port));
+  const hit = nearestCanvasPort(allowed.length ? allowed : nearby, point, zoom, radius);
+  return { hit, rejection: hit ? connectionRejection(graph, source, hit) : null };
 }
 
 export function canvasConnectionPath(a: CanvasPoint, b: CanvasPoint): string {

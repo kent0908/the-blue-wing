@@ -1,17 +1,21 @@
-.port { position: absolute; z-index: 5; display: grid; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; place-items: center; cursor: crosshair; touch-action: none; }
-.output { right: -16px; top: 4px; }
-.input { left: -16px; top: 50%; transform: translateY(-50%); }
-.dot { display: block; width: 11px; height: 11px; border: 2px solid #151b1b; border-radius: 50%; background: var(--port-color); box-shadow: 0 0 0 1px #ffffff35; transition: box-shadow .15s ease, transform .15s ease; pointer-events: none; }
-.port:hover .dot, .port:focus-visible .dot { transform: scale(1.28); box-shadow: 0 0 0 5px #ffffff18; }
+.port { position: absolute; z-index: 5; display: grid; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; place-items: center; cursor: crosshair; touch-action: none; }
+.output { right: -22px; top: 0; }
+.input { left: -22px; top: 50%; transform: translateY(-50%); }
+/* Source handles keep a generous screen-space target at low zoom. Input rows
+   retain their spacing; the touch magnet supplies the larger landing area. */
+.output::before { position: absolute; left: 50%; top: 50%; width: max(44px, calc(44px / var(--canvas-zoom, 1))); height: max(44px, calc(44px / var(--canvas-zoom, 1))); content: ""; transform: translate(-50%, -50%); border-radius: 50%; }
+.dot { display: block; width: 11px; height: 11px; border: 2px solid #151b1b; border-radius: 50%; background: var(--port-color); outline: 1px solid #ffffff50; outline-offset: 0; transition: outline-offset .15s ease, transform .15s ease; pointer-events: none; }
+.port:hover .dot, .port:focus-visible .dot { transform: scale(1.25); outline-color: #e6eee5; outline-offset: 3px; }
 .port:focus-visible { outline: 1px dashed #d2eee5; outline-offset: -2px; border-radius: 50%; }
-.connected .dot { box-shadow: 0 0 0 2px #080f0e, 0 0 0 3px var(--port-color); }
-.compatible .dot { box-shadow: 0 0 0 5px #7ff0cd26, 0 0 12px #7ff0cd25; }
+.connected .dot { outline-color: var(--port-color); outline-offset: 2px; }
+.compatible .dot { outline-color: var(--port-color); outline-offset: 3px; }
 .incompatible .dot { opacity: .24; }
-.snapped .dot, .active .dot { transform: scale(1.4); box-shadow: 0 0 0 6px #7ff0cd38, 0 0 18px #7ff0cd55; }
+.snapped .dot, .active .dot { transform: scale(1.4); outline: 2px solid #e6eee5; outline-offset: 4px; }
 .stillDot { display: none; }
 .edgeHit { cursor: pointer; pointer-events: stroke; }
 .edgeHit:focus { outline: none; stroke: #ffffff18; }
-.toolbar { position: absolute; left: 16px; bottom: 68px; z-index: 10; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: min(540px, calc(100% - 32px)); padding: 8px 12px; border: 1px solid #31463f; border-radius: 10px; color: #aac7bc; background: #101b18ed; font-size: 11px; line-height: 1.5; }
-.toolbar button { min-height: 30px; padding: 3px 8px; border: 1px solid #4c6f62; border-radius: 6px; color: #c6f4e5; white-space: nowrap; }
+.toolbar { position: absolute; left: 16px; bottom: 68px; z-index: 10; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: min(540px, calc(100% - 32px)); padding: 8px 12px; border: 1px solid #333533; border-radius: 8px; color: #c0c6c1; background: #181a19; font-size: 12px; line-height: 1.5; }
+.toolbar button { min-height: 36px; padding: 3px 10px; border: 1px solid #5b625d; border-radius: 5px; color: #f0f2ed; white-space: nowrap; }
 .toolbar p { margin: 0; flex: 1 1 200px; }
+@media (max-width: 640px) { .output { top: 2px; } .toolbar { left: 12px; right: 12px; max-width: none; bottom: 72px; padding: 8px 10px; } .toolbar button { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .movingDot { display: none; } .stillDot { display: block; } .dot { transition: none; } }

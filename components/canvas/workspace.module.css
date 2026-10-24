@@ -1,0 +1,115 @@
+.workspace {
+  --work-ground: #090909;
+  --work-panel: #161616;
+  --work-raised: #222;
+  --work-ink: #f3f2ee;
+  --work-muted: #b4b4b4;
+  --work-faint: #949494;
+  --work-rule: #2e2e2e;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  color: var(--work-ink);
+  background: var(--work-ground);
+}
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 20px; flex-shrink: 0; background: #111; }
+.identity { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 250px; }
+.back { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; color: var(--work-muted); border-radius: 6px; }
+.project { min-width: 0; flex: 1; }
+.scope { display: flex; align-items: center; gap: 8px; color: var(--work-faint); font-size: 12px; line-height: 18px; }
+.projectName { width: 100%; max-width: 360px; padding: 2px 0; font-size: 16px; font-weight: 500; line-height: 24px; color: var(--work-ink); background: transparent; border: 0; }
+.saveState { color: var(--work-muted); font-size: 12px; white-space: nowrap; }
+.viewSwitch { display: flex; gap: 4px; padding: 3px; background: #222; border-radius: 6px; }
+.viewSwitch button { min-height: 34px; padding: 6px 12px; border-radius: 4px; white-space: nowrap; font-size: 12px; color: var(--work-muted); }
+.viewSwitch button[aria-pressed=true] { background: #3a3a3a; color: white; }
+.paletteWrap { position: relative; }
+.button, .primary, .quiet { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 12px; border-radius: 6px; font-size: 12px; line-height: 20px; white-space: nowrap; }
+.button { color: var(--work-ink); background: #262626; }
+.primary { color: #111; background: #efeee9; font-weight: 600; }
+.quiet { color: var(--work-muted); background: transparent; }
+.more { display: none; position: relative; }
+.more summary { display: grid; place-items: center; width: 36px; min-height: 44px; border-radius: 6px; color: var(--work-muted); cursor: pointer; list-style: none; font-size: 24px; }
+.more summary::-webkit-details-marker { display: none; }
+.more[open] summary { background: #333; }
+.more > div { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 180px; border: 1px solid #444; border-radius: 6px; background: #222; padding: 6px; }
+.more > div button { width: 100%; min-height: 44px; padding: 8px 12px; text-align: left; font-size: 14px; }
+.actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.workspace button:disabled { cursor: not-allowed; color: #a0a0a0; background: #242424; }
+.workspace :is(button,a,input,textarea,select):focus-visible { outline: 2px solid #d0e8df; outline-offset: 3px; }
+.workspace :is(button,a) { transition: background-color .15s ease, color .15s ease; }
+.workspace :is(.button,.back,.quiet):hover { background: #333; color: white; }
+.primary:hover { background: white; }
+/* taste-skill-ignore: the node palette is a floating overlay. */
+.palette { position: absolute; left: 0; top: calc(100% + 10px); z-index: 40; width: 280px; padding: 8px; border: 1px solid #3b3b3b; border-radius: 8px; background: #222; box-shadow: 0 12px 32px #0006; }
+.paletteHeading { display: flex; align-items: center; justify-content: space-between; padding: 8px; font-size: 14px; }
+.paletteHeading button { min-width: 36px; min-height: 36px; font-size: 20px; }
+.paletteItem { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; text-align: left; border-radius: 4px; }
+.paletteItem:hover { background: #333; }
+.paletteItem span { min-width: 0; }
+.paletteItem strong { display: block; font-size: 14px; font-weight: 500; }
+.paletteItem small { display: block; margin-top: 4px; color: var(--work-muted); font-size: 12px; line-height: 18px; }
+.billing { padding: 9px 20px; color: var(--work-muted); font-size: 12px; line-height: 20px; background: #151515; flex-shrink: 0; }
+.billing button { text-align: left; }
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; isolation: isolate; user-select: none; background: #090909; }
+.panSurface { position: absolute; inset: 0; touch-action: none; }
+/* The full stage is the working surface. World geometry remains unscaled data;
+   every connector uses measured DOM centres instead of these presentation tokens. */
+.stageMeta { position: absolute; top: 16px; left: 20px; z-index: 8; display: flex; gap: 16px; color: var(--work-faint); font-size: 12px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.dock { position: absolute; right: 20px; bottom: 20px; z-index: 11; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid #3b3b3b; border-radius: 8px; color: var(--work-muted); background: #222; }
+.dock button { min-width: 36px; min-height: 36px; padding: 6px 10px; font-size: 12px; white-space: nowrap; border-radius: 4px; }
+.dock button:hover { color: white; background: #333; }
+.zoom { min-width: 42px; font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
+.navigator { max-width: 180px; min-width: 0; min-height: 36px; color: var(--work-ink); background: #222; border: 0; border-radius: 4px; font-size: 12px; padding: 6px; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; padding: 32px; text-align: center; }
+.empty h2 { max-width: 460px; margin: 0 auto 16px; font-family: var(--font-editorial), Georgia, serif; font-size: clamp(22px, 3vw, 30px); font-weight: 400; line-height: 1.5; text-wrap: balance; }
+.empty p { max-width: 360px; margin: 0 auto; font-size: 14px; line-height: 24px; color: var(--work-muted); text-wrap: pretty; }
+.node { position: absolute; overflow: visible; border-radius: 8px; background: var(--work-panel); outline: 1px solid #333; }
+.node[data-selected=true] { outline: 2px solid #b9d5ce; }
+.nodeHeader { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; cursor: grab; border-bottom: 1px solid #2c2c2c; touch-action: none; }
+.nodeHeader:active { cursor: grabbing; }
+.nodeTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+.nodeAction { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; color: var(--work-muted); border-radius: 4px; }
+.nodeAction:hover { background: #333; color: white; }
+.inputRow { position: relative; display: flex; align-items: center; padding: 0 12px; color: var(--work-muted); font-size: 12px; }
+.nodeBody { padding: 12px; }
+.nodeBody > * + * { margin-top: 10px; }
+.field { width: 100%; border: 1px solid #444; border-radius: 4px; background: #222; padding: 8px 10px; color: var(--work-ink); font-size: 13px; line-height: 20px; }
+.field::placeholder { color: var(--work-faint); }
+.nodeBody :is(label,p,small) { font-size: 12px; line-height: 20px; }
+.nodeBody :is(input,select,textarea) { min-width: 0; }
+@media (max-width: 900px) {
+  .toolbar { gap: 8px; padding: 10px 12px; }
+  .identity { flex-basis: calc(100% - 90px); }
+  .actions { margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr); padding: 8px 12px; gap: 8px; }
+  .identity { grid-column: 1 / -1; }
+  .viewSwitch { grid-column: 1 / -1; justify-self: start; }
+  .paletteWrap { grid-column: 1; }
+  .actions { grid-column: 2; gap: 4px; }
+  .quiet { display: none; }
+  .more { display: block; }
+  .identity { flex-basis: calc(100% - 100px); }
+  .projectName { font-size: 14px; }
+  .scope { font-size: 11px; }
+  .saveState { font-size: 11px; }
+  .actions { width: auto; justify-content: flex-end; }
+  .button,.primary { padding-inline: 10px; }
+  .button,.primary,.quiet,.back,.viewSwitch button { min-height: 44px; }
+  .billing { padding: 8px 12px; font-size: 12px; max-height: 110px; overflow: auto; }
+  .palette { position: fixed; inset: auto 8px 8px; width: auto; max-height: 75dvh; overflow-y: auto; padding: 12px; border-radius: 12px; }
+  .paletteItem { min-height: 60px; }
+  .stageMeta { top: 12px; left: 16px; gap: 12px; }
+  .dock { left: 12px; right: 12px; bottom: 12px; gap: 0; }
+  .dock button { min-width: 40px; min-height: 44px; padding: 6px; }
+  .navigator { flex: 1; width: 60px; min-height: 44px; }
+  .zoom { min-width: 36px; }
+  .nodeHeader { height: 48px; }
+  .nodeBody :is(input,textarea,select) { font-size: 16px; }
+  .empty { padding: 24px; }
+}
+@media (prefers-reduced-motion: reduce) { .workspace :is(button,a) { transition: none; } }
+@media (max-width: 360px) { .addLabel { display: none; } .paletteWrap > button { min-width: 44px; } }

@@ -123,8 +123,8 @@ export const NODE_TYPES: CanvasNodeType[] = ["text", "loadImage", "image", "vide
 
 /** Fixed layout constants shared by node rendering and edge-path math. */
 export const NODE_WIDTH = 240;
-export const NODE_HEADER_H = 40;
-export const NODE_PORT_ROW_H = 26;
+export const NODE_HEADER_H = 44;
+export const NODE_PORT_ROW_H = 44;
 
 /** Resize-handle bounds — see CanvasNode's width/textHeight. */
 export const MIN_NODE_WIDTH = 200;

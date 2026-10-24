@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NODE_SPECS, NODE_WIDTH, NODE_HEADER_H, NODE_PORT_ROW_H, type CanvasGraph, type CanvasNode, type PortType } from "@/lib/canvas/types";
-import { canvasConnectionPath, canvasPortKey, connectionRejection, nearestCanvasPort, type CanvasPoint, type ConnectionSource, type ConnectionTarget } from "@/lib/canvas/connections";
+import { canvasConnectionPath, canvasPortKey, nearestConnectionTarget, type CanvasPoint, type ConnectionSource, type ConnectionTarget } from "@/lib/canvas/connections";
 import styles from "./connections.module.css";
 
 export const CONNECTION_COLORS: Record<PortType, string> = { text: "#7ea8ff", image: "#7ff0cd", video: "#f0b37f" };
@@ -10,6 +10,7 @@ export type PortOffsets = Record<string, CanvasPoint>;
 export interface ConnectionSession extends ConnectionSource {
   startedAt: CanvasPoint;
   pointerId?: number;
+  pointerType?: string;
   sequence: number;
 }
 export interface MeasuredTarget extends ConnectionTarget, CanvasPoint {}
@@ -51,8 +52,7 @@ export default function CanvasConnections({ graph, offsets, session, zoom, selec
       const candidates: MeasuredTarget[] = current.graph.nodes.flatMap(node => NODE_SPECS[node.type].inputs.map(port => ({
         nodeId: node.id, portId: port.id, type: port.type, ...measuredPortPosition(node, port.id, current.offsets.get(node.id)),
       })));
-      const hit = nearestCanvasPort(candidates, point, current.zoom);
-      const rejection = hit ? connectionRejection(current.graph, session, hit) : null;
+      const { hit, rejection } = nearestConnectionTarget(current.graph, session, candidates, point, current.zoom, session.pointerType === "touch" ? 36 : 28);
       return { point, hit, rejection };
     };
     const update = () => {
@@ -65,7 +65,8 @@ export default function CanvasConnections({ graph, offsets, session, zoom, selec
       setPreview({ point: hit && !rejection ? { x: hit.x, y: hit.y } : point, invalid: !!rejection, sequence: session.sequence });
     };
     const move = (event: PointerEvent) => {
-      if (session.pointerId !== undefined && event.pointerId !== session.pointerId && event.buttons) return;
+      // Ignore every event from a second finger, including hover events with buttons=0.
+      if (session.pointerId !== undefined && event.pointerId !== session.pointerId) return;
       if (Math.hypot(event.clientX - session.startedAt.x, event.clientY - session.startedAt.y) > 4) moved = true;
       pointer = { x: event.clientX, y: event.clientY };
       if (!frame) frame = requestAnimationFrame(update);
@@ -79,15 +80,22 @@ export default function CanvasConnections({ graph, offsets, session, zoom, selec
       else latest.current.onCancel();
     };
     const cancel = () => latest.current.onCancel();
+    const pointerCancel = (event: PointerEvent) => {
+      if (session.pointerId === undefined || event.pointerId === session.pointerId) cancel();
+    };
+    const visibility = () => { if (document.visibilityState === "hidden") cancel(); };
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); cancel(); } };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("pointercancel", pointerCancel);
+    window.addEventListener("blur", cancel);
+    document.addEventListener("visibilitychange", visibility);
     window.addEventListener("keydown", key);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", cancel); window.removeEventListener("keydown", key);
+      window.removeEventListener("pointercancel", pointerCancel); window.removeEventListener("keydown", key);
+      window.removeEventListener("blur", cancel); document.removeEventListener("visibilitychange", visibility);
     };
   }, [session]);
 
@@ -110,7 +118,8 @@ export default function CanvasConnections({ graph, offsets, session, zoom, selec
             if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(edge.id); }
             if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); event.stopPropagation(); onDelete(edge.id); }
           }} />
-        <path d={path} fill="none" stroke={selected ? "#f0b37f" : color} strokeWidth={selected ? 2.6 : 1.7} vectorEffect="non-scaling-stroke" opacity={selected ? 1 : .64} />
+        {selected && <path d={path} fill="none" stroke="#f1f0e9" strokeWidth={6} vectorEffect="non-scaling-stroke" opacity={.15} />}
+        <path d={path} fill="none" stroke={color} strokeWidth={selected ? 2.6 : 1.7} vectorEffect="non-scaling-stroke" opacity={selected ? 1 : .64} />
         {[.18, .5, .82].map((progress, index) => {
           const handle = Math.max(50, Math.abs(b.x - a.x) / 2); const rest = 1 - progress;
           const x = rest ** 3 * a.x + 3 * rest ** 2 * progress * (a.x + handle) + 3 * rest * progress ** 2 * (b.x - handle) + progress ** 3 * b.x;

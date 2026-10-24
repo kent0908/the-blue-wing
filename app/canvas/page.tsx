@@ -3,12 +3,12 @@ import Image from "next/image";
 import styles from "./gallery.module.css";
 import CanvasVideoPreview from "@/components/canvas/CanvasVideoPreview";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ShareWorkflowDialog from "@/components/canvas/ShareWorkflowDialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconPlus, IconCanvas, IconTrash, IconGlobe, IconApps } from "@/components/Icons";
-import { useTr } from "@/lib/i18n/client";
+import { useLocale, useTr } from "@/lib/i18n/client";
 
 interface WorkflowSummary {
   id: string;
@@ -54,6 +54,7 @@ function GalleryCard({
   previewVideo,
   previewImages,
   previewHref,
+  busy = false,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -66,36 +67,40 @@ function GalleryCard({
   previewVideo?: string;
   previewImages?: {src: string; label: string}[];
   previewHref?: string;
+  busy?: boolean;
 }) {
   const tr = useTr();
   return (
-    <div className={`group ${styles.card}`}>
+    <article className={styles.card}>
       {previewImages ? <div className={styles.referencePreview}><div className={styles.referenceImages}>{previewImages.map(item => <figure key={item.src}><Image unoptimized width={1200} height={675} src={item.src} alt={tr(item.label)} /><figcaption>{tr(item.label)}</figcaption></figure>)}</div><p>{tr("參考素材")}</p></div> : previewVideo ? <CanvasVideoPreview src={previewVideo} poster={cover} title={title} /> : cover && <Image width={3840} height={2160} src={cover} unoptimized={cover.startsWith("/api/")} alt={title} className={styles.cover} />}
-      <div className="flex items-center gap-2">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">{icon}</span>
-        <span className={styles.title}>{title}</span>
+      <div className={styles.cardHeading}>
+        <span className={styles.cardIcon} aria-hidden="true">{icon}</span>
+        <h3 className={styles.title}>{title}</h3>
       </div>
-      <div className="min-w-0">
+      <div className={styles.cardBody}>
         <p className={styles.description}>{subtitle}</p>
         <div className={styles.actions}>
-          {previewHref && <Link href={previewHref} className="text-xs text-emerald-300 hover:underline">{tr("預覽節點")}</Link>}
-          {badge ? <span className="text-[11px] text-[#7d7d7d]">{badge}</span> : <span />}
+          {badge ? <span className={styles.meta}>{badge}</span> : <span />}
+          {previewHref && <Link href={previewHref} className={styles.previewLink}>{tr("預覽節點")}</Link>}
           <button
             type="button"
             onClick={onOpen}
             className={styles.action}
+            disabled={busy}
           >
             {onOpenLabel}
           </button>
         </div>
       </div>
-      {corner && <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">{corner}</div>}
-    </div>
+      {corner && <div className={styles.corner}>{corner}</div>}
+    </article>
   );
 }
 
 export default function CanvasHomePage() {
   const tr = useTr();
+  const locale = useLocale();
+  const copy = locale === "ja" ? { search: "マイキャンバスを検索", noMatch: "一致するキャンバスがありません。", searchHint: "別の名前で検索してください。", deleteFailed: "削除できませんでした。内容はそのまま保存されています。", deleting: "削除中…", deleteTitle: "この作品を削除しますか？", deleteNote: "この操作は元に戻せません。" } : locale === "en" ? { search: "Search my canvases", noMatch: "No matching canvases.", searchHint: "Try another name.", deleteFailed: "Could not delete. Your work is still saved.", deleting: "Deleting…", deleteTitle: "Delete this work?", deleteNote: "This action cannot be undone." } : { search: "搜尋我的畫布", noMatch: "找不到符合的畫布。", searchHint: "試試其他名稱。", deleteFailed: "刪除失敗，作品仍保留，請稍後再試。", deleting: "刪除中…", deleteTitle: "確定刪除這份作品？", deleteNote: "此動作無法復原。" };
   const router = useRouter();
   const [shareId, setShareId] = useState<string | null>(null);
   const [workflows, setWorkflows] = useState<WorkflowSummary[] | null>(null);
@@ -105,6 +110,28 @@ export default function CanvasHomePage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [deletion, setDeletion] = useState<{ kind: "workflow" | "template" | "plaza"; id: string | number; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const deleteTrigger = useRef<HTMLElement | null>(null);
+  const filteredWorkflows = workflows?.filter(workflow => workflow.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale)));
+
+  useEffect(() => {
+    if (!deletion) return;
+    const previousFocus = deleteTrigger.current;
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const controls = dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)");
+      if (!controls?.length) { event.preventDefault(); return; }
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", trapFocus);
+    return () => { document.removeEventListener("keydown", trapFocus); previousFocus?.focus(); };
+  }, [deletion]);
 
   const load = useCallback(() => {
     fetch("/api/canvas")
@@ -158,11 +185,29 @@ export default function CanvasHomePage() {
     }
   };
 
-  const remove = async (id: string) => {
-    if (!confirm(tr("刪除這個畫布？此動作無法復原。"))) return;
-    const res = await fetch(`/api/canvas/${id}`, { method: "DELETE" }).catch(() => null);
-    if (!res?.ok) { setError(tr("刪除失敗，畫布仍保留，請稍後再試")); return; }
-    setWorkflows((cur) => cur?.filter((w) => w.id !== id) ?? cur);
+  const requestDeletion = (item: NonNullable<typeof deletion>) => {
+    deleteTrigger.current = document.activeElement as HTMLElement | null;
+    setDeleteError(null);
+    setDeletion(item);
+  };
+  const remove = async () => {
+    if (!deletion || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const { kind, id } = deletion;
+    const path = kind === "workflow" ? `/api/canvas/${id}` : kind === "template" ? `/api/canvas/templates/${id}` : `/api/canvas/plaza/${id}`;
+    try {
+      const res = await fetch(path, { method: "DELETE" });
+      if (!res.ok) throw new Error(copy.deleteFailed);
+      if (kind === "workflow") setWorkflows(cur => cur?.filter(item => item.id !== id) ?? cur);
+      else if (kind === "template") setTemplates(cur => cur?.filter(item => item.id !== id) ?? cur);
+      else setPlaza(cur => cur?.filter(item => item.id !== id) ?? cur);
+      setDeletion(null);
+    } catch {
+      setDeleteError(copy.deleteFailed);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const publishTemplate = async (w: WorkflowSummary) => {
@@ -215,26 +260,14 @@ export default function CanvasHomePage() {
     }
   };
 
-  const deleteTemplate = async (id: number) => {
-    if (!confirm(tr("刪除這個官方模板？"))) return;
-    await fetch(`/api/canvas/templates/${id}`, { method: "DELETE" });
-    setTemplates((cur) => cur?.filter((t) => t.id !== id) ?? cur);
-  };
-
-  const deletePlazaPost = async (id: number) => {
-    if (!confirm(tr("刪除這篇分享？"))) return;
-    await fetch(`/api/canvas/plaza/${id}`, { method: "DELETE" });
-    setPlaza((cur) => cur?.filter((p) => p.id !== id) ?? cur);
-  };
-
   return (
-    <div className="h-full overflow-y-auto">
+    <div className={styles.page}>
       {shareId !== null && <ShareWorkflowDialog workflows={workflows || []} initialId={shareId} onClose={() => setShareId(null)} onPublished={() => { setShareId(null); load(); }} />}
-      <div className="mx-auto max-w-[1080px] px-6 py-8">
-        <div className="flex items-center justify-between">
+      <div className={styles.container}>
+        <header className={styles.header}>
           <div>
-            <h1 className="bw-editorial-title text-[32px] sm:text-[40px]">{tr("智慧畫布")}</h1>
-            <p className="mt-1 text-[13px] leading-relaxed text-[#8a8a8a]">
+            <h1>{tr("智慧畫布")}</h1>
+            <p>
               {tr("把文字、圖片、影片生成節點拉在一起，自由搭建你的工作流。")}
             </p>
           </div>
@@ -242,54 +275,60 @@ export default function CanvasHomePage() {
             type="button"
             onClick={createWorkflow}
             disabled={creating}
-            className="flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[13px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:opacity-50"
+            className={styles.primary}
           >
             <IconPlus className="h-4 w-4" />
             {creating ? tr("建立中…") : tr("建立新畫布")}
           </button>
-        </div>
+        </header>
 
-        {error && <p className="mt-4 text-[13px] text-[#ff9b9b]">{tr(error)}</p>}
+        {error && <p role="alert" className={styles.error}>{tr(error)}</p>}
 
         {/* 我的畫布 */}
-        <section className="mt-8">
-          <h2 className="bw-editorial-title text-[23px]">{tr("我的畫布")}</h2>
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2>{tr("我的畫布")}{workflows && <span className={styles.count}>{query.trim() ? `${filteredWorkflows?.length ?? 0} / ${workflows.length}` : workflows.length}</span>}</h2>
+            <label className={styles.search}>
+              <span className="sr-only">{copy.search}</span>
+              <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.search} />
+            </label>
+          </div>
 
           {workflows === null && !error && (
-            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="bw-shimmer h-[120px] rounded-xl" />
+            <div className={styles.workflowGrid} aria-busy="true">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className={styles.skeleton} />
               ))}
             </div>
           )}
 
           {workflows?.length === 0 && (
-            <div className="mt-16 text-center text-[13px] text-[#5c5c5c]">
+            <div className={styles.empty}>
               {tr("還沒有任何畫布")}
               <br />
               {tr("按右上角「建立新畫布」開始，或下面挑一個模板／廣場分享來改")}
             </div>
           )}
 
-          {workflows && workflows.length > 0 && (
-            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {workflows.map((w) => (
-                <Link
+          {workflows && workflows.length > 0 && filteredWorkflows?.length === 0 && <div className={styles.empty}><p>{copy.noMatch}</p><p>{copy.searchHint}</p></div>}
+          {filteredWorkflows && filteredWorkflows.length > 0 && (
+            <div className={styles.workflowGrid}>
+              {filteredWorkflows.map((w) => (
+                <article
                   key={w.id}
-                  href={`/canvas/${w.id}`}
-                  className="group relative flex h-[120px] flex-col justify-between rounded-xl border border-[#262626] bg-[#141414] p-4 transition-colors hover:border-[#3a3a3a]"
+                  className={styles.workflow}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#1f1f1f] text-[#7ff0cd]">
+                  <Link href={`/canvas/${w.id}`} className={styles.workflowLink}>
+                    <span className={styles.workflowIcon}>
                       <IconCanvas className="h-4 w-4" />
                     </span>
-                    <span className={styles.title}>{tr(w.name)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-[#7d7d7d]">
+                    <h3>{w.name}</h3>
+                  </Link>
+                  <div className={styles.workflowMeta}>
                     <span>{w.nodeCount} {tr("個節點")}</span>
-                    <span>{new Date(w.updatedAt).toLocaleDateString("zh-TW")}</span>
+                    <time dateTime={w.updatedAt}>{new Date(w.updatedAt).toLocaleDateString(locale === "zh-Hant" ? "zh-TW" : locale === "ja" ? "ja-JP" : "en-US", { year: "numeric", month: "short", day: "numeric" })}</time>
                   </div>
-                  <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className={styles.workflowActions}>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -300,7 +339,7 @@ export default function CanvasHomePage() {
                       disabled={busyId === w.id}
                       aria-label={tr("分享到廣場")}
                       title={tr("分享到藍翼廣場")}
-                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
+                      className={styles.iconButton}
                     >
                       <IconGlobe className="h-3.5 w-3.5" />
                     </button>
@@ -315,7 +354,7 @@ export default function CanvasHomePage() {
                         disabled={busyId === w.id}
                         aria-label={tr("發布為官方模板")}
                         title={tr("發布為官方模板")}
-                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#1a2420] hover:text-[#7ff0cd] disabled:opacity-50"
+                        className={styles.iconButton}
                       >
                         <IconApps className="h-3.5 w-3.5" />
                       </button>
@@ -325,37 +364,36 @@ export default function CanvasHomePage() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        remove(w.id);
+                        requestDeletion({ kind: "workflow", id: w.id, name: w.name });
                       }}
                       aria-label={tr("刪除")}
-                      className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
+                      className={styles.iconButton}
                     >
                       <IconTrash className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                </Link>
+                </article>
               ))}
             </div>
           )}
         </section>
 
         {/* 官方模板 */}
-        <section className="mt-8">
-          <div className="flex items-center gap-2">
-            <IconApps className="h-4 w-4 text-[#7ff0cd]" />
-            <h2 className="bw-editorial-title text-[23px]">{tr("官方模板")}</h2>
-            <span className="text-[11.5px] text-[#6d6d6d]">{tr("— 從一份構想，走向完整的作品")}</span>
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div><h2>{tr("官方模板")}{templates && <span className={styles.count}>{templates.length}</span>}</h2>
+            <p>{tr("— 從一份構想，走向完整的作品")}</p></div>
           </div>
           {templates === null ? (
-            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
+            <div className={styles.gallery} aria-busy="true">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className={styles.skeleton} />
               ))}
             </div>
           ) : templates.length === 0 ? (
-            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">{tr("目前還沒有官方模板")}</p>
+            <p className={styles.empty}>{tr("目前還沒有官方模板")}</p>
           ) : (
-            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={styles.gallery}>
               {templates.map((t) => (
                 <GalleryCard
                   key={t.id}
@@ -369,13 +407,14 @@ export default function CanvasHomePage() {
                   badge={tr("{n} 個節點", { n: t.nodeCount })}
                   onOpen={() => cloneTemplate(t.id)}
                   onOpenLabel={busyId === `t${t.id}` ? tr("複製中…") : tr("複製到我的畫布")}
+                  busy={busyId !== null}
                   corner={
                     isAdmin && t.id > 0 ? (
                       <button
                         type="button"
-                        onClick={() => deleteTemplate(t.id)}
+                        onClick={() => requestDeletion({ kind: "template", id: t.id, name: tr(t.name) })}
                         aria-label={tr("刪除範本")}
-                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
+                        className={styles.iconButton}
                       >
                         <IconTrash className="h-3.5 w-3.5" />
                       </button>
@@ -388,22 +427,22 @@ export default function CanvasHomePage() {
         </section>
 
         {/* 藍翼廣場 */}
-        <section className="mt-8">
-          <div className="flex items-center gap-2">
-            <IconGlobe className="h-4 w-4 text-[#7ff0cd]" />
-            <h2 className="bw-editorial-title text-[23px]">{tr("藍翼廣場")}</h2><button type="button" onClick={() => setShareId("")} className="rounded-full bg-[#7ff0cd] px-3 py-2 text-xs text-black">{tr("＋ 上傳工作流")}</button>
-            <span className="text-[11.5px] text-[#6d6d6d]">{tr("— 大家分享出來的工作流，歡迎拿去用")}</span>
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div><h2>{tr("藍翼廣場")}{plaza && <span className={styles.count}>{plaza.length}</span>}</h2>
+            <p>{tr("— 大家分享出來的工作流，歡迎拿去用")}</p></div>
+            <button type="button" onClick={() => setShareId("")} className={styles.secondary}><IconPlus className="h-4 w-4" />{tr("＋ 上傳工作流").replace(/^＋\s*/, "")}</button>
           </div>
           {plaza === null ? (
-            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bw-shimmer h-[132px] rounded-xl" />
+            <div className={styles.gallery} aria-busy="true">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className={styles.skeleton} />
               ))}
             </div>
           ) : plaza.length === 0 ? (
-            <p className="mt-3 text-[12.5px] text-[#5c5c5c]">{tr("還沒有人分享工作流，來當第一個吧")}</p>
+            <p className={styles.empty}>{tr("還沒有人分享工作流，來當第一個吧")}</p>
           ) : (
-            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className={styles.gallery}>
               {plaza.map((p) => (
                 <GalleryCard
                   key={p.id}
@@ -413,13 +452,14 @@ export default function CanvasHomePage() {
                   badge={tr("by {author} · 複製 {n} 次", { author: p.authorName, n: p.copyCount })}
                   onOpen={() => clonePlazaPost(p.id)}
                   onOpenLabel={busyId === `p${p.id}` ? tr("複製中…") : tr("複製到我的畫布")}
+                  busy={busyId !== null}
                   corner={
                     p.isOwn || isAdmin ? (
                       <button
                         type="button"
-                        onClick={() => deletePlazaPost(p.id)}
+                        onClick={() => requestDeletion({ kind: "plaza", id: p.id, name: p.name })}
                         aria-label={tr("刪除分享")}
-                        className="grid h-6 w-6 place-items-center rounded-md text-[#6d6d6d] hover:bg-[#241414] hover:text-[#ff8a8a]"
+                        className={styles.iconButton}
                       >
                         <IconTrash className="h-3.5 w-3.5" />
                       </button>
@@ -431,6 +471,15 @@ export default function CanvasHomePage() {
           )}
         </section>
       </div>
+      {deletion && <div className={styles.dialogBackdrop} onKeyDown={event => { if (event.key === "Escape" && !deleting) setDeletion(null); }}>
+        <section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="canvas-delete-title" aria-describedby="canvas-delete-note" className={styles.dialog}>
+          <h2 id="canvas-delete-title">{copy.deleteTitle}</h2>
+          <p className={styles.deleteName}>{deletion.name}</p>
+          <p id="canvas-delete-note">{copy.deleteNote}</p>
+          {deleteError && <p role="alert" className={styles.error}>{deleteError}</p>}
+          <div className={styles.dialogActions}><button type="button" autoFocus className={styles.secondary} onClick={() => setDeletion(null)} disabled={deleting}>{tr("取消")}</button><button type="button" className={styles.danger} onClick={() => void remove()} disabled={deleting}>{deleting ? copy.deleting : tr("刪除")}</button></div>
+        </section>
+      </div>}
     </div>
   );
 }

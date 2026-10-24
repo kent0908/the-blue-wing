@@ -43,6 +43,8 @@ import type { CanvasEditorRuntime } from "@/lib/canvas/runtime";
 import CanvasConnections, { CONNECTION_COLORS, type ConnectionSession, type PortOffsets } from "./CanvasConnections";
 import CanvasRunConfirmation from "./CanvasRunConfirmation";
 import connectionStyles from "./connections.module.css";
+import workspaceStyles from "./workspace.module.css";
+import { canvasWorkspaceCopy } from "@/lib/i18n/canvasWorkspace";
 
 const NODE_ICON: Record<CanvasNodeType, (p: { className?: string }) => React.ReactElement> = {
   text: IconChat,
@@ -59,9 +61,9 @@ interface AssetLite {
 }
 
 type Interaction =
-  | { kind: "pan"; startClientX: number; startClientY: number; startPan: { x: number; y: number } }
-  | { kind: "dragNode"; id: string; offsetX: number; offsetY: number }
-  | { kind: "resizeNode"; id: string; startClientX: number; startClientY: number; startWidth: number; startHeight: number }
+  | { kind: "pan"; startClientX: number; startClientY: number; startPan: { x: number; y: number }; pointerId: number }
+  | { kind: "dragNode"; id: string; offsetX: number; offsetY: number; pointerId: number }
+  | { kind: "resizeNode"; id: string; startClientX: number; startClientY: number; startWidth: number; startHeight: number; pointerId: number }
   | null;
 
 export default function CanvasEditor({
@@ -80,6 +82,7 @@ export default function CanvasEditor({
   const tr = useTr();
   const locale = useLocale();
   const connectionCopy = canvasConnectionsCopy[locale];
+  const workspaceCopy = canvasWorkspaceCopy[locale];
   const [rates, setRates] = useState<RateCardEntry[]>([]);
   const [view, setView] = useState<"canvas" | "director">(runtime?.initialView ?? (runtime ? "canvas" : "director"));
   const [costDetails, setCostDetails] = useState(false);
@@ -205,6 +208,7 @@ export default function CanvasEditor({
     if (!interaction) return;
 
     const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== interaction.pointerId) return;
       if (interaction.kind === "pan") {
         setPan({
           x: interaction.startPan.x + (e.clientX - interaction.startClientX),
@@ -226,15 +230,18 @@ export default function CanvasEditor({
       }
     };
 
-    const onUp = () => setInteraction(null);
+    const onUp = (event: PointerEvent) => { if (event.pointerId === interaction.pointerId) setInteraction(null); };
+    const onBlur = () => setInteraction(null);
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
+    window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("blur", onBlur);
     };
   }, [interaction, toWorld, mutate]);
 
@@ -243,15 +250,28 @@ export default function CanvasEditor({
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      // Preserve reading/editing inside nodes. Ctrl+wheel (trackpad pinch) still
+      // zooms the stage wherever the pointer is, including over a prompt.
+      if (e.deltaY === 0) return;
+      if (!e.ctrlKey) {
+        let target = e.target instanceof Element ? e.target : null;
+        if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+        while (target && target !== el) {
+          const { overflowY } = getComputedStyle(target);
+          if ((overflowY === "auto" || overflowY === "scroll") && target.scrollHeight > target.clientHeight + 1) return;
+          target = target.parentElement;
+        }
+      }
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
       const worldX = (cx - panRef.current.x) / zoomRef.current;
       const worldY = (cy - panRef.current.y) / zoomRef.current;
-      const next = Math.min(2, Math.max(0.3, zoomRef.current * (e.deltaY < 0 ? 1.1 : 0.9)));
-      setZoom(next);
-      setPan({ x: cx - worldX * next, y: cy - worldY * next });
+      const next = Math.min(2.5, Math.max(0.15, zoomRef.current * (e.deltaY < 0 ? 1.1 : 0.9)));
+      const nextPan = { x: cx - worldX * next, y: cy - worldY * next };
+      zoomRef.current = next; panRef.current = nextPan;
+      setZoom(next); setPan(nextPan);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -376,20 +396,66 @@ export default function CanvasEditor({
     mutate(current=>({...current,nodes:[...current.nodes,{id:stageId,type:"director3d",x:0,y:0,data:defaultNodeData("director3d")}],edges:[...current.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),{id:newId("edge"),fromNode:stageId,fromPort:"out",toNode:id,toPort:"image"}]}));
     setDirector3dNodeId(stageId);
   };
+  const focusNode = useCallback((id: string) => {
+    const node = graphRef.current.nodes.find(item => item.id === id);
+    const box = containerRef.current?.getBoundingClientRect();
+    if (!node || !box) return;
+    const scale = Math.min(1, (box.width - 64) / (node.width ?? NODE_WIDTH));
+    const nextPan = { x: (box.width - (node.width ?? NODE_WIDTH) * scale) / 2 - node.x * scale, y: 52 - node.y * scale };
+    zoomRef.current = scale; panRef.current = nextPan;
+    setZoom(scale); setPan(nextPan); setSelectedNode(id);
+  }, []);
+  const zoomAtCenter = (factor: number) => {
+    const box = containerRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const current = zoomRef.current;
+    const next = Math.min(2.5, Math.max(.15, current * factor));
+    const nextPan = { x: box.width / 2 - (box.width / 2 - panRef.current.x) * next / current, y: box.height / 2 - (box.height / 2 - panRef.current.y) * next / current };
+    zoomRef.current = next; panRef.current = nextPan;
+    setZoom(next); setPan(nextPan);
+  };
   const fitCanvas = useCallback(() => {
     const nodes=graphRef.current.nodes; const box=containerRef.current?.getBoundingClientRect();
     if(!nodes.length||!box) return;
     const left=Math.min(...nodes.map(n=>n.x)), top=Math.min(...nodes.map(n=>n.y));
     const right=Math.max(...nodes.map(n=>n.x+(n.width??NODE_WIDTH))), bottom=Math.max(...nodes.map(n=>n.y+(portOffsets.get(n.id)?.__bounds.y ?? 300)));
     const scale=Math.max(.15,Math.min(1,(box.width-80)/(right-left),(box.height-80)/(bottom-top)));
-    setZoom(scale);setPan({x:(box.width-(right-left)*scale)/2-left*scale,y:40-top*scale});
+    const nextPan = {x:(box.width-(right-left)*scale)/2-left*scale,y:40-top*scale};
+    zoomRef.current = scale; panRef.current = nextPan;
+    setZoom(scale); setPan(nextPan);
   }, [portOffsets]);
   const initiallyFitted = useRef(false);
   useEffect(() => {
     if (view !== "canvas" || initiallyFitted.current || !graphRef.current.nodes.length || portOffsets.size < graphRef.current.nodes.length) return;
-    const frame = requestAnimationFrame(() => { fitCanvas(); initiallyFitted.current = true; });
+    const frame = requestAnimationFrame(() => {
+      if ((containerRef.current?.clientWidth ?? 1000) < 640) focusNode(graphRef.current.nodes[0].id);
+      else fitCanvas();
+      initiallyFitted.current = true;
+    });
     return () => cancelAnimationFrame(frame);
-  }, [view, portOffsets, fitCanvas]);
+  }, [view, portOffsets, fitCanvas, focusNode]);
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || view !== "canvas") return;
+    let width = element.clientWidth;
+    let height = element.clientHeight;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = element.clientWidth;
+      const nextHeight = element.clientHeight;
+      if (!nextWidth || !nextHeight || (width === nextWidth && height === nextHeight)) return;
+      width = nextWidth; height = nextHeight;
+      if (!initiallyFitted.current) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const nodeId = selectedNode ?? graphRef.current.nodes[0]?.id;
+        if (width < 640 && nodeId) focusNode(nodeId);
+        else fitCanvas();
+      });
+    });
+    observer.observe(element);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [view, selectedNode, fitCanvas, focusNode]);
 
   const totalCredits = canvasRunCredits(graph, rates);
   const selectedCredits = selectedNode ? canvasRunCredits(graph, rates, upstreamOrder(graph, selectedNode)) : null;
@@ -415,85 +481,53 @@ export default function CanvasEditor({
     if (runLock.busy) return;
     setInteraction(null); setSelectedNode(null); setSelectedEdge(null); setHoveredPort(null);
     const session: ConnectionSession = { fromNode: node.id, fromPort: NODE_SPECS[node.type].output.id, portType: NODE_SPECS[node.type].output.type,
-      startedAt: { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }, pointerId: event?.pointerId, sequence: ++connectionSequence.current, reconnectEdgeId };
+      startedAt: { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }, pointerId: event?.pointerId, pointerType: event?.pointerType, sequence: ++connectionSequence.current, reconnectEdgeId };
     connectionRef.current = session; setConnection(session); setConnectionMessage(connectionCopy.connecting);
   };
   const deleteEdge = (id: string) => { mutate(current => ({ ...current, edges: current.edges.filter(edge => edge.id !== id) })); setSelectedEdge(null); setConnectionMessage(connectionCopy.removed); };
 
 
   return (
-    <div className="flex h-full flex-col bg-[#0a0a0a]">
-      {/* toolbar */}
-      <div className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-[#1c1c1c] bg-black px-4 py-2">
-        <Link href={runtime?.backHref ?? "/canvas"} className="rounded-lg p-1.5 text-[#9a9a9a] transition-colors hover:text-white" aria-label={runtime?.backLabel ?? tr("返回")} title={runtime?.backLabel ?? tr("返回")}>
-          <IconChevronLeft className="h-4 w-4" />
-        </Link>
-        <input
-          value={name}
-          maxLength={120}
-          disabled={runningAll}
-          onChange={(e) => {
-            nameRef.current = e.target.value; setName(e.target.value);
-            saveState.edit(); setDirty(saveState.dirty);
-          }}
-          className="w-[150px] min-w-0 rounded-lg bg-transparent px-2 py-1 text-[14px] font-medium text-white focus:bg-[#161616] focus:outline-none"
-        />
-        <span className="text-[11.5px] text-[#6d6d6d]">{runningAll ? tr("執行中，請勿關閉") : saving ? tr("儲存中…") : dirty ? tr("尚未儲存") : tr("已儲存")}</span>
-
-        {runtime?.showDirector !== false && <div className="flex rounded-lg border border-[#354047] p-1">
-          {([['canvas','流程畫布'],['director','分鏡導演台']] as const).map(([id,label])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>{setView(id);setAddMenuOpen(false);}} className={`whitespace-nowrap rounded px-3 py-1.5 text-xs ${view===id?'bg-[#31434f] text-white':'text-[#9aadb9]'}`}>{tr(label)}</button>)}
-        </div>}
-        <div className="relative ml-1">
-          <button
-            type="button"
-            disabled={runningAll}
-            onClick={() => setAddMenuOpen((v) => !v)}
-            className="flex h-8 items-center gap-1.5 rounded-full bg-[#1f1f1f] px-3 text-[12.5px] text-white transition-colors hover:bg-[#282828]"
-          >
-            <IconPlus className="h-3.5 w-3.5" />
-            {tr("新增節點")}
-          </button>
-          {addMenuOpen && (
-            <div className="bw-menu absolute left-0 top-[calc(100%+6px)] z-40 w-[200px] p-1.5">
-              {(runtime?.allowedNodeTypes ?? NODE_TYPES).map((t) => {
-                const Icon = NODE_ICON[t];
-                return (
-                  <button key={t} type="button" className="bw-menu-item" onClick={() => addNode(t)}>
-                    <Icon className="h-[15px] w-[15px]" />
-                    <span className="flex-1 text-left">
-                      <span className="block">{tr(NODE_SPECS[t].label)}</span>
-                      <span className="block text-[10.5px] text-[#7d7d7d]">{tr(NODE_SPECS[t].hint)}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+    <div className={workspaceStyles.workspace} data-workflow-workspace>
+      <div className={workspaceStyles.toolbar}>
+        <div className={workspaceStyles.identity}>
+          <Link href={runtime?.backHref ?? "/canvas"} className={workspaceStyles.back} aria-label={runtime?.backLabel ?? tr("返回")} title={runtime?.backLabel ?? tr("返回")}>
+            <IconChevronLeft className="h-4 w-4" />
+          </Link>
+          <div className={workspaceStyles.project}>
+            <div className={workspaceStyles.scope}>{runtime ? workspaceCopy.business : workspaceCopy.studio}</div>
+            <h1 className="sr-only">{workspaceCopy.canvas}</h1>
+            <input aria-label={workspaceCopy.name} value={name} maxLength={120} disabled={runningAll}
+              onChange={e => { nameRef.current = e.target.value; setName(e.target.value); saveState.edit(); setDirty(saveState.dirty); }}
+              className={workspaceStyles.projectName} />
+          </div>
+          <span role="status" className={workspaceStyles.saveState}>{runningAll ? tr("執行中，請勿關閉") : saving ? tr("儲存中…") : dirty ? tr("尚未儲存") : tr("已儲存")}</span>
         </div>
-
-        <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-          <button type="button" onClick={exportDraft} className="whitespace-nowrap text-xs text-[#7ff0cd]">{tr("匯出草稿")}</button>
-          <button
-            type="button"
-            onClick={runAll}
-            disabled={runningAll || saving || graph.nodes.length === 0}
-            className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[12.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <IconPlay className="h-3.5 w-3.5" />
-            {runningAll ? tr("執行中…") : tr("全部執行")}
+        {runtime?.showDirector !== false && <div className={workspaceStyles.viewSwitch}>
+          {([['canvas','流程畫布'],['director','分鏡導演台']] as const).map(([id,label]) => <button key={id} type="button" aria-pressed={view===id} onClick={()=>{setView(id);setAddMenuOpen(false);}}>{tr(label)}</button>)}
+        </div>}
+        <div className={workspaceStyles.paletteWrap}>
+          <button type="button" disabled={runningAll} aria-label={tr("新增節點")} title={tr("新增節點")} aria-expanded={addMenuOpen} aria-controls="workflow-node-menu" onClick={()=>setAddMenuOpen(v=>!v)} className={workspaceStyles.button}>
+            <IconPlus className="h-4 w-4" /><span className={workspaceStyles.addLabel}>{tr("新增節點")}</span>
           </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving || runningAll}
-            className="h-8 shrink-0 whitespace-nowrap rounded-full border border-[#3a3a3a] px-4 text-[12.5px] text-white transition-colors hover:border-[#555] disabled:opacity-50"
-          >
-            {tr("儲存")}
+          {addMenuOpen && <div id="workflow-node-menu" className={workspaceStyles.palette} onKeyDown={event=>{if(event.key==='Escape') {setAddMenuOpen(false);event.stopPropagation();}}}>
+            <div className={workspaceStyles.paletteHeading}><span>{workspaceCopy.palette}</span><button type="button" aria-label={workspaceCopy.close} onClick={()=>setAddMenuOpen(false)}>×</button></div>
+            {(runtime?.allowedNodeTypes ?? NODE_TYPES).map(type=>{const Icon=NODE_ICON[type];return <button key={type} type="button" className={workspaceStyles.paletteItem} onClick={()=>addNode(type)}>
+              <Icon className="h-4 w-4 shrink-0 text-[#b4b4b4]"/><span><strong>{tr(NODE_SPECS[type].label)}</strong><small>{tr(NODE_SPECS[type].hint)}</small></span>
+            </button>;})}
+          </div>}
+        </div>
+        <div className={workspaceStyles.actions}>
+          <button type="button" onClick={exportDraft} className={workspaceStyles.quiet}>{tr("匯出草稿")}</button>
+          <details className={workspaceStyles.more}><summary aria-label={workspaceCopy.more}>⋯</summary><div><button type="button" onClick={exportDraft}>{tr("匯出草稿")}</button></div></details>
+          <button type="button" onClick={save} disabled={saving || runningAll} className={workspaceStyles.button}>{tr("儲存")}</button>
+          <button type="button" onClick={runAll} disabled={runningAll || saving || graph.nodes.length===0} className={workspaceStyles.primary}>
+            <IconPlay className="h-3.5 w-3.5"/>{runningAll ? tr("執行中…") : tr("全部執行")}
           </button>
         </div>
       </div>
 
-      {runtime ? <div className="shrink-0 border-b border-[#252525] bg-[#101817] px-4 py-2 text-xs text-[#9ce9d5]">{runtime.billingNotice}</div> : <div className="shrink-0 border-b border-[#252525] bg-[#101817] px-4 py-2 text-xs text-[#9ce9d5]">
+      {runtime ? <div className={workspaceStyles.billing}>{runtime.billingNotice}</div> : <div className={workspaceStyles.billing}>
         <button type="button" onClick={() => setCostDetails(v => !v)} aria-expanded={costDetails} className="text-left">
           {tr("全部執行：約")} {totalCredits === null ? tr("費率未設定") : tr("{n} 點", { n: totalCredits })}　{selectedNode && tr("選取節點含上游：約 {n}　", { n: selectedCredits === null ? tr("費率未設定") : tr("{n} 點", { n: selectedCredits }) })}{costDetails ? tr("收合明細 ▴") : tr("查看點數明細 ▾")}
         </button>
@@ -518,20 +552,19 @@ export default function CanvasEditor({
       <div
         ref={containerRef}
         inert={runningAll}
-        className={`relative min-h-0 flex-1 select-none overflow-hidden ${view === "director" ? "hidden" : ""}`}
-        style={{
-          backgroundImage: "radial-gradient(circle, #1e1e1e 1px, transparent 1px)",
-          backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
-          backgroundPosition: `${pan.x}px ${pan.y}px`,
-        }}
+        className={`${workspaceStyles.stage} ${view === "director" ? "hidden" : ""}`}
+        style={{ "--canvas-zoom": zoom } as React.CSSProperties}
         onPointerDown={(e) => {
-          if (e.target !== e.currentTarget || (e.button !== 0 && e.button !== 1)) return;
+          const onBackground = e.target === e.currentTarget || (e.target instanceof HTMLElement && e.target.hasAttribute("data-canvas-pan-surface"));
+          if (!onBackground || (e.button !== 0 && e.button !== 1)) return;
           cancelConnection();
           setSelectedNode(null);
           setSelectedEdge(null);
-          setInteraction({ kind: "pan", startClientX: e.clientX, startClientY: e.clientY, startPan: pan });
+          setInteraction({ kind: "pan", startClientX: e.clientX, startClientY: e.clientY, startPan: pan, pointerId: e.pointerId });
         }}
       >
+        <div data-canvas-pan-surface className={workspaceStyles.panSurface} />
+        <div className={workspaceStyles.stageMeta}><span>{workspaceCopy.nodes.replace("{n}", String(graph.nodes.length))}</span><span>{workspaceCopy.links.replace("{n}", String(graph.edges.length))}</span></div>
         <div
           className="absolute left-0 top-0"
           style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}
@@ -578,7 +611,7 @@ export default function CanvasEditor({
                 setSelectedNode(node.id);
                 setSelectedEdge(null);
                 const w = toWorld(e.clientX, e.clientY);
-                setInteraction({ kind: "dragNode", id: node.id, offsetX: w.x - node.x, offsetY: w.y - node.y });
+                setInteraction({ kind: "dragNode", id: node.id, offsetX: w.x - node.x, offsetY: w.y - node.y, pointerId: e.pointerId });
               }}
               onDelete={() => {
                 mutate((g) => ({
@@ -595,6 +628,7 @@ export default function CanvasEditor({
                 setSelectedEdge(null);
                 setInteraction({
                   kind: "resizeNode",
+                  pointerId: e.pointerId,
                   id: node.id,
                   startClientX: e.clientX,
                   startClientY: e.clientY,
@@ -612,21 +646,17 @@ export default function CanvasEditor({
           {connection && <button type="button" onClick={cancelConnection}>{connectionCopy.cancel}</button>}
           {selectedEdge && <button type="button" onClick={() => deleteEdge(selectedEdge)}>{connectionCopy.remove}</button>}
         </div>
-        <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-[#39464e] bg-[#131c22]/95 px-3 py-2 shadow-lg" onPointerDown={e=>e.stopPropagation()}>
-          <button type="button" aria-label={tr("縮小畫布")} onClick={()=>setZoom(z=>Math.max(.15,z/1.2))} className="px-2 text-white">−</button>
-          <span className="w-12 text-center text-xs text-[#becbd3]">{Math.round(zoom*100)}%</span>
-          <button type="button" aria-label={tr("放大畫布")} onClick={()=>setZoom(z=>Math.min(2.5,z*1.2))} className="px-2 text-white">＋</button>
-          <button type="button" onClick={fitCanvas} className="whitespace-nowrap px-2 text-xs text-[#becbd3]">{tr("檢視全貌")}</button>
+        <div className={workspaceStyles.dock} onPointerDown={e=>e.stopPropagation()}>
+          {graph.nodes.length>0 && <select className={workspaceStyles.navigator} aria-label={workspaceCopy.focus} value={selectedNode ?? ""} onChange={event=>focusNode(event.target.value)}>
+            <option value="" disabled>{workspaceCopy.focus}</option>
+            {graph.nodes.map((node,index)=><option key={node.id} value={node.id}>{index+1}. {String(node.data.title || tr(NODE_SPECS[node.type].label))}</option>)}
+          </select>}
+          <button type="button" aria-label={tr("縮小畫布")} onClick={()=>zoomAtCenter(1/1.2)}>−</button>
+          <span className={workspaceStyles.zoom}>{Math.round(zoom*100)}%</span>
+          <button type="button" aria-label={tr("放大畫布")} onClick={()=>zoomAtCenter(1.2)}>＋</button>
+          <button type="button" aria-label={tr("檢視全貌")} onClick={fitCanvas}>{workspaceCopy.overview}</button>
         </div>
-        {graph.nodes.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-[13px] text-[#4a4a4a]">
-            <div>
-              {tr("畫布是空的")}
-              <br />
-              {tr("點左上角「新增節點」開始搭建工作流")}
-            </div>
-          </div>
-        )}
+        {graph.nodes.length===0 && <div className={workspaceStyles.empty}><div><h2>{workspaceCopy.emptyTitle}</h2><p>{workspaceCopy.emptyBody}</p></div></div>}
       </div>
 
       {!runtime && runConfirmation !== null && <CanvasRunConfirmation message={runConfirmation} onDecision={settleRunConfirmation} />}
@@ -708,35 +738,32 @@ function NodeCard({
   // comment for why this can't just be a plain CSS-relative dropdown.
   const [assetPickerPos, setAssetPickerPos] = useState<{ top: number; left: number } | null>(null);
 
-  const fieldCls =
-    "w-full rounded-lg border border-[#2c2c2c] bg-[#1c1c1c] px-2.5 py-1.5 text-[12px] text-white focus:border-[#4a4a4a] focus:outline-none";
+  const fieldCls = workspaceStyles.field;
 
   return (
     <div
       ref={cardRef}
       data-canvas-node={node.id}
       onPointerDown={onSelect}
-      className={[
-        "absolute overflow-visible rounded-xl border bg-[#161616] shadow-lg",
-        selected ? "border-[#7ff0cd]" : "border-[#2a2a2a]",
-      ].join(" ")}
+      className={workspaceStyles.node}
+      data-selected={selected}
       style={{ left: node.x, top: node.y, width: node.width ?? NODE_WIDTH }}
     >
       {/* header */}
       <div
         onPointerDown={onHeaderPointerDown}
         style={{ touchAction: "none" }}
-        className="flex h-10 cursor-grab items-center gap-1.5 rounded-t-xl border-b border-[#232323] px-2.5 active:cursor-grabbing"
+        className={workspaceStyles.nodeHeader}
       >
         <Icon className="h-3.5 w-3.5 shrink-0 text-[#9a9a9a]" />
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-white">{String(node.data.title || tr(spec.label))}</span>
+        <span className={workspaceStyles.nodeTitle}>{String(node.data.title || tr(spec.label))}</span>
         <StatusDot status={node.status} />
         <button
           type="button"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onRun}
           title={tr("執行（會先跑上游節點）")}
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a9a] transition-colors hover:bg-[#242424] hover:text-[#7ff0cd]"
+          className={workspaceStyles.nodeAction}
         >
           <IconPlay className="h-3 w-3" />
         </button>
@@ -745,7 +772,7 @@ function NodeCard({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={onDelete}
           title={tr("刪除節點")}
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#9a9a9a] transition-colors hover:bg-[#2a1616] hover:text-[#ff8a8a]"
+          className={workspaceStyles.nodeAction}
         >
           <IconTrash className="h-3 w-3" />
         </button>
@@ -764,7 +791,7 @@ function NodeCard({
       {spec.inputs.map(input => {
         const target = { nodeId: node.id, portId: input.id, type: input.type };
         const compatible = connection ? !connectionRejection(graph, connection, target) : false;
-        return <div key={input.id} className="relative flex items-center px-2.5 text-[11px] text-[#8a8a8a]" style={{ height: NODE_PORT_ROW_H }}>
+        return <div key={input.id} className={workspaceStyles.inputRow} style={{ height: NODE_PORT_ROW_H }}>
           <button type="button" data-port-kind="in" data-node-id={node.id} data-port-id={input.id} data-port-type={input.type}
             aria-label={`${connectionCopy.input}${String(node.data.title || tr(spec.label))} · ${tr(input.label)}`} title={`${connectionCopy.input}${tr(input.label)}`}
             onPointerDown={event => onInputPortDown(event, target)} onClick={() => onInputActivate(target)}
@@ -777,7 +804,7 @@ function NodeCard({
       })}
 
       {/* body */}
-      <div className="space-y-2 p-2.5 pt-1.5" onPointerDown={(e) => e.stopPropagation()}>
+      <div className={workspaceStyles.nodeBody} onPointerDown={(e) => e.stopPropagation()}>
         {settingsOverride !== undefined ? settingsOverride : <>
         {node.type === "text" && (
           <textarea
@@ -856,7 +883,7 @@ function NodeCard({
                 >
                   <div className="mb-1.5 flex items-center justify-between">
                     <span className="text-[11px] text-white">{tr("選擇素材（可複選）")}</span>
-                    <button type="button" onClick={() => setAssetPickerOpen(false)} className="text-[10.5px] text-[#8a8a8a] hover:text-white">
+                    <button type="button" onClick={() => setAssetPickerOpen(false)} className="text-[12px] text-[#8a8a8a] hover:text-white">
                       {tr("完成")}
                     </button>
                   </div>
@@ -875,7 +902,7 @@ function NodeCard({
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={a.src} alt={tr(a.name)} className="h-full w-full object-cover" />
-                          {on && <span className="absolute inset-0 grid place-items-center bg-black/40 text-[11px] text-[#7ff0cd]">✓</span>}
+                          {on && <span className="absolute inset-0 grid place-items-center bg-black/40 text-[11px] text-[#7ff0cd]"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m4 10 4 4 8-8"/></svg></span>}
                         </button>
                       );
                     })}
@@ -1038,7 +1065,7 @@ function NodeCard({
 
 function StatusDot({ status }: { status?: CanvasNode["status"] }) {
   if (!status || status === "idle") return null;
-  if (status === "running") return <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#f0d27f]" />;
+  if (status === "running") return <span className="h-2 w-2 shrink-0 rounded-full bg-[#f0d27f]" />;
   if (status === "done") return <span className="h-2 w-2 shrink-0 rounded-full bg-[#7ff0cd]" />;
   return <span className="h-2 w-2 shrink-0 rounded-full bg-[#ff6b6b]" />;
 }
