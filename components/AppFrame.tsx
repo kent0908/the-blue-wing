@@ -32,5 +32,6 @@ export default function AppFrame({children}:{children:React.ReactNode}) {
       <div className="flex items-center bg-black"><button type="button" aria-label={t.nav.openNav} onClick={()=>drawer.current?.showModal()} className="shrink-0 p-3 text-xl md:hidden">☰</button><div className="min-w-0 flex-1"><Suspense fallback={<div className="h-14"/>}><TopBar/></Suspense></div></div>
       <main className="min-h-0 flex-1">{children}</main>
     </div>
-  </div><SupportChat/></>;
+  </div>{/* Editors reserve the bottom edge for canvas controls. Help stays in TopBar. */}
+  {!path.startsWith("/canvas/") && <SupportChat/>}</>;
 }
