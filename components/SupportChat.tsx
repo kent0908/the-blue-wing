@@ -42,6 +42,7 @@ export default function SupportChat() {
   const tr = useTr();
   const pathname = usePathname();
   const companionChat = /^\/companions\/\d+$/.test(pathname);
+  const creativeHome = pathname === "/";
   const [open, setOpen] = useState(false);
   const rootOptions = rootOptionsFor();
   const [msgs, setMsgs] = useState<Msg[]>([{ ...GREETING, options: rootOptionsFor() }]);
@@ -117,7 +118,7 @@ export default function SupportChat() {
       <button
         onClick={() => setOpen(true)}
         aria-label={tr("客服")}
-        className={`fixed ${companionChat ? "bottom-28 right-4 sm:right-5" : "bottom-5 right-5"} z-50 grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16] shadow-lg transition-transform hover:scale-105`}
+        className={`fixed ${companionChat || creativeHome ? "bottom-28 right-4 sm:right-5" : "bottom-5 right-5"} z-50 grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16] shadow-lg transition-transform hover:scale-105`}
       >
         <IconChat className="h-5 w-5" />
       </button>

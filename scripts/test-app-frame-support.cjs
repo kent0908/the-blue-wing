@@ -41,6 +41,7 @@ function load(file) {
   return mod.exports;
 }
 const AppFrame = load('components/AppFrame.tsx').default;
+const SupportChat = load('components/SupportChat.tsx').default;
 const { LocaleProvider } = load('lib/i18n/client.tsx');
 const routes = [
   ['/canvas', true, true],
@@ -77,7 +78,16 @@ try {
     }
   }
   assert.equal(calls, 0);
+  for (const locale of ['zh-Hant', 'en', 'ja']) {
+    for (const [route, raised] of [['/', true], ['/companions/1', true], ['/studio', false]]) {
+      currentPath = route;
+      const html = renderToStaticMarkup(React.createElement(LocaleProvider, { locale }, React.createElement(SupportChat)));
+      assert.equal(html.includes('bottom-28'), raised, `${locale} ${route}: support stays clear of bottom creation controls`);
+      assert.ok(html.includes('aria-label='), 'Support remains accessible and available');
+    }
+  }
   console.log(`PASS AppFrame support: ${passed} actual React SSR route/language cases; real TopBar help, child content and consumer shell preserved; zero API or paid calls.`);
+  console.log('PASS SupportChat: 9 real React SSR route/language cases; homepage composer clearance, companion position and normal studio position.');
 } finally {
   global.fetch = previousFetch;
 }
