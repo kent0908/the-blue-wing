@@ -14,6 +14,18 @@
   background: #080808;
   color: var(--home-ink);
 }
+.home section[aria-labelledby="draft-home-title"] h2 {
+  font-family: var(--font-home-display, inherit);
+  font-weight: 850;
+  font-size: clamp(28px, 2.8vw, 40px);
+  line-height: 1.25;
+  letter-spacing: -.035em;
+}
+.home section[aria-labelledby="draft-home-title"] > div:first-child > p:first-child { display: none; }
+@media (max-width: 1100px) {
+  .home section[aria-labelledby="draft-home-title"] { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .home section[aria-labelledby="draft-home-title"] h2 { font-size: 28px; }
+}
 .container { max-width: 1600px; margin: auto; padding: 32px 56px 120px; }
 .hero { margin-top: 76px; }
 .intro { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 24px; }

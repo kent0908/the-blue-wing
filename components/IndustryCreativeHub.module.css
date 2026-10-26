@@ -872,6 +872,12 @@
   font-weight: 700;
   cursor: pointer;
 }
+/* The real app keeps its desktop sidebar at 768px. Give the headline its full
+   content column instead of competing with a secondary studio link. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  .header { display: block; }
+  .studioLink { display: none; }
+}
 .showMore:hover {
   background: #383838;
 }
