@@ -8,6 +8,7 @@ import TemplatePreview from '@/components/TemplatePreview';
 import { CANVAS_PREVIEWS } from '@/lib/officialTemplates';
 import OfficialTemplates from '@/components/OfficialTemplates';
 import HeroCarousel from "@/components/HeroCarousel";
+import IndustryCreativeHub from "@/components/IndustryCreativeHub";
 import { SeedanceDraftHomeEntry } from "@/components/SeedanceDraftShowcase";
 import { IconArrowRight, IconModel, IconPlus, IconSparkle } from "@/components/Icons";
 import ModelLogo from "@/components/ModelLogo";
@@ -39,8 +40,6 @@ const DEFAULT_TEMPLATES: Block[] = [
   { id: -7, tKey: "shots", title: "鏡頭設計師", subtitle: "創造電影級攝影機角度", badge: null, imageUrl: null, targetMode: "video", modelId: null, prompt: null },
   { id: -8, tKey: "color", title: "電影色彩", subtitle: "添加豐富的電影風格色調", badge: null, imageUrl: null, targetMode: "image", modelId: null, prompt: null },
 ];
-
-const TINTS = ["#2e4a2a", "#4a2f2a", "#4a3d24", "#2a3550"];
 
 function hrefFor(b: Block): string {
   const p = new URLSearchParams();
@@ -103,6 +102,7 @@ export default function HomePage() {
   return (
     <div className={`${styles.home} relative h-full overflow-y-auto`}>
       <div className={styles.container}>
+        <IndustryCreativeHub />
         <HeroCarousel />
 
         <div className={styles.models}>
@@ -153,9 +153,9 @@ export default function HomePage() {
         <SeedanceDraftHomeEntry />
 
         <section id="canvas-showcase" className={styles.workshop}>
-          <div className={styles.sectionHeading}><div><p>01 / THE WORKSHOP</p><h2>{t.home.canvasHeading}</h2></div><Link href="/canvas">{tr("探索工作流")} ↗</Link></div>
+          <div className={styles.sectionHeading}><div><h2>{t.home.canvasHeading}</h2></div><Link href="/canvas">{tr("探索工作流")} ↗</Link></div>
           <div className={styles.workshopGrid}>
-            {templates.slice(0, 8).map((c, i) => { const preview=CANVAS_PREVIEWS.find(p=>p.title===c.title); return (
+            {templates.slice(0, 8).map((c) => { const preview=CANVAS_PREVIEWS.find(p=>p.title===c.title); return (
               <div key={c.id} className="group">
                 {preview ? <TemplatePreview id={preview.id} revision={preview.revision} title={templateText(c)[0]} active={playingCanvas===preview.id} onToggle={()=>setPlayingCanvas(playingCanvas===preview.id?null:preview.id)}/> : c.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- public content proxy
@@ -167,7 +167,7 @@ export default function HomePage() {
                 ) : (
                   <div
                     className="aspect-[4/3] rounded-xl transition-transform group-hover:-translate-y-0.5"
-                    style={{ background: `linear-gradient(160deg,${TINTS[i % TINTS.length]} 0%,#101010 100%)` }}
+                    style={{ background: "#181818" }}
                   />
                 )}
                 <Link href={preview&&c.id<0?`/studio?mode=video&operation=freestyle&official=${preview.id}`:hrefFor(c)} className="mt-3 block text-[14px] font-medium hover:text-[#76dfbf]">{templateText(c)[0]} ↗</Link>
@@ -180,7 +180,7 @@ export default function HomePage() {
       </div>
 
       <div className="pointer-events-none sticky bottom-6 flex flex-col items-center justify-center gap-3 px-6 xl:flex-row">
-        <div className="pointer-events-auto flex w-full max-w-[600px] items-center gap-3 rounded-full border border-[#2a2a2a] bg-[#161616]/95 py-2 pl-3 pr-2 backdrop-blur">
+        <div className="pointer-events-auto flex w-full max-w-[600px] items-center gap-3 rounded-full border border-[#2a2a2a] bg-[#161616] py-2 pl-3 pr-2">
           <button aria-label={t.home.toAssets} onClick={() => router.push("/assets")} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#242424] text-[#9a9a9a] transition-colors hover:text-white">
             <IconPlus className="h-4 w-4" />
           </button>
@@ -193,7 +193,7 @@ export default function HomePage() {
           />
           <button
             onClick={start}
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] px-4 text-[13.5px] font-medium text-[#0a1a16] transition-[filter] hover:brightness-105"
+            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-[#f4f4ed] px-4 text-[13.5px] font-semibold text-[#111] hover:bg-white"
           >
             <IconSparkle className="h-4 w-4" />
             {t.home.start}

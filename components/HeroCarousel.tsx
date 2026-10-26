@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IconChevronLeft, IconChevronRight } from "./Icons";
-import { useTr } from "@/lib/i18n/client";
+import { useLocale, useTr } from "@/lib/i18n/client";
 import styles from "./HomeEditorial.module.css";
 import { k } from "@/lib/i18n/tr";
 
@@ -37,6 +37,11 @@ function heroHref(b: HeroBlock): string {
 }
 
 const FILMS = ["worlds", "art", "sound", "door"];
+const COLLECTION_COPY = {
+  "zh-Hant": { title: "藍翼原創選片", subtitle: "不同的畫風，同樣不設限的想像。" },
+  en: { title: "Blue Wing originals", subtitle: "Different worlds. An imagination that keeps moving." },
+  ja: { title: "藍翼オリジナル作品", subtitle: "画風を越えて、想像は動き続ける。" },
+};
 const SLIDES: Slide[] = [
  { title: k("一翼，萬象"), subtitle: k("一片藍羽，穿過不同的世界，將故事帶向同一片海。"), href: "/studio?mode=video&model=SIRAYA-Seedance-2.5", gradient: "#192a28" },
  { title: k("美，不只有一種答案"), subtitle: k("從動畫到版畫，再走進畫廊。同一個瞬間，有不同的看法。"), href: "/studio?mode=image", gradient: "#272a1e" },
@@ -46,6 +51,7 @@ const SLIDES: Slide[] = [
 
 export default function HeroCarousel() {
   const tr = useTr();
+  const copy = COLLECTION_COPY[useLocale()];
   const [dynamicSlides, setDynamicSlides] = useState<Slide[] | null>(null);
 
   useEffect(() => {
@@ -97,22 +103,20 @@ export default function HeroCarousel() {
   },[playing, visible, i, failed, current.image]);
   const select = (index: number)=>{setI(index);setFailed(false);setPlaying(!reduced)};
   return <section ref={region} className={styles.hero} aria-label={tr("創作展示")}>
-    <div className={styles.masthead}><span>THE BLUE WING / CREATIVE STUDIO</span><span>SELECTED POSSIBILITIES — 01</span></div>
-    <div className={styles.intro}><h1>{tr("讓想像，留下畫面。")}</h1><p>{tr("從一束光、一個角色，到一段值得留下的故事。")}</p></div>
+    <div className={styles.intro}><h2>{copy.title}</h2><p>{copy.subtitle}</p></div>
     <div className={styles.stage}>
       <div className={styles.visual}>
         {!current.image && !failed ? <video ref={video} key={film} src={`${mediaBase}.mp4`} poster={poster} preload="metadata" muted playsInline onError={()=>{setPlaying(false);setFailed(true)}} onEnded={()=>select((i+1)%slides.length)} aria-label={tr(current.title)+tr("預覽")} /> :
           // eslint-disable-next-line @next/next/no-img-element -- existing public artwork
-          <img key={current.image || poster} src={current.image || poster} alt={tr(current.title)} fetchPriority="high" />}
-        <div className={styles.caption}><span>BLUE WING / ORIGINAL FILMS</span><span>{tr("靜音預覽")}</span></div>
-        {!current.image && <button className={styles.play} onClick={()=>{if(failed){setFailed(false);setPlaying(true)}else setPlaying(p=>!p)}} aria-label={tr(playing ? "暫停創作片段" : "播放創作片段")}>{playing ? "Ⅱ" : "▶"} <span>{tr(failed ? "重新載入片段" : playing ? "暫停片段" : "播放片段")}</span></button>}
+          <img key={current.image || poster} src={current.image || poster} alt={tr(current.title)} loading="lazy" decoding="async" />}
+        {!current.image && !failed && <div className={styles.caption}><span>{tr("靜音預覽")}</span></div>}
+        {!current.image && <button type="button" className={styles.play} onClick={()=>{if(failed){setFailed(false);setPlaying(true)}else setPlaying(p=>!p)}} aria-label={tr(playing ? "暫停創作片段" : "播放創作片段")}><span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span><span>{tr(failed ? "重新載入片段" : playing ? "暫停片段" : "播放片段")}</span></button>}
         {failed && <p role="status" className={styles.mediaError}>{tr("片段暫時無法載入，請稍後重試。")}</p>}
       </div>
       <div className={styles.essay}>
-        <span className={styles.index}>{String(i+1).padStart(2,"0")} <small>/ {String(slides.length).padStart(2,"0")}</small></span>
-        <div aria-live="polite"><p className={styles.eyebrow}>SELECTED FILM</p><h2>{tr(current.title)}</h2><p className={styles.description}>{tr(current.subtitle)}</p></div>
+        <div aria-live="polite"><h3>{tr(current.title)}</h3><p className={styles.description}>{tr(current.subtitle)}</p></div>
         <Link className={styles.cta} href={current.href}>{tr("開始探索")} <span>↗</span></Link>
-        <div className={styles.navigation}><button onClick={()=>{select((i+slides.length-1)%slides.length)}} aria-label={tr("上一張")}><IconChevronLeft /></button><div className={styles.dots}>{slides.map((s,j)=><button key={j} aria-label={tr("第 {n} 張",{n:j+1})} aria-pressed={i===j} onClick={()=>{select(j)}}><span /></button>)}</div><button onClick={()=>{select((i+1)%slides.length)}} aria-label={tr("下一張")}><IconChevronRight /></button></div>
+        <div className={styles.navigation}><button type="button" onClick={()=>{select((i+slides.length-1)%slides.length)}} aria-label={tr("上一張")}><IconChevronLeft /></button><div className={styles.dots}>{slides.map((s,j)=><button type="button" key={j} aria-label={tr("第 {n} 張",{n:j+1})} aria-pressed={i===j} onClick={()=>{select(j)}}><span /></button>)}</div><span className={styles.slideCount}>{i+1} / {slides.length}</span><button type="button" onClick={()=>{select((i+1)%slides.length)}} aria-label={tr("下一張")}><IconChevronRight /></button></div>
       </div>
     </div>
   </section>;

@@ -5,7 +5,7 @@ import { getOfficialTemplate } from '@/lib/officialTemplates';
 import LayerDecompositionResult from "@/components/LayerDecompositionResult";
 import { modelLabel } from "@/lib/modelLabel";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Composer from "@/components/Composer";
@@ -20,6 +20,10 @@ import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
 import { generationTimeLabel } from "@/lib/formatTime";
 import { useTr } from "@/lib/i18n/client";
+import { useLocale } from "@/lib/i18n/client";
+import { industryHandoffSnapshot, type IndustryBriefHandoff } from "@/lib/industryHandoff";
+
+const noBriefSubscription = () => () => {};
 
 /**
  * Which 生成紀錄 kind belongs on-screen for a given composer mode. The main
@@ -33,6 +37,7 @@ const MODE_FOR_KIND: Record<ResultItem["kind"], Mode> = { image: "image", video:
 
 function StudioInner() {
   const tr = useTr();
+  const locale = useLocale();
   const router = useRouter();
   const params = useSearchParams();
   const mode = (params.get("mode") as Mode) || "video";
@@ -40,6 +45,16 @@ function StudioInner() {
   const urlPrompt = params.get("q") ?? undefined;
   const preset = params.get("preset");
   const official = getOfficialTemplate(params.get("official"));
+  const briefToken = params.get("brief");
+  const briefSnapshot = useSyncExternalStore(noBriefSubscription, () => {
+    if (!briefToken) return "";
+    try { return industryHandoffSnapshot(sessionStorage, briefToken); } catch { return ""; }
+  }, () => null);
+  const industryBrief: IndustryBriefHandoff | null = briefSnapshot ? JSON.parse(briefSnapshot) : null;
+  const briefReady = !briefToken || briefSnapshot !== null;
+  const briefPrompt = industryBrief?.mode === mode ? industryBrief.prompt : undefined;
+  const briefMissing = briefReady && !!briefToken && !briefPrompt;
+  const briefMissingMessage = locale === "ja" ? "このブリーフは別のタブ、または有効期限切れです。ホームで制作プランを開き直してください。" : locale === "en" ? "This brief is unavailable in this tab or has expired. Reopen the creative plan from the home page." : "這份簡報已過期，或不在目前分頁。請回首頁重新開啟創作方案。";
 
   // A screenshot (or a recorded 運鏡's sampled frames) handed off from the
   // standalone 3D導演台 page (see app/canvas/director3d/page.tsx) — it
@@ -54,6 +69,7 @@ function StudioInner() {
     videoRef?: { url: string };
   } | null>(() => {
     if (typeof window === "undefined") return null;
+    if (briefToken) return null;
     try {
       const raw = sessionStorage.getItem(DIRECTOR3D_HANDOFF_KEY);
       if (!raw) return null;
@@ -74,11 +90,12 @@ function StudioInner() {
   const [presetVideoRef] = useState(director3dHandoff?.videoRef);
 
   useEffect(() => {
-    if (!preset) return;
+    if (!preset || briefToken) return;
     let alive = true;
     (async () => {
       try {
         const j = await fetch("/api/home-blocks").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        if (!alive) return;
         const all = j ? [...(j.hero ?? []), ...(j.showcase ?? []), ...(j.template ?? [])] : [];
         const b = all.find((x: { id: number }) => String(x.id) === preset);
         if (b && alive) {
@@ -103,7 +120,7 @@ function StudioInner() {
     return () => {
       alive = false;
     };
-  }, [preset, urlModel, urlPrompt, tr]);
+  }, [preset, urlModel, urlPrompt, tr, briefToken]);
 
   const [panelOpen, setPanelOpen] = useState(false);
   // Which history item the main viewer shows. null = "the newest one" (the
@@ -194,17 +211,19 @@ function StudioInner() {
                 {tr("同時最多")} {MAX_CONCURRENT_JOBS} {tr("個生成在跑（不限模式），等其中一個完成才能再送出")}
               </p>
             )}
-            {official ? <OfficialTemplateComposer key={official.id} template={official} composerProps={{initialModel:urlModel,mode,onModeChange:setMode,onSubmit:handleSubmit,busy:atCapacity}} /> : presetReady ? (
+            {briefMissing && <p role="alert" className="mb-3 rounded-lg bg-[#242424] p-3 text-sm text-[#e6c6af]">{briefMissingMessage} <Link href="/" className="underline">{locale === "ja" ? "ホームへ" : locale === "en" ? "Go home" : "返回首頁"}</Link></p>}
+            {!briefToken && official ? <OfficialTemplateComposer key={official.id} template={official} composerProps={{initialModel:urlModel,mode,onModeChange:setMode,onSubmit:handleSubmit,busy:atCapacity}} /> : (briefToken || presetReady) && briefReady ? (
               <Composer
+                key={briefToken ? `industry-${briefToken}` : "regular-studio"}
                 mode={mode}
                 onModeChange={setMode}
                 onSubmit={handleSubmit}
                 busy={atCapacity}
-                initialModel={urlModel ?? presetModel}
-                initialPrompt={presetPrompt}
-                initialImgValues={presetImgValues}
-                initialRefs={presetRefs}
-                initialVideoRef={presetVideoRef}
+                initialModel={briefToken ? undefined : urlModel ?? presetModel}
+                initialPrompt={briefToken ? briefPrompt : presetPrompt}
+                initialImgValues={briefToken ? undefined : presetImgValues}
+                initialRefs={briefToken ? undefined : presetRefs}
+                initialVideoRef={briefToken ? undefined : presetVideoRef}
               />
             ) : (
               <div className="h-[168px] rounded-2xl border border-[#2a2a2a] bg-[#161616] bw-shimmer" />
