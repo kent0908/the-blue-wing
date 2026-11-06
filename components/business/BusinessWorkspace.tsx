@@ -17,7 +17,8 @@ import BusinessAssets, { type BusinessAssetRecord } from "./BusinessAssets";
 import BusinessUsage from "./BusinessUsage";
 import BusinessModelCatalog from "./BusinessModelCatalog";
 import BusinessWorkflows from "./BusinessWorkflows";
-import BusinessGenerationReceipt from "./BusinessGenerationReceipt";
+import BusinessCollection from "./BusinessCollection";
+import { businessResultsCopy } from "@/lib/i18n/businessResults";
 import BusinessImageControls from "./BusinessImageControls";
 import BusinessPrompt, { type MentionCandidate } from "./BusinessPrompt";
 import { allocateMention, resolveMentionPrompt, type MentionBindings, type MentionReference } from "@/lib/businessMentions";
@@ -43,6 +44,7 @@ const isPending = (job: BusinessGeneration) => ["submitting", "processing", "unk
 export default function BusinessWorkspace() {
   const locale = useLocale();
   const t = businessCopy(locale);
+  const resultsCopy = businessResultsCopy(locale);
   const mentionCopy = businessMentionsCopy(locale);
   const mentionBindings = useRef<MentionBindings>({});
   const klingText = klingCopy(locale);
@@ -91,6 +93,10 @@ export default function BusinessWorkspace() {
   const [imageBusinessAssets, setImageBusinessAssets] = useState<BusinessProviderAsset[]>([]);
   const [dedicatedOptions, setDedicatedOptions] = useState<BusinessDedicatedVideoOptions>({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS });
   const [jobs, setJobs] = useState<BusinessGeneration[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const historyLock = useRef(false);
+  const historyVersion = useRef(0);
+  const workspaceScroll = useRef<HTMLDivElement>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [confirmation, setConfirmation] = useState<BusinessSubmission | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -134,15 +140,18 @@ export default function BusinessWorkspace() {
   }, [t]);
 
   const loadHistory = useCallback(async (reconcile = true) => {
+    if (historyLock.current) return;
+    historyLock.current = true;
+    const version = historyVersion.current;
     setHistoryLoading(true);
     try {
-      const response = await fetch("/api/business/generations", { cache: "no-store" });
+      const response = await fetch("/api/business/generations", { cache: "no-store", signal: AbortSignal.timeout(30000) });
       const data = await response.json().catch(() => null);
       if (!response.ok) { setError(businessError(t, data?.error?.code)); return; }
       let nextJobs: BusinessGeneration[] = data.generations ?? [];
       if (reconcile) {
         const updates = await Promise.allSettled(nextJobs.filter(isPending).slice(0, 12).map(async job => {
-          const status = await fetch(`/api/business/generations/${encodeURIComponent(job.id)}`, { cache: "no-store" });
+          const status = await fetch(`/api/business/generations/${encodeURIComponent(job.id)}`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
           if (!status.ok) return job;
           const result = await status.json();
           return (result.generation ?? job) as BusinessGeneration;
@@ -150,14 +159,23 @@ export default function BusinessWorkspace() {
         const replaced = new Map(updates.filter((item): item is PromiseFulfilledResult<BusinessGeneration> => item.status === "fulfilled").map(item => [item.value.id, item.value]));
         nextJobs = nextJobs.map(job => replaced.get(job.id) ?? job);
       }
+      // A list requested before submission must not overwrite its new result.
+      if (version !== historyVersion.current) return;
       setJobs(nextJobs);
       if (unresolvedRequest.current) {
         const original = nextJobs.find(job => job.clientRequestId === unresolvedRequest.current);
         if (original && original.status !== "unknown" && original.status !== "submitting") { unresolvedRequest.current = null; setUncertain(false); }
       }
     } catch { setError(t.unavailable); }
-    finally { setHistoryLoading(false); }
+    finally { historyLock.current = false; setHistoryLoading(false); }
   }, [t]);
+
+  const hasPendingJobs = jobs.some(isPending);
+  useEffect(() => {
+    if (!approved || !hasPendingJobs) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible" && !submitLock.current) void loadHistory(true); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [approved, hasPendingJobs, loadHistory]);
 
   useEffect(() => {
     if (!approved) return;
@@ -348,10 +366,12 @@ export default function BusinessWorkspace() {
       }
       const job = data?.generation as BusinessGeneration | undefined;
       if (!job) { setUncertain(true); setError(t.uncertain); return; }
+      historyVersion.current++;
       setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
+      setSelectedJobId(job.id);
+      workspaceScroll.current?.scrollTo({ top: 0, behavior: "instant" });
       if (job.status === "unknown" || job.status === "submitting") { setUncertain(true); setError(t.uncertain); }
-      else { unresolvedRequest.current = null; setUncertain(false); setNotice(t.submittingNotice); }
-      setTab("history");
+      else { unresolvedRequest.current = null; setUncertain(false); setNotice(resultsCopy.submitted); }
     } catch { setUncertain(true); setError(t.uncertain); }
     finally { setConfirmation(null); submitLock.current = false; setSubmitting(false); }
   };
@@ -364,13 +384,23 @@ export default function BusinessWorkspace() {
   const selectedSeconds = seedanceAutoDuration ? -1 : selected?.secondsOptions?.length && !selected.secondsOptions.includes(seconds) ? selected.defaultSeconds ?? selected.secondsOptions[0] : Math.max(selected?.minSeconds ?? 2, Math.min(seconds, selected?.maxSeconds ?? 30));
   const supportsAudioAtResolution = !selected?.nativeAudioResolutions || selected.nativeAudioResolutions.includes(selectedResolution);
   const referenceLimit = selected?.seedance?.references.image ?? selected?.maxReferenceImages ?? 4;
+  const visibleJobs = jobs.filter(job => job.kind === kind && (!job.nsfw || selected?.nsfw));
+  const previewJob = visibleJobs.find(job => job.id === selectedJobId) ?? visibleJobs[0];
+  const reusePrompt = (job: BusinessGeneration) => {
+    if (submitLock.current) return;
+    resetSelection(); mentionBindings.current = {};
+    setPrompt(job.prompt); setSelectedJobId(job.id);
+    setError(""); setNotice(resultsCopy.reused);
+    if (!models.some(model => model.id === job.model && model.modality === job.kind)) setError(resultsCopy.missingModel);
+    navigate(job.kind, job.model, "create");
+  };
   const dateLabel = (date: string) => { const parsed = new Date(date); return Number.isNaN(parsed.getTime()) ? "—" : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(parsed); };
 
   return <div className={studio.shell} data-business-workspace>
     <BusinessStudioNav copy={s} business={t} approved={approved} keyConfigured={!!access?.keyConfigured} modelsLoading={modelsLoading} models={models} kind={kind} selectedId={selected?.id ?? ""} tab={tab} onKind={chooseKind} onModel={chooseModel} onTab={chooseTab} />
     <div className={`${studio.body}${tab === "workflows" ? ` ${workflowStyles.workspaceBody}` : ""}`}>
     {approved ? <header className={`${studio.workspaceHeader}${tab === "workflows" ? ` ${workflowStyles.workspaceHeader}` : ""}`}><div><p className={styles.eyebrow}>{access.account?.companyName} / {s.studioLabel}</p><h1>{tab === "create" ? s[`${kind}Title`] : tab === "key" ? t.keyTab : tab === "assets" ? operations.assetTitle : tab === "usage" ? operations.usage : tab === "models" ? operations.models : tab === "workflows" ? workflowsCopy.nav : t.historyTab}</h1>{tab !== "workflows" ? <p>{tab === "create" ? s[`${kind}Description`] : tab === "key" ? t.keyText : tab === "assets" ? operations.assetDescription : tab === "usage" ? operations.usageDescription : tab === "models" ? operations.modelsDescription : t.secureNotice}</p> : null}</div><div className={studio.workspaceMeta}><span className={styles.status}>{t.approved}</span><span className={studio.keyStatus} data-connected={access.keyConfigured}>{access.keyConfigured ? s.keyConnected : t.notConfigured}</span><button className={styles.small} onClick={refresh} disabled={loading}>{loading ? t.checking : t.refresh}</button></div></header> : null}
-    <div className={studio.workspaceBody}><div className={approved ? studio.activeContent : styles.inner}>
+    <div ref={workspaceScroll} className={studio.workspaceBody}><div className={approved ? studio.activeContent : styles.inner}>
     {!approved ? <>
     <header className={styles.hero}><div><p className={styles.eyebrow}>{t.eyebrow}</p><h1>{t.title}</h1><p>{t.description}</p></div><div className={styles.heroArt} aria-hidden="true"><i className={styles.artLine} /><i className={styles.artLine} /><i className={styles.artLine} /><span className={styles.artCaption}>{s.studioLabel}</span></div></header>
     <div className={styles.principles}>{[[t.independent, t.independentText], [t.ownKey, t.ownKeyText], [t.ownCosts, t.ownCostsText]].map(([title, text], index) => <section className={styles.principle} key={title}><span>0{index + 1}</span><h2>{title}</h2><p>{text}</p></section>)}</div>
@@ -381,9 +411,9 @@ export default function BusinessWorkspace() {
       {access.account ? <div className={styles.stateCard}><span className={styles.status}>{t[access.account.status]}</span><p>{access.account.status === "pending" ? t.pendingText : access.account.status === "rejected" ? t.rejectedText : t.suspendedText}</p>{access.account.reviewNote ? <p className={styles.review}><strong>{t.reviewNote}</strong><br />{access.account.reviewNote}</p> : null}</div> : null}
       {access.account?.status !== "suspended" ? <form className={styles.form} onSubmit={apply}><label className={styles.field}>{t.company}<input required minLength={1} maxLength={120} value={company} onChange={e => setCompany(e.target.value)} placeholder={t.companyPlaceholder} autoComplete="organization" /></label><label className={styles.field}>{t.useCase}<textarea required minLength={10} maxLength={2000} value={useCase} onChange={e => setUseCase(e.target.value)} placeholder={t.useCasePlaceholder} /></label><div><button type="submit" className={styles.button} disabled={applying}>{applying ? t.applying : access.account ? t.reapply : t.apply}</button></div></form> : null}
     </section> : <>
-      <section id={`business-panel-${tab}`} aria-label={tab === "create" ? t.createTab : tab === "key" ? t.keyTab : tab === "workflows" ? workflowsCopy.nav : tab === "assets" ? operations.assets : tab === "usage" ? operations.usage : tab === "models" ? operations.models : t.historyTab} className={tab === "create" ? studio.createLayout : tab === "workflows" ? workflowStyles.workspacePanel : styles.panel}>
+      <section data-has-result={!!previewJob} id={`business-panel-${tab}`} aria-label={tab === "create" ? t.createTab : tab === "key" ? t.keyTab : tab === "workflows" ? workflowsCopy.nav : tab === "assets" ? operations.assets : tab === "usage" ? operations.usage : tab === "models" ? operations.models : t.historyTab} className={tab === "create" ? studio.createLayout : tab === "workflows" ? workflowStyles.workspacePanel : styles.panel}>
         {tab === "workflows" ? <BusinessWorkflows models={models} /> : tab === "assets" ? <BusinessAssets imageOnly={kind === "image" || !!selected?.dedicatedVideo} onSelect={selected?.seedance || ((kind === "image" || !!selected?.dedicatedVideo) && selected?.supportsReferences) ? selectManagedAsset : undefined} selectedIds={kind === "image" || selected?.dedicatedVideo ? imageBusinessAssets.map(asset => asset.uploadId ?? asset.id) : providerAssets.map(asset => asset.id)} /> : tab === "usage" ? <BusinessUsage /> : tab === "models" ? <BusinessModelCatalog models={models} unavailableModels={unavailableModels} upstreamTotal={upstreamTotal} loading={modelsLoading} onRefresh={() => void loadModels()} onChoose={chooseModel} /> : tab === "key" ? <><div className={styles.panelHead}><div><h2 className={styles.heading}>{t.keyTitle}</h2><p className={styles.description}>{t.keyText}</p></div></div>{credential ? <div className={styles.keyCard}><div><strong>{credential.label}</strong><p>{t.configured} · {t.last4} •••• {credential.last4}</p><p>{dateLabel(credential.updatedAt)}</p></div><button className={styles.small} type="button" onClick={() => setDeleteOpen(true)} disabled={keySaving}>{t.deleteKey}</button></div> : <p className={styles.note}>{t.notConfigured}</p>}
-          {!access.encryptionReady ? <p className={styles.warning}>{t.encryptionUnavailable}</p> : null}<form className={styles.form} onSubmit={saveKey} autoComplete="off"><label className={styles.field}>{t.keyLabel}<input value={keyLabel} onChange={e => setKeyLabel(e.target.value)} maxLength={64} required autoComplete="off" /></label><label className={styles.field}>{t.apiKey}<input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} required placeholder={t.keyPlaceholder} maxLength={203} autoComplete="new-password" spellCheck={false} autoCapitalize="none" aria-describedby="business-key-privacy" /></label><p id="business-key-privacy" className={styles.note}>{t.writeOnly}</p><div><button type="submit" className={styles.button} disabled={keySaving || !access.encryptionReady || !apiKey.trim()}>{keySaving ? t.saving : credential ? t.replaceKey : t.saveKey}</button></div></form><p className={styles.note}>{t.noPaidPreview}</p></> : tab === "create" ? <><BusinessStage movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} job={jobs.find(job => job.kind === kind && (!job.nsfw || selected?.nsfw))} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={job => setJobs(current => current.map(old => old.id === job.id ? job : old))} /><div className={studio.editor}>
+          {!access.encryptionReady ? <p className={styles.warning}>{t.encryptionUnavailable}</p> : null}<form className={styles.form} onSubmit={saveKey} autoComplete="off"><label className={styles.field}>{t.keyLabel}<input value={keyLabel} onChange={e => setKeyLabel(e.target.value)} maxLength={64} required autoComplete="off" /></label><label className={styles.field}>{t.apiKey}<input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} required placeholder={t.keyPlaceholder} maxLength={203} autoComplete="new-password" spellCheck={false} autoCapitalize="none" aria-describedby="business-key-privacy" /></label><p id="business-key-privacy" className={styles.note}>{t.writeOnly}</p><div><button type="submit" className={styles.button} disabled={keySaving || !access.encryptionReady || !apiKey.trim()}>{keySaving ? t.saving : credential ? t.replaceKey : t.saveKey}</button></div></form><p className={styles.note}>{t.noPaidPreview}</p></> : tab === "create" ? <><BusinessStage movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} key={previewJob?.id ?? kind} job={previewJob} recentJobs={visibleJobs} onSelect={job => setSelectedJobId(job.id)} onReuse={reusePrompt} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={job => setJobs(current => current.map(old => old.id === job.id ? job : old))} /><div className={studio.editor}>
           {!access.keyConfigured ? <div className={styles.empty}><h2 className={styles.heading}>{t.keyTitle}</h2><p>{t.keyNeeded}</p><button className={styles.button} type="button" onClick={() => chooseTab("key")}>{t.keyTab}</button></div> : <><div className={studio.editorHeader}><h2>{s.parametersTitle}</h2><button className={styles.small} type="button" disabled={modelsLoading} onClick={loadModels}>{modelsLoading ? t.checking : t.refresh}</button></div><form className={studio.editorForm} onSubmit={requestConfirmation}>
             <label className={styles.field}>{t.model}<select required value={selected?.id ?? ""} onChange={e => chooseModel(e.target.value)} disabled={modelsLoading || !selectedModels.length}>{!selected && <option value="" disabled>{modelId ? s.modelUnavailable : t.emptyModels}</option>}{selectedModels.map(model => <option key={model.id} value={model.id}>{model.displayName}{model.nsfw ? ` · ${t.nsfw}` : ""}</option>)}</select></label>
             {!modelsLoading && modelId && !selected && <p className={styles.warning} role="alert">{s.modelUnavailable}</p>}
@@ -392,15 +422,13 @@ export default function BusinessWorkspace() {
             <div className={styles.settings}>{kind === "image" && selected?.sizes?.length ? <label className={styles.field}>{t.size}<select value={selectedSize} onChange={e => setSize(e.target.value)}>{selected.sizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}
               {kind === "video" ? <><label className={styles.field}>{t.duration}{selected?.seedance ? <><select aria-label={t.duration} value={seedanceAutoDuration ? "auto" : "fixed"} disabled={seedanceVideoDuration} onChange={e => setSeconds(e.target.value === "auto" ? -1 : selected.defaultSeconds ?? 5)}><option value="fixed">{d.fixed}</option><option value="auto">{d.automatic}</option></select>{!seedanceAutoDuration ? <input type="number" min={selected.minSeconds} max={selected.maxSeconds} step={1} value={selectedSeconds} required aria-label={t.duration} onChange={e => setSeconds(Number(e.target.value))} /> : <span className={styles.note}>{d.autoDurationNotice}</span>}</> : selected?.secondsOptions?.length ? <select value={selectedSeconds} onChange={e => setSeconds(Number(e.target.value))}>{selected.secondsOptions.map(value => <option key={value} value={value}>{value}</option>)}</select> : <input type="number" min={selected?.minSeconds ?? 2} max={selected?.maxSeconds ?? 15} step={1} value={selectedSeconds} required onChange={e => setSeconds(Number(e.target.value))} />}</label>{selected?.resolutions?.length ? <label className={styles.field}>{t.resolution}<select value={selectedResolution} onChange={e => setResolution(e.target.value)}>{selected.resolutions.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}{selected?.aspectRatios?.length ? <label className={styles.field}>{t.aspect}<select value={selected.dedicatedVideo?.aspectRatioFromSource ? "source" : selectedAspect} disabled={seedanceAdaptive || selected.dedicatedVideo?.aspectRatioFromSource} onChange={e => setAspect(e.target.value)}>{selected.dedicatedVideo?.aspectRatioFromSource ? <option value="source">{dedicatedCopy.sourceAspect}</option> : selected.aspectRatios.map(value => <option value={value} key={value}>{value}</option>)}</select></label> : null}</> : null}
             </div>{kind === "image" && selected ? <BusinessImageControls model={selected} count={imageCount} onCount={setImageCount} quality={imageQuality} onQuality={setImageQuality} seed={seed} onSeed={setSeed} negative={imageNegative} onNegative={setImageNegative} /> : null}{kind === "video" && selected?.supportsAudio ? <label className={styles.check}><input type="checkbox" checked={selected.nativeAudioOnly || (supportsAudioAtResolution && audio)} disabled={selected.nativeAudioOnly || !supportsAudioAtResolution} onChange={e => setAudio(e.target.checked)} />{t.audio}</label> : null}
-            {selected?.seedance ? <BusinessSeedanceControls key={credential?.id ?? "current-key"} capability={selected.seedance} mode={videoMode} onMode={chooseVideoMode} assets={assets} assetIds={assetIds} onLocalSelection={toggleLocalReference} providerAssets={providerAssets} onProviderSelection={toggleProviderReference} referenceOrder={referenceOrder} outputFormat={outputFormat} onOutputFormat={setOutputFormat} seed={seed} onSeed={setSeed} onOpenAssets={() => chooseTab("assets")} /> : null}
+            {selected?.seedance ? <BusinessSeedanceControls key={credential?.id ?? "current-key"} capability={selected.seedance} mode={videoMode} onMode={chooseVideoMode} assets={assets} assetIds={assetIds} onLocalSelection={toggleLocalReference} providerAssets={providerAssets} nativeAssets={imageBusinessAssets} onNativeRemove={id => { setImageBusinessAssets(current => current.filter(asset => asset.uploadId !== id)); setReferenceOrder(current => current.filter(key => key !== `business:${id}`)); setConfirmation(null); }} onProviderSelection={toggleProviderReference} referenceOrder={referenceOrder} outputFormat={outputFormat} onOutputFormat={setOutputFormat} seed={seed} onSeed={setSeed} onOpenAssets={() => chooseTab("assets")} /> : null}
             {selected?.dedicatedVideo ? <><BusinessDedicatedVideoControls capability={selected.dedicatedVideo} value={dedicatedOptions} onChange={chooseDedicatedOptions} referenceCount={imageBusinessAssets.length} disabled={submitting} onOpenAssets={() => chooseTab("assets")} />{imageBusinessAssets.length > 0 ? <div className={styles.row}>{imageBusinessAssets.map((asset, index) => <button key={asset.id} type="button" className={styles.small} disabled={submitting} onClick={() => { setImageBusinessAssets(current => current.filter(value => value.id !== asset.id)); setConfirmation(null); }}><span>{index + 1}. {asset.name} ×</span></button>)}</div> : null}</> : null}
             {seedanceAdaptive ? <p className={styles.note}>{d.adaptiveNotice}</p> : null}
             {kind === "image" && selected?.supportsReferences ? <div><button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button>{imageBusinessAssets.length > 0 && <div className={styles.row} style={{marginTop:12}}>{imageBusinessAssets.map(asset => <button key={asset.id} type="button" className={styles.small} onClick={() => setImageBusinessAssets(current => current.filter(value => value.id !== asset.id))}>{asset.name} ×</button>)}</div>}</div> : null}{selected?.supportsReferences && !selected.seedance && !selected.dedicatedVideo ? <details className={styles.promptDetails}><summary>{t.references} · {assetIds.length + (kind === "image" ? imageBusinessAssets.length : 0)} / {referenceLimit}</summary><p className={styles.note}>{t.referenceText.replace("{n}", String(referenceLimit))}</p>{assets.length ? <div className={styles.assetGrid}>{assets.slice(0, 100).map(asset => <button type="button" key={asset.id} className={styles.asset} aria-pressed={assetIds.includes(asset.id)} title={assetIds.includes(asset.id) ? t.removeReference : t.selectReference} disabled={!assetIds.includes(asset.id) && assetIds.length + (kind === "image" ? imageBusinessAssets.length : 0) >= referenceLimit} onClick={() => setAssetIds(current => current.includes(asset.id) ? current.filter(id => id !== asset.id) : [...current, asset.id])}><Image src={asset.src} alt={asset.name} loading="lazy" width={200} height={100} unoptimized /><span>{asset.name}</span></button>)}</div> : <p className={styles.note}>{t.noAssets}</p>}<button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button></details> : null}
             {selected?.id === "minimax-h3" || selected?.id === "minimax-h3-max" ? <p className={styles.warning}>{selected.id === "minimax-h3" ? t.minimaxH3References : t.minimaxH3MaxReferences}</p> : null}<p className={styles.note}>{t.providerBilling} · {t.noCredits}<br />{t.noQuote}</p><div><button type="submit" className={styles.button} disabled={submitting || navigationPending || uncertain || !selected || !prompt.trim() || (selected.nsfw && !access.adultVerified)}>{submitting ? t.generating : t.generate} <span aria-hidden="true">↗</span></button></div>
           </form>{selected?.nsfw && !access.adultVerified ? <BusinessAdultDeclaration copy={t} onVerified={refreshAccess} /> : null}<p className={styles.note}>{t.catalogNotice}</p></>}
-        </div></> : <><div className={styles.panelHead}><div><h2 className={styles.heading}>{t.historyTitle}</h2><p className={styles.description}>{t.secureNotice}</p></div><button className={styles.small} type="button" disabled={historyLoading} onClick={() => loadHistory(true)}>{historyLoading ? t.checking : t.refresh}</button></div><p className={styles.note}>{t.manualRefresh}<br />{t.billingNotice}</p>
-          {jobs.length ? <div className={styles.history}>{jobs.map(job => <article key={job.id} className={styles.work}><div className={styles.workHeader}><div><h3>{job.model} {job.nsfw ? <span className={styles.sensitive}>{t.nsfw}</span> : null}</h3><time dateTime={job.createdAt}>{dateLabel(job.createdAt)}</time></div><span className={styles.status}>{t[job.status]}</span></div>{job.videoUrl || job.images?.length ? <div className={styles.workMedia}>{job.videoUrl ? <video src={job.videoUrl} controls preload="metadata" playsInline aria-label={job.model} /> : job.images?.map((image, index) => <a key={image.url} href={image.url} target="_blank" rel="noreferrer" aria-label={`${t.view} ${index + 1}`}><Image src={image.url} alt={`${job.model} · ${index + 1}`} loading="lazy" width={960} height={960} unoptimized /></a>)}</div> : null}{job.text ? <div className={styles.workText}>{job.text}</div> : null}{job.errorCode ? <p className={styles.feedback}>{businessError(t, job.errorCode)}</p> : null}<details className={styles.promptDetails}><summary>{t.promptUsed}</summary><p>{job.prompt}</p></details><p className={styles.request}>{t.requestId}: {job.id}</p><BusinessGenerationReceipt job={job} onUpdated={updated => setJobs(current => current.map(old => old.id === updated.id ? updated : old))} />{job.videoUrl && /\.mov(?:\?|$)/i.test(job.videoUrl) ? <p className={styles.note}>{d.movNotice}</p> : null}{job.images?.map((image, index) => <a key={image.url} className={styles.subtleLink} href={`${image.url}?download=1`} download>{operations.downloadImage} {index + 1} ↗</a>)}{job.videoUrl ? <a className={styles.subtleLink} href={`${job.videoUrl}?download=1`} download>{t.download} ↗</a> : null}</article>)}</div> : <div className={styles.empty}><h3>{t.emptyHistory}</h3><p>{t.emptyHistoryText}</p></div>}
-        </>}
+        </div></> : <BusinessCollection jobs={jobs} refreshing={historyLoading} onRefresh={() => void loadHistory(true)} onReuse={reusePrompt} onJobUpdated={job => setJobs(current => current.map(old => old.id === job.id ? job : old))} />}
       </section>
       {uncertain ? <aside className={styles.warning} role="status">{t.uncertain}<div className={styles.row} style={{ marginTop: 12 }}><button type="button" className={styles.small} disabled={historyLoading} onClick={() => loadHistory(true)}>{historyLoading ? t.checking : t.checkOriginal}</button></div></aside> : null}
     </>}
