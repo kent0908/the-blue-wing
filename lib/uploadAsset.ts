@@ -6,8 +6,12 @@ import { k } from "./i18n/k";
 
 export interface UploadAssetOptions {
   onProgress?: (fraction: number) => void;
+  onStage?: (stage: "preparing" | "uploading" | "registering") => void;
   signal?: AbortSignal;
 }
+
+// Retrying registration must reuse the uploaded object, not upload a second copy.
+const uploadedPaths = new WeakMap<File, string>();
 
 export class UploadAssetError extends Error {
   code: string;
@@ -45,7 +49,9 @@ export async function uploadAsset(file: File, opts: UploadAssetOptions = {}): Pr
     throw new UploadAssetError(`檔案太大，單檔上限 ${Math.floor(MAX_ASSET_BYTES_DIRECT / 1024 / 1024)} MB`, "too_large");
   }
 
-  if (!(await directUploadAvailable())) return uploadAssetLegacy(file);
+  opts.signal?.throwIfAborted();
+  opts.onStage?.("preparing");
+  if (!(await directUploadAvailable())) return uploadAssetLegacy(file, opts);
 
   const safe = (file.name || "asset").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
   // The token route pins the prefix to the session's user, so the pathname
@@ -54,30 +60,40 @@ export async function uploadAsset(file: File, opts: UploadAssetOptions = {}): Pr
   if (!userId) throw new UploadAssetError(k("請先登入"), "unauthorized");
   const pathname = `assets/${userId}/${Date.now()}-${safe}`;
 
-  let blobPathname: string;
+  let blobPathname = uploadedPaths.get(file);
+  const uploadSignal = AbortSignal.any([AbortSignal.timeout(300_000), ...(opts.signal ? [opts.signal] : [])]);
   try {
-    const result = await upload(pathname, file, {
-      access: "private",
-      handleUploadUrl: "/api/assets/upload",
-      contentType: file.type,
-      multipart: file.size > 8 * 1024 * 1024,
-      abortSignal: opts.signal,
-      onUploadProgress: (p) => opts.onProgress?.(p.percentage / 100),
-    });
-    blobPathname = result.pathname;
+    if (!blobPathname) {
+      opts.signal?.throwIfAborted();
+      opts.onStage?.("uploading");
+      const result = await upload(pathname, file, {
+        access: "private",
+        handleUploadUrl: "/api/assets/upload",
+        contentType: file.type,
+        multipart: file.size > 8 * 1024 * 1024,
+        abortSignal: uploadSignal,
+        onUploadProgress: (p) => opts.onProgress?.(p.percentage / 100),
+      });
+      blobPathname = result.pathname;
+      uploadedPaths.set(file, blobPathname);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (opts.signal?.aborted) throw new UploadAssetError(k("已取消"), "aborted");
+    if (uploadSignal.aborted) throw new DOMException("Upload timed out", "TimeoutError");
     // @vercel/blob's client only says "Failed to retrieve the client token"
     // for any non-2xx from the token route — reword the common cases.
     if (/retrieve the client token/i.test(message)) throw new UploadAssetError(k("無法取得上傳授權，請重新登入後再試"), "upload_token_failed");
     throw new UploadAssetError(message.replace(/^Vercel Blob:\s*/, "") || k("上傳失敗，請稍後再試"));
   }
 
+  opts.signal?.throwIfAborted();
+  opts.onStage?.("registering");
   const reg = await fetch("/api/assets/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pathname: blobPathname, filename: (file.name || "asset").slice(0, 120) }),
+    signal: AbortSignal.any([AbortSignal.timeout(30_000), ...(opts.signal ? [opts.signal] : [])]),
   });
   if (!reg.ok) throw await readError(reg, k("上傳完成但登錄失敗，請重新整理後再試"));
   const j = (await reg.json()) as { asset: PublicAsset };
@@ -87,7 +103,7 @@ export async function uploadAsset(file: File, opts: UploadAssetOptions = {}): Pr
 
 let availability: Promise<boolean> | null = null;
 function directUploadAvailable(): Promise<boolean> {
-  availability ??= fetch("/api/assets/upload", { cache: "no-store" })
+  availability ??= fetch("/api/assets/upload", { cache: "no-store", signal: AbortSignal.timeout(15_000) })
     .then((r) => (r.ok ? r.json() : { available: false }))
     .then((j: { available?: boolean }) => !!j.available)
     .catch(() => false);
@@ -96,7 +112,7 @@ function directUploadAvailable(): Promise<boolean> {
 
 let userIdPromise: Promise<number | null> | null = null;
 function currentUserId(): Promise<number | null> {
-  userIdPromise ??= fetch("/api/auth/me", { cache: "no-store" })
+  userIdPromise ??= fetch("/api/auth/me", { cache: "no-store", signal: AbortSignal.timeout(15_000) })
     .then((r) => (r.ok ? r.json() : null))
     .then((j: { user?: { id?: number | string } } | null) => {
       const id = Number(j?.user?.id);
@@ -110,13 +126,15 @@ function currentUserId(): Promise<number | null> {
   return userIdPromise;
 }
 
-async function uploadAssetLegacy(file: File): Promise<PublicAsset> {
+async function uploadAssetLegacy(file: File, opts: UploadAssetOptions): Promise<PublicAsset> {
   if (file.size > MAX_ASSET_BYTES) {
     throw new UploadAssetError(`這個環境目前只能上傳 ${Math.floor(MAX_ASSET_BYTES / 1024 / 1024)} MB 以內的檔案`, "too_large");
   }
   const fd = new FormData();
   fd.append("file", file);
-  const res = await fetch("/api/assets", { method: "POST", body: fd });
+  opts.signal?.throwIfAborted();
+  opts.onStage?.("uploading");
+  const res = await fetch("/api/assets", { method: "POST", body: fd, signal: AbortSignal.any([AbortSignal.timeout(300_000), ...(opts.signal ? [opts.signal] : [])]) });
   if (!res.ok) throw await readError(res, k("上傳失敗，請稍後再試"));
   const j = (await res.json()) as { asset: PublicAsset };
   return j.asset;

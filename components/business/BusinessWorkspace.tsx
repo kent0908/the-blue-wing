@@ -19,6 +19,9 @@ import BusinessModelCatalog from "./BusinessModelCatalog";
 import BusinessWorkflows from "./BusinessWorkflows";
 import BusinessGenerationReceipt from "./BusinessGenerationReceipt";
 import BusinessImageControls from "./BusinessImageControls";
+import BusinessPrompt, { type MentionCandidate } from "./BusinessPrompt";
+import { allocateMention, resolveMentionPrompt, type MentionBindings, type MentionReference } from "@/lib/businessMentions";
+import { businessMentionsCopy } from "@/lib/i18n/businessMentions";
 import BusinessDedicatedVideoControls, { DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS, type BusinessDedicatedVideoOptions } from "./BusinessDedicatedVideoControls";
 import { buildBusinessDedicatedVideoPayload } from "@/lib/businessDedicatedVideo";
 import { businessDedicatedVideoCopy } from "@/lib/i18n/businessDedicatedVideo";
@@ -27,7 +30,7 @@ import { businessWorkflowsCopy } from "@/lib/i18n/businessWorkflows";
 import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type BusinessSeedanceMode } from "@/lib/businessSeedance";
 import { businessSeedanceCopy } from "@/lib/i18n/businessSeedance";
 import { businessStudioCopy } from "@/lib/i18n/businessStudio";
-import { businessStudioHref, parseBusinessStudioLocation, type BusinessStudioTab } from "@/lib/businessStudio";
+import { businessStudioHref, parseBusinessStudioLocation, selectBusinessModel, type BusinessStudioTab } from "@/lib/businessStudio";
 import styles from "./Business.module.css";
 import studio from "./BusinessStudio.module.css";
 import workflowStyles from "./BusinessWorkflows.module.css";
@@ -40,6 +43,8 @@ const isPending = (job: BusinessGeneration) => ["submitting", "processing", "unk
 export default function BusinessWorkspace() {
   const locale = useLocale();
   const t = businessCopy(locale);
+  const mentionCopy = businessMentionsCopy(locale);
+  const mentionBindings = useRef<MentionBindings>({});
   const klingText = klingCopy(locale);
   const s = businessStudioCopy(locale);
   const d = businessSeedanceCopy(locale);
@@ -95,10 +100,7 @@ export default function BusinessWorkspace() {
   const unresolvedRequest = useRef<string | null>(null);
   const selectionContext = useRef<string | null>(null);
   const selectedModels = models.filter(model => model.modality === kind);
-  const selected = selectedModels.find(model => model.id === modelId)
-    ?? selectedModels.find(model => !model.nsfw && (!model.dedicatedVideo || model.dedicatedVideo.capability === "text-to-video"))
-    ?? selectedModels.find(model => !model.nsfw)
-    ?? selectedModels[0];
+  const selected = selectBusinessModel(models, kind, modelId);
   const promptLimit = selected?.dedicatedVideo?.cjkPromptMaxChars && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) ? selected.dedicatedVideo.cjkPromptMaxChars : selected?.promptMaxChars ?? 12000;
   const approved = access?.account?.status === "approved";
 
@@ -213,11 +215,11 @@ export default function BusinessWorkspace() {
   };
   const resetSelection = useCallback(() => { setSize(""); setResolution(""); setAssetIds([]); setAudio(false); setApiKey(""); setVideoMode("freestyle"); setProviderAssets([]); setReferenceOrder([]); setOutputFormat("mp4"); setSeed(""); setImageCount(1); setImageQuality(""); setImageNegative(""); setImageBusinessAssets([]); setDedicatedOptions({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS }); if (!submitLock.current) setConfirmation(null); }, [setConfirmation, setApiKey]);
   const navigate = (nextKind: BusinessKind, nextModel: string, nextTab: BusinessStudioTab) => startTransition(() => router.push(businessStudioHref({ kind: nextKind, modelId: nextModel, tab: nextTab }), { scroll: false }));
-  const setTab = (value: BusinessStudioTab) => navigate(kind, selected?.id ?? "", value);
+  const setTab = (value: BusinessStudioTab) => navigate(kind, modelId || selected?.id || "", value);
   const chooseTab = (value: BusinessStudioTab) => { if (submitLock.current) return; if (!submitLock.current) setConfirmation(null); setApiKey(""); setError(""); setNotice(""); setTab(value); };
   const chooseKind = (value: BusinessKind) => { if (submitLock.current) return; resetSelection(); setApiKey(""); navigate(value, "", "create"); };
   const chooseModel = (value: string) => { if (submitLock.current) return; const model = models.find(item => item.id === value); if (!model) return; resetSelection(); setSeconds(model.defaultSeconds ?? Math.min(model.maxSeconds ?? 5, Math.max(model.minSeconds ?? 2, 5))); navigate(model.modality, model.id, "create"); };
-  const chooseVideoMode = (value: BusinessSeedanceMode) => { if (submitLock.current) return; setVideoMode(value); setAssetIds([]); setProviderAssets([]); setReferenceOrder([]); setConfirmation(null); setSeconds(value === "video-edit" || value === "video-extend" ? -1 : selected?.defaultSeconds ?? 5); };
+  const chooseVideoMode = (value: BusinessSeedanceMode) => { if (submitLock.current) return; setVideoMode(value); setAssetIds([]); setImageBusinessAssets([]); setProviderAssets([]); setReferenceOrder([]); setConfirmation(null); setSeconds(value === "video-edit" || value === "video-extend" ? -1 : selected?.defaultSeconds ?? 5); };
   const toggleLocalReference = (id: number) => { if (submitLock.current) return; const exists = assetIds.includes(id); const key = `local:${id}`; setAssetIds(current => exists ? current.filter(value => value !== id) : [...current, id]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
   const toggleProviderReference = (asset: BusinessProviderAsset) => { if (submitLock.current) return; const exists = providerAssets.some(value => value.id === asset.id); const key = `provider:${asset.id}`; setProviderAssets(current => exists ? current.filter(value => value.id !== asset.id) : [...current, asset]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
   const chooseDedicatedOptions = (value: BusinessDedicatedVideoOptions) => { if (submitLock.current) return; if (value.mode !== dedicatedOptions.mode) setImageBusinessAssets([]); setDedicatedOptions(value); setConfirmation(null); };
@@ -226,10 +228,10 @@ export default function BusinessWorkspace() {
     if (kind === "video" && selected.seedance) {
       if (asset.status !== "active") return;
       const next = providerAssets.some(value => value.id === asset.id) ? providerAssets.filter(value => value.id !== asset.id) : [...providerAssets, asset];
-      const counts = { image: assetIds.length, video: 0, audio: 0 }; next.forEach(reference => { counts[reference.type]++; });
+      const counts = { image: assetIds.length + imageBusinessAssets.length, video: 0, audio: 0 }; next.forEach(reference => { counts[reference.type]++; });
       const frameMode = videoMode === "image-to-video" || videoMode === "first-last-frame";
       const limit = videoMode === "text-to-video" ? 0 : videoMode === "image-to-video" ? 1 : videoMode === "first-last-frame" ? 2 : selected.seedance.references.total;
-      if (assetIds.length + next.length > limit || (frameMode && (counts.video > 0 || counts.audio > 0)) || Object.entries(counts).some(([type, count]) => count > selected.seedance!.references[type as "image" | "video" | "audio"])) { setError(d.referenceLimitError); return; }
+      if (assetIds.length + imageBusinessAssets.length + next.length > limit || (frameMode && (counts.video > 0 || counts.audio > 0)) || Object.entries(counts).some(([type, count]) => count > selected.seedance!.references[type as "image" | "video" | "audio"])) { setError(d.referenceLimitError); return; }
       toggleProviderReference(asset); chooseTab("create");
     } else if ((kind === "image" || kind === "video" && selected.dedicatedVideo) && asset.type === "image" && asset.uploadId && asset.storageReady) {
       const next = imageBusinessAssets.some(value => value.uploadId === asset.uploadId) ? imageBusinessAssets.filter(value => value.uploadId !== asset.uploadId) : [...imageBusinessAssets, asset];
@@ -248,13 +250,46 @@ export default function BusinessWorkspace() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- discard unsaved secrets when navigating between workspace panels
     setApiKey("");
   }, [kind, modelId, selected?.id, tab, resetSelection]);
+  function pickMention(candidate: MentionCandidate): string | null {
+    if (submitLock.current || navigationPending || !selected?.supportsReferences) return null;
+    const existing = candidate.localId ? assetIds.includes(candidate.localId) : selected.seedance && candidate.key.startsWith("provider:") ? providerAssets.some(asset => asset.id === candidate.asset?.id) : imageBusinessAssets.some(asset => asset.uploadId === candidate.asset?.uploadId);
+    if (!existing) {
+      const count = assetIds.length + imageBusinessAssets.length + (selected.seedance ? providerAssets.filter(asset => asset.type === "image").length : 0);
+      const mode = selected.seedance ? videoMode : dedicatedOptions.mode === "freestyle" ? selected.dedicatedVideo?.capability : dedicatedOptions.mode;
+      const limit = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : selected.seedance?.references.image ?? selected.maxReferenceImages ?? 0;
+      if (count >= limit || selected.seedance && assetIds.length + imageBusinessAssets.length + providerAssets.length >= selected.seedance.references.total) { setError(mentionCopy.limit); return null; }
+      if (candidate.localId) {
+        setAssetIds(current => [...current, candidate.localId!]);
+        if (selected.seedance) setReferenceOrder(current => [...current, candidate.key]);
+      } else if (candidate.asset && selected.seedance && candidate.key.startsWith("provider:") && candidate.asset.status === "active") {
+        setProviderAssets(current => [...current, candidate.asset!]); setReferenceOrder(current => [...current, candidate.key]);
+      } else if (candidate.asset?.storageReady && candidate.asset.uploadId && (kind === "image" || selected.dedicatedVideo || selected.seedance)) {
+        setImageBusinessAssets(current => [...current, candidate.asset!]);
+        if (selected.seedance) setReferenceOrder(current => [...current, candidate.key]);
+      } else return null;
+    }
+    const tag = allocateMention({ key: candidate.key, name: candidate.name, type: "image" }, mentionBindings.current);
+    mentionBindings.current[tag] = candidate.key;
+    setConfirmation(null); setError("");
+    return tag;
+  }
   const requestConfirmation = (event: React.FormEvent) => {
     event.preventDefault(); if (submitLock.current || navigationPending || uncertain || !selected || !prompt.trim()) return;
     if (prompt.length > (selected.promptMaxChars ?? 12000)) { setError(klingText.promptLimit); return; }
-    if (assetIds.length + (kind === "image" || selected.dedicatedVideo ? imageBusinessAssets.length : 0) > (selected.seedance?.references.image ?? selected.maxReferenceImages ?? 4)) { setError(d.referenceLimitError); return; }
+    if (assetIds.length + (kind === "image" || selected.dedicatedVideo || selected.seedance ? imageBusinessAssets.length : 0) > (selected.seedance?.references.image ?? selected.maxReferenceImages ?? 4)) { setError(d.referenceLimitError); return; }
     if (selected.nsfw && !access?.adultVerified) { setError(t.ageRequired); return; }
     if (/\b(?:sk|csk)-[A-Za-z0-9_-]{16,}/.test(prompt)) { setError(t.keyWarning); return; }
-    const parameters: BusinessSubmission["parameters"] = { model: selected.id, prompt: prompt.trim() };
+    const references: MentionReference[] = [
+      ...assetIds.map(id => ({ key: `local:${id}`, name: "", type: "image" as const })),
+      ...imageBusinessAssets.map(asset => ({ key: `business:${asset.uploadId}`, name: asset.name, type: "image" as const })),
+      ...providerAssets.map(asset => ({ key: `provider:${asset.id}`, name: asset.name, type: asset.type })),
+    ];
+    if (selected.seedance) references.sort((a, b) => referenceOrder.indexOf(a.key) - referenceOrder.indexOf(b.key));
+    let resolvedPrompt: string;
+    try { resolvedPrompt = resolveMentionPrompt(prompt.trim(), mentionBindings.current, references); }
+    catch { setError(mentionCopy.missing); return; }
+    if (resolvedPrompt.length > promptLimit) { setError(t.invalidRequest); return; }
+    const parameters: BusinessSubmission["parameters"] = { model: selected.id, prompt: resolvedPrompt };
     if (kind === "image") {
       if (!Number.isSafeInteger(imageCount) || imageCount < 1 || imageCount > (selected.maxImageCount ?? 1)) { setError(t.invalidRequest); return; }
       parameters.n = imageCount; const outputSize = size || selected.sizes?.[0]; if (outputSize) parameters.size = outputSize;
@@ -267,19 +302,22 @@ export default function BusinessWorkspace() {
     if (kind === "text") parameters.max_tokens = 1024;
     if (selected.supportsReferences && assetIds.length) parameters.assetIds = [...assetIds];
     if (kind === "video" && selected.seedance) {
-      try { assertBusinessSeedanceReferences(selected.seedance, videoMode, [...assetIds.map(() => ({ type: "image" as const })), ...providerAssets]); }
+      try { assertBusinessSeedanceReferences(selected.seedance, videoMode, [...[...assetIds, ...imageBusinessAssets].map(() => ({ type: "image" as const })), ...providerAssets]); }
       catch { setError(d.referenceLimitError); return; }
       parameters.mode = videoMode;
       parameters.seconds = seconds === -1 || providerAssets.some(asset => asset.type === "video") || videoMode === "video-edit" || videoMode === "video-extend" ? -1 : parameters.seconds;
       if (selected.seedance.version === "2.5" && ["image-to-video", "first-last-frame", "video-edit", "video-extend"].includes(videoMode)) parameters.aspect_ratio = "adaptive";
       if (providerAssets.length) parameters.providerAssets = providerAssets.map(({ id, type }) => ({ id, type }));
-      if (assetIds.length || providerAssets.length) parameters.referenceOrder = [...referenceOrder];
+      if (imageBusinessAssets.length) parameters.businessAssetIds = imageBusinessAssets.map(asset => asset.uploadId!);
+      if (assetIds.length || imageBusinessAssets.length || providerAssets.length) parameters.referenceOrder = [...referenceOrder];
       if (selected.seedance.version === "2.5") parameters.output_format = outputFormat;
       if (seed.trim()) { const value = Number(seed); if (!Number.isSafeInteger(value) || value < -1 || value > 2147483647) { setError(t.invalidRequest); return; } parameters.seed = value; }
       try {
         // Validate the same scalar/mode contract as the server before opening
         // paid confirmation. Placeholder URLs never read or transmit media.
-        buildBusinessSeedancePayload(parameters, [...assetIds.map(() => ({ type: "image" as const })), ...providerAssets].map((reference, index) => ({ type: reference.type, url: `owned-reference-${index}` })));
+        const adapterParameters = { ...parameters };
+        delete adapterParameters.businessAssetIds;
+        buildBusinessSeedancePayload(adapterParameters, [...[...assetIds, ...imageBusinessAssets].map(() => ({ type: "image" as const })), ...providerAssets].map((reference, index) => ({ type: reference.type, url: `owned-reference-${index}` })));
       } catch { setError(t.invalidRequest); return; }
     }
     if (kind === "video" && selected.dedicatedVideo) {
@@ -347,9 +385,10 @@ export default function BusinessWorkspace() {
         {tab === "workflows" ? <BusinessWorkflows models={models} /> : tab === "assets" ? <BusinessAssets imageOnly={kind === "image" || !!selected?.dedicatedVideo} onSelect={selected?.seedance || ((kind === "image" || !!selected?.dedicatedVideo) && selected?.supportsReferences) ? selectManagedAsset : undefined} selectedIds={kind === "image" || selected?.dedicatedVideo ? imageBusinessAssets.map(asset => asset.uploadId ?? asset.id) : providerAssets.map(asset => asset.id)} /> : tab === "usage" ? <BusinessUsage /> : tab === "models" ? <BusinessModelCatalog models={models} unavailableModels={unavailableModels} upstreamTotal={upstreamTotal} loading={modelsLoading} onRefresh={() => void loadModels()} onChoose={chooseModel} /> : tab === "key" ? <><div className={styles.panelHead}><div><h2 className={styles.heading}>{t.keyTitle}</h2><p className={styles.description}>{t.keyText}</p></div></div>{credential ? <div className={styles.keyCard}><div><strong>{credential.label}</strong><p>{t.configured} · {t.last4} •••• {credential.last4}</p><p>{dateLabel(credential.updatedAt)}</p></div><button className={styles.small} type="button" onClick={() => setDeleteOpen(true)} disabled={keySaving}>{t.deleteKey}</button></div> : <p className={styles.note}>{t.notConfigured}</p>}
           {!access.encryptionReady ? <p className={styles.warning}>{t.encryptionUnavailable}</p> : null}<form className={styles.form} onSubmit={saveKey} autoComplete="off"><label className={styles.field}>{t.keyLabel}<input value={keyLabel} onChange={e => setKeyLabel(e.target.value)} maxLength={64} required autoComplete="off" /></label><label className={styles.field}>{t.apiKey}<input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} required placeholder={t.keyPlaceholder} maxLength={203} autoComplete="new-password" spellCheck={false} autoCapitalize="none" aria-describedby="business-key-privacy" /></label><p id="business-key-privacy" className={styles.note}>{t.writeOnly}</p><div><button type="submit" className={styles.button} disabled={keySaving || !access.encryptionReady || !apiKey.trim()}>{keySaving ? t.saving : credential ? t.replaceKey : t.saveKey}</button></div></form><p className={styles.note}>{t.noPaidPreview}</p></> : tab === "create" ? <><BusinessStage movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} job={jobs.find(job => job.kind === kind && (!job.nsfw || selected?.nsfw))} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={job => setJobs(current => current.map(old => old.id === job.id ? job : old))} /><div className={studio.editor}>
           {!access.keyConfigured ? <div className={styles.empty}><h2 className={styles.heading}>{t.keyTitle}</h2><p>{t.keyNeeded}</p><button className={styles.button} type="button" onClick={() => chooseTab("key")}>{t.keyTab}</button></div> : <><div className={studio.editorHeader}><h2>{s.parametersTitle}</h2><button className={styles.small} type="button" disabled={modelsLoading} onClick={loadModels}>{modelsLoading ? t.checking : t.refresh}</button></div><form className={studio.editorForm} onSubmit={requestConfirmation}>
-            <label className={styles.field}>{t.model}<select required value={selected?.id ?? ""} onChange={e => chooseModel(e.target.value)} disabled={modelsLoading || !selectedModels.length}>{!selectedModels.length ? <option value="">{t.emptyModels}</option> : selectedModels.map(model => <option key={model.id} value={model.id}>{model.displayName}{model.nsfw ? ` · ${t.nsfw}` : ""}</option>)}</select></label>
+            <label className={styles.field}>{t.model}<select required value={selected?.id ?? ""} onChange={e => chooseModel(e.target.value)} disabled={modelsLoading || !selectedModels.length}>{!selected && <option value="" disabled>{modelId ? s.modelUnavailable : t.emptyModels}</option>}{selectedModels.map(model => <option key={model.id} value={model.id}>{model.displayName}{model.nsfw ? ` · ${t.nsfw}` : ""}</option>)}</select></label>
+            {!modelsLoading && modelId && !selected && <p className={styles.warning} role="alert">{s.modelUnavailable}</p>}
             {selected?.nsfw ? <span className={styles.sensitive}>{t.nsfw}</span> : null}
-            <label className={styles.field}>{t.prompt}<textarea required value={prompt} onChange={e => setPrompt(e.target.value)} maxLength={promptLimit} placeholder={t.promptPlaceholder} aria-describedby="business-prompt-note" style={{ minHeight: 190 }} /><span id="business-prompt-note" className={styles.note}>{prompt.length.toLocaleString()} / {promptLimit.toLocaleString()} · {t.keyWarning}</span></label>
+            <BusinessPrompt value={prompt} onChange={setPrompt} maxLength={promptLimit} label={t.prompt} placeholder={t.promptPlaceholder} note={t.keyWarning} assets={assets} mode={!selected?.supportsReferences ? "none" : selected.seedance ? "seedance" : selected.dedicatedVideo ? "native" : kind === "image" ? "image" : "local"} onPick={pickMention} />
             <div className={styles.settings}>{kind === "image" && selected?.sizes?.length ? <label className={styles.field}>{t.size}<select value={selectedSize} onChange={e => setSize(e.target.value)}>{selected.sizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}
               {kind === "video" ? <><label className={styles.field}>{t.duration}{selected?.seedance ? <><select aria-label={t.duration} value={seedanceAutoDuration ? "auto" : "fixed"} disabled={seedanceVideoDuration} onChange={e => setSeconds(e.target.value === "auto" ? -1 : selected.defaultSeconds ?? 5)}><option value="fixed">{d.fixed}</option><option value="auto">{d.automatic}</option></select>{!seedanceAutoDuration ? <input type="number" min={selected.minSeconds} max={selected.maxSeconds} step={1} value={selectedSeconds} required aria-label={t.duration} onChange={e => setSeconds(Number(e.target.value))} /> : <span className={styles.note}>{d.autoDurationNotice}</span>}</> : selected?.secondsOptions?.length ? <select value={selectedSeconds} onChange={e => setSeconds(Number(e.target.value))}>{selected.secondsOptions.map(value => <option key={value} value={value}>{value}</option>)}</select> : <input type="number" min={selected?.minSeconds ?? 2} max={selected?.maxSeconds ?? 15} step={1} value={selectedSeconds} required onChange={e => setSeconds(Number(e.target.value))} />}</label>{selected?.resolutions?.length ? <label className={styles.field}>{t.resolution}<select value={selectedResolution} onChange={e => setResolution(e.target.value)}>{selected.resolutions.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}{selected?.aspectRatios?.length ? <label className={styles.field}>{t.aspect}<select value={selected.dedicatedVideo?.aspectRatioFromSource ? "source" : selectedAspect} disabled={seedanceAdaptive || selected.dedicatedVideo?.aspectRatioFromSource} onChange={e => setAspect(e.target.value)}>{selected.dedicatedVideo?.aspectRatioFromSource ? <option value="source">{dedicatedCopy.sourceAspect}</option> : selected.aspectRatios.map(value => <option value={value} key={value}>{value}</option>)}</select></label> : null}</> : null}
             </div>{kind === "image" && selected ? <BusinessImageControls model={selected} count={imageCount} onCount={setImageCount} quality={imageQuality} onQuality={setImageQuality} seed={seed} onSeed={setSeed} negative={imageNegative} onNegative={setImageNegative} /> : null}{kind === "video" && selected?.supportsAudio ? <label className={styles.check}><input type="checkbox" checked={selected.nativeAudioOnly || (supportsAudioAtResolution && audio)} disabled={selected.nativeAudioOnly || !supportsAudioAtResolution} onChange={e => setAudio(e.target.checked)} />{t.audio}</label> : null}

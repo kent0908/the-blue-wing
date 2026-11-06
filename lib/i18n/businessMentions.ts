@@ -1,0 +1,6 @@
+import type { Locale } from "./locale";
+const zh = { hint: "輸入 @ 或按「標記圖片」，選擇已上傳的圖片並加入本次參考。", add: "標記圖片", loading: "載入圖片中…", empty: "沒有符合的圖片。請先到素材庫上傳。", error: "無法載入商務圖片，請重試。", missing: "標記的圖片已移除，請重新選取圖片或刪除該標記。", personal: "個人素材", business: "商務素材", list: "選擇要標記的圖片", limit: "此模式不接受更多圖片，請檢查參考數量與生成模式。" };
+type Copy = { [K in keyof typeof zh]: string };
+const en: Copy = { hint: "Type @ or choose Tag image to attach an uploaded image as a reference.", add: "Tag image", loading: "Loading images…", empty: "No matching images. Upload an image to your library first.", error: "Unable to load business images. Please retry.", missing: "A tagged image was removed. Select it again or delete its tag.", personal: "Personal asset", business: "Business asset", list: "Choose an image to tag", limit: "This mode cannot accept more images. Check the reference limit and generation mode." };
+const ja: Copy = { hint: "@ を入力するか「画像をタグ付け」を押して、アップロード済み画像を参照に追加します。", add: "画像をタグ付け", loading: "画像を読み込み中…", empty: "一致する画像がありません。先に素材庫にアップロードしてください。", error: "ビジネス画像を読み込めません。再試行してください。", missing: "タグ付けした画像が削除されました。再選択するかタグを削除してください。", personal: "個人素材", business: "ビジネス素材", list: "タグ付けする画像を選択", limit: "このモードには画像を追加できません。参照数と生成モードを確認してください。" };
+export const businessMentionsCopy = (locale: Locale): Copy => ({ "zh-Hant": zh, en, ja })[locale];

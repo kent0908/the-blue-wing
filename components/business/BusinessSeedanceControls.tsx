@@ -23,6 +23,8 @@ interface Props {
   seed?: string;
   onSeed?: (value: string) => void;
   onOpenAssets?: () => void;
+  nativeAssets?: BusinessProviderAsset[];
+  onNativeRemove?: (uploadId: string) => void;
 }
 const modeKeys: Record<BusinessSeedanceMode, readonly [keyof BusinessSeedanceCopy, keyof BusinessSeedanceCopy]> = {
   freestyle: ["freestyle", "freestyleInfo"], "text-to-video": ["textToVideo", "textToVideoInfo"],
@@ -55,14 +57,16 @@ export default function BusinessSeedanceControls(props: Props) {
   const providerTab = useRef<HTMLButtonElement | null>(null);
   useEffect(() => () => { pending.current?.abort(); }, []);
 
-  const counts = { image: assetIds.length, video: 0, audio: 0 };
+  const nativeAssets = props.nativeAssets ?? [];
+  const counts = { image: assetIds.length + nativeAssets.length, video: 0, audio: 0 };
   providerAssets.forEach(asset => { counts[asset.type]++; });
-  const selectedCount = assetIds.length + providerAssets.length;
+  const selectedCount = assetIds.length + nativeAssets.length + providerAssets.length;
   const frameMode = mode === "image-to-video" || mode === "first-last-frame";
   const referenceLimit = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : capability.references.total;
   const blocked = (type: SeedanceReferenceType) => mode === "text-to-video" || selectedCount >= referenceLimit || counts[type] >= capability.references[type] || (frameMode && type !== "image");
   const blockedReason = (type: SeedanceReferenceType) => mode === "text-to-video" ? t.textReferences : frameMode && type !== "image" ? t.imageOnly : t.capReached;
   const chips = [
+    ...nativeAssets.map(asset => ({ key: `business:${asset.uploadId}`, type: "image" as const, name: asset.name, remove: () => props.onNativeRemove?.(asset.uploadId!), source: t.localAsset })),
     ...assetIds.map(assetId => ({ key: `local:${assetId}`, type: "image" as const, name: assets.find(asset => asset.id === assetId)?.name || interpolate(t.assetUnnamed, { id: assetId }), remove: () => onLocalSelection(assetId), source: t.localAsset })),
     ...providerAssets.map(asset => ({ key: `provider:${asset.id}`, type: asset.type, name: asset.name, remove: () => onProviderSelection(asset), source: t.providerAsset })),
   ].sort((a, b) => {

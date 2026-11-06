@@ -1,6 +1,7 @@
 import type { Locale } from "./locale";
 
 const zh = {
+  modelUnavailable: "原先選取的模型目前無法使用，請重新選擇模型。",
   generationTitle: "每個想法，都有自己的畫面。",
   imageTitle: "圖片創作",
   videoTitle: "影片創作",
@@ -34,6 +35,7 @@ const zh = {
 export type BusinessStudioCopy = { [K in keyof typeof zh]: string };
 
 const en: BusinessStudioCopy = {
+  modelUnavailable: "The selected model is unavailable. Please choose a model again.",
   generationTitle: "Every idea has a world of its own.",
   imageTitle: "Image studio",
   videoTitle: "Video studio",
@@ -65,6 +67,7 @@ const en: BusinessStudioCopy = {
 };
 
 const ja: BusinessStudioCopy = {
+  modelUnavailable: "選択したモデルは現在利用できません。モデルを選び直してください。",
   generationTitle: "ひとつの想いから、あなただけの画へ。",
   imageTitle: "画像制作",
   videoTitle: "映像制作",

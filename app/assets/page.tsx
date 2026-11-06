@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MAX_ASSET_BYTES_DIRECT } from "@/lib/assets";
-import { uploadAsset } from "@/lib/uploadAsset";
+import AssetUploader from "@/components/AssetUploader";
 import { useRouter } from "next/navigation";
 import ProviderAssetLibrary from "@/components/ProviderAssetLibrary";
-import { useTr } from "@/lib/i18n/client";
+import { useTr, useLocale } from "@/lib/i18n/client";
+import { assetUploadCopy } from "@/lib/i18n/assetUpload";
 
 interface Asset {
   id: number;
@@ -16,7 +17,6 @@ interface Asset {
   createdAt: string;
 }
 
-const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/webm,audio/mpeg,audio/wav,audio/x-wav,audio/mp4";
 const MAX_MB = Math.floor(MAX_ASSET_BYTES_DIRECT / 1024 / 1024);
 
 function fmtSize(n: number) {
@@ -27,15 +27,13 @@ function fmtSize(n: number) {
 
 export default function AssetsPage() {
   const tr = useTr();
+  const copy = assetUploadCopy(useLocale());
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<{ name: string; state: "pending" | "error"; msg?: string; progress?: number }[]>([]);
-  const [dragOver, setDragOver] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,41 +50,12 @@ export default function AssetsPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [router, tr]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- load() is this view's data fetch
     load();
   }, [load]);
-
-  const uploadOne = useCallback(async (file: File) => {
-    setUploads((u) => [...u, { name: file.name, state: "pending" }]);
-    const fail = (msg: string) =>
-      setUploads((u) => u.map((x) => (x.name === file.name && x.state === "pending" ? { ...x, state: "error", msg } : x)));
-    try {
-      const asset = await uploadAsset(file, {
-        onProgress: (fraction) =>
-          setUploads((u) => u.map((x) => (x.name === file.name && x.state === "pending" ? { ...x, progress: fraction } : x))),
-      });
-      setAssets((a) => [asset, ...a]);
-      setUploads((u) => u.filter((x) => !(x.name === file.name && x.state === "pending")));
-    } catch (e) {
-      fail(e instanceof Error ? e.message : tr("連線失敗"));
-    }
-  }, []);
-
-  const handleFiles = useCallback(
-    (files: FileList | File[]) => {
-      for (const f of Array.from(files)) {
-        if (f.size > MAX_MB * 1024 * 1024) {
-          setUploads((u) => [...u, { name: f.name, state: "error", msg: tr("超過 {n} MB", { n: MAX_MB }) }]);
-          continue;
-        }
-        uploadOne(f);
-      }
-    },
-    [uploadOne]
-  );
 
   const remove = async (id: number) => {
     if (!confirm(tr("刪除這個素材？"))) return;
@@ -106,22 +75,10 @@ export default function AssetsPage() {
   };
 
   return (
-    <div
-      className="h-full overflow-y-auto"
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
-      }}
-    >
+    <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[1000px] px-6 py-8">
         <h1 className="text-[22px] font-semibold tracking-tight">{tr("資產庫")}</h1>
-        <ProviderAssetLibrary sources={assets} />
+
         <p className="mt-1 text-[13px] text-[#8a8a8a]">
           {tr("上傳圖片、影片或音訊，之後可在這裡管理、登錄人物參考素材。單檔上限")} {MAX_MB} MB。
         </p>
@@ -132,52 +89,13 @@ export default function AssetsPage() {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className={`mt-5 flex w-full flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-10 text-center transition-colors ${
-            dragOver ? "border-[#7ff0cd] bg-[#10201c]" : "border-[#333] bg-[#141414] hover:border-[#4a4a4a]"
-          }`}
-        >
-          <span className="text-[13px] text-white">{tr("拖曳素材到這裡，或點擊選擇檔案")}</span>
-          <span className="mt-1 text-[11.5px] text-[#6d6d6d]">{tr("PNG · JPG · WebP · GIF · SVG · MP4 · WebM · MP3 · WAV · M4A（每個檔案最多")} {MAX_MB} {tr("MB，直接上傳到儲存空間）")}</span>
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPT}
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files?.length) handleFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-
-        {uploads.length > 0 && (
-          <div className="mt-3 space-y-1.5">
-            {uploads.map((u, i) => (
-              <div key={i} className="flex items-center gap-2 text-[12px]">
-                <span className={u.state === "error" ? "text-[#ff9b9b]" : "text-[#8a8a8a]"}>
-                  {u.state === "error" ? "✕" : "↑"}
-                </span>
-                <span className="truncate text-[#c9c9c9]">{tr(u.name)}</span>
-                <span className={u.state === "error" ? "text-[#ff9b9b]" : "text-[#6d6d6d]"}>
-                  {u.state === "error" ? u.msg : u.progress ? tr("上傳中… {p}%", { p: Math.round(u.progress * 100) }) : tr("上傳中…")}
-                </span>
-                {u.state === "error" && (
-                  <button
-                    onClick={() => setUploads((x) => x.filter((_, j) => j !== i))}
-                    className="text-[#6d6d6d] hover:text-white"
-                  >
-                    {tr("清除")}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
+        <AssetUploader disabled={!configured || loading} onUploaded={asset => setAssets(current => [asset, ...current.filter(item => item.id !== asset.id)])} />
+        <details className="mt-6 rounded-xl border border-[#35443d] p-4">
+          <summary className="cursor-pointer text-sm text-[#b4c2bc]">{copy.review}</summary>
+          <p className="mt-3 text-sm text-[#b4c2bc]">{copy.reviewHelp}</p>
+          <ProviderAssetLibrary sources={assets} />
+        </details>
+        <div className="mt-8 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">{copy.personal} · {assets.length}</h2><button type="button" disabled={loading} onClick={() => void load()} className="text-sm text-[#7ff0cd]">{copy.refresh}</button></div>
         {error ? (
           <div className="mt-6 rounded-xl border border-[#4a2020] bg-[#1a1010] px-4 py-3 text-[13px] text-[#ffb4b4]">{tr(error)}</div>
         ) : loading ? (

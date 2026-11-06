@@ -100,6 +100,8 @@ const { source: workspaceSource, handlers } = actualHandlers('components/busines
 function context() {
   const pushes = [];
   const state = {
+    mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, promptLimit: 12000,
+    resolveMentionPrompt: load('lib/businessMentions.ts').resolveMentionPrompt,
     kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video' },
     size: 'old-size', resolution: '4k', assetIds: [71, 72], audio: true, seconds: 30,
     videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123', imageCount:3, imageQuality:'high', imageNegative:'old', imageBusinessAssets:[{id:'old-b',uploadId:'fixture-old-upload'}], selectionContext:{current:'video:previous-model'},

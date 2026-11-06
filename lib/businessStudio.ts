@@ -11,8 +11,16 @@ export function parseBusinessStudioLocation(params: { get(name: string): string 
   return {
     kind: rawKind === "video" || rawKind === "text" ? rawKind : "image",
     tab: rawTab === "key" || rawTab === "history" || rawTab === "assets" || rawTab === "usage" || rawTab === "models" || rawTab === "workflows" ? rawTab : "create",
-    modelId: /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(rawModel) && !/^(?:sk|csk)-/i.test(rawModel) ? rawModel : "",
+    modelId: /^[a-zA-Z0-9._:-]{1,150}$/.test(rawModel) && !/^(?:sk|csk)-/i.test(rawModel) ? rawModel : "",
   };
+}
+
+/** An explicit selection must never silently fall back to a different model. */
+export function selectBusinessModel<T extends { id: string; modality: BusinessKind; nsfw: boolean; dedicatedVideo?: { capability: string } }>(models: T[], kind: BusinessKind, modelId: string): T | undefined {
+  const available = models.filter(model => model.modality === kind);
+  if (modelId) return available.find(model => model.id === modelId);
+  return available.find(model => !model.nsfw && (!model.dedicatedVideo || model.dedicatedVideo.capability === "text-to-video"))
+    ?? available.find(model => !model.nsfw) ?? available[0];
 }
 
 export function businessStudioHref(location: BusinessStudioLocation): string {

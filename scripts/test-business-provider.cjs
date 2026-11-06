@@ -18,6 +18,29 @@ async function check(name, fn) { await fn(); count++; console.log('PASS', name);
 (async () => {
   process.env.SIRAYA_API_KEY = 'platform-primary'; process.env.SIRAYA_API_KEY_2 = 'platform-backup';
   const own = { apiKey: 'sk-business-key-alice' };
+  await check('every executable catalog ID reaches the correct endpoint unchanged', async () => {
+    const fixture = JSON.parse(fs.readFileSync('scripts/fixtures/business-model-catalog-20261020.json', 'utf8'));
+    const { buildBusinessModelCatalog } = load('lib/businessModelCatalog.ts');
+    const { models } = buildBusinessModelCatalog({ data: fixture.ids.map(id => ({ id })) });
+    for (const model of models) {
+      const expected = model.modality === 'image' ? '/v1/images/generations' : model.modality === 'video' ? '/v1/videos/generations' : '/v1/chat/completions';
+      let calls = 0;
+      global.fetch = async (url, init) => {
+        calls++;
+        assert.equal(new URL(url).pathname, expected, model.id);
+        assert.equal(JSON.parse(init.body).model, model.id, model.id);
+        assert.equal(init.headers.get('Authorization'), 'Bearer ' + own.apiKey);
+        return Response.json({ data: [], choices: [] });
+      };
+      const payload = { model: model.id, prompt: 'A paper garden', seconds: model.defaultSeconds ?? 5, resolution: model.resolutions?.[0] ?? '720p' };
+      if (model.modality === 'image') await api.createImage({ model: model.id, prompt: payload.prompt }, own);
+      else if (model.modality === 'text') await api.createChatCompletion({ model: model.id, messages: [{ role: 'user', content: payload.prompt }] }, own);
+      else if (model.seedance || model.dedicatedVideo) await api.createBusinessVideo(payload, own);
+      else await api.createVideo(payload, own);
+      assert.equal(calls, 1, model.id);
+    }
+    assert.equal(models.length, 131);
+  });
   const invocations = [
     () => api.createImage({model:'SIRAYA-Dola-Seedream-5.0-pro',prompt:'A paper city'}, own),
     () => api.createImage({model:'NSFW-gpt-image-2',prompt:'A paper city',image:'https://example.com/image.png'}, own),
