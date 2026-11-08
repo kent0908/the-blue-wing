@@ -23,7 +23,7 @@ export default function BusinessCollection({ jobs, refreshing, onRefresh, onReus
   const filtered = jobs.filter(job => (kind === "all" || job.kind === kind) && (status === "all" || job.status === status) && `${job.prompt} ${job.model} ${modelLabel(job.model)}`.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim())).sort((a, b) => (sort === "latest" ? -1 : 1) * a.createdAt.localeCompare(b.createdAt));
   const selected = jobs.find(job => job.id === selectedId);
   return <div>
-    <div className={styles.collectionHeader}><div><h2>{c.results}</h2><p>{c.count.replace("{n}", String(filtered.length))}</p></div><button className={styles.button} type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? t.checking : t.refresh}</button></div>
+    <div className={styles.collectionHeader}><p role="status">{c.count.replace("{n}", String(filtered.length))}</p><button className={styles.button} type="button" onClick={onRefresh} disabled={refreshing}>{refreshing ? t.checking : t.refresh}</button></div>
     <div className={styles.filters}>
       <label>{c.search}<input type="search" value={query} onChange={event => { setQuery(event.target.value); setLimit(24); }} /></label>
       <label>{c.type}<select value={kind} onChange={event => { setKind(event.target.value); setLimit(24); }}>{["all", "image", "video", "text"].map(value => <option key={value} value={value}>{value === "all" ? c.all : t[value as "image" | "video" | "text"]}</option>)}</select></label>

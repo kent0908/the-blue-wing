@@ -146,7 +146,7 @@
   min-width: 0;
 }
 .editor { grid-area: editor; min-width: 0; }
-.preview { grid-area: preview; min-width: 0; }
+.preview { grid-area: preview; min-width: 0; scroll-margin-block-start: 12px; }
 .editorHeader { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
 .editorHeader h2 { margin: 0; font-size: 16px; line-height: 1.35; font-weight: 650; }
 .editorForm { display: grid; gap: 14px; min-width: 0; }
@@ -156,7 +156,6 @@
 
 @media (max-width: 1100px) {
   .createLayout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "editor" "preview"; }
-  .createLayout[data-has-result=true] { grid-template-areas: "preview" "editor"; }
 }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
@@ -168,7 +167,7 @@
   .mobileLabel { display: inline; }
   .desktopLabel { display: none; }
   .kindButton, .utilityButton { justify-content: center; text-align: center; padding: 5px 4px; gap: 5px; }
-  .utilityButton .keyDot { display: none; }
+  .utilityButton :is(.navIcon, .keyDot) { display: none; }
   .kindButton, .utilityButton { border-inline-start: 0; border-bottom: 2px solid transparent; }
   .kindButton[aria-pressed=true], .utilityButton[aria-pressed=true] { border-bottom-color: var(--desk-accent); }
   .body { margin: 0; border: 0; border-top: 1px solid var(--desk-rule); border-radius: 0; }
@@ -180,7 +179,6 @@
 }
 @media (max-width: 440px) {
   .kindButton, .utilityButton { font-size: 12px; }
-  .utilityButton > svg { display: none; }
   .workspaceHeaderInner { gap: 6px 10px; }
   .workspaceHeader h1 { font-size: 20px; }
   .keyStatus { font-size: 12px; }
