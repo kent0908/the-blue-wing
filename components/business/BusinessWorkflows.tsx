@@ -10,14 +10,15 @@ import type { CanvasGraph, CanvasNode } from "@/lib/canvas/types";
 import type { BusinessModel } from "./types";
 import styles from "./BusinessWorkflows.module.css";
 
-interface WorkflowSummary { id: string; name: string; nodeCount: number; updatedAt: string }
+interface WorkflowSummary { id: string; name: string; nodeCount: number; updatedAt: string; version: string }
 type Starter = "blank" | "imageVideo" | "sourceTemplate";
+type DraftDialog = { kind: "create" } | { kind: "rename"; workflow: WorkflowSummary };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const EXTRA = {
-  "zh-Hant": { start: "從哪裡開始", yours: "你的工作流", noMatches: "沒有符合的工作流。", count: "{n} 份草稿", filteredCount: "{n} / {total} 份草稿", selection: "選擇起步方式", blankHint: "留一張空白，從自己的節奏開始。", imageVideoHint: "寫下故事，生成畫面，再讓鏡頭動起來。", sourceTemplateHint: "帶入原本的素材，延伸下一個畫面。" },
-  en: { start: "Choose a starting point", yours: "Your workflows", noMatches: "No matching workflows.", count: "{n} drafts", filteredCount: "{n} of {total} drafts", selection: "Choose a starting point", blankHint: "An open canvas, ready for your own sequence.", imageVideoHint: "Write a story, make an image, then set it in motion.", sourceTemplateHint: "Bring your source material into the next image." },
-  ja: { start: "始め方を選ぶ", yours: "あなたのワークフロー", noMatches: "一致するワークフローはありません。", count: "{n}件の草稿", filteredCount: "全{total}件中{n}件", selection: "始め方を選ぶ", blankHint: "白い余白から、自分の順序でつくる。", imageVideoHint: "物語から一枚をつくり、その先の映像へ。", sourceTemplateHint: "手元の素材から、次の画面を広げる。" },
-};
+const VERSION = /^[a-f0-9]{32}$/;
+const validSummary = (row: WorkflowSummary) => row && typeof row.id === "string" && UUID.test(row.id) &&
+  typeof row.name === "string" && Number.isInteger(row.nodeCount) && row.nodeCount >= 0 &&
+  typeof row.updatedAt === "string" && Number.isFinite(Date.parse(row.updatedAt)) &&
+  typeof row.version === "string" && VERSION.test(row.version);
 
 /** Draft creation only. No model, credit or generation endpoint is called by a starter. */
 export function businessStarterGraph(starter: Starter, models: BusinessModel[]): CanvasGraph {
@@ -52,26 +53,28 @@ function StarterDrawing({ starter }: { starter: Starter }) {
 }
 
 export default function BusinessWorkflows({ models = [] }: { models?: BusinessModel[] }) {
-  const locale = useLocale(), t = businessWorkflowsCopy(locale), extra = EXTRA[locale], router = useRouter();
-  const nameId = useId(), searchId = useId();
+  const locale = useLocale(), t = businessWorkflowsCopy(locale), router = useRouter();
+  const nameId = useId(), searchId = useId(), dialogTitle = useId();
   const [workflows, setWorkflows] = useState<WorkflowSummary[] | null>(null);
-  const [loading, setLoading] = useState(false), [creating, setCreating] = useState(false);
-  const [error, setError] = useState(""), [name, setName] = useState(""), [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true), [saving, setSaving] = useState(false);
+  const [listError, setListError] = useState(false), [formError, setFormError] = useState("");
+  const [name, setName] = useState(""), [query, setQuery] = useState("");
   const [starter, setStarter] = useState<Starter>("blank");
-  const createLock = useRef(false), loadSequence = useRef(0);
+  const [draftDialog, setDraftDialog] = useState<DraftDialog | null>(null);
+  const [renameStale, setRenameStale] = useState(false), [notice, setNotice] = useState("");
+  const dialogRef = useRef<HTMLDialogElement>(null), nameRef = useRef<HTMLInputElement>(null), dismissRef = useRef<HTMLButtonElement>(null);
+  const saveLock = useRef(false), loadSequence = useRef(0);
   const loadWorkflows = useCallback(async (signal?: AbortSignal) => {
     const sequence = ++loadSequence.current;
-    setLoading(true); setError("");
+    setLoading(true); setListError(false);
     try {
       const response = await fetch("/api/business/workflows", { cache: "no-store", signal });
       const body = await response.json().catch(() => null);
-      if (!response.ok || !Array.isArray(body?.workflows)) throw new Error(t.error);
-      const rows = body.workflows as WorkflowSummary[];
-      if (rows.some(row => !row || typeof row.id !== "string" || !UUID.test(row.id) || typeof row.name !== "string" || typeof row.nodeCount !== "number" || typeof row.updatedAt !== "string")) throw new Error(t.error);
-      if (sequence === loadSequence.current && !signal?.aborted) setWorkflows(rows);
-    } catch { if (sequence === loadSequence.current && !signal?.aborted) setError(t.error); }
+      if (!response.ok || !Array.isArray(body?.workflows) || !body.workflows.every(validSummary)) throw new Error();
+      if (sequence === loadSequence.current && !signal?.aborted) setWorkflows(body.workflows);
+    } catch { if (sequence === loadSequence.current && !signal?.aborted) setListError(true); }
     finally { if (sequence === loadSequence.current && !signal?.aborted) setLoading(false); }
-  }, [t.error]);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initialize the approved workspace's own remote gallery
@@ -79,39 +82,119 @@ export default function BusinessWorkflows({ models = [] }: { models?: BusinessMo
     return () => { controller.abort(); };
   }, [loadWorkflows]);
 
-  const createWorkflow = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (createLock.current) return;
-    createLock.current = true; setCreating(true); setError("");
-    try {
-      const response = await fetch("/api/business/workflows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() || t.untitled, graph: businessStarterGraph(starter, models) }) });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(body?.error?.message || t.error);
-      if (typeof body?.workflow?.id !== "string" || !UUID.test(body.workflow.id)) throw new Error(t.error);
-      router.push(`/business/workflows/${body.workflow.id}`);
-    } catch (failure) { setError(failure instanceof Error ? failure.message : t.error); }
-    finally { createLock.current = false; setCreating(false); }
+  useEffect(() => {
+    if (!draftDialog) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    if (draftDialog.kind === "rename") {
+      nameRef.current?.focus();
+      nameRef.current?.select();
+    }
+    return () => { if (dialog.open) dialog.close(); };
+  }, [draftDialog]);
+  useEffect(() => { if (renameStale) dismissRef.current?.focus(); }, [renameStale]);
+
+  const openDialog = (next: DraftDialog) => {
+    setName(next.kind === "rename" ? next.workflow.name : "");
+    setStarter("blank");
+    setFormError("");
+    setRenameStale(false);
+    setNotice("");
+    setDraftDialog(next);
   };
-  const visible = (workflows ?? []).filter(workflow => workflow.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const closeDialog = () => {
+    dialogRef.current?.close();
+    setDraftDialog(null);
+  };
+
+  const saveDraft = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!draftDialog || saveLock.current || renameStale) return;
+    const renamed = draftDialog.kind === "rename" ? draftDialog.workflow : null;
+    const nextName = name.trim() || (renamed ? "" : t.untitled);
+    if (!nextName) { setFormError(t.nameRequired); nameRef.current?.focus(); return; }
+    if (renamed?.name === nextName) { closeDialog(); return; }
+    const fallback = renamed ? t.renameFailed : t.createFailed;
+    saveLock.current = true; setSaving(true); setFormError("");
+    try {
+      const graph = renamed ? null : businessStarterGraph(starter, models);
+      const response = await fetch(renamed ? `/api/business/workflows/${renamed.id}` : "/api/business/workflows", {
+        method: renamed ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(renamed ? { name: nextName, version: renamed.version } : { name: nextName, graph }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        if (renamed && (response.status === 404 || response.status === 409)) {
+          setRenameStale(true);
+          void loadWorkflows();
+          setFormError(t.renameConflict);
+        } else {
+          setFormError(typeof body?.error?.message === "string" ? body.error.message : fallback);
+        }
+        return;
+      }
+      const saved = { ...body?.workflow, nodeCount: renamed?.nodeCount ?? graph?.nodes.length } as WorkflowSummary;
+      if (!validSummary(saved) || (renamed && saved.id !== renamed.id)) throw new Error();
+      setWorkflows(rows => rows === null ? null : [saved, ...rows.filter(row => row.id !== saved.id)]);
+      closeDialog();
+      if (renamed) {
+        // A rename can change whether the row matches the old search.
+        if (!saved.name.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale))) setQuery("");
+        setNotice(t.renamed);
+      } else {
+        router.push(`/business/workflows/${saved.id}`);
+      }
+      // Ensure any older list request cannot replace the mutation result.
+      void loadWorkflows();
+    } catch { setFormError(fallback); }
+    finally { saveLock.current = false; setSaving(false); }
+  };
+  const searchTerm = query.trim().toLocaleLowerCase(locale);
+  const visible = (workflows ?? []).filter(workflow => workflow.name.toLocaleLowerCase(locale).includes(searchTerm));
+  const dateFormatter = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
   const dateLabel = (value: string) => {
     const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date) : "—";
+    return Number.isFinite(date.getTime()) ? dateFormatter.format(date) : "—";
   };
 
   return <div className={styles.workflowsPage} data-ui="business-workflows">
-    <header className={styles.workflowsIntro}><h2>{t.title}</h2><p>{t.subtitle}</p></header>
-    <form className={styles.workflowCreate} onSubmit={createWorkflow} aria-busy={creating}>
-      <fieldset disabled={creating} className={styles.workflowStarters}><legend>{extra.start}</legend><div role="group" aria-label={extra.selection} className={styles.workflowStarterGrid}>
-        {(["blank", "imageVideo", "sourceTemplate"] as const).map(item => <button key={item} type="button" aria-pressed={starter === item} className={styles.workflowStarter} onClick={() => setStarter(item)}><span className={styles.starterTitle}>{t[item]}<svg className={styles.selectedMark} width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m3 8 3 3 7-7" stroke="currentColor" strokeWidth="1.5" /></svg></span><StarterDrawing starter={item} /><span className={styles.starterDescription}>{extra[`${item}Hint`]}</span></button>)}
-      </div></fieldset>
-      <div className={styles.workflowCreateActions}><label htmlFor={nameId}>{t.name}<input id={nameId} value={name} onChange={event => setName(event.target.value)} maxLength={120} placeholder={t.untitled} autoComplete="off" disabled={creating} /></label><button className={styles.workflowPrimary} type="submit" disabled={creating}><IconPlus className={styles.workflowActionIcon} />{creating ? t.loading : t.create}</button></div>
-      <p className={styles.workflowDraftNote}>{t.draftOnly}</p>
-    </form>
-    {error ? <div role="alert" className={styles.workflowError}><p>{error}</p><button type="button" onClick={() => void loadWorkflows()} disabled={loading}>{t.retry}</button></div> : null}
-    <section className={styles.workflowCollection} aria-labelledby={`${searchId}-heading`} aria-busy={loading}>
-      <div className={styles.workflowCollectionHeading}><div><h3 id={`${searchId}-heading`}>{extra.yours}</h3><p aria-live="polite">{workflows === null ? "—" : workflowText(query.trim() ? extra.filteredCount : extra.count, { n: visible.length, total: workflows.length })}</p></div><label htmlFor={searchId}>{t.search}<input id={searchId} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t.search} /></label></div>
-      {loading && workflows === null ? <p role="status" className={styles.workflowEmpty}>{t.loading}</p> : visible.length ? <div className={styles.workflowRows}>{visible.map(workflow => <Link key={workflow.id} href={`/business/workflows/${workflow.id}`} className={styles.workflowRow} aria-label={`${t.open} · ${workflow.name}`}><svg className={styles.workflowRowIcon} viewBox="0 0 64 44" fill="none" aria-hidden="true"><rect x="2" y="3" width="18" height="16" rx="2"/><rect x="44" y="25" width="18" height="16" rx="2"/><path d="M20 11C36 11 28 33 44 33"/><circle cx="20" cy="11" r="2"/><circle cx="44" cy="33" r="2"/></svg><div className={styles.workflowIdentity}><h4>{workflow.name}</h4><p><span>{workflowText(t.nodes, { n: workflow.nodeCount })}</span><span>{t.updated} <time dateTime={workflow.updatedAt}>{dateLabel(workflow.updatedAt)}</time></span></p></div><span className={styles.workflowOpen}>{t.open}<span aria-hidden="true">↗</span></span></Link>)}</div> : <div className={styles.workflowEmpty}>{query.trim() ? <p>{extra.noMatches}</p> : <><h4>{t.empty}</h4><p>{t.emptyText}</p></>}</div>}
+    <section aria-labelledby={`${searchId}-heading`} aria-busy={loading}>
+      <header className={styles.workflowCollectionHeading}>
+        <div><h2 id={`${searchId}-heading`}>{t.title}</h2>{workflows !== null ? <p aria-live="polite">{workflowText(searchTerm ? t.filteredCount : workflows.length === 1 ? t.singleDraft : t.count, { n: visible.length, total: workflows.length })}</p> : null}</div>
+        <label className={styles.search} htmlFor={searchId}><span className={styles.screenReader}>{t.search}</span><input id={searchId} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t.search} disabled={workflows === null} /></label>
+        <button className={styles.workflowPrimary} type="button" onClick={() => openDialog({ kind: "create" })}><IconPlus className={styles.workflowActionIcon} />{t.create}</button>
+      </header>
+      <p role="status" className={notice ? styles.notice : styles.screenReader}>{notice}</p>
+      {listError ? <div role="alert" className={styles.workflowError}><p>{t.error}</p><button className={styles.workflowSecondary} type="button" onClick={() => void loadWorkflows()} disabled={loading}>{t.retry}</button></div> : null}
+      {workflows === null ? (loading ? <p role="status" className={styles.workflowEmpty}>{t.loading}</p> : null) : visible.length ? (
+        <ul className={styles.workflowRows}>
+          {visible.map(workflow => <li key={workflow.id} className={styles.workflowRow}>
+            <Link href={`/business/workflows/${workflow.id}`} className={styles.rowLink} aria-label={`${t.open}: ${workflow.name}`}>
+              <div className={styles.workflowIdentity}><h3>{workflow.name}</h3><p><span>{workflowText(workflow.nodeCount === 1 ? t.singleNode : t.nodes, { n: workflow.nodeCount })}</span><time dateTime={workflow.updatedAt}>{dateLabel(workflow.updatedAt)}</time></p></div>
+              <span className={styles.workflowOpen}>{t.open}<span aria-hidden="true">→</span></span>
+            </Link>
+            <button type="button" className={styles.workflowSecondary} onClick={() => openDialog({ kind: "rename", workflow })} aria-label={`${t.rename}: ${workflow.name}`}>{t.rename}</button>
+          </li>)}
+        </ul>
+      ) : <p className={styles.workflowEmpty}>{searchTerm ? t.noMatches : t.empty}</p>}
     </section>
-    <footer className={styles.workflowFooter}><p>{t.billing}</p><div><Link href="/business?tab=history">{t.history}<span aria-hidden="true">↗</span></Link><Link href="/business?tab=usage">{t.costs}<span aria-hidden="true">↗</span></Link></div></footer>
+    {draftDialog ? <dialog ref={dialogRef} className={styles.workflowDialog} aria-labelledby={dialogTitle} onCancel={event => { event.preventDefault(); if (!saveLock.current) closeDialog(); }}>
+      <h2 id={dialogTitle}>{draftDialog.kind === "create" ? t.create : t.rename}</h2>
+      <form onSubmit={saveDraft} aria-busy={saving}>
+        {draftDialog.kind === "create" ? <fieldset disabled={saving} className={styles.workflowStarters}><legend>{t.starter}</legend>
+          {(["blank", "imageVideo", "sourceTemplate"] as const).map(item => <label key={item} className={styles.workflowStarter}>
+            <input type="radio" name="starter" value={item} checked={starter === item} onChange={() => setStarter(item)} /><span>{t[item]}</span><StarterDrawing starter={item} />
+          </label>)}
+        </fieldset> : null}
+        <label className={styles.nameField} htmlFor={nameId}>{t.name}<input ref={nameRef} id={nameId} value={name} onChange={event => { setName(event.target.value); if (!renameStale) setFormError(""); }} maxLength={120} placeholder={t.untitled} autoComplete="off" enterKeyHint="done" disabled={saving || renameStale} required={draftDialog.kind === "rename"} /></label>
+        {formError ? <p role="alert" className={styles.formError}>{formError}</p> : null}
+        <div className={styles.dialogActions}>
+          <button ref={dismissRef} type="button" className={styles.workflowSecondary} disabled={saving} onClick={closeDialog}>{renameStale ? t.close : t.dismiss}</button>
+          {!renameStale ? <button className={styles.workflowPrimary} type="submit" disabled={saving}>{saving ? (draftDialog.kind === "create" ? t.creating : t.renaming) : draftDialog.kind === "create" ? t.createAndOpen : t.saveName}</button> : null}
+        </div>
+      </form>
+    </dialog> : null}
   </div>;
 }

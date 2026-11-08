@@ -9,6 +9,7 @@ import { modelLabel } from "@/lib/modelLabel";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { IconChevronLeft, IconPlus, IconPlay, IconTrash, IconImage, IconVideo, IconChat, IconAssets, IconAvatar } from "../Icons";
 import Director3DPanel from "./director3d/Director3DPanel";
 import type { Director3DSceneData } from "@/lib/canvas/director3d";
@@ -81,6 +82,8 @@ export default function CanvasEditor({
 }) {
   const tr = useTr();
   const locale = useLocale();
+  const router = useRouter();
+  const business = runtime?.kind === "business";
   const connectionCopy = canvasConnectionsCopy[locale];
   const workspaceCopy = canvasWorkspaceCopy[locale];
   const [rates, setRates] = useState<RateCardEntry[]>([]);
@@ -98,6 +101,9 @@ export default function CanvasEditor({
   const [graph, setGraph] = useState<CanvasGraph>(() => ({ ...initialGraph, nodes: initialGraph.nodes.map(n => n.status === "running" ? { ...n, status: "error", output: null, error: tr("上次執行已中斷，請確認生成紀錄後再執行") } : n) }));
   const [dirty, setDirty] = useState(initialGraph.nodes.some(n => n.status === "running"));
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [leaveHref, setLeaveHref] = useState<string | null>(null);
+  const leaveDialog = useRef<HTMLDialogElement>(null);
   const [saveState] = useState(() => { const state = new CanvasSaveState(initialVersion); if (initialGraph.nodes.some(n => n.status === "running")) state.edit(); return state; });
   const [runLock] = useState(() => new CanvasRunLock());
   const runController = useRef<AbortController | null>(null);
@@ -120,6 +126,7 @@ export default function CanvasEditor({
     runConfirmationResolver.current = null;
   }, []);
   const nameRef = useRef(initialName);
+  const nameInput = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -133,6 +140,7 @@ export default function CanvasEditor({
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [portOffsets, setPortOffsets] = useState<Map<string, PortOffsets>>(() => new Map());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const addMenuButton = useRef<HTMLButtonElement>(null);
   const [runningAll, setRunningAll] = useState(false);
   const [assetLibrary, setAssetLibrary] = useState<AssetLite[] | null>(runtime ? [] : null);
   const [consumerVideoModels, setVideoModels] = useState<{ id: string; name: string }[]>([]);
@@ -166,14 +174,35 @@ export default function CanvasEditor({
       if (saveState.dirty || saveState.saving || runLock.busy) { e.preventDefault(); e.returnValue = ""; }
     };
     const leave = (e: MouseEvent) => {
-      const link = (e.target as HTMLElement).closest?.("a[href]") as HTMLAnchorElement | null;
-      if (!link || link.target === "_blank" || e.ctrlKey || e.metaKey || e.shiftKey || link.href === location.href) return;
-      if ((saveState.dirty || saveState.saving || runLock.busy) && !confirm(tr("畫布尚有未儲存內容或執行中的工作。確定離開？可先取消並儲存或匯出草稿。"))) { e.preventDefault(); e.stopPropagation(); }
+      if (!(saveState.dirty || saveState.saving || runLock.busy)) return;
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const link = (e.target as Element | null)?.closest?.<HTMLAnchorElement>("a[href]");
+      if (!link || (link.target && link.target !== "_self") || link.hasAttribute("download") || link.href === location.href) return;
+      if (business) {
+        // External navigation still uses the browser's unload guard. Fragments on this page are safe.
+        let target: URL;
+        try { target = new URL(link.href); } catch { return; }
+        if (target.origin !== location.origin || target.pathname.startsWith("//") ||
+          (target.pathname === location.pathname && target.search === location.search)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setLeaveHref(target.pathname + target.search + target.hash);
+      } else if (!confirm(tr("畫布尚有未儲存內容或執行中的工作。確定離開？可先取消並儲存或匯出草稿。"))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
     window.addEventListener("beforeunload", guard);
     document.addEventListener("click", leave, true);
-    return () => { window.removeEventListener("beforeunload", guard); document.removeEventListener("click", leave, true); runController.current?.abort(); };
-  }, [saveState, runLock, tr]);
+    return () => { window.removeEventListener("beforeunload", guard); document.removeEventListener("click", leave, true); };
+  }, [business, saveState, runLock, tr]);
+  useEffect(() => () => runController.current?.abort(), []);
+  useEffect(() => {
+    const dialog = leaveDialog.current;
+    if (!leaveHref || !dialog) return;
+    if (!dialog.open) dialog.showModal();
+    return () => { if (dialog.open) dialog.close(); };
+  }, [leaveHref]);
 
   const toWorld = useCallback((clientX: number, clientY: number) => {
     const rect = containerRef.current!.getBoundingClientRect();
@@ -300,25 +329,57 @@ export default function CanvasEditor({
   }, [selectedNode, selectedEdge, mutate, view, connectionCopy]);
 
   /* ---- save ---- */
-  const save = async () => {
-    if (saveState.saving || runLock.busy) return;
-    const snapshot = { name: nameRef.current, graph: graphRef.current };
+  const apiBasePath = runtime?.apiBasePath ?? "/api/canvas";
+  const save = useCallback(async () => {
+    if (saveState.saving || runLock.busy) return false;
+    if (business && !saveState.dirty) return true;
+    const currentName = nameRef.current;
+    const snapshot = { name: business ? currentName.trim() : currentName, graph: graphRef.current };
+    if (business && !snapshot.name) {
+      setSaveError(workspaceCopy.nameRequired);
+      nameInput.current?.focus();
+      return false;
+    }
     setSaving(true); setSaveError(null);
     try {
-      validateGraph(snapshot.graph);
+      // The business route validates its own private sources and returns localized errors.
+      if (!business) validateGraph(snapshot.graph);
       await saveState.save(async version => {
-        const res = await fetch(`${runtime?.apiBasePath ?? "/api/canvas"}/${workflowId}`, {
+        const res = await fetch(`${apiBasePath}/${encodeURIComponent(workflowId)}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...snapshot, version }),
+          ...(business ? { signal: AbortSignal.timeout(25_000) } : {}),
         });
         const result = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(result.error?.message || tr("儲存失敗（{s}），草稿仍保留", { s: res.status }));
-        if (result.workflow?.id !== workflowId) throw new Error(tr("儲存回應與畫布不符，請保留草稿"));
+        if (!res.ok) throw new Error(result.error?.message || (business ? workspaceCopy.saveRetry : tr("儲存失敗（{s}），草稿仍保留", { s: res.status })));
+        if (result.workflow?.id !== workflowId || typeof result.workflow.version !== "string" || !result.workflow.version) {
+          throw new Error(business ? workspaceCopy.saveRetry : tr("儲存回應與畫布不符，請保留草稿"));
+        }
         return { version: result.workflow.version };
       });
-    } catch (e) { setSaveError(e instanceof Error ? e.message : tr("儲存失敗，草稿仍保留")); }
+      if (business && currentName !== snapshot.name && nameRef.current === currentName) {
+        nameRef.current = snapshot.name;
+        setName(snapshot.name);
+      }
+      return !saveState.dirty;
+    } catch (e) {
+      setSaveError(business
+        ? (e instanceof Error && e.name === "Error" ? e.message : workspaceCopy.saveRetry)
+        : (e instanceof Error ? e.message : tr("儲存失敗，草稿仍保留")));
+      return false;
+    }
     finally { setSaving(false); setDirty(saveState.dirty); }
-  };
+  }, [apiBasePath, business, runLock, saveState, tr, workflowId, workspaceCopy]);
+  useEffect(() => {
+    if (!business) return;
+    const shortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || (!event.metaKey && !event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      if (!event.repeat && !document.querySelector("dialog:modal")) void save();
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [business, save]);
   const exportDraft = () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify({ name: nameRef.current, graph: graphRef.current, version: saveState.version }, null, 2)], { type: "application/json" }));
     const link = document.createElement("a"); link.href = url; link.download = `canvas-${workflowId}-draft.json`; link.click();
@@ -352,7 +413,7 @@ export default function CanvasEditor({
   const execute = async (nodeId?: string, reuseCompleted = false) => {
     if (saveState.saving) return;
     await runLock.run(async () => {
-      setRunningAll(true); setSaveError(null);
+      setRunningAll(true); setRunError(null);
       const controller = new AbortController(); runController.current = controller;
       try {
         const snapshot = structuredClone(validateGraph(graphRef.current));
@@ -373,7 +434,7 @@ export default function CanvasEditor({
         await executeGraph(snapshot, order, (id, patch) => {
           if (!controller.signal.aborted) commitGraph({ ...graphRef.current, nodes: graphRef.current.nodes.map(n => n.id === id ? { ...n, ...patch } : n) });
         }, controller.signal, runtime ? (node, inputs) => runtime.runNode(node, inputs, controller.signal) : undefined);
-      } catch (e) { if (!controller.signal.aborted) setSaveError(e instanceof Error ? e.message : tr("執行失敗")); }
+      } catch (e) { if (!controller.signal.aborted) setRunError(e instanceof Error ? e.message : tr("執行失敗")); }
       finally { if (!controller.signal.aborted) setRunningAll(false); runController.current = null; }
     });
   };
@@ -390,7 +451,7 @@ export default function CanvasEditor({
     const g=graphRef.current;
     const source=g.edges.find(e=>e.toNode===id&&e.toPort==="image")?.fromNode;
     if(g.nodes.find(n=>n.id===source)?.type==="director3d") {setDirector3dNodeId(source!);return;}
-    if(g.nodes.length>=200) {setSaveError(tr("畫布已達 200 個節點，請先整理"));return;}
+    if(g.nodes.length>=200) {setRunError(tr("畫布已達 200 個節點，請先整理"));return;}
     if(source && !confirm(tr("將建立 3D 構圖並替換此鏡的參考連線。原素材節點會保留，是否繼續？"))) return;
     const stageId=newId("stage");
     mutate(current=>({...current,nodes:[...current.nodes,{id:stageId,type:"director3d",x:0,y:0,data:defaultNodeData("director3d")}],edges:[...current.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),{id:newId("edge"),fromNode:stageId,fromPort:"out",toNode:id,toPort:"image"}]}));
@@ -485,47 +546,79 @@ export default function CanvasEditor({
     connectionRef.current = session; setConnection(session); setConnectionMessage(connectionCopy.connecting);
   };
   const deleteEdge = (id: string) => { mutate(current => ({ ...current, edges: current.edges.filter(edge => edge.id !== id) })); setSelectedEdge(null); setConnectionMessage(connectionCopy.removed); };
-
+  const saveStatus = runningAll ? "running" : saving ? "saving" : saveError ? "failed" : dirty ? "dirty" : "saved";
+  const saveLabel = runningAll ? tr(business ? "執行中…" : "執行中，請勿關閉") : saving ? tr("儲存中…") : business && saveError ? workspaceCopy.saveFailed : dirty ? tr("尚未儲存") : tr("已儲存");
+  const closePalette = () => { setAddMenuOpen(false); addMenuButton.current?.focus(); };
+  const closeLeave = () => { leaveDialog.current?.close(); setLeaveHref(null); };
+  const exitWorkflow = (href: string) => { closeLeave(); router.push(href); };
+  const saveAndLeave = async (href: string) => {
+    const dialog = leaveDialog.current;
+    if (await save() && dialog?.open && leaveDialog.current === dialog && !saveState.dirty) exitWorkflow(href);
+  };
 
   return (
-    <div className={workspaceStyles.workspace} data-workflow-workspace>
+    <div className={`${workspaceStyles.workspace}${business ? ` ${workspaceStyles.business}` : ""}`} data-workflow-workspace data-save-state={saveStatus}>
       <div className={workspaceStyles.toolbar}>
         <div className={workspaceStyles.identity}>
           <Link href={runtime?.backHref ?? "/canvas"} className={workspaceStyles.back} aria-label={runtime?.backLabel ?? tr("返回")} title={runtime?.backLabel ?? tr("返回")}>
             <IconChevronLeft className="h-4 w-4" />
           </Link>
           <div className={workspaceStyles.project}>
-            <div className={workspaceStyles.scope}>{runtime ? workspaceCopy.business : workspaceCopy.studio}</div>
+            {!business && <div className={workspaceStyles.scope}>{workspaceCopy.studio}</div>}
             <h1 className="sr-only">{workspaceCopy.canvas}</h1>
-            <input aria-label={workspaceCopy.name} value={name} maxLength={120} disabled={runningAll}
-              onChange={e => { nameRef.current = e.target.value; setName(e.target.value); saveState.edit(); setDirty(saveState.dirty); }}
+            <input ref={nameInput} aria-label={workspaceCopy.name} value={name} maxLength={120} disabled={runningAll}
+              aria-invalid={business && saveError === workspaceCopy.nameRequired || undefined}
+              placeholder={business ? workspaceCopy.name : undefined}
+              onChange={e => {
+                nameRef.current = e.target.value; setName(e.target.value); saveState.edit(); setDirty(saveState.dirty);
+                if (business && saveError === workspaceCopy.nameRequired) setSaveError(null);
+              }}
               className={workspaceStyles.projectName} />
+            {business && <span role="status" className={workspaceStyles.saveState}>{saveLabel}</span>}
           </div>
-          <span role="status" className={workspaceStyles.saveState}>{runningAll ? tr("執行中，請勿關閉") : saving ? tr("儲存中…") : dirty ? tr("尚未儲存") : tr("已儲存")}</span>
+          {!business && <span role="status" className={workspaceStyles.saveState}>{saveLabel}</span>}
         </div>
         {runtime?.showDirector !== false && <div className={workspaceStyles.viewSwitch}>
           {([['canvas','流程畫布'],['director','分鏡導演台']] as const).map(([id,label]) => <button key={id} type="button" aria-pressed={view===id} onClick={()=>{setView(id);setAddMenuOpen(false);}}>{tr(label)}</button>)}
         </div>}
         <div className={workspaceStyles.paletteWrap}>
-          <button type="button" disabled={runningAll} aria-label={tr("新增節點")} title={tr("新增節點")} aria-expanded={addMenuOpen} aria-controls="workflow-node-menu" onClick={()=>setAddMenuOpen(v=>!v)} className={workspaceStyles.button}>
-            <IconPlus className="h-4 w-4" /><span className={workspaceStyles.addLabel}>{tr("新增節點")}</span>
+          <button ref={addMenuButton} type="button" disabled={runningAll} aria-label={business ? workspaceCopy.add : tr("新增節點")} title={business ? workspaceCopy.add : tr("新增節點")} aria-expanded={addMenuOpen} aria-controls="workflow-node-menu" onClick={()=>setAddMenuOpen(v=>!v)} className={workspaceStyles.button}>
+            <IconPlus className="h-4 w-4" /><span className={workspaceStyles.addLabel}>{business ? workspaceCopy.add : tr("新增節點")}</span>
           </button>
-          {addMenuOpen && <div id="workflow-node-menu" className={workspaceStyles.palette} onKeyDown={event=>{if(event.key==='Escape') {setAddMenuOpen(false);event.stopPropagation();}}}>
-            <div className={workspaceStyles.paletteHeading}><span>{workspaceCopy.palette}</span><button type="button" aria-label={workspaceCopy.close} onClick={()=>setAddMenuOpen(false)}>×</button></div>
-            {(runtime?.allowedNodeTypes ?? NODE_TYPES).map(type=>{const Icon=NODE_ICON[type];return <button key={type} type="button" className={workspaceStyles.paletteItem} onClick={()=>addNode(type)}>
+          {addMenuOpen && <div id="workflow-node-menu" className={workspaceStyles.palette} onKeyDown={event=>{if(event.key==='Escape') {closePalette();event.stopPropagation();}}}>
+            <div className={workspaceStyles.paletteHeading}><span>{business ? workspaceCopy.add : workspaceCopy.palette}</span><button type="button" aria-label={workspaceCopy.close} onClick={closePalette}>×</button></div>
+            {(runtime?.allowedNodeTypes ?? NODE_TYPES).map((type, index)=>{const Icon=NODE_ICON[type];return <button key={type} type="button" autoFocus={business && index === 0} className={workspaceStyles.paletteItem} onClick={()=>{addNode(type); if (business) addMenuButton.current?.focus();}}>
               <Icon className="h-4 w-4 shrink-0 text-[#b4b4b4]"/><span><strong>{tr(NODE_SPECS[type].label)}</strong><small>{tr(NODE_SPECS[type].hint)}</small></span>
             </button>;})}
           </div>}
         </div>
         <div className={workspaceStyles.actions}>
-          <button type="button" onClick={exportDraft} className={workspaceStyles.quiet}>{tr("匯出草稿")}</button>
-          <details className={workspaceStyles.more}><summary aria-label={workspaceCopy.more}>⋯</summary><div><button type="button" onClick={exportDraft}>{tr("匯出草稿")}</button></div></details>
-          <button type="button" onClick={save} disabled={saving || runningAll} className={workspaceStyles.button}>{tr("儲存")}</button>
-          <button type="button" onClick={runAll} disabled={runningAll || saving || graph.nodes.length===0} className={workspaceStyles.primary}>
-            <IconPlay className="h-3.5 w-3.5"/>{runningAll ? tr("執行中…") : tr("全部執行")}
+          {!business && <button type="button" onClick={exportDraft} className={workspaceStyles.quiet}>{tr("匯出草稿")}</button>}
+          <details className={workspaceStyles.more}><summary aria-label={workspaceCopy.more}>⋯</summary><div><button type="button" onClick={event => {
+            const menu = event.currentTarget.closest("details");
+            if (menu) { menu.open = false; menu.querySelector("summary")?.focus(); }
+            exportDraft();
+          }}>{tr("匯出草稿")}</button></div></details>
+          {!business && <button type="button" onClick={save} disabled={saving || runningAll} className={workspaceStyles.button}>{tr("儲存")}</button>}
+          <button type="button" onClick={runAll} disabled={runningAll || saving || graph.nodes.length===0} className={business ? workspaceStyles.button : workspaceStyles.primary}>
+            <IconPlay className="h-3.5 w-3.5"/>{business ? workspaceCopy.run : runningAll ? tr("執行中…") : tr("全部執行")}
           </button>
+          {business && <button type="button" onClick={save} disabled={saving || runningAll} aria-keyshortcuts="Control+S Meta+S" className={`${workspaceStyles.primary} ${workspaceStyles.saveButton}`}>{tr("儲存")}</button>}
         </div>
       </div>
+
+      {leaveHref && <dialog ref={leaveDialog} className={workspaceStyles.leaveDialog} aria-labelledby="workflow-leave-heading"
+        onCancel={event => { event.preventDefault(); closeLeave(); }}>
+        <h2 id="workflow-leave-heading">{workspaceCopy.leaveTitle}</h2>
+        {(dirty || runningAll) && <p>{runningAll ? workspaceCopy.leaveRunning : workspaceCopy.leaveChanges}</p>}
+        {saving && <p role="status">{tr("儲存中…")}</p>}
+        {saveError && !saving && <div className={workspaceStyles.leaveError}><p role="alert">{saveError}</p><button type="button" className={workspaceStyles.quiet} onClick={exportDraft}>{tr("匯出草稿")}</button></div>}
+        <div className={workspaceStyles.leaveActions}>
+          <button type="button" className={workspaceStyles.button} autoFocus onClick={closeLeave}>{workspaceCopy.keepEditing}</button>
+          <button type="button" className={workspaceStyles.quiet} disabled={saving} onClick={() => exitWorkflow(leaveHref)}>{dirty ? workspaceCopy.discard : workspaceCopy.leave}</button>
+          {dirty && !runningAll && <button type="button" className={workspaceStyles.primary} disabled={saving} onClick={() => void saveAndLeave(leaveHref)}>{workspaceCopy.saveAndLeave}</button>}
+        </div>
+      </dialog>}
 
       {runtime ? <div className={workspaceStyles.billing}>{runtime.billingNotice}</div> : <div className={workspaceStyles.billing}>
         <button type="button" onClick={() => setCostDetails(v => !v)} aria-expanded={costDetails} className="text-left">
@@ -538,7 +631,8 @@ export default function CanvasEditor({
       </div>
 
       }
-      {saveError && <p role="alert" className="shrink-0 bg-[#301919] px-4 py-2 text-sm text-red-200">{saveError}</p>}
+      {saveError && !leaveHref && <div className={workspaceStyles.saveError}><p role="alert">{saveError}</p>{business && <button type="button" className={workspaceStyles.quiet} onClick={exportDraft}>{tr("匯出草稿")}</button>}</div>}
+      {runError && <p role="alert" className="shrink-0 bg-[#301919] px-4 py-2 text-sm text-red-200">{runError}</p>}
       {runtime?.showDirector !== false && view === "director" && <DirectorBoard graph={graph} selectedId={selectedNode} onSelect={setSelectedNode} onChange={updateNodeData} onAdd={addShot}
         onStoryChange={text=>mutate(g=>{const story=g.nodes.find(n=>n.type==='text'&&n.data.directorStory===true);if(story)return {...g,nodes:g.nodes.map(n=>n.id===story.id?{...n,data:{...n.data,text}}:n)};if(g.nodes.length>=200)return g;return {...g,nodes:[...g.nodes,{id:newId('story'),type:'text',x:0,y:-300,data:{text,directorStory:true}}]};})}
         onStorySplit={()=>{const g=graphRef.current;const parts=storyParagraphs(String(g.nodes.find(n=>n.data.directorStory===true)?.data.text??''));if(!parts.length||g.nodes.length+parts.length>200)return;if(!confirm(tr("將新增 {n} 個分鏡，各段文字會成為分鏡敘事。只建立草稿，不扣點。是否繼續？", {n:parts.length})))return;const offset=orderedShots(g).length;const added:CanvasNode[]=parts.map((prompt,i)=>({id:newId('shot'),type:'video',x:(i+offset)*300,y:360,data:{...defaultNodeData('video'),prompt,shotTitle:tr("分鏡 {n}", {n:offset+i+1}),shotOrder:offset+i},status:'idle'}));mutate(current=>({...current,nodes:[...current.nodes,...added]}));setSelectedNode(added[0].id);}}
@@ -656,7 +750,12 @@ export default function CanvasEditor({
           <button type="button" aria-label={tr("放大畫布")} onClick={()=>zoomAtCenter(1.2)}>＋</button>
           <button type="button" aria-label={tr("檢視全貌")} onClick={fitCanvas}>{workspaceCopy.overview}</button>
         </div>
-        {graph.nodes.length===0 && <div className={workspaceStyles.empty}><div><h2>{workspaceCopy.emptyTitle}</h2><p>{workspaceCopy.emptyBody}</p></div></div>}
+        {graph.nodes.length===0 && <div className={workspaceStyles.empty}><div>
+          <h2>{business ? workspaceCopy.blankCanvas : workspaceCopy.emptyTitle}</h2>
+          {business
+            ? <button type="button" className={workspaceStyles.button} onClick={() => setAddMenuOpen(true)}>{workspaceCopy.add}</button>
+            : <p>{workspaceCopy.emptyBody}</p>}
+        </div></div>}
       </div>
 
       {!runtime && runConfirmation !== null && <CanvasRunConfirmation message={runConfirmation} onDecision={settleRunConfirmation} />}

@@ -79,6 +79,61 @@
 .field::placeholder { color: var(--work-faint); }
 .nodeBody :is(label,p,small) { font-size: 12px; line-height: 20px; }
 .nodeBody :is(input,select,textarea) { min-width: 0; }
+.business .toolbar {
+  position: relative;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--work-rule);
+}
+.business .back { width: 44px; height: 44px; }
+.business .project { display: grid; justify-items: start; gap: 2px; min-width: 0; }
+.business .projectName {
+  min-height: 32px;
+  max-width: 32rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 8px;
+  text-overflow: ellipsis;
+  font-size: 17px;
+  font-weight: 650;
+}
+.business .projectName:hover:not(:disabled) { border-color: #494949; background: #191919; }
+.business .projectName:focus { background: #191919; }
+.business .projectName[aria-invalid=true] { border-color: #db9992; }
+.business .saveState { display: block; padding-inline: 9px; color: #bbb; line-height: 18px; }
+.business[data-save-state=failed] .saveState { color: #fac0b9; }
+.business .actions { flex-wrap: nowrap; gap: 6px; margin-left: 0; }
+.business .more { display: block; }
+.business .more summary { width: 44px; }
+.business .more summary:focus-visible { outline: 2px solid #d0e8df; outline-offset: 2px; }
+.business .button, .business .primary, .business .quiet { min-height: 44px; font-size: 13px; }
+.business .saveButton { min-width: 80px; }
+.business .billing { background: #101010; padding-block: 5px; }
+.saveError { flex-shrink: 0; padding: 8px 20px; color: #ffccc7; background: #301919; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.business .saveError { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
+.business .saveError .quiet { color: inherit; padding: 4px 0; text-decoration: underline; text-underline-offset: 4px; }
+.business .empty button { pointer-events: auto; border: 1px solid #424242; }
+.leaveDialog {
+  width: min(450px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: auto;
+  padding: 22px;
+  color: var(--work-ink);
+  background: #191919;
+  border: 1px solid #444;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px #0008; /* Floating dialog */
+}
+.leaveDialog::backdrop { background: #000b; }
+.leaveDialog h2 { margin: 0 0 12px; font-size: 20px; font-weight: 650; line-height: 1.45; }
+.leaveDialog p { margin: 0 0 12px; color: var(--work-muted); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.leaveError p { color: #ffccc7; }
+.leaveError button { text-decoration: underline; text-underline-offset: 4px; }
+.leaveActions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 16px; }
 @media (max-width: 900px) {
   .toolbar { gap: 8px; padding: 10px 12px; }
   .identity { flex-basis: calc(100% - 90px); }
@@ -110,6 +165,14 @@
   .nodeHeader { height: 48px; }
   .nodeBody :is(input,textarea,select) { font-size: 16px; }
   .empty { padding: 24px; }
+  .business .toolbar { grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px; padding: 6px 12px 8px; }
+  .business .projectName { font-size: 16px; }
+  .business .actions { justify-self: end; gap: 4px; }
+  .business .saveButton { min-width: 66px; }
+  .business .billing { padding-block: 4px; }
+  .business .saveError { padding: 6px 12px; }
+  .leaveDialog { padding: 18px; }
+  .leaveActions { flex-direction: column; align-items: stretch; }
 }
 @media (prefers-reduced-motion: reduce) { .workspace :is(button,a) { transition: none; } }
 @media (max-width: 360px) { .addLabel { display: none; } .paletteWrap > button { min-width: 44px; } }

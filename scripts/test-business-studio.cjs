@@ -289,10 +289,9 @@ const { businessOperationsCopy } = load('lib/i18n/businessOperations.ts');
 const { businessWorkflowsCopy } = load('lib/i18n/businessWorkflows.ts');
 let navLocale='en';
 let currentSearch = '';
-let detailsRef = { current: { open: true } };
 const icons = Object.fromEntries(['IconImage', 'IconVideo', 'IconChat', 'IconHistory', 'IconWing', 'IconAssets', 'IconApps', 'IconCanvas'].map(name => [name, function fixtureIcon() {}]));
 const { default: BusinessStudioNav } = load('components/business/BusinessStudioNav.tsx', {
-  react: { useId: () => 'fixture-search', useState: () => [currentSearch, value => { currentSearch = value; }], useRef: () => detailsRef },
+  react: { useId: () => 'fixture-search', useState: () => [currentSearch, value => { currentSearch = value; }] },
   'react/jsx-runtime': jsxRuntime,
   'next/link': function fixtureLink() {},
   '@/components/Icons': icons,
@@ -326,14 +325,13 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
   for (const [key, value] of Object.entries(props.copy)) assert.ok(typeof value === 'string' && value.trim(), `${locale} copy ${key} exists`);
   const tree = BusinessStudioNav(props);
   for (const [kind, title] of [['image', 'imageTitle'], ['video', 'videoTitle'], ['text', 'textTitle']]) {
-    currentSearch = 'stale filter'; detailsRef.current.open = true; events.length = 0;
+    currentSearch = 'stale filter'; events.length = 0;
     const button = buttonFor(tree, props.copy[title]);
     assert.ok(button && !button.props.disabled, `${locale} ${kind} has an enabled native button`);
     assert.equal(button.props['aria-pressed'], kind === 'video');
     button.props.onClick();
     assert.deepEqual(events, [['kind', kind]], 'Choosing a studio emits one navigation, avoiding duplicate router history entries');
     assert.equal(currentSearch, '', 'Choosing another modality clears the old model search');
-    assert.equal(detailsRef.current.open, false, 'Choosing another modality closes the mobile model menu');
   }
   for (const [label, tab] of [[businessWorkflowsCopy(locale).nav,'workflows'],[businessOperationsCopy(locale).keys,'key'],[businessOperationsCopy(locale).work,'history'],[businessOperationsCopy(locale).assets,'assets'],[businessOperationsCopy(locale).usage,'usage'],[businessOperationsCopy(locale).models,'models']]) {
     events.length = 0;
@@ -350,21 +348,19 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
   const { props, events } = navProps();
   let tree = BusinessStudioNav(props);
   const modelButtons = flatten(tree).filter(node => node.type === 'button' && node.props.title === 'MiniMax H3');
-  assert.equal(modelButtons.length, 2, 'Both desktop and mobile model lists show the same account model');
+  assert.equal(modelButtons.length, 1, 'The sidebar does not duplicate the model browser on phones');
   for (const button of modelButtons) {
-    events.length = 0; detailsRef.current.open = true;
+    events.length = 0;
     button.props.onClick();
     assert.deepEqual(events, [['model', 'minimax-h3']], 'A model selection triggers exactly one account-scoped choice');
-    assert.equal(detailsRef.current.open, false, 'Selecting a model collapses mobile details');
   }
   const inputs = flatten(tree).filter(node => node.type === 'input' && node.props.type === 'search');
-  assert.equal(inputs.length, 2);
-  assert.notEqual(inputs[0].props.id, inputs[1].props.id, 'Responsive search controls have separate accessible IDs');
+  assert.equal(inputs.length, 1);
   inputs[0].props.onChange({ target: { value: '  KLING  ' } });
   tree = BusinessStudioNav(props);
   assert.equal(flatten(tree).filter(node => node.type === 'button' && node.props.title === 'MiniMax H3').length, 0, 'Search filters actual account models');
-  assert.equal(flatten(tree).filter(node => node.type === 'button' && node.props.title === 'Kling 3.0').length, 2, 'Search is case-insensitive and trims whitespace');
-  inputs[1].props.onChange({ target: { value: 'no-match' } });
+  assert.equal(flatten(tree).filter(node => node.type === 'button' && node.props.title === 'Kling 3.0').length, 1, 'Search is case-insensitive and trims whitespace');
+  inputs[0].props.onChange({ target: { value: 'no-match' } });
   assert.ok(flatten(BusinessStudioNav(props)).includes(props.copy.noResults), 'An empty search has useful feedback');
   currentSearch = '';
   assert.ok(!flatten(BusinessStudioNav({ ...props, kind: 'text' })).some(node => node.props?.title === 'MiniMax H3'), 'Switching modality cannot leak a video model into the text list');

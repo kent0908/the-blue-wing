@@ -36,33 +36,42 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   const [stage,setStage]=useState<"uploading"|"registering">("uploading");
   const [fileName,setFileName]=useState("");
   const [error,setError]=useState("");
+  const [catalogError,setCatalogError]=useState("");
+  const [configError,setConfigError]=useState("");
   const [notice,setNotice]=useState("");
   const [query,setQuery]=useState("");
+  const [appliedQuery,setAppliedQuery]=useState("");
   const [type,setType]=useState(imageOnly?"image":"all");
   const [status,setStatus]=useState("all");
   const [page,setPage]=useState(0);
-  const [total,setTotal]=useState(0);
   const [totalPages,setTotalPages]=useState(0);
   const [refreshingId,setRefreshingId]=useState("");
   const input=useRef<HTMLInputElement|null>(null);
   const activeRequest=useRef<AbortController|null>(null);
+  const configRequest=useRef<AbortController|null>(null);
   const committed=useRef<Filters>({type:imageOnly?"image":"all",status:"all",name:""});
   const uploadLock=useRef(false);
+  const fileRequests=useRef(new WeakMap<File,string>());
   const alive=useRef(true);
-  useEffect(()=>{alive.current=true;return()=>{alive.current=false;activeRequest.current?.abort();};},[]);
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;activeRequest.current?.abort();configRequest.current?.abort();};},[]);
 
   const loadConfig=useCallback(async()=>{
+    configRequest.current?.abort();
+    const controller=new AbortController();
+    configRequest.current=controller;
     try{
-      const response=await fetch("/api/business/provider-assets/upload",{cache:"no-store"});
+      const response=await fetch("/api/business/provider-assets/upload",{cache:"no-store",signal:controller.signal});
       const body=await response.json().catch(()=>null);
-      if(!alive.current)return;
-      if(!response.ok){setError(body?.error?.code??"business_asset_storage_unavailable");return;}
+      if(!alive.current||controller.signal.aborted)return;
+      if(!response.ok||!body?.types){setConfig(null);setConfigError(body?.error?.code??"business_asset_storage_unavailable");return;}
+      setConfigError("");
       setConfig(body);setUploads(body.uploads??[]);
-    }catch{if(alive.current)setError("business_asset_storage_unavailable");}
+    }catch{if(alive.current&&!controller.signal.aborted){setConfig(null);setConfigError("business_asset_storage_unavailable");}}
   },[]);
   const loadCatalog=useCallback(async(nextPage=1,filters=committed.current)=>{
     activeRequest.current?.abort();const controller=new AbortController();activeRequest.current=controller;
-    setLoading(true);if(nextPage===1)committed.current=filters;
+    setLoading(true);setCatalogError("");
+    if(nextPage===1){committed.current=filters;setAppliedQuery(filters.name.trim());}
     const params=new URLSearchParams({page:String(nextPage),pageSize:"30",status:filters.status});
     if(filters.type!=="all")params.set("assetType",filters.type);
     if(filters.name.trim())params.set("name",filters.name.trim());
@@ -70,30 +79,31 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
       const response=await fetch(`/api/business/provider-assets?${params}`,{cache:"no-store",signal:controller.signal});
       const body=await response.json().catch(()=>null);
       if(controller.signal.aborted||!alive.current)return;
-      if(!response.ok||body?.needsKey){setError(body?.needsKey?"credential_required":body?.error?.code??"business_asset_unavailable");return;}
+      if(!response.ok||body?.needsKey){setCatalogError(body?.needsKey?"credential_required":body?.error?.code??"business_asset_unavailable");return;}
       if(!Array.isArray(body?.assets)||!body.pagination)throw new Error("invalid_asset_list");
       const values=body.assets as BusinessAssetRecord[];
       setCatalog(previous=>Array.from(new Map((nextPage===1?values:[...previous,...values]).map(asset=>[asset.id,asset])).values()));
-      setPage(nextPage);setTotal(body.pagination.total);setTotalPages(body.pagination.totalPages);
-    }catch{if(!controller.signal.aborted&&alive.current)setError("business_asset_unavailable");}
+      setPage(nextPage);setTotalPages(body.pagination.totalPages);
+    }catch{if(!controller.signal.aborted&&alive.current)setCatalogError("business_asset_unavailable");}
     finally{if(!controller.signal.aborted&&alive.current)setLoading(false);}
   },[]);
   useEffect(()=>{
     let active=true;
     void Promise.resolve().then(()=>{
       if(!active)return;
-      void loadConfig().catch(()=>{if(alive.current)setError("business_asset_storage_unavailable");});
+      void loadConfig();
       void loadCatalog();
     });
     return()=>{active=false;};
   },[loadConfig,loadCatalog]);
 
   function queueFiles(values:File[]){
+    if(uploadLock.current||!config?.directUpload||!values.length)return;
     if(values.length>6){setError("too_many_files");return;}
     const normalized=values.map(typedFile);
     if(normalized.some(file=>!config?.types[file.type]||file.size<=0||file.size>config.types[file.type].maxBytes)){setError("business_asset_upload_invalid");return;}
     if(imageOnly&&normalized.some(file=>!file.type.startsWith("image/"))){setError("business_asset_upload_invalid");return;}
-    setFiles(normalized);setError("");setNotice("");
+    setFiles(normalized);setConsent(false);setError("");setNotice("");
   }
   function rememberUpload(value:UploadRecord){setUploads(previous=>[value,...previous.filter(item=>item.id!==value.id)].slice(0,60));}
   async function apiUpload(body:Record<string,unknown>){
@@ -105,28 +115,39 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   async function uploadFiles(){
     if(uploadLock.current||!files.length||!consent||!config?.directUpload)return;
     uploadLock.current=true;setUploading(true);setError("");setNotice("");
-    let uncertain=false;
+    let started=0;
+    let interrupted=false;
     try{
       for(const file of files){
+        if(!alive.current)break;
         setFileName(file.name);setProgress(0);setStage("uploading");
-        const initialized=await apiUpload({action:"initialize",clientRequestId:crypto.randomUUID(),name:file.name.slice(0,120),contentType:file.type,size:file.size});
-        rememberUpload(initialized.upload);
+        const clientRequestId=fileRequests.current.get(file)??crypto.randomUUID();
+        fileRequests.current.set(file,clientRequestId);
+        const initialized=await apiUpload({action:"initialize",clientRequestId,name:file.name.slice(0,120),contentType:file.type,size:file.size});
+        started++;
+        if(alive.current)rememberUpload(initialized.upload);
         await upload(initialized.pathname,file,{access:"private",handleUploadUrl:"/api/business/provider-assets/upload",contentType:file.type,multipart:file.size>8*1024*1024,clientPayload:JSON.stringify({uploadId:initialized.upload.id}),onUploadProgress:event=>{if(alive.current)setProgress(event.percentage);}});
-        setStage("registering");
+        if(alive.current)setStage("registering");
         const completed=await apiUpload({action:"complete",uploadId:initialized.upload.id});
+        if(!alive.current)break;
         rememberUpload(completed.upload);
-        if(completed.upload.status==="unknown"||completed.upload.status==="registering"){setError("business_asset_upload_uncertain");uncertain=true;break;}
-        if(completed.upload.status==="failed"){setError(completed.upload.errorCode??"business_asset_upload_rejected");uncertain=true;break;}
+        if(["created","unknown","registering"].includes(completed.upload.status)){setError("business_asset_upload_uncertain");interrupted=true;break;}
+        if(completed.upload.status==="failed"){setError(completed.upload.errorCode??"business_asset_upload_rejected");interrupted=true;break;}
       }
-      setFiles([]);if(input.current)input.current.value="";
-      if(!uncertain)setNotice(t.uploadFinished);
-      void loadCatalog(1,committed.current);onChanged?.();
-    }catch(error){setError(error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)?error.message:"business_asset_upload_uncertain");}
-    finally{uploadLock.current=false;if(alive.current){setUploading(false);setFileName("");}}
+      if(alive.current&&!interrupted)setNotice(t.uploadFinished);
+    }catch(error){if(alive.current)setError(error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)?error.message:"business_asset_upload_uncertain");}
+    finally{
+      uploadLock.current=false;
+      if(alive.current){
+        // A file with a recorded upload has its own recovery path. Leave only untouched files queued.
+        if(started){setFiles(files.slice(started));setConsent(false);void loadCatalog(1,committed.current);onChanged?.();}
+        setUploading(false);setFileName("");
+      }
+    }
   }
   async function recoverUpload(item:UploadRecord){
-    if(refreshingId)return;setRefreshingId(item.id);setError("");
-    try{const value=await apiUpload({action:"complete",uploadId:item.id});rememberUpload(value.upload);if(value.upload.status==="unknown"||value.upload.status==="registering")setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");onChanged?.();}
+    if(refreshingId)return;setRefreshingId(item.id);setError("");setNotice("");
+    try{const value=await apiUpload({action:"complete",uploadId:item.id});rememberUpload(value.upload);if(["created","unknown","registering"].includes(value.upload.status))setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");else{setNotice(t.uploadFinished);void loadCatalog(1,committed.current);}onChanged?.();}
     catch(error){setError(error instanceof Error?error.message:"business_asset_upload_uncertain");}
     finally{setRefreshingId("");}
   }
@@ -146,50 +167,54 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     const original=uploads.find(item=>item.asset?.id===asset.id);
     return {...asset,providerReady:asset.status==="active",...(original?{uploadId:original.id,storageReady:original.storageReady}:{})};
   }),...uploads.filter(item=>item.storageReady&&(!item.asset||!known.has(item.asset.id))).map(item=>({id:`upload:${item.id}`,name:item.name,type:item.type,status:item.status,uploadId:item.id,storageReady:true,providerReady:false}))]
-    .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||imageOnly&&asset.storageReady&&status==="active")&&(!query.trim()||asset.name.toLowerCase().includes(query.toLowerCase())));
+    .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||imageOnly&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
   const statusText=(value:string)=>value==="active"?t.active:value==="processing"||value==="registering"?t.processing:value==="created"?t.created:value==="unknown"?t.unknown:t.failed;
   const accept=Object.keys(config?.types??{}).filter(mime=>!imageOnly||mime.startsWith("image/")).join(",");
   const pendingUploads=uploads.filter(item=>["created","registering","unknown"].includes(item.status));
 
   return <section className={`${styles.assets} ${compact?styles.compact:""}`} aria-label={t.title}>
-    {!compact&&<header className={styles.heading}><p>{t.eyebrow}</p><h2>{t.title}</h2><div>{t.description}</div></header>}
-    <details className={styles.uploadPanel} open={compact?undefined:true}>
-      <summary>{t.upload}<span aria-hidden="true">＋</span></summary>
-      <div className={styles.uploadBody}>
-        <div className={styles.drop} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();if(!uploading)queueFiles(Array.from(event.dataTransfer.files));}}>
-          <AssetIcon type="image"/><p>{t.drop}</p><label className={styles.choose}>{t.choose}<input ref={input} type="file" multiple accept={accept} disabled={uploading||!config?.directUpload} onChange={event=>queueFiles(Array.from(event.target.files??[]))}/></label>
-        </div>
-        <p className={styles.note}>{t.limits}<br/>{t.formats}</p>
-        {config&&!config.directUpload&&<p className={styles.warning}>{t.storageUnavailable}</p>}
-        {!!files.length&&<><ul className={styles.queue}>{files.map((file,index)=><li key={`${file.name}-${index}`}><span>{file.name}<small>{(file.size/1024/1024).toFixed(2)} MB</small></span><button type="button" disabled={uploading} aria-label={`${t.removeFile} ${file.name}`} onClick={()=>setFiles(values=>values.filter((_,i)=>i!==index))}>×</button></li>)}</ul><label className={styles.consent}><input type="checkbox" checked={consent} onChange={event=>setConsent(event.target.checked)}/>{t.consent}</label><button type="button" className={styles.primary} disabled={uploading||!consent||!config?.directUpload} onClick={()=>{void uploadFiles();}}>{uploading?t[stage]:t.uploadSelected} <span aria-hidden="true">↗</span></button></>}
-        {uploading&&<div className={styles.uploadProgress} role="status"><span>{fileName}</span><progress aria-label={t.progress} max={100} value={stage==="registering"?100:progress}/></div>}
-        <p className={styles.note}>{t.privacy}<br/>{t.noGeneration}</p>
+    <div className={styles.uploadPanel} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();queueFiles(Array.from(event.dataTransfer.files));}}>
+      <div className={styles.uploadToolbar}>
+        <div><strong>{t.upload}</strong><p className={styles.note}>{imageOnly?t.imageLimits:t.limits}</p></div>
+        <input ref={input} type="file" hidden multiple accept={accept} disabled={uploading||!config?.directUpload} onChange={event=>{queueFiles(Array.from(event.target.files??[]));event.target.value="";}}/>
+        <button type="button" className={files.length?styles.small:styles.primary} disabled={uploading||!config?.directUpload} onClick={()=>input.current?.click()}>{!config&&!configError?t.loading:files.length?t.replaceFiles:t.choose}</button>
       </div>
-    </details>
+      {(configError||config&&!config.directUpload)&&<p className={styles.warning} role="alert">{configError?businessAssetsError(t,configError):t.storageUnavailable} <button type="button" className={styles.textButton} onClick={()=>void loadConfig()}>{t.refresh}</button></p>}
+      {!!files.length&&<>
+        <ul className={styles.queue} aria-label={t.queued}>{files.map((file,index)=><li key={`${file.name}-${index}`}>
+          <span>{file.name}<small>{(file.size/1024/1024).toFixed(2)} MB</small></span>
+          <button type="button" disabled={uploading} aria-label={`${t.removeFile} ${file.name}`} onClick={()=>setFiles(values=>values.filter((_,i)=>i!==index))}>×</button>
+        </li>)}</ul>
+        <label className={styles.consent}><input type="checkbox" checked={consent} disabled={uploading} onChange={event=>setConsent(event.target.checked)}/>{t.consent}</label>
+        <button type="button" className={styles.primary} disabled={uploading||!consent||!config?.directUpload} onClick={()=>void uploadFiles()}>{uploading?t[stage]:interpolate(t.uploadSelected,{n:files.length})}</button>
+      </>}
+      {uploading&&<div className={styles.uploadProgress} role="status"><span>{fileName}</span><progress aria-label={t.progress} max={100} value={stage==="registering"?100:progress}/></div>}
+      <details className={styles.help}><summary>{t.uploadHelp}</summary><p>{imageOnly?t.imageFormats:t.formats} {t.noGeneration}</p><p>{t.providerNotice}</p></details>
+    </div>
     {error&&<p className={styles.error} role="alert">{error==="too_many_files"?t.tooMany:businessAssetsError(t,error)}{error==="credential_required"&&<> <a href="/business?tab=key">{t.keyLink} ↗</a></>}</p>}
     {notice&&<p className={styles.success} role="status">{notice}</p>}
-    {!!pendingUploads.length&&<details className={styles.recent}><summary>{t.pendingTitle} · {pendingUploads.length}</summary><p className={styles.note}>{t.recoverable}</p><ul>{pendingUploads.map(item=><li key={item.id}><span>{item.name}<small>{statusText(item.status)}</small></span><button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>{void recoverUpload(item);}}>{t.recover}</button></li>)}</ul></details>}
+    {!!pendingUploads.length&&<details className={styles.recent}><summary>{t.pendingTitle} · {pendingUploads.length}</summary><ul>{pendingUploads.map(item=><li key={item.id}><span>{item.name}<small>{statusText(item.status)}</small></span><button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>void recoverUpload(item)}>{refreshingId===item.id?t.loading:t.recover}</button></li>)}</ul></details>}
     <div className={styles.libraryHeader}>
       <div className={styles.types} role="group" aria-label={t.source}>{(imageOnly?["image"]:["all","image","video","audio"]).map(value=><button type="button" key={value} aria-pressed={type===value} onClick={()=>{setType(value);void loadCatalog(1,{type:value,status,name:query});}}>{t[value as "all"|"image"|"video"|"audio"]}</button>)}</div>
-      <button type="button" className={styles.small} disabled={loading} onClick={()=>{void loadConfig();void loadCatalog(1,{type,status,name:query});}}>{loading?t.loading:t.refresh}</button>
+      <button type="button" className={styles.textButton} disabled={loading||uploading||!!refreshingId} onClick={()=>{void loadConfig();void loadCatalog();}}>{loading?t.loading:t.refresh}</button>
     </div>
-    <div className={styles.searchRow}><input type="search" maxLength={120} aria-label={t.search} placeholder={t.search} value={query} onChange={event=>setQuery(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void loadCatalog(1,{type,status,name:query});}}}/><button type="button" className={styles.small} disabled={loading} onClick={()=>{void loadCatalog(1,{type,status,name:query});}}>{t.searchButton}</button><label><span className={styles.srOnly}>{t.status}</span><select aria-label={t.status} value={status} onChange={event=>{setStatus(event.target.value);void loadCatalog(1,{type,status:event.target.value,name:query});}}><option value="all">{t.allStatus}</option><option value="active">{t.active}</option><option value="processing">{t.processing}</option><option value="failed">{t.failed}</option></select></label></div>
-    {!material.length&&!loading?<div className={styles.empty}><AssetIcon type="image"/><h3>{query?t.noResults:t.empty}</h3><p>{t.emptyDescription}</p></div>:<div className={styles.grid}>{material.map(asset=>{
+    <form className={styles.searchRow} role="search" aria-label={t.search} onSubmit={event=>{event.preventDefault();void loadCatalog(1,{type,status,name:query});}}><input type="search" maxLength={120} aria-label={t.search} placeholder={t.search} value={query} onChange={event=>setQuery(event.target.value)}/><button type="submit" className={styles.small} disabled={loading}>{t.searchButton}</button><select aria-label={t.status} value={status} onChange={event=>{setStatus(event.target.value);void loadCatalog(1,{type,status:event.target.value,name:query});}}><option value="all">{t.allStatus}</option><option value="active">{t.active}</option><option value="processing">{t.processing}</option><option value="failed">{t.failed}</option></select></form>
+    {catalogError&&<p className={styles.error} role="alert">{businessAssetsError(t,catalogError)}{catalogError==="credential_required"&&<> <a href="/business?tab=key">{t.keyLink} ↗</a></>}</p>}
+    {!material.length&&!loading&&!catalogError?<div className={styles.empty}><h3>{appliedQuery||status!=="all"||type!=="all"&&!imageOnly?t.noResults:t.empty}</h3></div>:<div className={styles.grid} aria-busy={loading}>{material.map(asset=>{
       const selected=selectedIds.includes(asset.id)||!!asset.uploadId&&selectedIds.includes(asset.uploadId);
       const available=imageOnly?asset.type==="image"&&!!asset.uploadId&&!!asset.storageReady:!!asset.providerReady;
       const disabled=!selected&&(!available||canSelect?.(asset)===false);
       const disabledReason=imageOnly&&!asset.uploadId?t.nativeRequired:!available?t.readyOnly:t.capacity;
       return <article className={styles.card} key={asset.id} data-selected={selected}>
-        <div className={styles.thumbnail}>{asset.type==="image"&&asset.uploadId&&asset.storageReady?<Image src={`/api/business/provider-assets/uploads/${asset.uploadId}/preview`} alt={asset.name} width={640} height={420} loading="lazy" unoptimized/>:<AssetIcon type={asset.type}/>}<span className={styles.mediaType}>{t[asset.type]}</span></div>
+        <div className={styles.thumbnail}>{asset.type==="image"&&asset.uploadId&&asset.storageReady?<Image src={`/api/business/provider-assets/uploads/${asset.uploadId}/preview`} alt="" width={640} height={420} loading="lazy" unoptimized/>:<AssetIcon type={asset.type}/>}<span className={styles.mediaType}>{t[asset.type]}</span></div>
         <div className={styles.cardBody}><h3 title={asset.name}>{asset.name}</h3><p className={styles.assetStatus} data-status={asset.storageReady&&imageOnly?"active":asset.status}>{asset.storageReady&&imageOnly?t.privateReady:statusText(asset.status)}</p><small>{asset.uploadId?t.native:t.provider}</small>
         {onSelect&&<button type="button" className={styles.selectButton} disabled={disabled} aria-pressed={selected} title={disabled?disabledReason:asset.name} onClick={()=>onSelect(asset)}>{selected?t.selected:imageOnly&&asset.storageReady?t.original:t.select}<span aria-hidden="true">{selected?"✓":"＋"}</span></button>}
-        {!asset.id.startsWith("upload:")&&<button type="button" className={styles.refreshOne} disabled={!!refreshingId} onClick={()=>{void refreshAsset(asset);}}>{t.refreshOne} ↻</button>}
+        {!asset.id.startsWith("upload:")&&asset.status!=="active"&&<button type="button" className={styles.textButton} disabled={!!refreshingId||uploading} onClick={()=>void refreshAsset(asset)}>{refreshingId===asset.id?t.loading:t.refreshOne}</button>}
         {onSelect&&disabled&&<p className={styles.disabledReason}>{disabledReason}</p>}
         {asset.storageReady&&!asset.providerReady&&!imageOnly&&<p className={styles.disabledReason}>{t.storageOnly}</p>}
         </div>
       </article>;
     })}</div>}
-    <div className={styles.footer}><p className={styles.note}>{interpolate(t.count,{count:material.length,total:Math.max(total,material.length)})}</p>{page<totalPages&&<button type="button" className={styles.small} disabled={loading} onClick={()=>{void loadCatalog(page+1);}}>{loading?t.loading:t.more}</button>}</div>
-    <p className={styles.note}>{imageOnly?t.imageOnly:t.readyOnly}<br/>{t.providerNotice}<br/>{t.metadataNotice}</p>
+    {(material.length>0||page<totalPages&&!catalogError)&&<div className={styles.footer}><p className={styles.note} role="status">{interpolate(t.count,{count:material.length})}</p>{page<totalPages&&!catalogError&&<button type="button" className={styles.small} disabled={loading} onClick={()=>void loadCatalog(page+1)}>{loading?t.loading:t.more}</button>}</div>}
   </section>;
 }

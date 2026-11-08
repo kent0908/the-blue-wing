@@ -61,23 +61,23 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
   return <section className={styles.stage} aria-label={c.results}>
     <header className={styles.header}><h2>{c.results}</h2><span>{title}</span></header>
     {hasOutput ? media() : <div className={styles.empty} role={pending ? "status" : undefined}>
-      <span className={pending ? styles.spinner : styles.mark} aria-hidden="true">{pending ? "" : job?.status === "failed" ? "!" : "✧"}</span>
+      {pending && <span className={styles.spinner} aria-hidden="true" />}
       <h3>{job ? business[job.status] : copy.previewEmpty}</h3>
       <p>{job?.status === "failed" ? businessError(business, job.errorCode ?? "generation_failed") : job?.status === "unknown" || job?.status === "submitting" ? c.unknown : pending ? c.pending : job ? c.emptyOutput : copy.previewEmptyText}</p>
     </div>}
     {thumbnails}
     {job && <div className={styles.info}><span className={styles.badge} data-status={job.status}>{business[job.status]}</span>{job.nsfw && <span className={styles.badge}>{business.nsfw}</span>}<time dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString(locale)}</time></div>}
-    <div className={styles.actions}>
+    {(job || url) && <div className={styles.actions}>
       {job && onReuse && <button type="button" className={`${styles.button} ${styles.primary}`} onClick={() => onReuse(job)}>{c.reuse} ↗</button>}
       {hasOutput && !inDialog && <button type="button" className={styles.button} onClick={open}>{c.expand}</button>}
       {url && <a href={downloadUrl} download target="_blank" rel="noreferrer">{business.download} ↓</a>}
       {job && <button type="button" className={styles.button} onClick={copyPrompt}>{c.copy}</button>}
       {(pending || job && !hasOutput) && <button type="button" className={styles.button} onClick={onRefresh} disabled={refreshing}>{refreshing ? business.checking : business.checkOriginal}</button>}
-    </div>
+    </div>}
     {feedback && <p className={styles.notice} role="status">{feedback}</p>}
     {job?.videoUrl && /\.mov(?:\?|$)/i.test(job.videoUrl) && movNotice && <p className={styles.notice}>{movNotice}</p>}
     {job && <details className={styles.details}><summary>{c.details}</summary><p>{job.prompt}</p>{job.errorCode && <p className={styles.error}>{businessError(business, job.errorCode)}</p>}<BusinessGenerationReceipt job={job} onUpdated={onJobUpdated} /><p>{business.requestId}: {job.id}</p></details>}
-    {!inDialog && <div className={styles.recent}><div className={styles.recentHeader}><h3>{c.recent}</h3><button type="button" className={styles.button} onClick={onHistory}>{copy.viewHistory} ↗</button></div>{onSelect && recentJobs.length > 0 && <div className={styles.rail}>{recentJobs.slice(0, 12).map(item => <ResultCard key={item.id} job={item} business={business} onClick={() => onSelect(item)} selected={item.id === job?.id} compact />)}</div>}</div>}
+    {!inDialog && recentJobs.length > 0 && <div className={styles.recent}><div className={styles.recentHeader}><h3>{c.recent}</h3><button type="button" className={styles.button} onClick={onHistory}>{copy.viewHistory} ↗</button></div>{onSelect && <div className={styles.rail}>{recentJobs.slice(0, 12).map(item => <ResultCard key={item.id} job={item} business={business} onClick={() => onSelect(item)} selected={item.id === job?.id} compact />)}</div>}</div>}
     {expanded && <ResultDialog title={title} closeLabel={c.close} onClose={() => setExpanded(false)}>{media(true)}{thumbnails}<div className={styles.actions}>{job?.images && job.images.length > 1 && <><button className={styles.button} type="button" disabled={imageIndex === 0} onClick={() => setImageIndex(index => index - 1)}>{c.previous}</button><button className={styles.button} type="button" disabled={imageIndex >= job.images.length - 1} onClick={() => setImageIndex(index => index + 1)}>{c.next}</button></>}{url && <a href={downloadUrl} target="_blank" rel="noreferrer" download>{business.download} ↓</a>}</div></ResultDialog>}
   </section>;
 }

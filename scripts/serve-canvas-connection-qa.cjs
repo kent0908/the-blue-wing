@@ -17,6 +17,7 @@ const loader = write('loader.cjs', `const ts=require(${JSON.stringify(require.re
 const cssLoader = write('css-loader.cjs', `module.exports=function(source){const classes={};const prefix='qa_'+require('node:crypto').createHash('sha1').update(this.resourcePath).digest('hex').slice(0,8)+'_';source=source.replace(/\\.([a-zA-Z][\\w-]*)/g,(_,key)=>{classes[key]=prefix+key;return '.'+classes[key];});return 'const s=document.createElement("style");s.textContent='+JSON.stringify(source)+';document.head.append(s);export default '+JSON.stringify(classes)+';';};`);
 const empty = write('empty.tsx', 'export default function Empty(){return null}');
 const link = write('link.tsx', 'import React from "react"; export default function Link({children,...props}:any){return <a {...props}>{children}</a>}');
+const navigation = write('navigation.ts', 'const router={push(href:string){window.history.pushState(null,"",href);}}; export function useRouter(){return router;}');
 const image = write('image.tsx', 'import React from "react"; export default function Image({alt="",...props}:any){return <img alt={alt} {...props}/>}');
 const entry = write('entry.tsx', `
 import React from 'react'; import {createRoot} from 'react-dom/client';
@@ -51,7 +52,7 @@ const bundled = require('next/dist/compiled/webpack/webpack');
 const webpack = bundled.webpack;
 const compiler = webpack({ mode: 'development', devtool: false, context: repo, entry, output: { path: temporary, filename: 'bundle.js' },
   resolve: { extensions: ['.tsx', '.ts', '.js'], modules: [path.join(repo, 'node_modules')], alias: {
-    '@': repo, 'next/link$': link, 'next/image$': image,
+    '@': repo, 'next/link$': link, 'next/image$': image, 'next/navigation$': navigation,
 
     [path.join(repo, 'components/canvas/director3d/Director3DPanel.tsx')]: empty,
   } },

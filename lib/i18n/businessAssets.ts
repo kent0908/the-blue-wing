@@ -1,27 +1,94 @@
 import type { Locale } from "./locale";
-const zh={
-  title:"素材，為下一個畫面而留。",eyebrow:"THE BLUE WING / BUSINESS MATERIALS",description:"在工作室上傳、整理與選取圖片、影片及聲音。使用你自己的 SIRAYA 金鑰，商務素材與一般創作流程分開管理。",upload:"加入素材",choose:"選擇檔案",uploadSelected:"上傳選取的素材",uploading:"正在上傳…",registering:"正在登錄 SIRAYA…",files:"{n} 個檔案",drop:"拖曳圖片、影片或音訊到這裡",limits:"圖片小於 30 MB；影片最多 50 MB；音訊最多 15 MB。每次最多 6 個檔案。",formats:"圖片 PNG／JPEG／WebP／GIF；影片 MP4／MOV；音訊 MP3／WAV。",privacy:"檔案直接傳入商務專屬的私有儲存空間，完整 API Key 不會回傳瀏覽器。",noGeneration:"上傳與查詢狀態不會送出模型生成。供應商的素材儲存費用仍依帳單為準。",consent:"我擁有這些素材，以及其中人物肖像的使用授權。",all:"全部素材",image:"圖片",video:"影片",audio:"音訊",status:"素材狀態",allStatus:"全部狀態",active:"可使用",processing:"處理中",failed:"登錄未完成",created:"等待上傳完成",unknown:"結果待確認",search:"搜尋素材名稱",searchButton:"搜尋",refresh:"重新讀取",refreshOne:"更新狀態",loading:"正在整理素材…",more:"載入更多素材",empty:"素材庫，等待你的第一個畫面。",emptyDescription:"從上方上傳素材，不需要離開商務工作室。",noResults:"沒有符合條件的素材。",count:"已顯示 {count}／{total} 個",select:"選取",selected:"已選取",readyOnly:"SIRAYA 素材須處理完成後，才能用於影片參照。",imageOnly:"此處選擇圖片參照。",nativeRequired:"此素材只存在 SIRAYA，尚無商務原檔；請重新上傳原圖後用於圖片生成。",pendingTitle:"近期上傳",recover:"查詢原有上傳",uncertain:"登錄結果尚未確認，請勿重複上傳。先查詢原有紀錄；這不會重新送出登錄。",privateReady:"原檔已保存",storageOnly:"原檔可用於圖片參照；SIRAYA 影片參照仍需等待登錄完成。",providerNotice:"素材 API 需由 SIRAYA 為帳號開通，目前僅支援 Root Account 的生成用金鑰。供應商會檢查檔案與內容，通過後才顯示可使用。",metadataNotice:"上傳時的瀏覽器預覽與檔案資訊只是輔助；供應商仍會驗證編碼、時長與素材規格。",keyNeeded:"請先接上自己的 SIRAYA API Key。",keyLink:"連接金鑰",storageUnavailable:"商務上傳服務尚未設定完成，請聯絡管理員。",serviceUnavailable:"暫時無法讀取 SIRAYA 素材。請確認素材功能與 Root Account 金鑰權限。",invalidFile:"檔案格式、尺寸或檔案大小不符合要求，請檢查後重試。",tooLarge:"檔案超過此類素材的大小上限。",tooMany:"一次最多上傳 6 個檔案。",changed:"金鑰或使用權限已變更，請重新讀取工作室。",error:"暫時無法完成，請稍後再試。",limit:"待處理上傳已達上限，請先處理既有紀錄。",expired:"上傳授權已過期，請重新選擇檔案。",missing:"尚未找到完整原檔。請等上傳完成，再查詢原有上傳。",rejected:"SIRAYA 未接受此素材登錄，請確認帳號與檔案規格。",recoverable:"上傳後的狀態保留在本頁，重新整理後仍可查詢。",removeFile:"移除待上傳檔案",name:"素材名稱",source:"來源",native:"商務原檔",provider:"SIRAYA 素材",disabled:"此素材目前無法選取",capacity:"已達本次參照的選取上限",uploadFinished:"原檔已上傳，可在素材列表查看處理狀態。",progress:"上傳進度",original:"使用商務原檔",cancelSelection:"清除待上傳清單",
+
+const zh = {
+  title: "素材庫", upload: "上傳素材", choose: "選擇檔案", replaceFiles: "換一批", queued: "待上傳",
+  uploadSelected: "上傳 {n} 個檔案", uploading: "上傳中…", registering: "登錄中…", uploadHelp: "格式與上傳須知",
+  limits: "一次最多 6 個：圖片小於 30 MB、影片 50 MB、音訊 15 MB。",
+  imageLimits: "一次最多 6 張，每張小於 30 MB。",
+  formats: "圖片 PNG／JPEG／WebP／GIF；影片 MP4／MOV；音訊 MP3／WAV。",
+  imageFormats: "支援 PNG、JPEG、WebP、GIF。",
+  noGeneration: "素材私密保存。上傳不會送出生成，儲存費用以供應商帳單為準。",
+  consent: "我有權使用這些素材及其中的人物肖像。",
+  all: "全部", image: "圖片", video: "影片", audio: "音訊", source: "素材類型",
+  status: "素材狀態", allStatus: "所有狀態", active: "可使用", processing: "處理中", failed: "登錄未完成", created: "等待上傳", unknown: "待確認",
+  search: "搜尋素材名稱", searchButton: "搜尋", refresh: "重新整理", refreshOne: "更新狀態", loading: "讀取中…", more: "載入更多",
+  empty: "還沒有素材", noResults: "找不到符合條件的素材", count: "顯示 {count} 個素材", select: "選取", selected: "已選取",
+  readyOnly: "登錄完成後才能作為影片參照。", nativeRequired: "請上傳原圖後再選取。", pendingTitle: "待確認的上傳", recover: "查詢狀態",
+  uncertain: "上傳結果待確認。請先查詢下方紀錄。", privateReady: "原檔已保存",
+  storageOnly: "原檔可用於圖片參照，影片參照仍需完成登錄。",
+  providerNotice: "素材登錄須使用已開通素材功能的 SIRAYA Root Account 金鑰。影片參照以 SIRAYA 審核結果為準。",
+  keyNeeded: "請先連接 SIRAYA 金鑰。", keyLink: "連接金鑰", storageUnavailable: "上傳服務尚未開通，請聯絡管理員。",
+  serviceUnavailable: "無法讀取 SIRAYA 素材。請確認帳號已開通素材功能。",
+  invalidFile: "檔案不符合格式或大小限制。", tooLarge: "檔案超過大小上限。", tooMany: "一次最多上傳 6 個檔案。",
+  changed: "金鑰或權限已變更，請重新整理。", error: "操作未完成，請重試。", limit: "待處理上傳已達上限，請先查詢既有紀錄。",
+  expired: "上傳授權已過期，請重新選擇檔案。", missing: "找不到完整原檔，請確認上傳是否完成。", rejected: "SIRAYA 未接受登錄，請確認權限與檔案規格。",
+  removeFile: "移除檔案", native: "商務原檔", provider: "SIRAYA 素材", capacity: "已達參照上限",
+  uploadFinished: "原檔已上傳。可在素材列表查看狀態。", progress: "上傳進度", original: "使用原圖",
 };
-export type BusinessAssetsCopy={ [K in keyof typeof zh]:string };
-const en:BusinessAssetsCopy={
-  title:"Material for your next frame.",eyebrow:"THE BLUE WING / BUSINESS MATERIALS",description:"Upload, organize and select images, video and sound inside your studio. Use your own SIRAYA key; business material and personal creation flows stay separate.",upload:"Add material",choose:"Choose files",uploadSelected:"Upload selected files",uploading:"Uploading…",registering:"Registering with SIRAYA…",files:"{n} files",drop:"Drop images, video or audio here",limits:"Images below 30 MB; video up to 50 MB; audio up to 15 MB. Up to 6 files per batch.",formats:"Images: PNG, JPEG, WebP, GIF. Video: MP4, MOV. Audio: MP3, WAV.",privacy:"Files go directly to private business storage. Your full API key is never returned to the browser.",noGeneration:"Uploading and checking status never submits a model generation. Provider asset-storage fees remain subject to your invoice.",consent:"I hold the rights to use these files and any depicted people's likenesses.",all:"All material",image:"Images",video:"Video",audio:"Audio",status:"Asset status",allStatus:"All statuses",active:"Ready",processing:"Processing",failed:"Registration incomplete",created:"Waiting for upload",unknown:"Unconfirmed",search:"Search asset names",searchButton:"Search",refresh:"Reload material",refreshOne:"Refresh status",loading:"Preparing your material…",more:"Load more material",empty:"A place for your first frame.",emptyDescription:"Upload material above without leaving your business studio.",noResults:"No material matches these filters.",count:"Showing {count} of {total}",select:"Select",selected:"Selected",readyOnly:"SIRAYA assets must finish processing before they can be used as video references.",imageOnly:"Choose image references here.",nativeRequired:"This file exists only in SIRAYA, with no business source file. Upload the original image to use it for image generation.",pendingTitle:"Recent uploads",recover:"Check original upload",uncertain:"Registration is unconfirmed. Do not upload again. Check the existing record first; this does not repeat registration.",privateReady:"Original saved",storageOnly:"The original can be used as an image reference. SIRAYA video references still require completed registration.",providerNotice:"SIRAYA must enable the asset API for your account. It currently accepts Root Account generation keys only. The provider checks files and content before marking an asset ready.",metadataNotice:"Browser previews and file information are only a guide. The provider still validates codecs, duration and media requirements.",keyNeeded:"Connect your own SIRAYA API key first.",keyLink:"Connect key",storageUnavailable:"Business uploads are not configured. Contact an administrator.",serviceUnavailable:"SIRAYA material is temporarily unavailable. Check asset access and Root Account key permissions.",invalidFile:"The format, dimensions or file size is not supported. Check the file and try again.",tooLarge:"This file exceeds the size limit for its media type.",tooMany:"Upload up to 6 files per batch.",changed:"Your key or access changed. Refresh the studio.",error:"Could not complete this action. Try again later.",limit:"The pending-upload limit has been reached. Check existing records first.",expired:"Upload authorization expired. Select the file again.",missing:"The complete source file was not found yet. Wait for uploading to finish, then check the original upload.",rejected:"SIRAYA did not accept this registration. Check account access and file requirements.",recoverable:"Upload status stays available here after reloading.",removeFile:"Remove queued file",name:"Asset name",source:"Source",native:"Business original",provider:"SIRAYA asset",disabled:"This material cannot be selected yet",capacity:"The reference selection limit has been reached",uploadFinished:"Original uploaded. Check its processing status in the asset list.",progress:"Upload progress",original:"Use business original",cancelSelection:"Clear queued files",
+export type BusinessAssetsCopy = { [K in keyof typeof zh]: string };
+const en: BusinessAssetsCopy = {
+  title: "Asset library", upload: "Upload assets", choose: "Choose files", replaceFiles: "Replace files", queued: "Files to upload",
+  uploadSelected: "Upload {n} selected", uploading: "Uploading…", registering: "Registering…", uploadHelp: "Formats and upload details",
+  limits: "Up to 6 files: images under 30 MB, video up to 50 MB, audio up to 15 MB.",
+  imageLimits: "Up to 6 images, under 30 MB each.",
+  formats: "Images: PNG, JPEG, WebP, GIF. Video: MP4, MOV. Audio: MP3, WAV.",
+  imageFormats: "PNG, JPEG, WebP or GIF.",
+  noGeneration: "Assets are stored privately. Uploads do not start generation. Storage fees follow your provider invoice.",
+  consent: "I have permission to use these files and any depicted likenesses.",
+  all: "All", image: "Images", video: "Video", audio: "Audio", source: "Asset type",
+  status: "Asset status", allStatus: "All statuses", active: "Ready", processing: "Processing", failed: "Registration incomplete", created: "Awaiting upload", unknown: "Unconfirmed",
+  search: "Search assets by name", searchButton: "Search", refresh: "Refresh", refreshOne: "Refresh status", loading: "Loading…", more: "Load more",
+  empty: "No assets yet", noResults: "No matching assets", count: "{count} assets shown", select: "Select", selected: "Selected",
+  readyOnly: "Registration must finish before use as a video reference.", nativeRequired: "Upload the original image to select it.", pendingTitle: "Unconfirmed uploads", recover: "Check status",
+  uncertain: "Upload unconfirmed. Check its record below first.", privateReady: "Original saved",
+  storageOnly: "The original is ready for image references. Video references require registration.",
+  providerNotice: "Registration requires a SIRAYA Root Account key with asset access. SIRAYA reviews assets for video references.",
+  keyNeeded: "Connect your SIRAYA key first.", keyLink: "Connect key", storageUnavailable: "Uploads are not configured. Contact an administrator.",
+  serviceUnavailable: "Could not load SIRAYA assets. Check that your account has asset access.",
+  invalidFile: "The file does not meet format or size limits.", tooLarge: "The file exceeds its size limit.", tooMany: "Upload up to 6 files at once.",
+  changed: "Your key or access changed. Refresh the studio.", error: "Could not complete this action. Try again.", limit: "Upload limit reached. Check pending records first.",
+  expired: "Upload authorization expired. Select the file again.", missing: "Original file not found. Check that uploading has finished.", rejected: "SIRAYA declined registration. Check your access and file specs.",
+  removeFile: "Remove file", native: "Business original", provider: "SIRAYA asset", capacity: "Reference limit reached",
+  uploadFinished: "Original uploaded. Check its status in the library.", progress: "Upload progress", original: "Use original",
 };
-const ja:BusinessAssetsCopy={
-  title:"次の一画に、素材を残す。",eyebrow:"THE BLUE WING / BUSINESS MATERIALS",description:"制作室内で画像・映像・音声をアップロードし、整理・選択できます。ご自身の SIRAYA キーを使用し、通常の制作フローとは分けて管理します。",upload:"素材を追加",choose:"ファイルを選択",uploadSelected:"選択した素材をアップロード",uploading:"アップロード中…",registering:"SIRAYA に登録中…",files:"{n}件のファイル",drop:"画像・映像・音声をここにドロップ",limits:"画像は30 MB未満、映像は50 MB、音声は15 MBまで。1回に最大6件。",formats:"画像：PNG・JPEG・WebP・GIF。映像：MP4・MOV。音声：MP3・WAV。",privacy:"ファイルはビジネス専用の非公開ストレージへ直接送信します。完全な API キーをブラウザへ返すことはありません。",noGeneration:"アップロードや状態確認でモデル生成は送信されません。提供元の素材保存料金は請求書で確認してください。",consent:"素材と、写っている人物の肖像を使用する権利を保有しています。",all:"すべての素材",image:"画像",video:"映像",audio:"音声",status:"素材の状態",allStatus:"すべての状態",active:"利用可能",processing:"処理中",failed:"登録未完了",created:"アップロード待ち",unknown:"未確認",search:"素材名で検索",searchButton:"検索",refresh:"素材を再読み込み",refreshOne:"状態を更新",loading:"素材を準備しています…",more:"素材をさらに読み込む",empty:"最初の一画のための場所。",emptyDescription:"制作室を離れず、上から素材を追加できます。",noResults:"条件に一致する素材がありません。",count:"{total}件中{count}件を表示",select:"選択",selected:"選択済み",readyOnly:"SIRAYA 素材を映像参照に使うには、処理の完了が必要です。",imageOnly:"画像の参考素材を選択してください。",nativeRequired:"SIRAYA にのみ存在し、ビジネス原本がありません。画像生成に使う場合は原本をアップロードしてください。",pendingTitle:"最近のアップロード",recover:"元のアップロードを確認",uncertain:"登録結果が未確認です。再アップロードせず、既存の記録を確認してください。登録を再送することはありません。",privateReady:"原本を保存済み",storageOnly:"原本は画像参照に使用できます。SIRAYA の映像参照には登録完了が必要です。",providerNotice:"SIRAYA 素材 API はアカウント別の有効化が必要で、現在は Root Account の生成キーのみ対応します。提供元がファイルと内容を確認してから利用可能になります。",metadataNotice:"ブラウザのプレビューやファイル情報は補助的なものです。コーデック・長さ・素材仕様は提供元でも検証します。",keyNeeded:"先にご自身の SIRAYA API キーを接続してください。",keyLink:"キーを接続",storageUnavailable:"ビジネス用アップロードが未設定です。管理者にお問い合わせください。",serviceUnavailable:"SIRAYA 素材を取得できません。素材機能と Root Account キーの権限を確認してください。",invalidFile:"形式・サイズ・容量が対応条件を満たしていません。確認して再試行してください。",tooLarge:"この種類の素材の容量上限を超えています。",tooMany:"1回にアップロードできるのは最大6件です。",changed:"キーまたは権限が変更されました。制作室を再読み込みしてください。",error:"操作を完了できませんでした。後ほど再試行してください。",limit:"処理待ちアップロードの上限です。既存の記録を確認してください。",expired:"アップロード権限が失効しました。ファイルを再選択してください。",missing:"完全な原本がまだ見つかりません。アップロード完了を待ち、元の記録を確認してください。",rejected:"SIRAYA が登録を受け付けませんでした。権限とファイル仕様を確認してください。",recoverable:"再読み込み後もアップロード状態を確認できます。",removeFile:"アップロード待ちのファイルを外す",name:"素材名",source:"保存先",native:"ビジネス原本",provider:"SIRAYA 素材",disabled:"この素材はまだ選択できません",capacity:"参照素材の選択上限に達しました",uploadFinished:"原本をアップロードしました。処理状況は素材一覧で確認できます。",progress:"アップロードの進捗",original:"ビジネス原本を使用",cancelSelection:"待機中の一覧を消去",
+const ja: BusinessAssetsCopy = {
+  title: "素材ライブラリ", upload: "素材をアップロード", choose: "ファイルを選択", replaceFiles: "ファイルを選び直す", queued: "アップロード待ち",
+  uploadSelected: "{n}件をアップロード", uploading: "アップロード中…", registering: "登録中…", uploadHelp: "形式とアップロードの詳細",
+  limits: "最大6件。画像は30 MB未満、映像は50 MB、音声は15 MBまで。",
+  imageLimits: "画像は最大6枚、1枚あたり30 MB未満。",
+  formats: "画像：PNG・JPEG・WebP・GIF。映像：MP4・MOV。音声：MP3・WAV。",
+  imageFormats: "PNG・JPEG・WebP・GIFに対応。",
+  noGeneration: "素材は非公開です。アップロードで生成は開始されません。保存料金は提供元の請求書をご確認ください。",
+  consent: "素材と写っている人物の肖像を使う権利があります。",
+  all: "すべて", image: "画像", video: "映像", audio: "音声", source: "素材の種類",
+  status: "素材の状態", allStatus: "すべての状態", active: "利用可能", processing: "処理中", failed: "登録未完了", created: "アップロード待ち", unknown: "未確認",
+  search: "素材名で検索", searchButton: "検索", refresh: "更新", refreshOne: "状態を更新", loading: "読み込み中…", more: "さらに表示",
+  empty: "素材はまだありません", noResults: "条件に合う素材がありません", count: "{count}件を表示", select: "選択", selected: "選択済み",
+  readyOnly: "映像の参照に使うには登録完了が必要です。", nativeRequired: "元画像をアップロードしてから選択してください。", pendingTitle: "確認待ちのアップロード", recover: "状態を確認",
+  uncertain: "結果を確認できません。下の記録を先に確認してください。", privateReady: "原本を保存済み",
+  storageOnly: "画像の参照には使えます。映像の参照は登録後に使えます。",
+  providerNotice: "登録には素材機能が有効な SIRAYA Root Account のキーが必要です。映像参照用の素材は SIRAYA が審査します。",
+  keyNeeded: "先に SIRAYA キーを接続してください。", keyLink: "キーを接続", storageUnavailable: "アップロードが未設定です。管理者にお問い合わせください。",
+  serviceUnavailable: "SIRAYA 素材を読み込めません。素材機能が有効かご確認ください。",
+  invalidFile: "ファイル形式か容量が対応条件を満たしていません。", tooLarge: "ファイルが容量上限を超えています。", tooMany: "一度に最大6件までアップロードできます。",
+  changed: "キーまたは権限が変わりました。画面を更新してください。", error: "操作を完了できませんでした。再試行してください。", limit: "処理待ちの上限に達しました。既存の記録を確認してください。",
+  expired: "アップロード権限が失効しました。ファイルを再選択してください。", missing: "原本が見つかりません。アップロードが完了したかご確認ください。", rejected: "SIRAYA が登録を受け付けませんでした。権限とファイル仕様をご確認ください。",
+  removeFile: "ファイルを外す", native: "ビジネス原本", provider: "SIRAYA 素材", capacity: "参照素材が上限に達しました",
+  uploadFinished: "原本をアップロードしました。素材一覧で状態を確認できます。", progress: "アップロードの進捗", original: "元画像を使う",
 };
-const COPY:Record<Locale,BusinessAssetsCopy>={"zh-Hant":zh,en,ja};
-export function businessAssetsCopy(locale:Locale):BusinessAssetsCopy{return COPY[locale];}
-export function businessAssetsError(t:BusinessAssetsCopy,code?:string):string{
-  if(code==="business_asset_upload_uncertain")return t.uncertain;
-  if(code==="business_asset_storage_unavailable")return t.storageUnavailable;
-  if(code==="business_asset_upload_too_large")return t.tooLarge;
-  if(code==="business_asset_upload_limit")return t.limit;
-  if(code==="business_asset_upload_expired")return t.expired;
-  if(code==="business_asset_upload_missing")return t.missing;
-  if(code==="business_asset_upload_rejected")return t.rejected;
-  if(code&&/credential_required|credential_unavailable/.test(code))return t.keyNeeded;
-  if(code&&/changed|suspended|not_approved|unauthorized/.test(code))return t.changed;
-  if(code&&/business_asset_unavailable/.test(code))return t.serviceUnavailable;
-  if(code&&/invalid|bad_|conflict/.test(code))return t.invalidFile;
+const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, en, ja };
+export function businessAssetsCopy(locale: Locale): BusinessAssetsCopy { return COPY[locale]; }
+export function businessAssetsError(t: BusinessAssetsCopy, code?: string): string {
+  if (code === "business_asset_upload_uncertain") return t.uncertain;
+  if (code === "business_asset_storage_unavailable") return t.storageUnavailable;
+  if (code === "business_asset_upload_too_large") return t.tooLarge;
+  if (code === "business_asset_upload_limit") return t.limit;
+  if (code === "business_asset_upload_expired") return t.expired;
+  if (code === "business_asset_upload_missing") return t.missing;
+  if (code === "business_asset_upload_rejected") return t.rejected;
+  if (code && /credential_required|credential_unavailable/.test(code)) return t.keyNeeded;
+  if (code && /changed|suspended|not_approved|unauthorized/.test(code)) return t.changed;
+  if (code && /business_asset_unavailable/.test(code)) return t.serviceUnavailable;
+  if (code && /invalid|bad_|conflict/.test(code)) return t.invalidFile;
   return t.error;
 }

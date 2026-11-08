@@ -99,7 +99,7 @@ export default function TopBar({ business = false }: { business?: boolean }) {
   };
 
   return (
-    <><header className="flex h-14 shrink-0 items-center justify-end gap-1 whitespace-nowrap bg-black pr-2 sm:pr-6 [&>a]:shrink-0 [&>button]:shrink-0">
+    <><header className={`flex shrink-0 items-center justify-end gap-1 whitespace-nowrap pr-2 sm:pr-6 [&>a]:shrink-0 [&>button]:shrink-0 ${business ? "h-12 bg-transparent" : "h-14 bg-black"}`}>
       <Link
         href="/help"
         aria-label={t.top.help}

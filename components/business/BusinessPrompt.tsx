@@ -66,7 +66,7 @@ export default function BusinessPrompt(props: Props) {
   return <div className={styles.field}>
     <label htmlFor={id}>{props.label}</label>
     <textarea id={id} ref={input} required value={props.value} maxLength={props.maxLength} placeholder={props.placeholder} aria-describedby={`${id}-note`} aria-controls={opened ? `${id}-list` : undefined} aria-activedescendant={opened && matches[index] ? `${id}-option-${index}` : undefined}
-      style={{ minHeight: 190 }} onChange={event => { props.onChange(event.target.value); track(event.target.value, event.target.selectionStart); }} onClick={event => track(props.value, event.currentTarget.selectionStart)}
+      onChange={event => { props.onChange(event.target.value); track(event.target.value, event.target.selectionStart); }} onClick={event => track(props.value, event.currentTarget.selectionStart)}
       onKeyDown={event => {
         if (!opened || event.nativeEvent.isComposing) return;
         if (event.key === "Escape") { event.preventDefault(); setMention(null); }

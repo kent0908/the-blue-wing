@@ -24,3 +24,52 @@
 @media(max-width:760px){.inner{padding:30px 24px 100px}.hero{grid-template-columns:1fr;gap:10px;padding-bottom:32px}.heroArt{display:none}.hero h1{font-size:39px}.principles{gap:22px}.principle h2{line-height:1.8}.settings{grid-template-columns:repeat(2,minmax(0,1fr))}.application{grid-template-columns:1fr;gap:18px}.workMedia{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr}.panelHead{gap:14px}}
 @media(max-width:440px){.inner{padding:24px 18px 100px}.hero h1{font-size:32px}.eyebrow{font-size:8px;letter-spacing:.15em}.principles{grid-template-columns:1fr;gap:23px;padding:28px 0}.principle{display:grid;grid-template-columns:24px minmax(0,1fr);gap:0 12px}.principle span{grid-row:1/3;font-size:20px}.principle h2{margin:0 0 5px}.principle p{grid-column:2}.heading{font-size:27px}.grid,.settings{grid-template-columns:1fr}.tabs{gap:22px}.tab{font-size:11px}.panel{padding:27px 0}.button,.secondary{width:100%}.row .small{width:auto}.adult{padding:17px}.adult h3{font-size:23px}.assetGrid{grid-template-columns:repeat(3,minmax(0,1fr))}.dialog{padding:23px 18px}.dialog h2{font-size:25px}.dialog dl{grid-template-columns:1fr;gap:4px}.dialog dd{margin-bottom:7px}.birthGrid{gap:6px}.birthGrid select{padding:10px 7px}.workspaceTop{gap:10px}.stateCard{padding-left:17px}.keyCard{padding:16px 0}.workHeader{gap:8px}.toolbar .search{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.button,.secondary,.tab,.small{transition:none}}
+/* Business desk controls. Keep the admin and consumer surfaces independent. */
+[data-business-workspace] .panel { padding: 20px 0; }
+[data-business-workspace] .heading { font-family: inherit; font-size: 20px; font-weight: 650; line-height: 1.35; }
+[data-business-workspace] .description { color: #bbc1c6; font-size: 14px; line-height: 1.55; margin: 0 0 16px; }
+[data-business-workspace] .note { color: #b2b7bc; font-size: 13px; line-height: 1.55; }
+[data-business-workspace] .field { color: #f1f1ed; font-size: 14px; gap: 6px; }
+[data-business-workspace] .field :is(input, textarea, select) {
+  min-height: 44px;
+  background: #121416;
+  border: 1px solid #51575c;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+[data-business-workspace] .field :is(input, textarea, select):focus { border-color: #bbddd2; box-shadow: none; outline: 2px solid #bbddd2; outline-offset: -2px; }
+[data-business-workspace] .field :is(input, textarea)::placeholder { color: #a1a8ae; }
+[data-business-workspace] .field > .note, [data-business-workspace] .form > .note { margin: 0; }
+[data-business-workspace] .settings { grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr)); }
+[data-business-workspace] :is(.button, .small, .secondary) {
+  min-height: 44px;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.35;
+}
+[data-business-workspace] .button { color: #14221e; border-color: #bbddd2; background: #bbddd2; }
+[data-business-workspace] .button:hover:not(:disabled) { background: #d6ebe4; }
+[data-business-workspace] :is(.small, .secondary) { border-color: #51575c; color: #f1f1ed; }
+[data-business-workspace] :is(.small, .secondary):hover:not(:disabled) { background: #2a2e32; }
+[data-business-workspace] .form { gap: 14px; }
+[data-business-workspace] .keyCard { border-color: #36393d; gap: 10px; padding: 12px 0; margin-bottom: 18px; }
+[data-business-workspace] .keyCard p { color: #b2b7bc; font-size: 13px; margin: 4px 0 0; }
+[data-business-workspace] .empty { border: 0; padding: 0; }
+[data-business-workspace] .empty h2 { margin: 0 0 6px; font-size: 18px; }
+[data-business-workspace] .empty p { color: #b2b7bc; font-size: 14px; }
+[data-business-workspace] .promptDetails { margin: 0; font-size: 14px; }
+[data-business-workspace] .promptDetails summary { min-height: 44px; padding-block: 10px; color: #ebedea; }
+[data-business-workspace] .promptDetails .small { margin-top: 8px; }
+[data-business-workspace] .check { min-height: 44px; align-items: center; font-size: 14px; }
+[data-business-workspace] .check input { margin: 0; width: 18px; height: 18px; }
+[data-business-workspace] .dialog { background: #191b1d; border-color: #51575c; border-radius: 12px; }
+[data-business-workspace] .dialog::backdrop { background: #000b; backdrop-filter: none; }
+[data-business-workspace] .dialog h2 { font: 650 22px/1.35 system-ui, sans-serif; }
+[data-business-workspace] .dialog p, [data-business-workspace] .dialog dl { color: #d0d4d7; font-size: 14px; line-height: 1.5; }
+[data-business-workspace] .dialog dt { color: #b2b7bc; }
+[data-business-workspace] .dialogActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }
+@media (max-width: 600px) {
+  [data-business-workspace] .field :is(input, textarea, select) { font-size: 16px; }
+}

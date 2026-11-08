@@ -8,29 +8,32 @@ const ts = require('typescript');
 const source = fs.readFileSync('components/business/BusinessWorkspace.tsx', 'utf8');
 const ast = ts.createSourceFile('BusinessWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const handlers = {};
-const videoDownloadAnchors = [];
 let preSubmitErrorsSource;
 function visit(node) {
   if (ts.isVariableDeclaration(node) && ['requestConfirmation', 'submitGeneration', 'saveKey'].includes(node.name.getText(ast)) && ts.isArrowFunction(node.initializer)) handlers[node.name.getText(ast)] = node.initializer.getText(ast);
   if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'PRE_SUBMIT_ERRORS') preSubmitErrorsSource = node.initializer.getText(ast);
-  if (ts.isJsxOpeningElement(node) && node.tagName.getText(ast) === 'a') {
-    const attributes = node.attributes.properties;
-    const href = attributes.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'href');
-    if (attributes.some(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'download') && href?.initializer && ts.isJsxExpression(href.initializer) && href.initializer.expression?.getText(ast).includes('job.videoUrl')) videoDownloadAnchors.push(node);
-  }
   ts.forEachChild(node, visit);
 }
 visit(ast);
 for (const key of ['requestConfirmation', 'submitGeneration', 'saveKey']) assert.ok(handlers[key], `${key} actual handler found`);
 assert.ok(preSubmitErrorsSource, 'Actual pre-submit error set found');
-assert.equal(videoDownloadAnchors.length, 1, 'The history exposes exactly one original-video download link');
 {
-  const node = videoDownloadAnchors[0];
-  const href = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'href');
+  // The preview and expanded viewer share the authenticated download URL.
+  const stage = fs.readFileSync('components/business/BusinessStage.tsx', 'utf8');
+  const file = ts.createSourceFile('BusinessStage.tsx', stage, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let downloadUrl;
+  function walk(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(file) === 'downloadUrl') downloadUrl = node.initializer.getText(file);
+    ts.forEachChild(node, walk);
+  }
+  walk(file);
+  assert.ok(downloadUrl);
   const outputPath = '/api/business/media/fixture-account/standard/fixture-video.mp4';
-  assert.equal(vm.runInNewContext(href.initializer.expression.getText(ast), { job: { videoUrl: outputPath } }), `${outputPath}?download=1`, 'Actual history link requests authenticated Content-Disposition: attachment rather than navigating to the inline sandboxed video');
-  assert.ok(!node.attributes.properties.some(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(ast) === 'target'), 'History download does not open an inline-media tab');
+  assert.equal(vm.runInNewContext(downloadUrl, { url: outputPath }), `${outputPath}?download=1`);
+  assert.equal(vm.runInNewContext(downloadUrl, { url: `${outputPath}?v=1` }), `${outputPath}?v=1&download=1`);
 }
+const mentionsModule = { exports: {} };
+new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessMentions.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(mentionsModule, mentionsModule.exports);
 const seedanceModule = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessSeedance.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(seedanceModule, seedanceModule.exports);
 const { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSeedancePayload } = seedanceModule.exports;
@@ -46,6 +49,8 @@ function makeContext() {
     submitLock: { current: false }, keyLock: { current: false }, unresolvedRequest: { current: null }, uncertain: false, navigationPending: false,
     selected: { id: 'kling-3.0-turbo', supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: ['720p', '1080p'], secondsOptions: [5, 10], defaultSeconds: 5, resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1'], supportsReferences: true, maxReferenceImages: 1, promptMaxChars: 2500, nsfw: false },
     prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
+    mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, resolveMentionPrompt: mentionsModule.exports.resolveMentionPrompt, promptLimit: 12000,
+    resultsCopy: { submitted: 'sent' }, historyVersion: { current: 0 }, setSelectedJobId: noop, workspaceScroll: { current: null },
     videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', assertBusinessSeedanceReferences, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload,
     dedicatedOptions: {mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
     access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved', invalidRequest: 'invalid' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' }, d: { referenceLimitError: 'seedance-refs' },
