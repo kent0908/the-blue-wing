@@ -6,12 +6,15 @@ import { useRouter } from "next/navigation";
 import { IconPlus } from "@/components/Icons";
 import { useLocale } from "@/lib/i18n/client";
 import { businessWorkflowsCopy, workflowText } from "@/lib/i18n/businessWorkflows";
+import type { Locale } from "@/lib/i18n/locale";
+import { shortDramaTemplate } from "@/lib/canvas/shortDramaTemplate";
 import type { CanvasGraph, CanvasNode } from "@/lib/canvas/types";
 import type { BusinessModel } from "./types";
 import styles from "./BusinessWorkflows.module.css";
 
 interface WorkflowSummary { id: string; name: string; nodeCount: number; updatedAt: string; version: string }
-type Starter = "blank" | "imageVideo" | "sourceTemplate";
+const STARTERS = ["blank", "imageVideo", "sourceTemplate", "shortDrama"] as const;
+type Starter = typeof STARTERS[number];
 type DraftDialog = { kind: "create" } | { kind: "rename"; workflow: WorkflowSummary };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VERSION = /^[a-f0-9]{32}$/;
@@ -20,9 +23,54 @@ const validSummary = (row: WorkflowSummary) => row && typeof row.id === "string"
   typeof row.updatedAt === "string" && Number.isFinite(Date.parse(row.updatedAt)) &&
   typeof row.version === "string" && VERSION.test(row.version);
 
+function wideFrameSize(model: BusinessModel) {
+  return model.sizes?.find(size => {
+    const [width, height] = size.split("x").map(Number);
+    return width > 0 && height > 0 && Math.abs(width / height - 16 / 9) < 0.03;
+  });
+}
+
+function businessDramaGraph(models: BusinessModel[], locale: Locale): CanvasGraph {
+  const { graph } = shortDramaTemplate(locale);
+  const guide = graph.nodes.find(node => node.id === "guide");
+  if (guide) guide.data.text = businessWorkflowsCopy(locale).dramaWorkflowNote;
+  const imageNodes = graph.nodes.filter(node => node.type === "image");
+  const videoNodes = graph.nodes.filter(node => node.type === "video");
+  const imageModels = models.filter(model => model.modality === "image" && !model.nsfw &&
+    model.supportsReferences && (model.maxReferenceImages ?? 0) >= 1 && wideFrameSize(model));
+  const image = imageModels.find(model => model.id === imageNodes[0]?.data.model) ?? imageModels[0];
+  const videoModels = models.filter(model => model.modality === "video" && !model.nsfw && model.supportsReferences &&
+    !model.nativeAudioOnly && model.aspectRatios?.includes("16:9") && model.resolutions?.length &&
+    (model.seedance?.modes.includes("image-to-video") ||
+      model.dedicatedVideo?.capability === "image-to-video" && model.dedicatedVideo.modes.includes("image-to-video")) &&
+    videoNodes.every(node => {
+      const seconds = Number(node.data.seconds);
+      return seconds >= (model.minSeconds ?? 2) && seconds <= (model.maxSeconds ?? 15) &&
+        (!model.secondsOptions?.length || model.secondsOptions.includes(seconds));
+    }));
+  const video = videoModels.find(model => model.id === videoNodes[0]?.data.model) ??
+    videoModels.find(model => model.seedance) ?? videoModels[0];
+  for (const node of imageNodes) {
+    node.data.model = image?.id ?? "";
+    const size = String(node.data.size ?? "");
+    if (image && !image.sizes?.includes(size)) node.data.size = wideFrameSize(image);
+    if (!image?.imageControls?.some(control => control.key === "quality" &&
+      control.options?.includes(String(node.data.quality)))) delete node.data.quality;
+  }
+  for (const node of videoNodes) {
+    node.data.model = video?.id ?? "";
+    const resolution = String(node.data.resolution ?? "");
+    if (video && !video.resolutions?.includes(resolution)) node.data.resolution = video.resolutions?.[0];
+    node.data.generate_audio = false;
+    node.data.mode = "image-to-video";
+  }
+  return graph;
+}
+
 /** Draft creation only. No model, credit or generation endpoint is called by a starter. */
-export function businessStarterGraph(starter: Starter, models: BusinessModel[]): CanvasGraph {
+export function businessStarterGraph(starter: Starter, models: BusinessModel[], locale: Locale = "zh-Hant"): CanvasGraph {
   if (starter === "blank") return { nodes: [], edges: [] };
+  if (starter === "shortDrama") return businessDramaGraph(models, locale);
   const image = models.find(model => model.modality === "image" && !model.nsfw && model.supportsReferences);
   const video = models.find(model => model.modality === "video" && !model.nsfw && model.supportsReferences && !!model.seedance)
     ?? models.find(model => model.modality === "video" && !model.nsfw && model.supportsReferences &&
@@ -40,7 +88,12 @@ export function businessStarterGraph(starter: Starter, models: BusinessModel[]):
 
 function StarterDrawing({ starter }: { starter: Starter }) {
   return <svg viewBox="0 0 300 108" aria-hidden="true" className={styles.workflowDrawing}>
-    {starter === "blank" ? <><path className={styles.diagramEmpty} d="M61 19h178v70H61z" /><path d="M138 54h24m-12-12v24" /></> : <>
+    {starter === "shortDrama" ? <>
+      <rect className={styles.diagramNode} x="18" y="38" width="59" height="32" rx="4" />
+      <path className={styles.diagramWire} d="M77 54h47m0-42v84M124 12h73m-73 28h73m-73 28h73m-73 28h73" />
+      {[12, 40, 68, 96].map(y => <g key={y}><rect className={styles.diagramNode} x="197" y={y - 10} width="85" height="20" rx="3" /><path d={`M234 ${y - 5}l9 5-9 5z`} /></g>)}
+      <circle className={styles.diagramPort} cx="77" cy="54" r="4" />
+    </> : starter === "blank" ? <><path className={styles.diagramEmpty} d="M61 19h178v70H61z" /><path d="M138 54h24m-12-12v24" /></> : <>
       <path className={styles.diagramWire} d={starter === "imageVideo" ? "M74 54C96 54 96 54 118 54M184 54C206 54 206 54 228 54" : "M110 54C148 54 148 54 186 54"} />
       {starter === "imageVideo" ? <path className={styles.diagramWire} d="M74 54C96 54 88 9 149 9S213 9 213 36S217 54 228 54" /> : null}
       {(starter === "imageVideo" ? [8, 118, 228] : [44, 186]).map((x, index) => <g key={x}>
@@ -95,9 +148,9 @@ export default function BusinessWorkflows({ models = [] }: { models?: BusinessMo
   }, [draftDialog]);
   useEffect(() => { if (renameStale) dismissRef.current?.focus(); }, [renameStale]);
 
-  const openDialog = (next: DraftDialog) => {
+  const openDialog = (next: DraftDialog, initialStarter: Starter = "blank") => {
     setName(next.kind === "rename" ? next.workflow.name : "");
-    setStarter("blank");
+    setStarter(initialStarter);
     setFormError("");
     setRenameStale(false);
     setNotice("");
@@ -112,13 +165,13 @@ export default function BusinessWorkflows({ models = [] }: { models?: BusinessMo
     event.preventDefault();
     if (!draftDialog || saveLock.current || renameStale) return;
     const renamed = draftDialog.kind === "rename" ? draftDialog.workflow : null;
-    const nextName = name.trim() || (renamed ? "" : t.untitled);
+    const nextName = name.trim() || (renamed ? "" : starter === "shortDrama" ? t.shortDrama : t.untitled);
     if (!nextName) { setFormError(t.nameRequired); nameRef.current?.focus(); return; }
     if (renamed?.name === nextName) { closeDialog(); return; }
     const fallback = renamed ? t.renameFailed : t.createFailed;
     saveLock.current = true; setSaving(true); setFormError("");
     try {
-      const graph = renamed ? null : businessStarterGraph(starter, models);
+      const graph = renamed ? null : businessStarterGraph(starter, models, locale);
       const response = await fetch(renamed ? `/api/business/workflows/${renamed.id}` : "/api/business/workflows", {
         method: renamed ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -166,6 +219,17 @@ export default function BusinessWorkflows({ models = [] }: { models?: BusinessMo
         <label className={styles.search} htmlFor={searchId}><span className={styles.screenReader}>{t.search}</span><input id={searchId} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t.search} disabled={workflows === null} /></label>
         <button className={styles.workflowPrimary} type="button" onClick={() => openDialog({ kind: "create" })}><IconPlus className={styles.workflowActionIcon} />{t.create}</button>
       </header>
+      <div className={styles.featuredTemplate}>
+        <div>
+          <p className={styles.templateLabel}>{t.officialDrama}</p>
+          <h3>{t.shortDrama}</h3>
+          <p className={styles.templateDescription}>{t.dramaDescription}</p>
+        </div>
+        <div className={styles.templateActions}>
+          <Link href="/canvas/guide" className={styles.workflowSecondary}>{t.workflowGuide}</Link>
+          <button className={styles.workflowSecondary} type="button" onClick={() => openDialog({ kind: "create" }, "shortDrama")}>{t.copyDrama}</button>
+        </div>
+      </div>
       <p role="status" className={notice ? styles.notice : styles.screenReader}>{notice}</p>
       {listError ? <div role="alert" className={styles.workflowError}><p>{t.error}</p><button className={styles.workflowSecondary} type="button" onClick={() => void loadWorkflows()} disabled={loading}>{t.retry}</button></div> : null}
       {workflows === null ? (loading ? <p role="status" className={styles.workflowEmpty}>{t.loading}</p> : null) : visible.length ? (
@@ -184,11 +248,12 @@ export default function BusinessWorkflows({ models = [] }: { models?: BusinessMo
       <h2 id={dialogTitle}>{draftDialog.kind === "create" ? t.create : t.rename}</h2>
       <form onSubmit={saveDraft} aria-busy={saving}>
         {draftDialog.kind === "create" ? <fieldset disabled={saving} className={styles.workflowStarters}><legend>{t.starter}</legend>
-          {(["blank", "imageVideo", "sourceTemplate"] as const).map(item => <label key={item} className={styles.workflowStarter}>
+          {STARTERS.map(item => <label key={item} className={styles.workflowStarter}>
             <input type="radio" name="starter" value={item} checked={starter === item} onChange={() => setStarter(item)} /><span>{t[item]}</span><StarterDrawing starter={item} />
           </label>)}
         </fieldset> : null}
-        <label className={styles.nameField} htmlFor={nameId}>{t.name}<input ref={nameRef} id={nameId} value={name} onChange={event => { setName(event.target.value); if (!renameStale) setFormError(""); }} maxLength={120} placeholder={t.untitled} autoComplete="off" enterKeyHint="done" disabled={saving || renameStale} required={draftDialog.kind === "rename"} /></label>
+        {draftDialog.kind === "create" && starter === "shortDrama" && <p className={styles.templateHint}>{t.dramaModels}</p>}
+        <label className={styles.nameField} htmlFor={nameId}>{t.name}<input ref={nameRef} id={nameId} value={name} onChange={event => { setName(event.target.value); if (!renameStale) setFormError(""); }} maxLength={120} placeholder={starter === "shortDrama" ? t.shortDrama : t.untitled} autoComplete="off" enterKeyHint="done" disabled={saving || renameStale} required={draftDialog.kind === "rename"} /></label>
         {formError ? <p role="alert" className={styles.formError}>{formError}</p> : null}
         <div className={styles.dialogActions}>
           <button ref={dismissRef} type="button" className={styles.workflowSecondary} disabled={saving} onClick={closeDialog}>{renameStale ? t.close : t.dismiss}</button>

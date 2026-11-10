@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconPlus, IconCanvas, IconTrash, IconGlobe, IconApps } from "@/components/Icons";
 import { useLocale, useTr } from "@/lib/i18n/client";
+import { workflowGuideEntry } from "@/lib/i18n/workflowGuideEntry";
 
 interface WorkflowSummary {
   id: string;
@@ -271,15 +272,18 @@ export default function CanvasHomePage() {
               {tr("把文字、圖片、影片生成節點拉在一起，自由搭建你的工作流。")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={createWorkflow}
-            disabled={creating}
-            className={styles.primary}
-          >
-            <IconPlus className="h-4 w-4" />
-            {creating ? tr("建立中…") : tr("建立新畫布")}
-          </button>
+          <div className={styles.headerActions}>
+            <Link href="/canvas/guide" className={styles.secondary}>{workflowGuideEntry[locale].guide}</Link>
+            <button
+              type="button"
+              onClick={createWorkflow}
+              disabled={creating}
+              className={styles.primary}
+            >
+              <IconPlus className="h-4 w-4" />
+              {creating ? tr("建立中…") : tr("建立新畫布")}
+            </button>
+          </div>
         </header>
 
         {error && <p role="alert" className={styles.error}>{tr(error)}</p>}

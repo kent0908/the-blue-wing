@@ -85,6 +85,21 @@ await test('a route ID change never renders a stale graph under another workflow
 const paidGraph={nodes:[{id:'paid',type:'image',x:0,y:0,data:{model:'own-image',prompt:'blue feather',size:'1024x1024'}}],edges:[]};
 function resetReview(keyConfigured=true){wrapperState={0:{access:{account:{status:'approved'},keyConfigured},workflow,models:[{id:'own-image',displayName:'Own image',modality:'image',nsfw:false,supportsReferences:false}]},1:'',2:[],3:null};}
 function renderReview(){hookIndex=0;observedEffects=[];const tree=wrapperModule.exports.default({id});return{nodes:flatten(tree),effects:observedEffects};}
+await test('choosing a granted first-frame model preserves supported short film settings and falls back to valid options',()=>{
+  resetReview();
+  const model={id:'own-video',displayName:'Own video',modality:'video',nsfw:false,supportsReferences:true,seedance:{modes:['image-to-video']},defaultSeconds:5,minSeconds:4,maxSeconds:15,aspectRatios:['16:9'],resolutions:['480p','720p']};
+  const alternate={...model,id:'alternate-video',secondsOptions:[5,8],aspectRatios:['9:16'],resolutions:['1080p']};
+  wrapperState[0].models=[model,alternate];
+  const canvas=renderReview().nodes.find(node=>node.type===CanvasMarker);
+  const selectedNode={id:'shot-1',type:'video',data:{mode:'image-to-video',model:'',seconds:6,aspect_ratio:'16:9',resolution:'720p'}};
+  const patches=[];
+  const fields=canvas.props.runtime.renderNodeSettings(selectedNode,patch=>patches.push(patch));
+  const picker=flatten(fields.type(fields.props)).find(node=>node.type==='select');
+  picker.props.onChange({target:{value:model.id}});
+  assert.deepEqual(patches[0],{model:model.id,seconds:6,aspect_ratio:'16:9',resolution:'720p',generate_audio:false,mode:'image-to-video'});
+  picker.props.onChange({target:{value:alternate.id}});
+  assert.deepEqual(patches[1],{model:alternate.id,seconds:5,aspect_ratio:'9:16',resolution:'1080p',generate_audio:false,mode:'image-to-video'});
+});
 await test('paid execution opens a real page-dialog tree and leaves its decision Promise pending',async()=>{resetReview();const initial=renderReview(),canvas=initial.nodes.find(node=>node.type===CanvasMarker);let settled=false;const pending=canvas.props.runtime.confirmRun(paidGraph,['paid']);pending.then(()=>{settled=true;});await Promise.resolve();assert.equal(settled,false);assert.ok(wrapperState[3]&&typeof wrapperState[3].resolve==='function');const review=renderReview(),dialog=review.nodes.find(node=>node.type===mockImports['./BusinessDialog']);assert.ok(dialog);assert.ok(flatten(dialog).some(node=>typeof node==='string'&&node.includes('Own image')));assert.ok(flatten(dialog).some(node=>node.type==='button'&&node.props.children===businessWorkflowsCopy('zh-Hant').start));assert.ok(flatten(dialog).some(node=>node.type==='button'&&node.props.children===businessWorkflowsCopy('zh-Hant').cancel));dialog.props.onClose();assert.equal(await pending,false);});
 await test('actual in-page cancel and confirm buttons settle the decision false or true exactly once',async()=>{for(const approved of[false,true]){resetReview();let initial=renderReview(),canvas=initial.nodes.find(node=>node.type===CanvasMarker),pending=canvas.props.runtime.confirmRun(paidGraph,['paid']);const review=renderReview(),dialog=review.nodes.find(node=>node.type===mockImports['./BusinessDialog']),label=businessWorkflowsCopy('zh-Hant')[approved?'start':'cancel'];const button=flatten(dialog).find(node=>node.type==='button'&&node.props.children===label);assert.ok(button);button.props.onClick();assert.equal(await pending,approved);assert.equal(wrapperState[3],null);assert.equal(renderReview().nodes.some(node=>node.type===mockImports['./BusinessDialog']),false);}});
 await test('unmount or route cleanup resolves an unanswered in-page decision as false',async()=>{resetReview();const initial=renderReview(),canvas=initial.nodes.find(node=>node.type===CanvasMarker),pending=canvas.props.runtime.confirmRun(paidGraph,['paid']);const review=renderReview(),registered=review.effects.find(item=>Array.isArray(item.deps)&&item.deps[0]===id&&item.deps[1]===wrapperState[3]);assert.ok(registered);const cleanup=registered.effect();assert.equal(typeof cleanup,'function');cleanup();assert.equal(await pending,false);});

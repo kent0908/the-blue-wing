@@ -19,6 +19,10 @@ const mocks = {
   '@/components/Icons': new Proxy({}, { get: () => function Icon() {} }),
   '@/lib/i18n/client': { useLocale: () => locale, useTr: () => text => text },
 };
+const guideCopy = { exports: {} };
+const guideSource = fs.readFileSync(path.join(repo, 'lib/i18n/workflowGuideEntry.ts'), 'utf8');
+new Function('exports', ts.transpileModule(guideSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(guideCopy.exports);
+mocks['@/lib/i18n/workflowGuideEntry'] = guideCopy.exports;
 const moduleFixture = { exports: {} };
 new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync(path.join(repo, 'app/canvas/page.tsx'), 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText)(name => { if (name in mocks) return mocks[name]; throw Error('Unexpected import: ' + name); }, moduleFixture, moduleFixture.exports);
 const render = () => { index = 0; return moduleFixture.exports.default(); };
@@ -34,6 +38,13 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log('PASS ' + name); }
 (async () => {
+  await test('workflow guide is discoverable from the canvas header in all three languages', () => {
+    for (const lang of ['zh-Hant', 'en', 'ja']) {
+      reset(); locale = lang;
+      const link = elements().find(node => node.type === mockLink && node.props.href === '/canvas/guide');
+      assert.equal(link?.props.children, guideCopy.exports.workflowGuideEntry[lang].guide);
+    }
+  });
   await test('workflow controls are semantic siblings of the navigation link', () => { reset(); const nodes = elements(); const link = nodes.find(node => node.type === mockLink && node.props.href === '/canvas/one'); assert.ok(link); assert.equal(flatten(link).some(node => node?.type === 'button'), false); assert.ok(nodes.find(node => node.props?.['aria-label'] === '刪除')); });
   await test('personal search filters actual workflow names and has translated labels', () => { for (const [lang, label] of [['zh-Hant', '搜尋我的畫布'], ['en', 'Search my canvases'], ['ja', 'マイキャンバスを検索']]) { reset(); locale = lang; const input = elements().find(node => node.type === 'input' && node.props.type === 'search'); assert.equal(input.props.placeholder, label); input.props.onChange({ target: { value: 'MISSING' } }); assert.equal(elements().some(node => node.type === mockLink && node.props.href === '/canvas/one'), false); input.props.onChange({ target: { value: 'COBALT' } }); assert.ok(elements().find(node => node.type === mockLink && node.props.href === '/canvas/one')); } });
   await test('dates use the current zh/en/ja locale and retain the machine timestamp', () => { for (const lang of ['zh-Hant', 'en', 'ja']) { reset(); locale = lang; const time = elements().find(node => node.type === 'time'); assert.equal(time.props.dateTime, work.updatedAt); assert.equal(time.props.children, new Date(work.updatedAt).toLocaleDateString(lang === 'zh-Hant' ? 'zh-TW' : lang === 'ja' ? 'ja-JP' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })); } });

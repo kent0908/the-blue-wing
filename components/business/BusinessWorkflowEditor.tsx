@@ -47,7 +47,30 @@ function NodeFields({ node, models, onChange }: { node: CanvasNode; models: Busi
   return <div className={styles.fields}>
     {field(t.model, <select value={String(node.data.model ?? "")} onChange={event => {
       const model = choices.find(item => item.id === event.target.value);
-      if (model) onChange(node.type === "image" ? { model: model.id, size: model.sizes?.[0] ?? "" } : { model: model.id, seconds: model.defaultSeconds ?? model.secondsOptions?.find(value => value > 0) ?? 5, resolution: model.resolutions?.[0] ?? "", aspect_ratio: model.aspectRatios?.includes("16:9") ? "16:9" : model.aspectRatios?.[0] ?? "16:9", generate_audio: !!model.nativeAudioOnly, mode: "freestyle" });
+      if (!model) return;
+      if (node.type === "image") {
+        const size = String(node.data.size ?? "");
+        onChange({ model: model.id, size: model.sizes?.includes(size) ? size : model.sizes?.[0] ?? "" });
+        return;
+      }
+      const firstFrame = node.data.mode === "image-to-video" &&
+        (model.seedance?.modes.includes("image-to-video") ||
+          model.dedicatedVideo?.capability === "image-to-video" && model.dedicatedVideo.modes.includes("image-to-video"));
+      const seconds = Number(node.data.seconds);
+      const supportedSeconds = Number.isSafeInteger(seconds) && seconds >= (model.minSeconds ?? 2) &&
+        seconds <= (model.maxSeconds ?? 15) && (!model.secondsOptions?.length || model.secondsOptions.includes(seconds));
+      const resolution = String(node.data.resolution ?? "");
+      const supportedResolution = model.resolutions?.includes(resolution) &&
+        (!model.nativeAudioOnly || !model.nativeAudioResolutions?.length || model.nativeAudioResolutions.includes(resolution));
+      const aspect = String(node.data.aspect_ratio ?? "16:9");
+      onChange({
+        model: model.id,
+        seconds: firstFrame && supportedSeconds ? seconds : model.defaultSeconds ?? model.secondsOptions?.find(value => value > 0) ?? 5,
+        resolution: firstFrame && supportedResolution ? resolution : model.nativeAudioResolutions?.[0] ?? model.resolutions?.[0] ?? "",
+        aspect_ratio: firstFrame && model.aspectRatios?.includes(aspect) ? aspect : model.aspectRatios?.includes("16:9") ? "16:9" : model.aspectRatios?.[0] ?? "16:9",
+        generate_audio: !!model.nativeAudioOnly,
+        mode: firstFrame ? "image-to-video" : "freestyle",
+      });
     }}><option value="" disabled>{t.model}</option>{choices.map(model => <option key={model.id} value={model.id}>{model.displayName}</option>)}</select>)}
     {!selected && <p role="alert">{t.unavailableModel}</p>}
     {field(t.prompt, <textarea rows={4} maxLength={promptLimit} placeholder={t.promptHint} value={String(node.data.prompt ?? "")} onChange={event => onChange({ prompt: event.target.value })} />)}

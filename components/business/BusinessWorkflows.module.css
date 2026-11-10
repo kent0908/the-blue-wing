@@ -64,6 +64,22 @@
 .workflowSecondary:hover:not(:disabled) { background: var(--workflow-raised); border-color: #878d87; }
 .workflowPrimary:disabled, .workflowSecondary:disabled { cursor: wait; background: #303330; border-color: #565c56; color: #c7ccc7; }
 .workflowActionIcon { width: 16px; height: 16px; flex: none; }
+.featuredTemplate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 24px;
+  padding: 18px 4px;
+  margin-block-end: 20px;
+  border-block: 1px solid var(--workflow-border);
+}
+.featuredTemplate h3 { margin: 2px 0 4px; font-size: 19px; font-weight: 600; line-height: 1.4; text-wrap: balance; }
+.templateLabel, .templateDescription, .templateHint { margin: 0; color: var(--workflow-muted); font-size: 13px; }
+.templateLabel { color: var(--workflow-accent); }
+.templateDescription { text-wrap: pretty; }
+.templateActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.templateActions > a { text-decoration: none; }
+.templateHint { margin: -4px 0 12px; }
 .screenReader {
   position: absolute;
   width: 1px;
@@ -185,6 +201,7 @@
   .workflowCollectionHeading { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
   .workflowCollectionHeading .search { grid-area: 2 / 1 / auto / -1; }
   .workflowCollectionHeading .workflowPrimary { grid-area: 1 / 2; }
+  .featuredTemplate { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 440px) {
   .workflowRow, .rowLink { gap: 8px; }

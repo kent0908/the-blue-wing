@@ -13,6 +13,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/models`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${SITE_URL}/seedance-draft`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${SITE_URL}/canvas/guide`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${SITE_URL}/companions`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
   ];
   const models: MetadataRoute.Sitemap = MODEL_PAGES.map((m) => ({ url: `${SITE_URL}/models/${m.slug}`, lastModified: m.updatedAt, changeFrequency: "monthly", priority: 0.8 }));

@@ -1,10 +1,11 @@
 import { shareableGraph } from "@/lib/canvas/sharing";
-import { OFFICIAL_CANVAS_TEMPLATES, builtinCanvasSummary } from "@/lib/canvas/officialTemplates";
+import { officialCanvasTemplates, builtinCanvasSummary } from "@/lib/canvas/officialTemplates";
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, requireAdmin } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
 import { listTemplates, createTemplate, toPublicTemplate } from "@/lib/canvasTemplates";
 import type { CanvasGraph } from "@/lib/canvas/types";
+import { localeFromRequest } from "@/lib/i18n/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return auth.error;
 
   const rows = await listTemplates();
-  return NextResponse.json({ templates: [...OFFICIAL_CANVAS_TEMPLATES.map(builtinCanvasSummary), ...rows.map(toPublicTemplate)] });
+  return NextResponse.json({ templates: [...officialCanvasTemplates(localeFromRequest(req)).map(builtinCanvasSummary), ...rows.map(toPublicTemplate)] });
 }
 
 /**

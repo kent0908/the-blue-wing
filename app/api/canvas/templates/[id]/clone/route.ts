@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/apiauth";
 import { sql } from "@/lib/db";
 import { getTemplate } from "@/lib/canvasTemplates";
+import { localeFromRequest } from "@/lib/i18n/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const id = parseInt((await ctx.params).id, 10);
   if (!Number.isInteger(id)) return NextResponse.json({ error: { message: "無效的 id", code: "bad_id" } }, { status: 400 });
 
-  const template = builtinCanvasTemplate(id) ?? await getTemplate(id);
+  const template = builtinCanvasTemplate(id, localeFromRequest(req)) ?? await getTemplate(id);
   if (!template) return NextResponse.json({ error: { message: "找不到這個範本", code: "not_found" } }, { status: 404 });
 
   const { rows } = await sql`

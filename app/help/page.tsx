@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { FAQ_CATEGORIES } from "@/lib/supportFaq";
-import { getTr } from "@/lib/i18n/server";
-import { k } from "@/lib/i18n/tr";
+import { getLocale, getTr } from "@/lib/i18n/server";
+import { k, trFor } from "@/lib/i18n/tr";
+import { workflowGuideEntry } from "@/lib/i18n/workflowGuideEntry";
 
 // Rendered per request: the copy follows the visitor's language cookie (lib/i18n), so it can't be prerendered once.
 export const dynamic = "force-dynamic";
@@ -63,7 +64,8 @@ function Kbd({ children }: { children: React.ReactNode }) {
 }
 
 export default async function HelpPage() {
-  const tr = await getTr();
+  const locale = await getLocale();
+  const tr = trFor(locale);
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-[1080px] gap-10 px-6 py-8">
@@ -197,6 +199,9 @@ export default async function HelpPage() {
           {/* 智慧畫布與 3D 導演台 */}
           <section className="space-y-3">
             <H2 id="canvas">{tr("智慧畫布與 3D 導演台")}</H2>
+            <Link href="/canvas/guide" className="inline-flex min-h-11 items-center gap-2 text-[13px] leading-relaxed text-[#b7dfd2] underline decoration-[#4e7065] underline-offset-4 hover:decoration-current">
+              {workflowGuideEntry[locale].help}<span aria-hidden="true">↗</span>
+            </Link>
             <Card>
               <p className="text-[13px] leading-relaxed text-[#c9c9c9]">
                 <Link href="/canvas" className="text-[#7ff0cd] hover:underline">{tr("智慧畫布")}</Link>
