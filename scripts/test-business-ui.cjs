@@ -55,7 +55,7 @@ function makeContext() {
     submitLock: { current: false }, keyLock: { current: false }, unresolvedRequest: { current: null }, uncertain: false, navigationPending: false,
     selected: { id: 'kling-3.0-turbo', supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: ['720p', '1080p'], secondsOptions: [5, 10], defaultSeconds: 5, resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1'], supportsReferences: true, maxReferenceImages: 1, promptMaxChars: 2500, nsfw: false },
     prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
-    mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, resolveMentionPrompt: mentionsModule.exports.resolveMentionPrompt, promptLimit: 12000,
+    mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, resolveMentionPrompt: mentionsModule.exports.resolveMentionPrompt, orderMentionReferences: mentionsModule.exports.orderMentionReferences, promptLimit: 12000,
     resultsCopy: { submitted: 'sent' }, historyVersion: { current: 0 }, setSelectedJobId: noop, workspacePreview: { current: null }, requestAnimationFrame: callback => callback(),
     videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', assertBusinessSeedanceReferences, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload, buildBusinessWan3Payload,
     dedicatedOptions: {mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
@@ -256,7 +256,9 @@ function reviewWan3(context) {
     assert.equal(c.confirmation.parameters.businessAssetIds?.length??0,count);
     assert.equal(c.confirmation.parameters.assetIds,undefined);
     assert.equal(c.confirmation.parameters.providerAssets,undefined);
-    assert.equal(c.confirmation.parameters.referenceOrder,undefined);
+    if (c.selected.dedicatedVideo.supportsPersonalReferences && count) {
+      assert.deepEqual(Array.from(c.confirmation.parameters.referenceOrder),c.imageBusinessAssets.map(asset=>`business:${asset.uploadId}`));
+    } else assert.equal(c.confirmation.parameters.referenceOrder,undefined);
     assert.equal(c.confirmation.parameters.output_format,undefined);
     if(modelId.includes('i2v'))assert.equal(c.confirmation.parameters.aspect_ratio,undefined,'First frame controls the actual output ratio');
     if(modelId.startsWith('happyhorse')){assert.equal(c.confirmation.parameters.generate_audio,undefined);assert.equal(c.confirmation.parameters.prompt_extend,undefined);}
@@ -272,7 +274,7 @@ function reviewWan3(context) {
     ['two first frames without first-last mode','wan2.7-i2v',2,()=>{}],
     ['nine-image overflow','happyhorse-1.1-r2v',10,()=>{}],
     ['five-image overflow','wan2.7-r2v',6,()=>{}],
-    ['consumer reference IDs','wan2.7-r2v',1,c=>{c.assetIds=[1];}],
+    ['personal reference IDs on a business-only model','happyhorse-1.1-r2v',1,c=>{c.assetIds=[1];}],
     ['Seedance asset handle','wan2.7-r2v',1,c=>{c.providerAssets=[{id:'asset-only',type:'image'}];}],
     ['invalid seed','happyhorse-1.1-t2v',0,c=>{c.dedicatedOptions.seed='-1';}],
     ['CJK prompt exceeds actual router cap','happyhorse-1.1-t2v',0,c=>{c.prompt='景'.repeat(2501);}],
@@ -309,12 +311,27 @@ function reviewWan3(context) {
     assert.equal(result.uuids(), 1);
     assert.equal(result.calls.length, 0);
   }
+  {
+    const result = dedicatedContext('wan3.0-video-spicy', 1), c = result.context;
+    const businessKey = `business:${c.imageBusinessAssets[0].uploadId}`;
+    c.assetIds = [61];
+    c.referenceOrder = [businessKey,'local:61'];
+    c.dedicatedOptions.mode = 'first-last-frame';
+    c.mentionBindings.current = { privateImage:'local:61', businessImage:businessKey };
+    c.prompt = '@privateImage returns to @businessImage.';
+    reviewWan3(c);
+    assert.ok(c.confirmation, 'A mixed pair can reach confirmation for an owned Wan Spicy key');
+    assert.deepEqual(Array.from(c.confirmation.parameters.assetIds), [61]);
+    assert.deepEqual(Array.from(c.confirmation.parameters.referenceOrder), [businessKey,'local:61']);
+    assert.equal(c.confirmation.parameters.prompt, 'Image 2 returns to Image 1.');
+    assert.equal(result.calls.length, 0);
+  }
   for (const [name, count, configure, error] of [
     ['prompt exceeds 2,000 characters', 0, c => { c.prompt = '影'.repeat(2001); }, 'wan3-prompt-limit'],
     ['incomplete first-last pair', 1, c => { c.dedicatedOptions.mode = 'first-last-frame'; }, 'invalid'],
     ['reference overflow', 11, c => { c.dedicatedOptions.mode = 'subject-reference'; }, 'seedance-refs'],
     ['unavailable native upload', 1, c => { c.dedicatedOptions.mode = 'image-to-video'; c.imageBusinessAssets[0].storageReady = false; }, 'invalid'],
-    ['consumer asset', 0, c => { c.assetIds = [1]; }, 'invalid'],
+    ['personal asset on a text-only mode', 0, c => { c.assetIds = [1]; }, 'invalid'],
     ['out-of-range seed', 0, c => { c.dedicatedOptions.seed = '-1'; }, 'invalid'],
   ]) {
     const result = dedicatedContext('wan3.0-video', count), c = result.context;

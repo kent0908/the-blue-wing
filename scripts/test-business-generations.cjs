@@ -13,7 +13,7 @@ models.push(['minimax-h3','video'],['minimax-h3-max','video'],['minimax-m3','tex
 models.push(...['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst','gemini-3.1-flash-image','gemini-3.1-flash-lite-image','gemini-3-pro-image','ByteDance-Seedream-4.0','ByteDance-Seedream-4.5','Dola-Seedream-5.0-lite','NSFW-Seedream-4.0','NSFW-Seedream-4.5','NSFW-Seedream-5.0-lite'].map(id=>[id,'image']));
 models.push(...['claude-opus-5.5','gpt-6.1','uncensored-gpt-6','qwen3.8-max','kimi-k3','deepseek-v4-flash'].map(id=>[id,'text']));
 models.push(...['kling-tts','qwen3-asr-flash','gemini-embedding-2','wan2.7-t2v','wan2.7-i2v','wan2.7-r2v','wan2.7-videoedit','happyhorse-1.1-t2v','happyhorse-1.1-i2v','happyhorse-1.1-r2v'].map(id=>[id,'tool']));
-models.push(['wan3.0-video-pro','video']);
+models.push(['wan3.0-video-pro','video'],['wan3.0-video-prime-spicy','video']);
 models.push(['wan2.2-i2v-spicy','video'],['wan2.7-i2v-spicy','video']);
 models.push(['z-image-spicy','image'],['z-image-spicy-pro','image']);
 const rates=models.map(([modelId,modality])=>({modelId,modality,active:modelId!=='retired-image',credits:999}));
@@ -48,7 +48,17 @@ async function provider(kind,payload,options){providerCalls++;lastPayload=payloa
 const mocks={
  'next/server':{NextRequest,NextResponse},
  './db':{sql},'./assets':{blobConfigured:()=>blobReady,assetPathPrefix:id=>`assets/${id}/`,toPublicAsset:a=>({id:a.id,src:`/api/assets/${a.id}/raw`,name:a.filename,contentType:a.content_type,size:a.size,createdAt:a.created_at})},'./assetData':{assetsToDataUrls:async(_user,ids,limit)=>{assert.ok(ids.length<=limit);return ids.map(()=> 'data:image/png;base64,aW1hZ2U=')}},
- './businessReferenceUrls':{createBusinessReferenceUrls:async(userId,accountId,credentialId,ids,nsfw)=>{localReferenceCalls++;assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!assetRows.some(row=>row.id===id&&row.user_id===userId&&['image/png','image/jpeg','image/webp','image/gif'].includes(row.content_type)&&row.size<30*1024*1024)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/references/opaque-${id}`,role:'reference_image'}));}},
+ './businessReferenceUrls':{createBusinessReferenceUrls:async(userId,accountId,credentialId,ids,nsfw,profile)=>{
+   localReferenceCalls++;
+   assert.equal(accountId,account.id);
+   assert.equal(credentialId,activeCredential);
+   assert.equal(typeof nsfw,'boolean');
+   assert.ok(profile===undefined || profile==='wan');
+   const types=['image/png','image/jpeg','image/webp',...(profile==='wan'?[]:['image/gif'])];
+   const maxBytes=profile==='wan'?20*1024*1024:30*1024*1024-1;
+   if(ids.some(id=>!assetRows.some(row=>row.id===id&&row.user_id===userId&&types.includes(row.content_type)&&row.size<=maxBytes)))throw new BusinessError('invalid_reference');
+   return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/references/opaque-${id}`,role:'reference_image'}));
+ }},
  './businessProviderAssets':{getBusinessProviderAsset:async(id,{apiKey})=>{assert.equal(apiKey,credentials.get(activeCredential));const asset=registeredAssets.find(asset=>asset.id===id&&asset.apiKey===apiKey);if(!asset)throw Error('private provider failure');return {id,type:asset.type,name:'Registered character',status:asset.status};},resolveBusinessProviderAssets:async(refs,credential)=>{providerReferenceCalls++;assert.equal(credential.apiKey,credentials.get(activeCredential));if(refs.some(ref=>!registeredAssets.some(asset=>asset.id===ref.id&&asset.type===ref.type&&asset.status==='active'&&asset.apiKey===credential.apiKey)))throw new BusinessError('invalid_reference');return refs.map(ref=>({type:ref.type,url:`asset://${ref.id}`,role:`reference_${ref.type}`}));}},
  '@vercel/blob':{put:async(pathname,_bytes,opts)=>{assert.equal(opts.access,'private');uploads++;if(failStorage)throw Error('Private storage outage');return {pathname}}},
  './business':{BusinessError,businessJson,businessErrorResponse,requireBusiness:async()=>approval?{user:user(),account}:{error:businessJson({error:{code:'business_not_approved'}},403)},assertBusinessOrigin:req=>{if(req.headers.get('origin')!==req.nextUrl.origin)throw new BusinessError('invalid_origin',403)},readBusinessJson:async req=>req.json(),getBusinessCredential:async(_user,_account,id)=>!approval||revoked?null:{id:id??activeCredential,apiKey:credentials.get(id??activeCredential)}},
@@ -355,6 +365,61 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    for(const key of ['mode','referenceOrder','businessAssetIds','frame_images','editor']) assert.equal(lastPayload[key],undefined);
    const {reuse:snapshot}=await(await getReuse(jobs[0].id)).json();
    assert.deepEqual(snapshot.references.map(ref=>ref.key),referenceOrder); assert.deepEqual(snapshot.editor,editor); assert.equal(providerCalls,1);
+ });
+ await test('Wan 3.0 mixed personal and business images keep their picked order and mention labels through reuse', async () => {
+   assetRows=[{id:7,user_id:7,content_type:'image/png',size:1024}];
+   businessUploads=[uuid(902)];
+   const referenceOrder=[`business:${businessUploads[0]}`,'local:7'];
+   const parameters={model:'wan3.0-video-prime-spicy',mode:'subject-reference',assetIds:[7],businessAssetIds:businessUploads,referenceOrder,prompt:'Image 2 crosses the bridge.'};
+   const editor={prompt:'@Mio crosses the bridge.',mentions:{Mio:'local:7'}};
+   const response=await send({...body(1,'video',parameters),editor});
+   assert.equal(response.status,201);
+   assert.equal(lastPayload.model,parameters.model);
+   assert.deepEqual(lastPayload.reference_images,[
+     `https://fixture.invalid/api/business/provider-assets/source/opaque-${businessUploads[0]}`,
+     'https://fixture.invalid/api/business/references/opaque-7',
+   ]);
+   for(const key of ['assetIds','businessAssetIds','referenceOrder','referenceGenerationIds','editor']) assert.equal(lastPayload[key],undefined);
+   const {reuse:snapshot}=await(await getReuse(jobs[0].id)).json();
+   assert.deepEqual(snapshot.references.map(ref=>ref.key),referenceOrder);
+   assert.equal(snapshot.references[1].asset.src,'/api/assets/7/raw');
+   assert.deepEqual(snapshot.editor,editor);
+ });
+ await test('Wan 2.2 and 2.7 keyframes preserve personal and business source order on the wire', async () => {
+   assetRows=[{id:7,user_id:7,content_type:'image/webp',size:1024}];
+   businessUploads=[uuid(902)];
+   for(const [index,model] of ['wan2.2-i2v-spicy','wan2.7-i2v-spicy','wan2.7-i2v'].entries()){
+     const referenceOrder=[`business:${businessUploads[0]}`,'local:7'];
+     assert.equal((await send(body(index+1,'video',{model,mode:'first-last-frame',assetIds:[7],businessAssetIds:businessUploads,referenceOrder}))).status,201);
+     const [first,last]=model.startsWith('wan2.2')?[lastPayload.image,lastPayload.last_image]:lastPayload.frame_images.map(ref=>ref.image_url);
+     assert.ok(first.endsWith(businessUploads[0]));
+     assert.match(last,/\/api\/business\/references\/opaque-7$/);
+     assert.equal(lastPayload.assetIds,undefined);
+     assert.equal(lastPayload.referenceOrder,undefined);
+   }
+   assert.equal(localReferenceCalls,3);
+   assert.equal(businessUploadCalls,3);
+ });
+ await test('Wan personal references enforce shape, ownership and adult verification before reservation', async () => {
+   assetRows=[{id:7,user_id:99,content_type:'image/png',size:1024}];
+   const model='wan3.0-video-prime-spicy';
+   const firstFrame={model,mode:'image-to-video',assetIds:[7],referenceOrder:['local:7']};
+   const reject=async extra=>assert.equal((await send(body(1,'video',{...firstFrame,...extra}))).status,400);
+   await reject({referenceOrder:['local:8']});
+   await reject({mode:'text-to-video'});
+   await reject({model:'wan2.7-t2v'});
+   assert.equal(localReferenceCalls,0);
+   adult=false;
+   assert.equal((await send(body(1,'video',firstFrame))).status,403);
+   assert.equal(localReferenceCalls,0);
+   adult=true;
+   await reject({});
+   assetRows[0].user_id=7;
+   assetRows[0].content_type='image/gif';
+   await reject({});
+   assert.equal(localReferenceCalls,2);
+   assert.equal(jobs.length,0);
+   assert.equal(providerCalls,0);
  });
  console.log(`Business generation: ${count} actual route/security cases passed; no paid calls, platform credits or live database changes.`);
 })().catch(error=>{console.error(error);process.exitCode=1}).finally(()=>{global.fetch=originalFetch});

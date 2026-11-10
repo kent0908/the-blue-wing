@@ -14,6 +14,7 @@ export interface MentionCandidate {
   name: string;
   src?: string;
   localId?: number;
+  personalAsset?: BusinessAsset;
   asset?: BusinessAssetRecord;
 }
 
@@ -25,7 +26,8 @@ interface Props {
   placeholder: string;
   note: string;
   assets: BusinessAsset[];
-  mode: "none" | "local" | "image" | "seedance" | "native";
+  mode: "none" | "local" | "image" | "seedance" | "native" | "native-with-personal";
+  personalMaxBytes?: number;
   selectedKeys?: ReadonlySet<string>;
   onPick: (candidate: MentionCandidate) => string | null;
 }
@@ -56,7 +58,7 @@ async function loadList<T>(url: string, key: string, signal: AbortSignal): Promi
 
 function listCandidates(
   mode: Props["mode"], local: BusinessAsset[], uploads: Upload[], reviewed: BusinessAssetRecord[],
-  selectedKeys?: ReadonlySet<string>,
+  selectedKeys?: ReadonlySet<string>, personalMaxBytes?: number,
 ) {
   const candidates = new Map<string, MentionCandidate>();
   const seenProvider = new Set<string>();
@@ -89,9 +91,10 @@ function listCandidates(
   }
   if (mode !== "native") {
     for (const asset of local) {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(asset.contentType ?? "image/png")) continue;
+      if (!["image/png", "image/jpeg", "image/webp"].includes(asset.contentType ?? "image/png") ||
+        (personalMaxBytes !== undefined && asset.size !== undefined && Number(asset.size) > personalMaxBytes)) continue;
       const key = `local:${asset.id}`;
-      candidates.set(key, { key, localId: asset.id, name: asset.name, src: `/api/assets/${asset.id}/raw` });
+      candidates.set(key, { key, localId: asset.id, name: asset.name, src: `/api/assets/${asset.id}/raw`, personalAsset: asset });
     }
   }
   return [...candidates.values()];
@@ -181,7 +184,7 @@ export default function BusinessPrompt(props: Props) {
   }, [opened, manual]);
 
   const query = mention?.query.trim().normalize("NFKC").toLocaleLowerCase(locale) ?? "";
-  const candidates = opened ? listCandidates(mode, local ?? props.assets, uploads, reviewed, props.selectedKeys) : [];
+  const candidates = opened ? listCandidates(mode, local ?? props.assets, uploads, reviewed, props.selectedKeys, props.personalMaxBytes) : [];
   const matches = query ? candidates.filter(candidate => candidate.name.normalize("NFKC").toLocaleLowerCase(locale).includes(query)) : candidates;
   const activeIndex = matches.findIndex(candidate => candidate.key === activeKey);
   const activeId = activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined;

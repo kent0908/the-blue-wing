@@ -192,22 +192,26 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     catch { fail(); }
   }
   if (kind === "video" && model.dedicatedVideo) {
-    // These dedicated providers need HTTPS media, not Seedance's asset:// IDs.
-    // B-native immutable uploads have an independent account-scoped resolver.
-    const wan3 = model.dedicatedVideo.family === "wan3.0";
-    if (["assetIds", "providerAssets", "output_format"].some(key => parameters[key] !== undefined) ||
-      !wan3 && !model.dedicatedVideo.acceptsReferenceOrder && parameters.referenceOrder !== undefined) fail();
-    const keys = [...ownUploads.map(id => `business:${id}`), ...generatedIds.map(id => `generated:${id}`)];
+    // These dedicated providers consume signed HTTPS images, not Seedance asset:// IDs.
+    const { family, supportsPersonalReferences, acceptsReferenceOrder, referenceImageRules } = model.dedicatedVideo;
+    if (["providerAssets", "output_format"].some(key => parameters[key] !== undefined) ||
+      (!supportsPersonalReferences && assetIds !== undefined) ||
+      (!acceptsReferenceOrder && parameters.referenceOrder !== undefined)) fail();
+    const localIds = assetIds ?? [];
+    const keys = [...localIds.map(id => `local:${id}`), ...ownUploads.map(id => `business:${id}`), ...generatedIds.map(id => `generated:${id}`)];
     const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
     if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
+    delete adapterParameters.assetIds;
     delete adapterParameters.referenceOrder;
-    const buildPayload = wan3 ? buildBusinessWan3Payload : buildBusinessDedicatedVideoPayload;
+    const buildPayload = family === "wan3.0" ? buildBusinessWan3Payload : buildBusinessDedicatedVideoPayload;
     const types = referenceOrder.map((_, index) => ({ type: "image" as const, url: `https://owned.invalid/reference-${index}.png` }));
     try { buildPayload(adapterParameters, types); } catch { fail(); }
-    const refs = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
-    const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
-    if (refs.length !== ownUploads.length || generated.length !== generatedIds.length || [...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
-    const resolved = [...refs, ...generated];
+    const local = localIds.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, localIds, model.nsfw, "wan") : [];
+    const refs = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, referenceImageRules) : [];
+    const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, referenceImageRules) : [];
+    const resolved = [...local, ...refs, ...generated];
+    if (local.length !== localIds.length || refs.length !== ownUploads.length || generated.length !== generatedIds.length ||
+      resolved.some(ref => ref.type !== "image")) fail("invalid_reference");
     const byKey = new Map(keys.map((key, index) => [key, resolved[index]]));
     try { return buildPayload(adapterParameters, referenceOrder.map(key => byKey.get(key)!)); } catch { fail(); }
   }

@@ -24,6 +24,7 @@ function actualHandlers(file, names) {
       const initializer = ts.isArrowFunction(node.initializer) ? node.initializer : ts.isCallExpression(node.initializer) && node.initializer.expression.getText(ast) === 'useCallback' ? node.initializer.arguments[0] : undefined;
       if (initializer && ts.isArrowFunction(initializer)) handlers[node.name.getText(ast)] = initializer.getText(ast);
     }
+    if (ts.isFunctionDeclaration(node) && node.name && names.includes(node.name.text)) handlers[node.name.text] = node.getText(ast);
     ts.forEachChild(node, visit);
   }
   visit(ast);
@@ -96,12 +97,13 @@ assert.ok(consumerTree.some(node => node.type === consumerSupport), 'Normal stud
 
 // The handlers below run their real function bodies with observed React setters.
 // A network call is a test failure, so changing a model/tab cannot spend money.
-const { source: workspaceSource, handlers } = actualHandlers('components/business/BusinessWorkspace.tsx', ['resetSelection', 'navigate', 'setTab', 'chooseTab', 'chooseKind', 'chooseModel', 'requestConfirmation', 'chooseVideoMode', 'toggleLocalReference', 'toggleProviderReference', 'chooseDedicatedOptions', 'selectManagedAsset']);
+const { source: workspaceSource, handlers } = actualHandlers('components/business/BusinessWorkspace.tsx', ['resetSelection', 'navigate', 'setTab', 'chooseTab', 'chooseKind', 'chooseModel', 'requestConfirmation', 'chooseVideoMode', 'toggleLocalReference', 'toggleProviderReference', 'chooseDedicatedOptions', 'dedicatedImageLimit', 'addWanPersonalReference', 'removeDedicatedReference', 'toggleWanPersonalReference', 'selectManagedAsset']);
 function context() {
   const pushes = [];
   const state = {
     mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, promptLimit: 12000,
     resolveMentionPrompt: load('lib/businessMentions.ts').resolveMentionPrompt,
+    orderMentionReferences: load('lib/businessMentions.ts').orderMentionReferences,
     kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video' },
     size: 'old-size', resolution: '4k', assetIds: [71, 72], audio: true, seconds: 30,
     videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123', imageCount:3, imageQuality:'high', imageNegative:'old', imageBusinessAssets:[{id:'old-b',uploadId:'fixture-old-upload'}], selectionContext:{current:'video:previous-model'},
@@ -122,14 +124,16 @@ function context() {
     setSize: value => { state.size = value; },
     setResolution: value => { state.resolution = value; },
     setAssetIds: value => { state.assetIds = typeof value === 'function' ? value(state.assetIds) : value; },
+    assets: [], setAssets: value => { state.assets = typeof value === 'function' ? value(state.assets) : value; },
     setVideoMode: value => { state.videoMode = value; },
     setProviderAssets: value => { state.providerAssets = typeof value === 'function' ? value(state.providerAssets) : value; },
     setReferenceOrder: value => { state.referenceOrder = typeof value === 'function' ? value(state.referenceOrder) : value; },
     setOutputFormat: value => { state.outputFormat = value; },
     setSeed: value => { state.seed = value; },
-    setImageCount: value => { state.imageCount = value; }, setImageQuality: value => {state.imageQuality=value;}, setImageNegative:value=>{state.imageNegative=value;}, setImagePromptExtend:value=>{state.imagePromptExtend=value;}, setImageBusinessAssets:value=>{state.imageBusinessAssets=value;},
+    setImageCount: value => { state.imageCount = value; }, setImageQuality: value => {state.imageQuality=value;}, setImageNegative:value=>{state.imageNegative=value;}, setImagePromptExtend:value=>{state.imagePromptExtend=value;}, setImageBusinessAssets:value=>{state.imageBusinessAssets=typeof value==='function'?value(state.imageBusinessAssets):value;},
     setAudio: value => { state.audio = value; },
-    setDedicatedOptions:value=>{state.dedicatedOptions=value;},
+    setDedicatedOptions:value=>{state.dedicatedOptions=typeof value==='function'?value(state.dedicatedOptions):value;},
+    setAspect:value=>{state.aspect=value;},
     setSeconds: value => { state.seconds = value; },
     setConfirmation: value => { state.confirmation = value; },
     setApiKey: value => { state.apiKey = value; },
@@ -417,5 +421,26 @@ assert.ok(JobToasts(), 'Consumer job notifications continue working in the norma
   assert.equal(state.imageBusinessAssets.length,0,'Changing first-frame mode clears prior source order');assert.equal(state.confirmation,null);
   state.submitLock.current=true;state.imageBusinessAssets=[{id:'locked'}];state.chooseDedicatedOptions({...state.dedicatedOptions,watermark:true});
   assert.equal(state.dedicatedOptions.watermark,false,'In-flight paid confirmation locks dedicated controls');assert.equal(state.imageBusinessAssets.length,1);
+}
+{
+  const {state,pushes}=context();
+  state.resetSelection();
+  const capability=load('lib/businessWan3.ts').getBusinessWan3Capability('wan3.0-video');
+  state.selected={id:'wan3.0-video',supportsReferences:true,dedicatedVideo:capability};
+  state.assets=[{id:15,name:'Opening.png',src:'/api/assets/15/raw',contentType:'image/png'}];
+  state.toggleWanPersonalReference(15);
+  assert.equal(state.dedicatedOptions.mode,'subject-reference','Selecting from My Assets in the default mode switches to image references');
+  assert.deepEqual(Array.from(state.referenceOrder),['local:15']);
+  state.chooseDedicatedOptions({...state.dedicatedOptions,mode:'first-last-frame'});
+  assert.deepEqual(Array.from(state.assetIds),[15],'Switching to compatible frame mode keeps the selected opening image');
+  state.selectManagedAsset({id:'tail',uploadId:'tail',type:'image',status:'active',storageReady:true});
+  assert.deepEqual(Array.from(state.referenceOrder),['local:15','business:tail']);
+  state.chooseDedicatedOptions({...state.dedicatedOptions,mode:'image-to-video'});
+  assert.equal(state.dedicatedOptions.mode,'first-last-frame','An incompatible switch must not silently discard either frame');
+  state.removeDedicatedReference('business:tail');
+  state.chooseDedicatedOptions({...state.dedicatedOptions,mode:'image-to-video'});
+  assert.equal(state.dedicatedOptions.mode,'image-to-video');
+  assert.deepEqual(Array.from(state.referenceOrder),['local:15']);
+  assert.equal(pushes.length,1,'Only the return from the business assets page navigates');
 }
 console.log('PASS business studio: URL validation/roundtrip, actual model/kind/tab actions, back-forward reset, unknown-request preservation, in-flight and URL-transition confirmation/button locks, responsive nav, real search, three-language labels, approval/key states and consumer-shell/toast isolation; no network or paid calls.');

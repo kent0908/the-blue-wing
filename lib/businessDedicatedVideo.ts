@@ -20,6 +20,7 @@ export interface BusinessDedicatedVideoCapability {
   defaultResolution?: string;
   promptExtendSurcharged?: boolean;
   acceptsReferenceOrder?: boolean;
+  supportsPersonalReferences?: boolean;
   autoDuration?: boolean;
   sourceDuration: boolean;
   aspectRatios: string[];
@@ -50,6 +51,7 @@ export function getBusinessDedicatedVideoCapability(model: string | null | undef
       defaultSeconds: 5,
       ...(wan22 ? { secondsOptions: [5, 8], promptExtendSurcharged: true } : {}),
       acceptsReferenceOrder: true,
+      supportsPersonalReferences: true,
       sourceDuration: false,
       aspectRatios: [...STANDARD_RATIOS],
       aspectRatioFromSource: true,
@@ -75,6 +77,7 @@ export function getBusinessDedicatedVideoCapability(model: string | null | undef
   const suffix = wan?.[1] ?? happy![2];
   const capability = suffix === "t2v" ? "text-to-video" : suffix === "i2v" ? "image-to-video" : suffix === "r2v" ? "subject-reference" : "video-edit";
   const editing = capability === "video-edit";
+  const supportsPersonalReferences = !!wan && (capability === "image-to-video" || capability === "subject-reference");
   const modes: BusinessDedicatedVideoMode[] = ["freestyle", capability];
   if (wan && capability === "image-to-video") modes.push("first-last-frame", "video-extend");
   return {
@@ -82,6 +85,7 @@ export function getBusinessDedicatedVideoCapability(model: string | null | undef
     resolutions: happy?.[1] === "1" ? ["480p", "720p", "1080p"] : ["720p", "1080p"],
     minSeconds: wan ? 2 : 3, maxSeconds: wan && editing ? 10 : 15,
     defaultSeconds: editing && wan ? 0 : 5, sourceDuration: editing,
+    ...(supportsPersonalReferences ? { supportsPersonalReferences, acceptsReferenceOrder: true } : {}),
     aspectRatios: [...(wan ? STANDARD_RATIOS : HAPPY_RATIOS)],
     aspectRatioFromSource: editing || capability === "image-to-video",
     // Native Wan 2.7 allows five materials. SIRAYA only publishes image

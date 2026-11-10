@@ -1,6 +1,12 @@
 import type { Locale } from "./locale";
 
 const zh = {
+  personalLibrary: "我的素材庫", personalSource: "個人素材", businessSource: "商務素材", searchPersonal: "搜尋圖片名稱",
+  personalLoading: "正在讀取我的素材庫…", personalUnavailable: "目前無法讀取我的素材庫。", refreshPersonal: "重新讀取素材",
+  personalEmpty: "我的素材庫目前沒有可用的圖片。", personalNoResults: "找不到符合的圖片。", managePersonal: "管理我的素材庫",
+  personalSwitchMode: "選擇圖片後會切換至圖片參照。", referenceCapacity: "已達此模式的圖片上限。", personalTooLarge: "檔案超過大小上限",
+  imageOrder: "圖片順序", openingFrame: "首幀", closingFrame: "尾幀", referenceNumber: "圖片 {index}",
+  moveEarlier: "將 {name} 向前移", moveLater: "將 {name} 向後移", removeImage: "移除 {name}",
   durationAuto: "自動", durationSeconds: "{value} 秒", automaticAspect: "依素材",
   wan3ImageRules: "請使用 JPEG、無透明區域的 PNG 或 WebP。每邊 240–6,000 px，長短邊比不超過 8:1，每張最多 20 MB。", wan3ReferenceInfo: "在提示詞中以 Image 1、Image 2 等指定圖片，順序同下方清單。", wan3Seed: "可填 0 至 2,147,483,647 的整數，0 代表隨機。", wan3PromptLimit: "Wan 3.0 的提示詞上限為 2,000 字元。",
   title: "鏡頭設定", mode: "創作方式", textToVideo: "文字成片", imageToVideo: "首幀成片", firstLastFrame: "首尾幀", subjectReference: "圖片參照",
@@ -10,6 +16,12 @@ const zh = {
 };
 export type BusinessDedicatedVideoCopy = { [K in keyof typeof zh]: string };
 const en: BusinessDedicatedVideoCopy = {
+  personalLibrary: "My assets", personalSource: "Personal asset", businessSource: "Business asset", searchPersonal: "Search image names",
+  personalLoading: "Loading your assets…", personalUnavailable: "Your assets could not be loaded.", refreshPersonal: "Reload assets",
+  personalEmpty: "Your library has no eligible images.", personalNoResults: "No images match your search.", managePersonal: "Manage my assets",
+  personalSwitchMode: "Choosing an image switches to Image references.", referenceCapacity: "This mode's image limit has been reached.", personalTooLarge: "File exceeds the size limit",
+  imageOrder: "Image order", openingFrame: "First frame", closingFrame: "Last frame", referenceNumber: "Image {index}",
+  moveEarlier: "Move {name} earlier", moveLater: "Move {name} later", removeImage: "Remove {name}",
   durationAuto: "Auto", durationSeconds: "{value} s", automaticAspect: "Auto",
   wan3ImageRules: "Use JPEG, non-transparent PNG or WebP. Each side must be 240–6,000 px, the aspect ratio at most 8:1, and each file at most 20 MB.", wan3ReferenceInfo: "Use Image 1, Image 2, and so on in your prompt. The numbers follow the selection order shown below.", wan3Seed: "Enter an integer from 0 to 2,147,483,647. Zero means random.", wan3PromptLimit: "Wan 3.0 prompts are limited to 2,000 characters.",
   title: "Shot settings", mode: "Creation mode", textToVideo: "Text to video", imageToVideo: "First frame", firstLastFrame: "First & last frames", subjectReference: "Image references",
@@ -18,6 +30,12 @@ const en: BusinessDedicatedVideoCopy = {
   advanced: "More settings", watermark: "Keep the generated-content watermark", watermarkInfo: "When off, the request explicitly asks the model to omit its watermark.", seed: "Random seed (optional)", seedPlaceholder: "Leave blank for a random seed", seedWan: "Use an integer from -1 to 2,147,483,647. A matching seed does not guarantee identical results.", seedHappy: "Use an integer from 0 to 2,147,483,647. A matching seed does not guarantee identical results.", promptExtend: "Let the model refine the prompt", promptExtendInfo: "When on, the model rewrites your description before generation. Leave off to keep your own wording.", negative: "Content to avoid (optional)", negativePlaceholder: "For example: blurry frames, camera shake, unnatural hands", negativeCount: "{count} / 4,000 characters", providerDocs: "View model parameter documentation",
 };
 const ja: BusinessDedicatedVideoCopy = {
+  personalLibrary: "マイ素材庫", personalSource: "個人素材", businessSource: "ビジネス素材", searchPersonal: "画像名で検索",
+  personalLoading: "マイ素材庫を読み込み中…", personalUnavailable: "マイ素材庫を読み込めませんでした。", refreshPersonal: "素材を再読み込み",
+  personalEmpty: "マイ素材庫に利用できる画像がありません。", personalNoResults: "一致する画像がありません。", managePersonal: "マイ素材庫を管理",
+  personalSwitchMode: "画像を選ぶと参考画像モードに切り替わります。", referenceCapacity: "このモードの画像数の上限に達しました。", personalTooLarge: "ファイルサイズの上限を超えています",
+  imageOrder: "画像の順序", openingFrame: "開始フレーム", closingFrame: "終了フレーム", referenceNumber: "画像 {index}",
+  moveEarlier: "{name} を前へ", moveLater: "{name} を後ろへ", removeImage: "{name} を外す",
   durationAuto: "自動", durationSeconds: "{value} 秒", automaticAspect: "自動",
   wan3ImageRules: "JPEG・透過なしのPNG・WebPを使用してください。各辺240〜6,000 px、縦横比は長辺と短辺で最大8:1、1枚20 MB以下です。", wan3ReferenceInfo: "プロンプトでは、下の選択順に合わせて Image 1、Image 2 などで画像を指定できます。", wan3Seed: "0〜2,147,483,647 の整数を入力できます。0 はランダムです。", wan3PromptLimit: "Wan 3.0 のプロンプトは2,000文字までです。",
   title: "ショット設定", mode: "制作方法", textToVideo: "テキストから映像", imageToVideo: "開始フレーム", firstLastFrame: "開始・終了フレーム", subjectReference: "参考画像",

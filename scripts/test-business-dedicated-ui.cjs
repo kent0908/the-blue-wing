@@ -14,8 +14,10 @@ function loader(hookMock = false) {
     if (cache[path]) return cache[path];
     const fixtureModule = { exports: {} };
     const requireFixture = name => {
-      if (name === 'react') return hookMock ? { useId: () => 'fixture-controlled-id' } : React;
+      if (name === 'react') return hookMock ? { useId: () => 'fixture-controlled-id', useState: value => [value, () => {}] } : React;
       if (name === 'react/jsx-runtime') return require(name);
+      if (name === 'next/image') return ({ unoptimized, ...props }) => React.createElement('img', props);
+      if (name === 'next/link') return props => React.createElement('a', props);
       if (name === '@/lib/i18n/client') return { useLocale: () => locale };
       if (name === '@/lib/i18n/businessDedicatedVideo') return read('lib/i18n/businessDedicatedVideo.ts');
       if (name === '@/lib/i18n/businessOperations') return read('lib/i18n/businessOperations.ts');
@@ -33,6 +35,16 @@ const { getBusinessDedicatedVideoCapability: caps } = read('lib/businessDedicate
 const { getBusinessWan3Capability: wanCaps } = read('lib/businessWan3.ts');
 const { businessDedicatedVideoCopy } = read('lib/i18n/businessDedicatedVideo.ts');
 let combinations = 0;
+const fixtureAssets = [
+  { id: 31, name: 'Garden Opening', contentType: 'image/jpeg' },
+  { id: 42, name: 'Garden Closing', contentType: 'image/webp' },
+  { id: 53, name: 'Scene Video', contentType: 'video/mp4' },
+  { id: 64, name: 'Oversized Image', contentType: 'image/png', size: 21 * 1024 * 1024 },
+];
+const fixtureReferences = [
+  { key: 'business:closing', name: 'Business Closing', source: 'business' },
+  { key: 'local:31', name: 'Garden Opening', source: 'personal', src: '/api/assets/31/raw' },
+];
 for (locale of ['zh-Hant', 'en', 'ja']) {
   for (const model of ['wan2.7-t2v', 'wan2.7-i2v', 'wan2.7-r2v', 'happyhorse-1.1-t2v', 'happyhorse-1.1-i2v', 'happyhorse-1.1-r2v']) {
     const html = renderToStaticMarkup(React.createElement(Controls, { capability: caps(model), value: defaults, onChange: () => {}, referenceCount: 0, onOpenAssets: () => {} }));
@@ -74,6 +86,21 @@ for (locale of ['zh-Hant', 'en', 'ja']) {
     assert.equal((html.match(/<option /g) ?? []).length, 4);
     combinations++;
   }
+  const libraryProps = { assets: fixtureAssets, selectedIds: [31], onToggle: () => {}, onRetry: () => {} };
+  const personal = renderToStaticMarkup(React.createElement(Controls, { capability: wan, value: defaults, onChange: () => {}, personalLibrary: libraryProps }));
+  assert.ok(personal.includes(copy.personalLibrary) && personal.includes(copy.personalSwitchMode), `${locale}: Wan default text mode surfaces a personal entry`);
+  assert.ok(personal.includes('/api/assets/31/raw') && personal.includes('aria-pressed="true"'), `${locale}: selected owned thumbnail is identified`);
+  assert.ok(!personal.includes('Scene Video'), `${locale}: nonimage personal media is excluded`);
+  assert.ok(personal.includes(copy.personalTooLarge), `${locale}: an oversized personal image explains why it cannot be selected`);
+  const firstLast = renderToStaticMarkup(React.createElement(Controls, {
+    capability: wan, value: { ...defaults, mode: 'first-last-frame' }, onChange: () => {},
+    personalLibrary: libraryProps, referenceItems: fixtureReferences, onRemoveReference: () => {}, onMoveReference: () => {},
+  }));
+  assert.ok(firstLast.includes(copy.imageOrder) && firstLast.includes(copy.openingFrame) && firstLast.includes(copy.closingFrame), `${locale}: mixed refs have explicit frame positions`);
+  assert.ok(firstLast.includes(copy.personalSource) && firstLast.includes(copy.businessSource), `${locale}: libraries remain distinguishable`);
+  assert.ok(firstLast.includes(copy.selected.replace('{count}', '2').replace('{max}', '2')));
+  const happyNoPersonal = renderToStaticMarkup(React.createElement(Controls, { capability: caps('happyhorse-1.1-i2v'), value: defaults, onChange: () => {}, personalLibrary: libraryProps }));
+  assert.ok(!happyNoPersonal.includes(copy.personalLibrary), `${locale}: unrelated dedicated models do not gain personal materials`);
   const duration = renderToStaticMarkup(React.createElement(WanDuration, { capability: wan, seconds: -1, disabled: true, onChange: () => {} }));
   assert.ok(duration.includes('<select disabled="">'));
   assert.ok(duration.includes(`<option value="-1" selected="">${copy.durationAuto}</option>`));
@@ -111,4 +138,27 @@ assert.equal(Controlled({ ...props, capability: caps('happyhorse-1.0-video-edit'
 const durationChanges = [];
 WanDuration({ capability: wanCaps('wan3.0-video-pro'), seconds: 5, onChange: seconds => durationChanges.push(seconds) }).props.onChange({ target: { value: '-1' } });
 assert.deepEqual(durationChanges, [-1], 'Wan 3.0 duration handler preserves the automatic value');
-console.log(`PASS business dedicated UI: ${combinations} actual SSR locale/model and mode combinations, localized Wan 3.0 duration range, controlled mode/watermark handlers, native asset action, overflow warning and submission lock; no network or paid calls.`);
+const toggles = [], changesInOrder = [], removed = [];
+const mixed = flatten(Controlled({
+  ...props,
+  capability: wanCaps('wan3.0-video'),
+  value: { ...defaults, mode: 'first-last-frame' },
+  personalLibrary: { assets: fixtureAssets, selectedIds: [31], onToggle: id => toggles.push(id) },
+  referenceItems: fixtureReferences,
+  onMoveReference: (key, direction) => changesInOrder.push([key, direction]),
+  onRemoveReference: key => removed.push(key),
+}));
+const personalPicker = mixed.find(node => typeof node.type === 'function' && node.type.name === 'PersonalImagePicker');
+const pickerNodes = flatten(personalPicker.type(personalPicker.props));
+const chosen = pickerNodes.find(node => node.type === 'button' && node.props['aria-pressed'] === true);
+const available = pickerNodes.find(node => node.type === 'button' && node.props['aria-pressed'] === false);
+assert.equal(chosen.props.disabled, false, 'A selected personal image can be removed when the mode is full');
+assert.equal(available.props.disabled, true, 'The library blocks adding another image at combined capacity');
+chosen.props.onClick();
+available.props.onClick();
+assert.deepEqual(toggles, [31]);
+mixed.find(node => node.props?.['aria-label'] === 'Move Garden Opening earlier').props.onClick();
+mixed.find(node => node.props?.['aria-label'] === 'Remove Business Closing').props.onClick();
+assert.deepEqual(changesInOrder, [['local:31', -1]]);
+assert.deepEqual(removed, ['business:closing']);
+console.log(`PASS business dedicated UI: ${combinations} localized model/mode renders, owned material selection, mixed-order controls, native assets and confirmation lock; no network or paid calls.`);

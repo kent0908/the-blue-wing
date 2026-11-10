@@ -46,7 +46,7 @@ const blob = { get: async (pathname, options) => {
 const references = load('lib/businessReferenceUrls.ts', { 'server-only': {}, '@vercel/blob': blob, './db': source,
   './assets': { assetPathPrefix: id => `assets/${id}/` }, './adultGate': adult, './businessTypes': { BusinessError }, './seo/site': { SITE_URL: 'https://thebluewing.studio' } });
 const route = load('app/api/business/references/[token]/route.ts', { '@/lib/businessReferenceUrls': references, '@/lib/businessTypes': { BusinessError } });
-const create = (ids = [1], nsfw = false, user = 7, account = accountId, credential = credentialId) => references.createBusinessReferenceUrls(user, account, credential, ids, nsfw);
+const create = (ids = [1], nsfw = false, user = 7, account = accountId, credential = credentialId, profile) => references.createBusinessReferenceUrls(user, account, credential, ids, nsfw, profile);
 const tokenOf = reference => new URL(reference.url).pathname.split('/').at(-1);
 const fetchToken = token => route.GET(new NextRequest(`https://thebluewing.studio/api/business/references/${token}`, { headers: { authorization: 'not-forwarded', cookie: 'not-required', range: 'bytes=0-4' } }), { params: Promise.resolve({ token }) });
 function reset() {
@@ -185,6 +185,34 @@ async function denied(token, status = 404, noLookup = false) {
       assets[0] = { ...assets[0], content_type: mime, size: bytes.length }; blobType = mime; blobSize = bytes.length; blobBytes = bytes; blobLength = String(bytes.length);
       const response = await fetchToken(tokenOf((await create())[0])); assert.equal(response.status, 200, mime); assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
     }
+  });
+  await test('Wan accepts the documented smaller, wider still image and rechecks its profile on fetch', async () => {
+    const assign = bytes => {
+      blobBytes = bytes; blobSize = bytes.length; blobLength = String(bytes.length); assets[0].size = bytes.length;
+    };
+    const wide = await sharp({ create: { width: 1920, height: 240, channels: 3, background: '#5a8aaf' } }).png().toBuffer();
+    assign(wide);
+    await assert.rejects(() => create(), error => error.code === 'invalid_reference', 'existing Seedance minimum dimensions and ratio are retained');
+    const createWan = () => create([1], true, 7, accountId, credentialId, 'wan');
+    const token = tokenOf((await createWan())[0]);
+    const response = await fetchToken(token);
+    assert.equal(response.status, 200);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), wide);
+    const alpha = await sharp({ create: { width: 300, height: 300, channels: 4, background: '#5a8aaf80' } }).png().toBuffer();
+    assign(alpha);
+    await assert.rejects(createWan, error => error.code === 'invalid_reference');
+    assert.equal((await fetchToken(token)).status, 404);
+    assign(wide.subarray(0, wide.length - 60));
+    await assert.rejects(createWan, error => error.code === 'invalid_reference', 'the decoder must read pixels, beyond parsing the image header');
+    assert.equal((await fetchToken(token)).status, 404);
+  });
+  await test('Wan rejects unsupported formats and oversize before reading any Blob bytes', async () => {
+    const createWan = () => create([1], false, 7, accountId, credentialId, 'wan');
+    assets[0].size = 20 * 1024 * 1024 + 1;
+    await assert.rejects(createWan, error => error.code === 'invalid_reference');
+    assets[0].size = fixture.length; assets[0].content_type = 'image/gif';
+    await assert.rejects(createWan, error => error.code === 'invalid_reference');
+    assert.equal(blobCalls.length, 0);
   });
   await test('actual undersized image, out-of-range ratio and spoofed image magic are denied before HTTP 200', async () => {
     const token = tokenOf((await create())[0]);

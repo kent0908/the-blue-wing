@@ -14,11 +14,16 @@ export const BUSINESS_REFERENCE_MAX_BYTES = 30 * 1024 * 1024;
 /** These raster formats are both accepted by Seedance and registered by this site's asset uploader. */
 export const BUSINESS_REFERENCE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
+const WAN_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const WAN_MAX_BYTES = 20 * 1024 * 1024;
+type ReferenceProfile = "wan";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const AAD = Buffer.from("tbw:business:reference-image:v1");
 const KEY_PURPOSE = "tbw:business:reference-image:key:v1";
 interface ReferenceGrant {
   v: 1; uid: number; aid: string; cid: string; sid: number; adult: boolean; iat: number; exp: number;
+  profile?: ReferenceProfile;
 }
 interface AuthorizationRow extends AdultGateUser {
   account_id: string; user_id: number | string; account_status: string;
@@ -80,7 +85,8 @@ function unseal(token: string): ReferenceGrant {
     if (!value || typeof value !== "object" || Array.isArray(value)) unavailable();
     const grant = value as ReferenceGrant;
     const now = nowSeconds();
-    if (Object.keys(value).sort().join(",") !== "adult,aid,cid,exp,iat,sid,uid,v" || grant.v !== 1 ||
+    const expectedKeys = grant.profile === "wan" ? "adult,aid,cid,exp,iat,profile,sid,uid,v" : "adult,aid,cid,exp,iat,sid,uid,v";
+    if (Object.keys(value).sort().join(",") !== expectedKeys || grant.v !== 1 ||
       !positiveInt(grant.uid) || !positiveInt(grant.sid) || typeof grant.aid !== "string" || !UUID.test(grant.aid) ||
       typeof grant.cid !== "string" || !UUID.test(grant.cid) || typeof grant.adult !== "boolean" ||
       !positiveInt(grant.iat) || !positiveInt(grant.exp) || grant.iat > now || grant.exp <= now ||
@@ -104,9 +110,11 @@ async function authorized(userId: number, accountId: string, credentialId: strin
     row.user_status === "active" && row.email_verified === true && (!adult || isAdultVerified(row));
 }
 
-function validAsset(asset: ReferenceAsset | undefined, userId: number): asset is ReferenceAsset {
+function validAsset(asset: ReferenceAsset | undefined, userId: number, profile?: ReferenceProfile): asset is ReferenceAsset {
+  const imageTypes = profile === "wan" ? WAN_IMAGE_TYPES : BUSINESS_REFERENCE_IMAGE_TYPES;
+  const maxBytes = profile === "wan" ? WAN_MAX_BYTES : BUSINESS_REFERENCE_MAX_BYTES - 1;
   if (!asset || Number(asset.user_id) !== userId || !positiveInt(Number(asset.id)) ||
-    !BUSINESS_REFERENCE_IMAGE_TYPES.has(asset.content_type) || !positiveInt(Number(asset.size)) || Number(asset.size) >= BUSINESS_REFERENCE_MAX_BYTES) return false;
+    !imageTypes.has(asset.content_type) || !positiveInt(Number(asset.size)) || Number(asset.size) > maxBytes) return false;
   // A database pathname is still untrusted: never let Blob's get() accept an arbitrary URL or another storage namespace.
   return typeof asset.pathname === "string" && asset.pathname.startsWith(assetPathPrefix(userId)) &&
     /^[A-Za-z0-9_./-]+$/.test(asset.pathname) && asset.pathname.split("/").every(part => !!part && part !== "." && part !== "..");
@@ -114,10 +122,10 @@ function validAsset(asset: ReferenceAsset | undefined, userId: number): asset is
 
 /** Server-owned references only. The opaque grant contains no API key, plaintext account ID or asset URL. */
 export async function createBusinessReferenceUrls(
-  userId: number | string, accountId: string, credentialId: string, assetIds: number[], nsfw: boolean,
+  userId: number | string, accountId: string, credentialId: string, assetIds: number[], nsfw: boolean, profile?: ReferenceProfile,
 ): Promise<BusinessReferenceImage[]> {
   const ownerId = safeUserId(userId);
-  if (!UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" ||
+  if (!UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" || (profile !== undefined && profile !== "wan") ||
     !Array.isArray(assetIds) || assetIds.length > BUSINESS_REFERENCE_MAX_IMAGES || assetIds.some(id => !positiveInt(id)) ||
     new Set(assetIds).size !== assetIds.length) throw new BusinessError("invalid_reference");
   if (!assetIds.length) return [];
@@ -125,15 +133,15 @@ export async function createBusinessReferenceUrls(
   const { rows } = await sql.query<ReferenceAsset>(
     "select id,user_id,pathname,content_type,size from assets where user_id=$1 and id=any($2::bigint[])", [ownerId, assetIds]);
   const byId = new Map(rows.map(asset => [Number(asset.id), asset]));
-  if (rows.length !== assetIds.length || assetIds.some(id => !validAsset(byId.get(id), ownerId))) throw new BusinessError("invalid_reference");
+  if (rows.length !== assetIds.length || assetIds.some(id => !validAsset(byId.get(id), ownerId, profile))) throw new BusinessError("invalid_reference");
   // Fail invalid dimensions/bytes before the caller reserves or submits a billable task. Sequential reads bound memory to one file.
   try {
-    for (const id of assetIds) await readVerifiedReferenceImage(byId.get(id)!);
+    for (const id of assetIds) await readVerifiedReferenceImage(byId.get(id)!, profile);
   } catch { throw new BusinessError("invalid_reference"); }
   if (!await authorized(ownerId, accountId, credentialId, nsfw)) throw new BusinessError("invalid_reference");
   const iat = nowSeconds();
   return assetIds.map(sid => ({ type: "image", role: "reference_image", url: new URL(
-    `/api/business/references/${seal({ v: 1, uid: ownerId, aid: accountId, cid: credentialId, sid, adult: nsfw, iat, exp: iat + BUSINESS_REFERENCE_TTL_SECONDS })}`,
+    `/api/business/references/${seal({ v: 1, uid: ownerId, aid: accountId, cid: credentialId, sid, adult: nsfw, iat, exp: iat + BUSINESS_REFERENCE_TTL_SECONDS, ...(profile && { profile }) })}`,
     SITE_URL,
   ).toString() }));
 }
@@ -147,7 +155,7 @@ function sniffRaster(bytes: Uint8Array): string | null {
   return null;
 }
 
-async function readVerifiedReferenceImage(asset: ReferenceAsset, signal?: AbortSignal): Promise<Buffer> {
+async function readVerifiedReferenceImage(asset: ReferenceAsset, profile?: ReferenceProfile, signal?: AbortSignal): Promise<Buffer> {
   const deadline = AbortSignal.timeout(30_000);
   const abortSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
   const blob = await get(asset.pathname, { access: "private", useCache: false, abortSignal });
@@ -179,8 +187,12 @@ async function readVerifiedReferenceImage(asset: ReferenceAsset, signal?: AbortS
     const formats: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
     const width = metadata.width ?? 0;
     const height = metadata.height ?? 0;
-    if (formats[metadata.format ?? ""] !== asset.content_type || width < 300 || width > 6000 || height < 300 || height > 6000 ||
-      width / height < 0.4 || width / height > 2.5) unavailable();
+    const minSide = profile === "wan" ? 240 : 300;
+    const maxRatio = profile === "wan" ? 8 : 2.5;
+    const ratio = width / height;
+    if (formats[metadata.format ?? ""] !== asset.content_type || width < minSide || width > 6000 || height < minSide || height > 6000 ||
+      ratio < 1 / maxRatio || ratio > maxRatio || (profile === "wan" && asset.content_type === "image/png" && metadata.hasAlpha)) unavailable();
+    if (profile === "wan") await sharp(bytes, { animated: false, limitInputPixels: 36_000_000 }).stats();
   } catch (error) {
     await reader.cancel().catch(() => {});
     throw error instanceof BusinessError ? error : new BusinessError("not_found", 404);
@@ -197,8 +209,8 @@ export async function businessReferenceImageResponse(token: string, signal?: Abo
   const { rows } = await sql.query<ReferenceAsset>(
     "select id,user_id,pathname,content_type,size from assets where user_id=$1 and id=$2 limit 1", [grant.uid, grant.sid]);
   const asset = rows[0];
-  if (!validAsset(asset, grant.uid) || Number(asset.id) !== grant.sid) unavailable();
-  const bytes = await readVerifiedReferenceImage(asset, signal);
+  if (!validAsset(asset, grant.uid, grant.profile) || Number(asset.id) !== grant.sid) unavailable();
+  const bytes = await readVerifiedReferenceImage(asset, grant.profile, signal);
   let offset = 0;
   // Streaming the validated bytes avoids a single large serverless response body or provider data URL.
   const stream = new ReadableStream<Uint8Array>({

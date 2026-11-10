@@ -1,6 +1,12 @@
 export interface MentionReference { key: string; name: string; type: "image" | "video" | "audio" }
 export type MentionBindings = Record<string, string>;
 
+/** Missing keys come last, in their original order (older drafts can lack an order). */
+export function orderMentionReferences<T extends { key: string }>(references: readonly T[], order: readonly string[]): T[] {
+  const positions = new Map(order.map((key, index) => [key, index]));
+  return [...references].sort((left, right) => (positions.get(left.key) ?? order.length) - (positions.get(right.key) ?? order.length));
+}
+
 export function allocateMention(reference: MentionReference, bindings: MentionBindings): string {
   const existing = Object.keys(bindings).find(tag => bindings[tag] === reference.key);
   if (existing) return existing;

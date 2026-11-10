@@ -37,6 +37,7 @@ export function getBusinessWan3Capability(model: string | null | undefined) {
     minSeconds: 2, maxSeconds: 30, defaultSeconds: 5, sourceDuration: false, autoDuration: true,
     aspectRatios: [...RATIOS], aspectRatioFromSource: false,
     maxReferenceImages: MAX_IMAGES, maxReferenceVideos: 0, maxReferenceAudio: 0,
+    acceptsReferenceOrder: true, supportsPersonalReferences: true,
     supportsAudio: true, modes: [...WAN3_MODES], promptMaxChars: MAX_PROMPT,
     // Use the intersection with the app's inspected image formats.
     referenceImageRules: {
