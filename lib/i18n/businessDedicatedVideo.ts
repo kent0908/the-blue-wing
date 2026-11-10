@@ -1,7 +1,7 @@
 import type { Locale } from "./locale";
 
 const zh = {
-  durationAuto: "自動（由模型決定）", durationSeconds: "{value} 秒", automaticAspect: "自動（依素材）",
+  durationAuto: "自動", durationSeconds: "{value} 秒", automaticAspect: "依素材",
   wan3ImageRules: "請使用 JPEG、無透明區域的 PNG 或 WebP。每邊 240–8,000 px，長短邊比不超過 8:1，每張最多 20 MB。", wan3ReferenceInfo: "在提示詞中以 Image 1、Image 2 等指定圖片，順序同下方清單。", wan3Seed: "可填 0 至 2,147,483,647 的整數，0 代表隨機。", wan3PromptLimit: "Wan 3.0 的提示詞上限為 2,000 字元。",
   title: "鏡頭設定", mode: "創作方式", textToVideo: "文字成片", imageToVideo: "首幀成片", firstLastFrame: "首尾幀", subjectReference: "圖片參照",
   textInfo: "以文字描述場景、動作與鏡頭，不帶入參考圖片。", imageInfo: "選擇一張圖片作為首幀，再描述接下來的動作。", framesInfo: "依序選擇兩張圖片：第一張是首幀，第二張是尾幀。", referenceInfo: "圖片會依選擇順序帶入作品，請在描述中清楚交代每張素材的用途。",
@@ -10,7 +10,7 @@ const zh = {
 };
 export type BusinessDedicatedVideoCopy = { [K in keyof typeof zh]: string };
 const en: BusinessDedicatedVideoCopy = {
-  durationAuto: "Auto (model decides)", durationSeconds: "{value} s", automaticAspect: "Auto (match the media)",
+  durationAuto: "Auto", durationSeconds: "{value} s", automaticAspect: "Auto",
   wan3ImageRules: "Use JPEG, non-transparent PNG or WebP. Each side must be 240–8,000 px, the aspect ratio at most 8:1, and each file at most 20 MB.", wan3ReferenceInfo: "Use Image 1, Image 2, and so on in your prompt. The numbers follow the selection order shown below.", wan3Seed: "Enter an integer from 0 to 2,147,483,647. Zero means random.", wan3PromptLimit: "Wan 3.0 prompts are limited to 2,000 characters.",
   title: "Shot settings", mode: "Creation mode", textToVideo: "Text to video", imageToVideo: "First frame", firstLastFrame: "First & last frames", subjectReference: "Image references",
   textInfo: "Describe the scene, action and camera in words, without reference images.", imageInfo: "Choose one opening frame, then describe what happens next.", framesInfo: "Choose two images in order: the first is the opening frame and the second is the closing frame.", referenceInfo: "Images follow your selection order. Describe the purpose of each reference clearly.",
@@ -18,7 +18,7 @@ const en: BusinessDedicatedVideoCopy = {
   advanced: "More settings", watermark: "Keep the generated-content watermark", watermarkInfo: "When off, the request explicitly asks the model to omit its watermark.", seed: "Random seed (optional)", seedPlaceholder: "Leave blank for a random seed", seedWan: "Use an integer from -1 to 2,147,483,647. A matching seed does not guarantee identical results.", seedHappy: "Use an integer from 0 to 2,147,483,647. A matching seed does not guarantee identical results.", promptExtend: "Let the model refine the prompt", promptExtendInfo: "When on, the model rewrites your description before generation. Leave off to keep your own wording.", negative: "Content to avoid (optional)", negativePlaceholder: "For example: blurry frames, camera shake, unnatural hands", negativeCount: "{count} / 4,000 characters", providerDocs: "View model parameter documentation",
 };
 const ja: BusinessDedicatedVideoCopy = {
-  durationAuto: "自動（モデルが決定）", durationSeconds: "{value} 秒", automaticAspect: "自動（素材に合わせる）",
+  durationAuto: "自動", durationSeconds: "{value} 秒", automaticAspect: "自動",
   wan3ImageRules: "JPEG・透過なしのPNG・WebPを使用してください。各辺240〜8,000 px、縦横比は長辺と短辺で最大8:1、1枚20 MB以下です。", wan3ReferenceInfo: "プロンプトでは、下の選択順に合わせて Image 1、Image 2 などで画像を指定できます。", wan3Seed: "0〜2,147,483,647 の整数を入力できます。0 はランダムです。", wan3PromptLimit: "Wan 3.0 のプロンプトは2,000文字までです。",
   title: "ショット設定", mode: "制作方法", textToVideo: "テキストから映像", imageToVideo: "開始フレーム", firstLastFrame: "開始・終了フレーム", subjectReference: "参考画像",
   textInfo: "参考画像を使わず、場面・動作・カメラを文章で指定します。", imageInfo: "開始フレームとなる画像を1枚選び、その後の動きを記述します。", framesInfo: "画像を2枚、順番に選択します。1枚目が開始、2枚目が終了フレームです。", referenceInfo: "画像は選択順に読み込まれます。それぞれの素材の役割を文章で明確に指定してください。",
