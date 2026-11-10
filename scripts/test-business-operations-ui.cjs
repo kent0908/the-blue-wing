@@ -181,5 +181,58 @@ async function run() {
   assert.equal(calls.at(-1), "/api/business/usage?page=1");
   assert.ok(!text(renderUsage()).includes(usageCopy.filterOn));
   console.log("PASS usage: filter/reset, reachable receipt, page CSV action with spreadsheet escaping and no inferred costs");
+
+  const businessStrings = load("lib/i18n/business.ts");
+  const resultStrings = load("lib/i18n/businessResults.ts");
+  const wan = load("lib/businessWan3.ts");
+  for (const locale of ["zh-Hant", "en", "ja"]) {
+    const business = businessStrings.businessCopy(locale);
+    const copy = resultStrings.businessResultsCopy(locale);
+    const upstreamPolicy = businessStrings.businessError(business, "provider_content_policy");
+    assert.match(upstreamPolicy, /SIRAYA/);
+    assert.notEqual(upstreamPolicy, businessStrings.businessError(business, "prompt_blocked"));
+    assert.notEqual(upstreamPolicy, businessStrings.businessError(business, "provider_rejected"));
+
+    const stage = hooks();
+    const requests = [];
+    const previous = { id: "failed-wan-job", kind: "video", nsfw: true, model: "wan3.0-video-prime-pro-spicy",
+      status: "failed", errorCode: "result_missing", prompt: "A blue feather in the wind.", createdAt: "2026-11-10T03:00:00Z" };
+    const videoUrl = "/api/business/media/fixture-account/adult/previous-video.mp4";
+    const recovered = { ...previous, status: "completed", errorCode: null, videoUrl };
+    const { default: Stage } = load("components/business/BusinessStage.tsx", {
+      react: stage.react,
+      "next/image": function FixtureImage() {},
+      "@/lib/i18n/client": { useLocale: () => locale },
+      "@/lib/i18n/business": businessStrings,
+      "@/lib/i18n/businessResults": resultStrings,
+      "@/lib/modelLabel": { modelLabel: id => id },
+      "@/lib/businessWan3": wan,
+      "./BusinessGenerationReceipt": { __esModule: true, default: ReceiptMarker },
+    }, {
+      fetch: async (url, options) => {
+        requests.push({ url, method: options.method ?? "GET", body: options.body });
+        return response({ generation: recovered });
+      },
+    });
+    let job = previous;
+    const render = () => stage.render(Stage, {
+      business, job, kind: "video", refreshing: false,
+      onJobUpdated: updated => { job = updated; },
+    });
+    const action = button(render(), copy.recoverVideo);
+    const pending = action.onClick();
+    await action.onClick();
+    await pending;
+    assert.deepEqual(requests, [{ url: "/api/business/generations/failed-wan-job?recheck=1", method: "GET", body: undefined }]);
+    assert.equal(job, recovered);
+    assert.ok(elements(render()).some(node => node.type === "video" && node.props.src === videoUrl));
+    assert.ok(text(render()).includes(copy.videoRecovered));
+    job = { ...previous, errorCode: "provider_content_policy" };
+    assert.ok(text(render()).includes(upstreamPolicy));
+    assert.ok(!text(render()).includes(copy.recoverVideo));
+    job = { ...previous, model: "wan3.0-video-prime-pro" };
+    assert.ok(!text(render()).includes(copy.recoverVideo));
+  }
+  console.log("PASS results: local and SIRAYA policy messages differ in all three locales; old Wan Spicy results recover by one GET and replace the failed preview");
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

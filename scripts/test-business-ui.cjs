@@ -64,7 +64,7 @@ function makeContext() {
     REQUEST_HEADERS: { 'Content-Type': 'application/json' },
     businessError: (_copy, code) => code || 'error', confirmation: null, jobs: [],
     apiKey: 'sk-this-is-a-disposable-fixture-key', keyLabel: 'Fixture',
-    setError: value => { context.error = value; }, setNotice: noop, setSubmitting: noop, setTab: noop, setKeySaving: noop, setCredential: noop,
+    setError: value => { context.error = value; }, setNotice: value => { context.notice = value; }, setSubmitting: noop, setTab: noop, setKeySaving: noop, setCredential: noop,
     resetSelection:noop, setUnavailableModels:noop,setUpstreamTotal:noop, setApiKey: value => { context.apiKey = value; }, refreshAccess: async () => {}, loadModels: async () => { context.catalogReloads = (context.catalogReloads ?? 0) + 1; }, setModels: value => { context.models = value; },
     setConfirmation: value => { context.confirmation = value; },
     setUncertain: value => { context.uncertain = value; },
@@ -117,6 +117,18 @@ function reviewWan3(context) {
   assert.equal(context.confirmation, null);
   assert.equal(context.unresolvedRequest.current, null);
   assert.equal(context.jobs.length, 1);
+  assert.equal(context.notice, context.resultsCopy.submitted);
+
+  ({ context, calls } = makeContext());
+  context.requestConfirmation(event);
+  const failedJob = { id: 'provider-rejected-job', status: 'failed', errorCode: 'provider_content_policy' };
+  context.fetch = async () => ({ ok: true, status: 201, json: async () => ({ generation: failedJob }) });
+  await context.submitGeneration();
+  assert.equal(context.jobs[0], failedJob, 'The provider failure stays in the job history');
+  assert.equal(context.error, failedJob.errorCode);
+  assert.equal(context.notice, '', 'A synchronously failed job must not display the success toast');
+  assert.equal(context.uncertain, false);
+  assert.equal(context.unresolvedRequest.current, null);
 
   ({ context, calls } = makeContext());
   context.requestConfirmation(event);

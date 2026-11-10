@@ -521,7 +521,11 @@ export default function BusinessWorkspace() {
       setSelectedJobId(job.id);
       requestAnimationFrame(() => workspacePreview.current?.scrollIntoView({ block: "start", behavior: "instant" }));
       if (job.status === "unknown" || job.status === "submitting") { setUncertain(true); setError(t.uncertain); }
-      else { unresolvedRequest.current = null; setUncertain(false); setNotice(resultsCopy.submitted); }
+      else {
+        unresolvedRequest.current = null; setUncertain(false);
+        if (job.status === "failed") setError(businessError(t, job.errorCode));
+        else setNotice(resultsCopy.submitted);
+      }
     } catch { setUncertain(true); setError(t.uncertain); }
     finally { setConfirmation(null); submitLock.current = false; setSubmitting(false); }
   };
@@ -567,6 +571,10 @@ export default function BusinessWorkspace() {
     ...(confirmation.parameters.providerAssets ?? []).map(({ id, type }) => ({ key: `provider:${id}`, name: providerAssets.find(asset => asset.id === id)?.name ?? t.references, type })),
   ], confirmation.parameters.referenceOrder ?? []) : [];
   const visibleJobs = jobs.filter(job => job.kind === kind && (!job.nsfw || selected?.nsfw));
+  const syncUpdatedJob = (job: BusinessGeneration) => {
+    historyVersion.current++;
+    setJobs(current => current.map(old => old.id === job.id ? job : old));
+  };
   const previewJob = visibleJobs.find(job => job.id === selectedJobId) ?? visibleJobs[0];
   const restorePrompt = (job: BusinessGeneration, setup: BusinessReuseSetup | null) => {
     const model = models.find(item => item.id === job.model && item.modality === job.kind);
@@ -702,7 +710,7 @@ export default function BusinessWorkspace() {
             {kind === "image" && selected?.supportsReferences ? <div><button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button>{imageBusinessAssets.length > 0 && <div className={styles.row} style={{marginTop:12}}>{imageBusinessAssets.map(asset => <button key={asset.id} type="button" className={styles.small} onClick={() => setImageBusinessAssets(current => current.filter(value => value.id !== asset.id))}>{asset.name} ×</button>)}</div>}</div> : null}{selected?.supportsReferences && !selected.seedance && !selected.dedicatedVideo ? <details className={styles.promptDetails}><summary>{t.references} · {assetIds.length + (kind === "image" ? imageBusinessAssets.length : 0)} / {referenceLimit}</summary><p className={styles.note}>{t.referenceText.replace("{n}", String(referenceLimit))}</p>{assets.length ? <div className={styles.assetGrid}>{assets.slice(0, 100).map(asset => <button type="button" key={asset.id} className={styles.asset} aria-pressed={assetIds.includes(asset.id)} title={assetIds.includes(asset.id) ? t.removeReference : t.selectReference} disabled={!assetIds.includes(asset.id) && assetIds.length + (kind === "image" ? imageBusinessAssets.length : 0) >= referenceLimit} onClick={() => setAssetIds(current => current.includes(asset.id) ? current.filter(id => id !== asset.id) : [...current, asset.id])}><Image src={asset.src} alt={asset.name} loading="lazy" width={200} height={100} unoptimized /><span>{asset.name}</span></button>)}</div> : <p className={styles.note}>{t.noAssets}</p>}<button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button></details> : null}
             {selected?.id === "minimax-h3" || selected?.id === "minimax-h3-max" ? <p className={styles.warning}>{selected.id === "minimax-h3" ? t.minimaxH3References : t.minimaxH3MaxReferences}</p> : null}<div className={studio.reviewActions}><p className={styles.note}>{t.providerBilling} · {t.noCredits}</p><button type="submit" className={styles.button} disabled={submitting || navigationPending || uncertain || !selected || !prompt.trim() || (selected.nsfw && !access.adultVerified)}>{submitting ? t.generating : t.generate} <span aria-hidden="true">↗</span></button></div>
           </form>{selected?.nsfw && !access.adultVerified ? <BusinessAdultDeclaration copy={t} onVerified={refreshAccess} /> : null}</>}
-        </div><div className={studio.preview} id="business-preview" tabIndex={-1} ref={workspacePreview}><BusinessStage movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} key={previewJob?.id ?? kind} job={previewJob} recentJobs={visibleJobs} onSelect={job => setSelectedJobId(job.id)} onReuse={reusePrompt} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={job => setJobs(current => current.map(old => old.id === job.id ? job : old))} /></div></> : <BusinessCollection jobs={jobs} refreshing={historyLoading} onRefresh={() => void loadHistory(true)} onReuse={reusePrompt} onJobUpdated={job => setJobs(current => current.map(old => old.id === job.id ? job : old))} />}
+        </div><div className={studio.preview} id="business-preview" tabIndex={-1} ref={workspacePreview}><BusinessStage movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} key={previewJob?.id ?? kind} job={previewJob} recentJobs={visibleJobs} onSelect={job => setSelectedJobId(job.id)} onReuse={reusePrompt} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={syncUpdatedJob} /></div></> : <BusinessCollection jobs={jobs} refreshing={historyLoading} onRefresh={() => void loadHistory(true)} onReuse={reusePrompt} onJobUpdated={syncUpdatedJob} />}
       </section>
       {uncertain ? <aside className={styles.warning} role="status">{t.uncertain}<div className={styles.row} style={{ marginTop: 12 }}><button type="button" className={styles.small} disabled={historyLoading} onClick={() => loadHistory(true)}>{historyLoading ? t.checking : t.checkOriginal}</button></div></aside> : null}
     </>}

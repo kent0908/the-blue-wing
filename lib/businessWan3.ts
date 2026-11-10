@@ -28,6 +28,10 @@ function isWan3Id(value: unknown): value is Wan3Id {
   return typeof value === "string" && Object.hasOwn(MODELS, value);
 }
 
+export function isBusinessWan3SpicyModel(value: unknown): value is Wan3Id {
+  return isWan3Id(value) && value.endsWith("-spicy");
+}
+
 export function getBusinessWan3Capability(model: string | null | undefined) {
   if (!isWan3Id(model)) return undefined;
   const { label, pro } = MODELS[model];

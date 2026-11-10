@@ -8,6 +8,7 @@ import type { businessStudioCopy } from "@/lib/i18n/businessStudio";
 import { businessResultsCopy } from "@/lib/i18n/businessResults";
 import type { BusinessGeneration, BusinessKind, BusinessModel } from "./types";
 import { modelLabel } from "@/lib/modelLabel";
+import { isBusinessWan3SpicyModel } from "@/lib/businessWan3";
 import BusinessGenerationReceipt from "./BusinessGenerationReceipt";
 import { useLocale } from "@/lib/i18n/client";
 import styles from "./BusinessResults.module.css";
@@ -45,15 +46,42 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
   const [imageIndex, setImageIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [recovering, setRecovering] = useState(false);
+  const recovery = useRef<AbortController | null>(null);
+  useEffect(() => () => recovery.current?.abort(), []);
   const video = useRef<HTMLVideoElement>(null);
   const pending = job && ["processing", "submitting", "unknown"].includes(job.status);
   const hasOutput = !!(job?.videoUrl || job?.images?.length || job?.text);
+  const canRecoverVideo = !!onJobUpdated && job?.kind === "video" && job.nsfw && job.status === "failed" &&
+    job.errorCode === "result_missing" && isBusinessWan3SpicyModel(job.model);
   const image = job?.images?.[imageIndex] ?? job?.images?.[0];
   const url = job?.videoUrl ?? image?.url;
   const downloadUrl = url?.startsWith("/api/business/media/") ? `${url}${url.includes("?") ? "&" : "?"}download=1` : url;
   const title = job ? modelLabel(job.model) : model?.displayName ?? business[kind];
   const open = () => { video.current?.pause(); setExpanded(true); };
   const copyPrompt = async () => { try { await navigator.clipboard.writeText(job?.prompt ?? ""); setFeedback(c.copied); } catch { setFeedback(c.copyFailed); } };
+  const recoverVideo = async () => {
+    if (!canRecoverVideo || !job || recovery.current) return;
+    const controller = new AbortController();
+    recovery.current = controller;
+    setRecovering(true); setFeedback("");
+    try {
+      const response = await fetch(`/api/business/generations/${encodeURIComponent(job.id)}?recheck=1`, {
+        cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(150_000)]),
+      });
+      const body = response.ok ? await response.json() as { generation?: BusinessGeneration } : null;
+      if (body?.generation?.id !== job.id) throw new Error("recheck_unavailable");
+      if (controller.signal.aborted) return;
+      onJobUpdated?.(body.generation);
+      setFeedback(body.generation.status === "completed" && body.generation.videoUrl ? c.videoRecovered :
+        body.generation.status === "processing" ? c.pending : c.videoNotRecovered);
+    } catch {
+      if (!controller.signal.aborted) setFeedback(c.videoNotRecovered);
+    } finally {
+      recovery.current = null;
+      if (!controller.signal.aborted) setRecovering(false);
+    }
+  };
   const media = (large = false) => <div className={styles.media}>
     {job?.videoUrl ? <video ref={large ? undefined : video} src={job.videoUrl} controls preload="metadata" playsInline aria-label={title} /> : image ? large || inDialog ? <Image src={image.url} alt={`${title} · ${imageIndex + 1}`} width={1600} height={1600} unoptimized /> : <button type="button" className={styles.imageButton} onClick={open} aria-label={c.expand}><Image src={image.url} alt={`${title} · ${imageIndex + 1}`} width={1200} height={1200} unoptimized /></button> : <div className={styles.text}>{job?.text}</div>}
   </div>;
@@ -72,7 +100,7 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
       {hasOutput && !inDialog && <button type="button" className={styles.button} onClick={open}>{c.expand}</button>}
       {url && <a href={downloadUrl} download target="_blank" rel="noreferrer">{business.download} ↓</a>}
       {job && <button type="button" className={styles.button} onClick={copyPrompt}>{c.copy}</button>}
-      {(pending || job && !hasOutput) && <button type="button" className={styles.button} onClick={onRefresh} disabled={refreshing}>{refreshing ? business.checking : business.checkOriginal}</button>}
+      {(pending || job && !hasOutput) && <button type="button" className={styles.button} onClick={canRecoverVideo ? recoverVideo : onRefresh} disabled={refreshing || recovering}>{refreshing || recovering ? business.checking : canRecoverVideo ? c.recoverVideo : business.checkOriginal}</button>}
     </div>}
     {feedback && <p className={styles.notice} role="status">{feedback}</p>}
     {job?.videoUrl && /\.mov(?:\?|$)/i.test(job.videoUrl) && movNotice && <p className={styles.notice}>{movNotice}</p>}

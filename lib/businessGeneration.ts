@@ -8,7 +8,7 @@ import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type Bu
 import { assertBusinessImageParameters, getBusinessImageCapability, type BusinessImageControl } from "./businessImageCapabilities";
 import { buildBusinessModelCatalog } from "./businessModelCatalog";
 import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
-import { buildBusinessWan3Payload } from "./businessWan3";
+import { buildBusinessWan3Payload, isBusinessWan3SpicyModel } from "./businessWan3";
 import { buildBusinessZImagePayload, type BusinessZImageCapability } from "./businessZImage";
 import { getBusinessProviderAsset, resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
@@ -277,7 +277,7 @@ async function reserveGeneration(user: UserRow, account: BusinessAccount, creden
   finally { client.release(); }
 }
 
-function validSource(source: string, kind: "image" | "video") {
+function validSource(source: string, kind: "image" | "video", model?: string) {
   if (kind === "image" && /^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=\r\n]+$/.test(source)) return true;
   try {
     const url = new URL(source);
@@ -289,13 +289,15 @@ function validSource(source: string, kind: "image" | "video") {
     // https://platform.minimax.io/docs/guides/video-prompt
     // https://kling.ai/document-api/apiReference/model/textToVideo
     const exact = ["cdn.hailuoai.com", "filecdn.minimax.chat"].includes(url.hostname);
+    // SIRAYA task status returned this exact CDN for Wan 3.0 Spicy video output.
+    const wanSpicy = kind === "video" && isBusinessWan3SpicyModel(model) && url.hostname === "usercontent1.carrothub.ai";
     const vendor = ["volces.com", "amazonaws.com", "googleusercontent.com", "googleapis.com", "siraya.ai", "openaiusercontent.com", "blob.core.windows.net", "aliyuncs.com", "klingai.com"].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`));
-    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor);
+    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor || wanSpicy);
   } catch { return false; }
 }
 
 async function persistBusinessMedia(source: string, row: BusinessGenerationRow, kind: "image" | "video") {
-  if (!blobConfigured() || !validSource(source, kind)) fail("storage_unavailable", 503);
+  if (!blobConfigured() || !validSource(source, kind, row.model)) fail("storage_unavailable", 503);
   let bytes: Buffer;
   let contentType: string;
   const data = /^data:(image\/(?:png|jpeg|webp));base64,([\s\S]+)$/.exec(source);
@@ -345,8 +347,28 @@ async function finishMedia(row: BusinessGenerationRow, source: BusinessOutput) {
   } catch { return updateGeneration(row, "processing", null, "storage_unavailable"); }
 }
 
+// Documented SIRAYA and BytePlus ModelArk identifiers, independent of error messages.
+const providerPolicyIdentifiers = new Set([
+  "content_policy_violation",
+  "SensitiveContentDetected",
+  "InputTextSensitiveContentDetected", "InputImageSensitiveContentDetected",
+  "InputVideoSensitiveContentDetected", "InputAudioSensitiveContentDetected",
+  "OutputTextSensitiveContentDetected", "OutputImageSensitiveContentDetected",
+  "OutputVideoSensitiveContentDetected", "OutputAudioSensitiveContentDetected",
+  "InputTextSensitiveContentDetected.PolicyViolation", "InputImageSensitiveContentDetected.PolicyViolation",
+  "InputVideoSensitiveContentDetected.PolicyViolation", "InputAudioSensitiveContentDetected.PolicyViolation",
+  "OutputImageSensitiveContentDetected.PolicyViolation", "OutputVideoSensitiveContentDetected.PolicyViolation",
+  "OutputAudioSensitiveContentDetected.PolicyViolation", "InputImageSensitiveContentDetected.PrivacyInformation",
+  "InputVideoSensitiveContentDetected.PrivacyInformation", "OutputImageSensitiveContentDetected.DeepFake",
+]);
+
+function isProviderContentPolicy(error: unknown) {
+  return record(error) && [error.code, error.type].some(value => typeof value === "string" && providerPolicyIdentifiers.has(value));
+}
+
 function providerErrorCode(error: unknown) {
   if (error instanceof SirayaApiError) {
+    if (isProviderContentPolicy(error)) return "provider_content_policy";
     if ([401, 403].includes(error.status)) return "provider_unauthorized";
     if ([402, 429].includes(error.status)) return "provider_quota";
     if (error.status >= 400 && error.status < 500) return "provider_rejected";
@@ -402,6 +424,9 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
     return { row: await updateGeneration(row, code === "outcome_unknown" ? "unknown" : "failed", null, code), duplicate: false };
   }
   if (!record(result)) return { row: await updateGeneration(row, "unknown", null, "outcome_unknown"), duplicate: false };
+  if (isProviderContentPolicy(result.error)) {
+    return { row: await updateGeneration(row, "failed", null, "provider_content_policy"), duplicate: false };
+  }
   if (row.kind === "text") {
     const choice = Array.isArray(result.choices) ? result.choices[0] : null;
     const text = record(choice) && record(choice.message) && typeof choice.message.content === "string" ? choice.message.content.trim() : "";
@@ -414,7 +439,7 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
     }).slice(0, Number(payload.n ?? 1));
     row = images.length ? await finishMedia(row, { images }) : await updateGeneration(row, "failed", null, "result_missing");
   } else {
-    const url = videoUrl(result);
+    const url = videoUrl(result, row.model);
     const id = typeof result.id === "string" && /^[a-zA-Z0-9_-]{1,2000}$/.test(result.id) ? result.id : null;
     if (url) row = await finishMedia(row, { videoUrl: url });
     else if (id) row = await updateGeneration(row, "processing", null, null, null, id);
@@ -423,10 +448,10 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
   return { row, duplicate: false };
 }
 
-function videoUrl(result: Record<string, unknown>) {
+function videoUrl(result: Record<string, unknown>, model: string) {
   const first = Array.isArray(result.data) ? result.data[0] : null;
-  const value = result.output_url ?? (record(first) ? first.url : null);
-  return typeof value === "string" && validSource(value, "video") ? value : null;
+  const candidates = [result.output_url, record(first) ? first.url : null];
+  return candidates.find((value): value is string => typeof value === "string" && validSource(value, "video", model)) ?? null;
 }
 
 export async function listBusinessGenerations(user: UserRow, account: BusinessAccount) {
@@ -493,33 +518,42 @@ export async function getBusinessGenerationReuse(user: UserRow, account: Busines
     ...(!missingReferences && snapshot.editor ? { editor: snapshot.editor } : {}) };
 }
 
-export async function getBusinessGeneration(user: UserRow, account: BusinessAccount, id: string) {
+export async function getBusinessGeneration(user: UserRow, account: BusinessAccount, id: string, recheck = false) {
   if (!UUID.test(id)) fail("generation_not_found", 404);
   const owned = await sql.query<BusinessGenerationRow>("select * from business_generations where id=$1 and account_id=$2 and user_id=$3", [id, account.id, user.id]);
   let row = owned.rows[0];
   if (!row) fail("generation_not_found", 404);
   assertBusinessGenerationAge(row, user);
-  if (row.status !== "processing") return row;
+  const recheckMissing = recheck && row.status === "failed" && row.error_code === "result_missing"
+    && row.kind === "video" && row.nsfw && !!row.provider_task_id && isBusinessWan3SpicyModel(row.model);
+  if (row.status !== "processing" && !recheckMissing) return row;
   // One read-only reconciliation per job. Concurrent tabs cannot duplicate Blob uploads.
   const claimed = await sql.query<BusinessGenerationRow>(`update business_generations set reconcile_after=now()+interval '5 minutes'
-    where id=$1 and account_id=$2 and user_id=$3 and status='processing'
-    and (reconcile_after is null or reconcile_after<now()) returning *`, [id, account.id, user.id]);
+    where id=$1 and account_id=$2 and user_id=$3
+    and (status='processing' or ($4::boolean and status='failed' and error_code='result_missing' and provider_task_id is not null))
+    and (reconcile_after is null or reconcile_after<now()) returning *`, [id, account.id, user.id, recheckMissing]);
   if (!claimed.rows[0]) return row;
   row = claimed.rows[0];
+  const recovering = row.status === "failed";
   try {
-    if (row.provider_output) return await finishMedia(row, row.provider_output);
+    if (row.provider_output && !recovering) return await finishMedia(row, row.provider_output);
     if (row.kind !== "video" || !row.provider_task_id) return row;
     const credential = await getBusinessCredential(user.id, account.id, row.credential_id);
-    if (!credential) return await updateGeneration(row, "processing", null, "credential_missing");
+    if (!credential) return recovering ? row : await updateGeneration(row, "processing", null, "credential_missing");
     let result: unknown;
     try { result = await getVideoStatus(row.provider_task_id, { apiKey: credential.apiKey }); }
-    catch { return row; } // Read-only lookup may be retried, never resubmit the paid POST.
+    catch (error) {
+      if (error instanceof SirayaApiError && isProviderContentPolicy(error)) return await updateGeneration(row, "failed", null, "provider_content_policy");
+      return row; // Read-only lookup may be retried, never resubmit the paid POST.
+    }
     if (!record(result)) return row;
     const status = String(result.status ?? "processing").toLowerCase();
-    const url = videoUrl(result);
-    if (["failed", "cancelled", "canceled", "error"].includes(status)) row = await updateGeneration(row, "failed", null, "provider_failed");
-    else if (url) row = await finishMedia(row, { videoUrl: url });
-    else if (["completed", "succeeded", "success"].includes(status)) row = await updateGeneration(row, "failed", null, "result_missing");
+    const completed = ["completed", "succeeded", "success"].includes(status);
+    const url = videoUrl(result, row.model);
+    if (isProviderContentPolicy(result.error)) row = await updateGeneration(row, "failed", null, "provider_content_policy");
+    else if (["failed", "cancelled", "canceled", "error"].includes(status)) row = await updateGeneration(row, "failed", null, "provider_failed");
+    else if (url && (completed || !recovering)) row = await finishMedia(row, { videoUrl: url });
+    else if (completed) row = await updateGeneration(row, "failed", null, "result_missing");
     return row;
   } finally { await sql.query("update business_generations set reconcile_after=null where id=$1 and account_id=$2 and user_id=$3", [id, account.id, user.id]); }
 }

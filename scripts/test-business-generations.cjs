@@ -13,12 +13,13 @@ models.push(['minimax-h3','video'],['minimax-h3-max','video'],['minimax-m3','tex
 models.push(...['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst','gemini-3.1-flash-image','gemini-3.1-flash-lite-image','gemini-3-pro-image','ByteDance-Seedream-4.0','ByteDance-Seedream-4.5','Dola-Seedream-5.0-lite','NSFW-Seedream-4.0','NSFW-Seedream-4.5','NSFW-Seedream-5.0-lite'].map(id=>[id,'image']));
 models.push(...['claude-opus-5.5','gpt-6.1','uncensored-gpt-6','qwen3.8-max','kimi-k3','deepseek-v4-flash'].map(id=>[id,'text']));
 models.push(...['kling-tts','qwen3-asr-flash','gemini-embedding-2','wan2.7-t2v','wan2.7-i2v','wan2.7-r2v','wan2.7-videoedit','happyhorse-1.1-t2v','happyhorse-1.1-i2v','happyhorse-1.1-r2v'].map(id=>[id,'tool']));
-models.push(['wan3.0-video-pro','video'],['wan3.0-video-prime-spicy','video']);
+const wanSpicyModels = ['wan3.0-video-spicy', 'wan3.0-video-pro-spicy', 'wan3.0-video-prime-spicy', 'wan3.0-video-prime-pro-spicy'];
+models.push(['wan3.0-video-pro','video'], ...wanSpicyModels.map(id => [id,'video']));
 models.push(['wan2.2-i2v-spicy','video'],['wan2.7-i2v-spicy','video']);
 models.push(['z-image-spicy','image'],['z-image-spicy-pro','image']);
 const rates=models.map(([modelId,modality])=>({modelId,modality,active:modelId!=='retired-image',credits:999}));
 class BusinessError extends Error{constructor(code,status=400){super(code);this.code=code;this.status=status;}}
-class SirayaApiError extends Error{constructor(status,message){super(message);this.status=status;}}
+class SirayaApiError extends Error{constructor(status,message,type,code){super(message);this.status=status;this.type=type;this.code=code;}}
 class NextRequest extends Request{get nextUrl(){return new URL(this.url)}}
 const NextResponse={json:(body,opts={})=>Response.json(body,opts)};
 function user(){return {id:7,role:'user',birth_date:adult?'1990-01-01':'2015-01-01'}}
@@ -39,7 +40,14 @@ async function query(q,p=[]){q=q.replace(/\s+/g,' ').toLowerCase();
  if(q.startsWith('update business_generations set submitted_at=')){const row=jobs.find(j=>j.id===p[1]&&j.account_id===p[2]&&j.user_id===p[3]);assert.ok(row);row.submitted_at??=p[0];return {rows:[clone(row)]};}
  if(q.startsWith('update business_generations set provider_request_id=')){if(metadataWriteFails){metadataWriteFails=false;throw Error('fixture transient receipt write failure');}const row=jobs.find(j=>j.id===p[2]&&j.account_id===p[3]&&j.user_id===p[4]);assert.ok(row);row.provider_request_id=p[0];row.provider_http_status=p[1];row.provider_request_ids=p[5];row.provider_receipt_count=p[6];return {rows:[]};}
  if(q.startsWith('update business_generations set status=')){const row=jobs.find(j=>j.id===p[5]&&j.account_id===p[6]&&j.user_id===p[7]);assert.ok(row);row.status=p[0];const output=p[1]?JSON.parse(p[1]):null;assert.match(q,/coalesce\(\$2::jsonb,'\{\}'::jsonb\) \|\| jsonb_build_object\('reuseinput',output->'reuseinput'\)/);row.output=row.output?.reuseInput?{...output,reuseInput:row.output.reuseInput}:output;row.error_code=p[2];if(p[3])row.provider_output=JSON.parse(p[3]);if(p[4])row.provider_task_id=p[4];if(p[8])row.provider_request_id=p[8];if(p[9])row.provider_http_status=p[9];row.provider_request_ids=p[10];row.provider_receipt_count=p[11];row.completed_at??=p[12];row.duration_ms??=p[13];return {rows:[clone(row)]};}
- if(q.startsWith('update business_generations set reconcile_after=now()')){const row=jobs.find(j=>j.id===p[0]&&j.account_id===p[1]&&j.user_id===p[2]);if(!row||row.status!=='processing'||row.reconcile_after)return {rows:[]};row.reconcile_after=true;return {rows:[clone(row)]};}
+ if(q.startsWith('update business_generations set reconcile_after=now()')){
+   assert.match(q, /\$4::boolean and status='failed' and error_code='result_missing' and provider_task_id is not null/);
+   const row=jobs.find(j=>j.id===p[0]&&j.account_id===p[1]&&j.user_id===p[2]);
+   const recoverable=p[3] && row?.status==='failed' && row.error_code==='result_missing' && row.provider_task_id;
+   if(!row || (row.status!=='processing' && !recoverable) || row.reconcile_after)return {rows:[]};
+   row.reconcile_after=true;
+   return {rows:[clone(row)]};
+ }
  if(q.startsWith('update business_generations set reconcile_after=null')){const row=jobs.find(j=>j.id===p[0]);if(row)row.reconcile_after=null;return {rows:[]};}
  throw Error('Unexpected SQL fixture: '+q);
 }
@@ -65,16 +73,16 @@ const mocks={
  './rateCard':{listRates:async()=>{throw Error('C retail catalog must never govern BYOK')}},
  './businessAssetUploads':{reusableBusinessUploads:async(userId,accountId,ids)=>{assert.equal(userId,7);assert.equal(accountId,account.id);return ids.filter(id=>businessUploads.includes(id)).map(id=>({id,uploadId:id,name:'Original upload',type:'image',status:'active',storageReady:true}));},resolveBusinessUploadSources:async(userId,accountId,credentialId,ids,nsfw)=>{businessUploadCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/provider-assets/source/opaque-${id}`}));}},
  './businessGeneratedReferences':{reusableBusinessGeneratedImageIds:async(userId,accountId,credentialId,ids,nsfw)=>{assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');return ids.filter(id=>generatedSources.includes(id));},resolveBusinessGeneratedImageSources:async(userId,accountId,credentialId,ids,nsfw)=>{generatedReferenceCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!generatedSources.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/generated-references/opaque-${id}`}));}},
- './siraya':{SirayaApiError,createImage:(payload,options)=>provider('image',payload,options),createBusinessImage:(payload,options)=>{exactImageCalls++;return provider('image',payload,options)},createVideo:(payload,options)=>provider('video',payload,options),createBusinessVideo:(payload,options)=>provider('video',payload,options),createChatCompletion:(payload,options)=>provider('text',payload,options),listModels:async options=>{lookupCalls++;seenKeys.push(options.apiKey);if(catalogFailure)throw Error('private upstream error');return {data:models.filter(([id])=>!removedModels.includes(id)).map(([id])=>({id}))}},getVideoStatus:async(id,options)=>{lookupCalls++;assert.equal(id,'provider-owned-job');seenKeys.push(options.apiKey);return pollVideo}},
+ './siraya':{SirayaApiError,createImage:(payload,options)=>provider('image',payload,options),createBusinessImage:(payload,options)=>{exactImageCalls++;return provider('image',payload,options)},createVideo:(payload,options)=>provider('video',payload,options),createBusinessVideo:(payload,options)=>provider('video',payload,options),createChatCompletion:(payload,options)=>provider('text',payload,options),listModels:async options=>{lookupCalls++;seenKeys.push(options.apiKey);if(catalogFailure)throw Error('private upstream error');return {data:models.filter(([id])=>!removedModels.includes(id)).map(([id])=>({id}))}},getVideoStatus:async(id,options)=>{lookupCalls++;assert.equal(id,'provider-owned-job');seenKeys.push(options.apiKey);if(pollVideo instanceof Error)throw pollVideo;return pollVideo}},
 };
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const mod={exports:{}};cache.set(file,mod);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;new Function('require','module','exports',code)(id=>{const canonical=id.startsWith('@/lib/')?'./'+id.slice(6):id;if(canonical in mocks)return mocks[canonical];if(id.startsWith('@/'))return load(path.resolve(id.slice(2))+'.ts');if(id.startsWith('.'))return load(path.resolve(path.dirname(file),id)+'.ts');return require(id)},mod,mod.exports);return mod.exports;}
 const routes=load('app/api/business/generations/route.ts'),single=load('app/api/business/generations/[id]/route.ts'),reuse=load('app/api/business/generations/[id]/reuse/route.ts'),catalog=load('app/api/business/models/route.ts');
-const originalFetch=global.fetch;global.fetch=async(url,init)=>{sourceFetches.push(url);assert.equal(init.redirect,'error');return downloadRedirect?new Response(null,{status:302,headers:{location:'http://127.0.0.1/private'}}):new Response(Buffer.from('fixture-video'),{headers:{'content-type':downloadMime}})};
+const originalFetch=global.fetch;global.fetch=async(url,init)=>{sourceFetches.push(url);assert.equal(init.redirect,'error');assert.equal(new Headers(init.headers).has('Authorization'),false);return downloadRedirect?new Response(null,{status:302,headers:{location:'http://127.0.0.1/private'}}):new Response(Buffer.from('fixture-video'),{headers:{'content-type':downloadMime}})};
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const body=(n=1,kind='video',parameters={})=>({clientRequestId:uuid(n),kind,parameters:{model:kind==='video'?'SIRAYA-Seedance-2.5':kind==='image'?'Dola-Seedream-5.0-pro':'deepseek-v4.1-flash',prompt:'A blue feather crosses a paper city',...parameters}});
 const request=(payload,origin='https://fixture.invalid')=>new NextRequest('https://fixture.invalid/api/business/generations',{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify(payload)});
 const send=(payload=body(),origin)=>routes.POST(request(payload,origin));
-const get=id=>single.GET(new NextRequest('https://fixture.invalid/api/business/generations/'+id),{params:Promise.resolve({id})});
+const get=(id,query='',headers)=>single.GET(new NextRequest(`https://fixture.invalid/api/business/generations/${id}${query}`,{headers}),{params:Promise.resolve({id})});
 const getReuse=id=>reuse.GET(new NextRequest(`https://fixture.invalid/api/business/generations/${id}/reuse`),{params:Promise.resolve({id})});
 function reset(){jobs.length=0;providerCalls=lookupCalls=uploads=localReferenceCalls=providerReferenceCalls=0;approval=adult=blobReady=true;revoked=failStorage=rotateDuringReservation=downloadRedirect=metadataWriteFails=false;failProvider=kindResult=null;seenKeys=[];sourceFetches=[];lastPayload=null;assetRows=[];registeredAssets=[];downloadMime='video/mp4';businessUploadCalls=0;businessUploads=[];generatedReferenceCalls=0;generatedSources=[];catalogFailure=false;removedModels=[];activeCredential='11111111-1111-4111-8111-111111111111';credentials.set(activeCredential,'sk-fixture-key-original');upstreamVideo={id:'provider-owned-job',status:'processing'};pollVideo={status:'processing'};lock=Promise.resolve()}
 let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();count++;console.log('PASS '+name)}
@@ -204,6 +212,126 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
  await test('revoked pinned key blocks lookup and does not fall back',async()=>{await send();revoked=true;const response=await get(jobs[0].id);assert.equal((await response.json()).generation.errorCode,'credential_missing');assert.equal(lookupCalls,1)});
  await test('completed video is persisted privately and repeated reads do not call vendor',async()=>{await send();pollVideo={status:'succeeded',output_url:'https://example.volces.com/own.mp4'};let json=await (await get(jobs[0].id)).json();assert.equal(json.generation.status,'completed');assert.match(json.generation.videoUrl,/^\/api\/business\/media\//);await get(jobs[0].id);assert.equal(lookupCalls,2);assert.equal(uploads,1);assert.equal(providerCalls,1)});
  await test('completed-without-video is failure, no endless polling or extra paid call',async()=>{await send();pollVideo={status:'completed'};const response=await get(jobs[0].id);assert.equal((await response.json()).generation.errorCode,'result_missing');await get(jobs[0].id);assert.equal(lookupCalls,2);assert.equal(providerCalls,1)});
+ await test('Wan 3.0 Spicy video accepts the exact signed CDN and skips an invalid earlier result URL', async () => {
+   for (const [index, model] of wanSpicyModels.entries()) {
+     const url = `https://usercontent1.carrothub.ai/results/${index}.mp4?signature=fixture`;
+     kindResult = { output_url: index === 0 ? url : 'https://untrusted.invalid/result.mp4', data: [{ url }] };
+     const result = (await (await send(body(index+1, 'video', { model }))).json()).generation;
+     assert.equal(result.status, 'completed', model);
+     assert.match(result.videoUrl, /^\/api\/business\/media\/[^/]+\/adult\//);
+     assert.equal(sourceFetches[index], url);
+     assert.ok(!JSON.stringify(result).includes('carrothub.ai'));
+   }
+   assert.equal(uploads, wanSpicyModels.length);
+ });
+ await test('the Wan CDN cannot be used by other models, images, spoofed hosts, HTTP or custom ports', async () => {
+   const url = 'https://usercontent1.carrothub.ai/results/fixture.mp4';
+   const requests = [
+     ['video', 'wan3.0-video-pro', url],
+     ['video', 'NSFW-SIRAYA-Seedance-2.5', url],
+     ['image', 'NSFW-Dola-Seedream-5.0-pro', url],
+     ...[
+       'http://usercontent1.carrothub.ai/a.mp4',
+       'https://usercontent1.carrothub.ai.evil.invalid/a.mp4',
+       'https://other.usercontent1.carrothub.ai/a.mp4',
+       'https://usercontent2.carrothub.ai/a.mp4',
+       'https://user:pass@usercontent1.carrothub.ai/a.mp4',
+       'https://usercontent1.carrothub.ai:8443/a.mp4',
+     ].map(source => ['video', 'wan3.0-video-prime-pro-spicy', source]),
+   ];
+   for (const [index, [kind, model, source]] of requests.entries()) {
+     kindResult = kind === 'video' ? { id: 'provider-owned-job', output_url: source } : { data: [{ url: source }] };
+     const response = await send(body(index+1, kind, { model }));
+     assert.equal(response.status, 201, `${model} ${source}`);
+     const { generation } = await response.json();
+     if (kind === 'video') {
+       assert.equal(generation.status, 'processing');
+       pollVideo = { status: 'completed', output_url: source };
+       assert.equal((await (await get(generation.id)).json()).generation.errorCode, 'result_missing');
+     } else assert.equal(generation.errorCode, 'result_missing');
+     assert.equal(sourceFetches.length, 0, `${model} ${source}`);
+   }
+   assert.equal(uploads, 0);
+ });
+ await test('manual Wan recovery is owner-only, requires age and the original key, and never resubmits', async () => {
+   await send(body(1, 'video', { model: 'wan3.0-video-prime-pro-spicy' }));
+   const job = jobs[0];
+   pollVideo = { status: 'completed' };
+   const failed = (await (await get(job.id)).json()).generation;
+   assert.equal(failed.errorCode, 'result_missing');
+   pollVideo = { status: 'completed', output_url: 'https://usercontent1.carrothub.ai/results/fixture.mp4' };
+   for (const query of ['', '?recheck=0', '?recheck=true']) {
+     assert.equal((await (await get(job.id, query)).json()).generation.errorCode, 'result_missing');
+   }
+   for (const headers of [{'sec-fetch-site':'cross-site'}, {'sec-fetch-site':'same-site'}, {origin:'https://untrusted.invalid'}]) {
+     assert.equal((await get(job.id, '?recheck=1', headers)).status, 403);
+   }
+   adult = false;
+   assert.equal((await get(job.id, '?recheck=1')).status, 403);
+   adult = true;
+   approval = false;
+   assert.equal((await get(job.id, '?recheck=1')).status, 403);
+   approval = true;
+   job.user_id = 8;
+   assert.equal((await get(job.id, '?recheck=1')).status, 404);
+   job.user_id = 7;
+   revoked = true;
+   assert.equal((await (await get(job.id, '?recheck=1')).json()).generation.errorCode, 'result_missing');
+   revoked = false;
+   assert.equal(lookupCalls, 2);
+   activeCredential = '22222222-2222-4222-8222-222222222222';
+   credentials.set(activeCredential, 'sk-fixture-key-rotated');
+   const responses = await Promise.all([get(job.id, '?recheck=1'), get(job.id, '?recheck=1')]);
+   const recovered = (await Promise.all(responses.map(response => response.json()))).map(item => item.generation).find(item => item.status === 'completed');
+   assert.ok(recovered);
+   assert.match(recovered.videoUrl, /^\/api\/business\/media\/[^/]+\/adult\//);
+   assert.equal(recovered.completedAt, failed.completedAt);
+   await get(job.id, '?recheck=1');
+   assert.equal(lookupCalls, 3);
+   assert.equal(seenKeys.at(-1), 'sk-fixture-key-original');
+   assert.equal(providerCalls, 1);
+   assert.equal(uploads, 1);
+ });
+ await test('recheck does not reactivate other failed tasks', async () => {
+   await send();
+   pollVideo = { status: 'completed' };
+   const id = jobs[0].id;
+   assert.equal((await (await get(id)).json()).generation.errorCode, 'result_missing');
+   assert.equal((await (await get(id, '?recheck=1')).json()).generation.errorCode, 'result_missing');
+   assert.equal(lookupCalls, 2);
+   assert.equal(providerCalls, 1);
+ });
+ await test('structured content policy codes classify POST and async rejection without exposing provider text', async () => {
+   const code = 'OutputVideoSensitiveContentDetected';
+   const model = 'NSFW-SIRAYA-Seedance-2.5';
+   const message = 'fixture internal provider reason';
+   failProvider = new SirayaApiError(400, message, 'BadRequest', `${code}.PolicyViolation`);
+   const rejected = (await (await send(body(1, 'video', { model }))).json()).generation;
+   assert.equal(rejected.errorCode, 'provider_content_policy');
+   assert.equal(rejected.providerHttpStatus, 400);
+   assert.ok(!JSON.stringify(rejected).includes(message));
+   failProvider = null;
+   kindResult = { error: { type: code, message } };
+   assert.equal((await (await send(body(2, 'video', { model }))).json()).generation.errorCode, 'provider_content_policy');
+   kindResult = null;
+   await send(body(3, 'video', { model }));
+   pollVideo = { status: 'failed', error: { code: `${code}.PolicyViolation`, message } };
+   const failed = (await (await get(jobs[2].id)).json()).generation;
+   assert.equal(failed.errorCode, 'provider_content_policy');
+   assert.equal(failed.providerHttpStatus, 200);
+   assert.ok(!JSON.stringify(failed).includes(message));
+   await send(body(4, 'video', { model }));
+   pollVideo = new SirayaApiError(400, message, 'BadRequest', code);
+   assert.equal((await (await get(jobs[3].id)).json()).generation.errorCode, 'provider_content_policy');
+   failProvider = new SirayaApiError(400, `${message} ${code}`, 'BadRequest', 'InvalidParameter');
+   assert.equal((await (await send(body(5, 'video', { model }))).json()).generation.errorCode, 'provider_rejected');
+   failProvider = null;
+   await send(body(6, 'video', { model }));
+   pollVideo = { status: 'failed', error: { code: `${code}.Unverified`, message: code } };
+   assert.equal((await (await get(jobs[5].id)).json()).generation.errorCode, 'provider_failed');
+   failProvider = new SirayaApiError(400, message, 'content_policy_violation');
+   assert.equal((await (await send(body(7, 'video', { model }))).json()).generation.errorCode, 'provider_content_policy');
+ });
  await test('parallel poll reconciles at most once and never duplicates media upload',async()=>{await send();pollVideo={status:'completed',output_url:'https://example.volces.com/own.mp4'};await Promise.all([get(jobs[0].id),get(jobs[0].id),get(jobs[0].id)]);assert.equal(lookupCalls,2);assert.equal(uploads,1)});
  await test('malicious private-network or arbitrary provider output URL never fetched',async()=>{kindResult={data:[{url:'http://127.0.0.1/secrets'}]};const response=await send(body(1,'image'));assert.equal((await response.json()).generation.errorCode,'result_missing');assert.equal(uploads,0)});
  await test('documented Kling and MiniMax media origins are privately persisted',async()=>{for(const [index,url] of ['https://v16-kling.klingai.com/fixture.mp4','https://cdn.hailuoai.com/fixture.mp4','https://filecdn.minimax.chat/fixture.mp4'].entries()){kindResult={data:[{url}]};const response=await send(body(index+1));assert.equal((await response.json()).generation.status,'completed');assert.equal(sourceFetches[index],url);}assert.equal(uploads,3)});
