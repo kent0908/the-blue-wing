@@ -103,6 +103,7 @@ async function checkShortDramaRun() {
    assert.deepEqual(inputs.get(stillId).image, ['https://example.invalid/pier.jpg']);
    assert.equal(inputs.get(stillId).prompt, workflow.nodes.find(node => node.id === `${shot.id}-framing`).data.text);
    assert.deepEqual(inputs.get(shot.id).imageUrls, [`https://example.invalid/${stillId}.jpg`]);
+   assert.equal(inputs.get(shot.id).generate_audio, false, 'edit-led sound keeps native audio off');
    assert.equal(inputs.get(shot.id).prompt, workflow.nodes.find(node => node.id === `${shot.id}-motion`).data.text);
    assert.equal(shot.output.kind, 'video');
   }

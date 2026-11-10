@@ -41,7 +41,10 @@ import workflowStyles from "./BusinessWorkflows.module.css";
 const REQUEST_HEADERS = { "Content-Type": "application/json" };
 // The API guarantees these failures occurred before a paid provider request.
 const PRE_SUBMIT_ERRORS = new Set(["invalid_origin", "invalid_body", "invalid_parameters", "invalid_reference", "business_asset_unavailable", "model_unavailable", "age_unverified", "credential_required", "credential_changed", "credential_validation_failed", "prompt_blocked", "too_many_concurrent", "business_not_approved", "business_suspended", "encryption_unavailable", "credential_unavailable"]);
-const isPending = (job: BusinessGeneration) => ["submitting", "processing", "unknown"].includes(job.status);
+const isPending = (job: BusinessGeneration) => job.status === "submitting" || job.status === "processing";
+const SUBMISSION_TIMEOUT = 60_000;
+const RECEIPT_EXPIRY = 6 * 60_000;
+type SubmissionReceipt = { requestId: string; expiresAt: number };
 
 function dedicatedImageLimit(mode: BusinessSeedanceMode | undefined, maximum: number): number {
   if (mode === "text-to-video" || mode === "video-extend") return 0;
@@ -120,12 +123,36 @@ export default function BusinessWorkspace() {
   const [uncertain, setUncertain] = useState(false);
   const submitLock = useRef(false);
   const keyLock = useRef(false);
-  const unresolvedRequest = useRef<string | null>(null);
+  const unresolvedRequest = useRef<SubmissionReceipt | null>(null);
   const selectionContext = useRef<string | null>(null);
   const selectedModels = models.filter(model => model.modality === kind);
   const selected = selectBusinessModel(models, kind, modelId);
   const promptLimit = selected?.dedicatedVideo?.cjkPromptMaxChars && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) ? selected.dedicatedVideo.cjkPromptMaxChars : selected?.promptMaxChars ?? 12000;
   const approved = access?.account?.status === "approved";
+  const receiptStorageKey = approved && access?.account ? `bw:business-receipt:${access.account.id}` : "";
+
+  const saveReceipt = useCallback((receipt: SubmissionReceipt | null) => {
+    const previousRequestId = unresolvedRequest.current?.requestId;
+    unresolvedRequest.current = receipt;
+    if (!receiptStorageKey) return;
+    try {
+      if (receipt) sessionStorage.setItem(receiptStorageKey, JSON.stringify({ requestId: receipt.requestId, expiresAt: receipt.expiresAt }));
+      else if (JSON.parse(sessionStorage.getItem(receiptStorageKey) ?? "null")?.requestId === previousRequestId) {
+        sessionStorage.removeItem(receiptStorageKey);
+      }
+    } catch { /* Browser storage may be unavailable. The server still keeps accepted jobs. */ }
+  }, [receiptStorageKey]);
+
+  useEffect(() => {
+    if (!receiptStorageKey) return;
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(receiptStorageKey) ?? "null") as SubmissionReceipt | null;
+      if (typeof stored?.requestId !== "string" || !/^[a-f0-9-]{36}$/i.test(stored.requestId) || !Number.isFinite(stored.expiresAt)) return;
+      unresolvedRequest.current = stored;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- recover the previous tab's in-flight acknowledgement
+      setUncertain(true);
+    } catch { /* A missing or invalid receipt does not prevent browsing saved jobs. */ }
+  }, [receiptStorageKey]);
 
   const refreshAccess = useCallback(async () => {
     const response = await fetch("/api/business/access", { cache: "no-store" });
@@ -156,43 +183,71 @@ export default function BusinessWorkspace() {
     finally { setModelsLoading(false); }
   }, [t]);
 
-  const loadHistory = useCallback(async (reconcile = true) => {
+  const loadHistory = useCallback(async (reconcile = true, silent = false) => {
     if (historyLock.current) return;
     historyLock.current = true;
     const version = historyVersion.current;
-    setHistoryLoading(true);
+    if (!silent) setHistoryLoading(true);
     try {
       const response = await fetch("/api/business/generations", { cache: "no-store", signal: AbortSignal.timeout(30000) });
       const data = await response.json().catch(() => null);
-      if (!response.ok) { setError(businessError(t, data?.error?.code)); return; }
-      let nextJobs: BusinessGeneration[] = data.generations ?? [];
+      if (!response.ok || !Array.isArray(data?.generations)) { if (!silent) setError(businessError(t, data?.error?.code)); return; }
+      if (version !== historyVersion.current) return;
+      let nextJobs: BusinessGeneration[] = data.generations;
+      setJobs(nextJobs);
+      const receipt = unresolvedRequest.current;
+      if (!submitLock.current && receipt) {
+        let original = nextJobs.find(job => job.clientRequestId === receipt.requestId);
+        let checked = Boolean(original);
+        if (!original) {
+          const result = await fetch(`/api/business/generations?clientRequestId=${encodeURIComponent(receipt.requestId)}`, {
+            cache: "no-store", signal: AbortSignal.timeout(10_000),
+          });
+          if (result.ok) {
+            const body = await result.json();
+            checked = body.generation === null || body.generation?.clientRequestId === receipt.requestId;
+            if (checked && body.generation) original = body.generation;
+          }
+        }
+        if (version !== historyVersion.current || unresolvedRequest.current !== receipt) return;
+        if (original && !nextJobs.some(job => job.clientRequestId === receipt.requestId)) {
+          nextJobs = [original, ...nextJobs];
+          setJobs(nextJobs);
+        }
+        if (original || checked && Date.now() >= receipt.expiresAt) {
+          saveReceipt(null);
+          setUncertain(false);
+          if (original?.status === "failed") setError(businessError(t, original.errorCode));
+          else if (original) setNotice(resultsCopy.submitted);
+          else setNotice(resultsCopy.receiptNotFound);
+        }
+      }
       if (reconcile) {
         const updates = await Promise.allSettled(nextJobs.filter(isPending).slice(0, 12).map(async job => {
           const status = await fetch(`/api/business/generations/${encodeURIComponent(job.id)}`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
           if (!status.ok) return job;
           const result = await status.json();
-          return (result.generation ?? job) as BusinessGeneration;
+          return (result.generation?.id === job.id ? result.generation : job) as BusinessGeneration;
         }));
+        if (version !== historyVersion.current) return;
         const replaced = new Map(updates.filter((item): item is PromiseFulfilledResult<BusinessGeneration> => item.status === "fulfilled").map(item => [item.value.id, item.value]));
-        nextJobs = nextJobs.map(job => replaced.get(job.id) ?? job);
+        setJobs(current => current.map(job => replaced.get(job.id) ?? job));
       }
-      // A list requested before submission must not overwrite its new result.
-      if (version !== historyVersion.current) return;
-      setJobs(nextJobs);
-      if (unresolvedRequest.current) {
-        const original = nextJobs.find(job => job.clientRequestId === unresolvedRequest.current);
-        if (original && original.status !== "unknown" && original.status !== "submitting") { unresolvedRequest.current = null; setUncertain(false); }
-      }
-    } catch { setError(t.unavailable); }
-    finally { historyLock.current = false; setHistoryLoading(false); }
-  }, [t]);
+    } catch { if (!silent) setError(t.unavailable); }
+    finally { historyLock.current = false; if (!silent) setHistoryLoading(false); }
+  }, [resultsCopy.receiptNotFound, resultsCopy.submitted, saveReceipt, t]);
 
   const hasPendingJobs = jobs.some(isPending);
   useEffect(() => {
-    if (!approved || !hasPendingJobs) return;
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible" && !submitLock.current) void loadHistory(true); }, 15000);
-    return () => window.clearInterval(timer);
-  }, [approved, hasPendingJobs, loadHistory]);
+    if (!approved || (!hasPendingJobs && !uncertain)) return;
+    const refreshPending = () => { if (document.visibilityState === "visible") void loadHistory(true, true); };
+    const timer = window.setInterval(refreshPending, 5000);
+    document.addEventListener("visibilitychange", refreshPending);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshPending);
+    };
+  }, [approved, hasPendingJobs, uncertain, loadHistory]);
 
   const loadPersonalAssets = useCallback(async () => {
     personalAssetsRequest.current?.abort();
@@ -265,14 +320,13 @@ export default function BusinessWorkspace() {
     } catch { setError(t.unavailable); }
     finally { keyLock.current = false; setKeySaving(false); }
   };
-  const resetSelection = useCallback(() => { setSize(""); setResolution(""); setAssetIds([]); setAudio(false); setApiKey(""); setVideoMode("freestyle"); setProviderAssets([]); setReferenceOrder([]); setOutputFormat("mp4"); setSeed(""); setImageCount(1); setImageQuality(""); setImageNegative(""); setImagePromptExtend(false); setImageBusinessAssets([]); setDedicatedOptions({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS }); if (!submitLock.current) setConfirmation(null); }, [setConfirmation, setApiKey]);
+  const resetSelection = useCallback(() => { setSize(""); setResolution(""); setAssetIds([]); setAudio(false); setApiKey(""); setVideoMode("freestyle"); setProviderAssets([]); setReferenceOrder([]); setOutputFormat("mp4"); setSeed(""); setImageCount(1); setImageQuality(""); setImageNegative(""); setImagePromptExtend(false); setImageBusinessAssets([]); setDedicatedOptions({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS }); setConfirmation(null); }, [setConfirmation, setApiKey]);
   const navigate = (nextKind: BusinessKind, nextModel: string, nextTab: BusinessStudioTab) => startTransition(() => router.push(businessStudioHref({ kind: nextKind, modelId: nextModel, tab: nextTab }), { scroll: false }));
   const setTab = (value: BusinessStudioTab) => navigate(kind, modelId || selected?.id || "", value);
-  const chooseTab = (value: BusinessStudioTab) => { if (submitLock.current) return; if (!submitLock.current) setConfirmation(null); setApiKey(""); setError(""); setNotice(""); setTab(value); };
-  const chooseKind = (value: BusinessKind) => { if (submitLock.current) return; resetSelection(); setApiKey(""); navigate(value, "", "create"); };
-  const chooseModel = (value: string) => { if (submitLock.current) return; const model = models.find(item => item.id === value); if (!model) return; resetSelection(); setSeconds(model.defaultSeconds ?? Math.min(model.maxSeconds ?? 5, Math.max(model.minSeconds ?? 2, 5))); navigate(model.modality, model.id, "create"); };
+  const chooseTab = (value: BusinessStudioTab) => { setConfirmation(null); setApiKey(""); setError(""); setNotice(""); setTab(value); };
+  const chooseKind = (value: BusinessKind) => { resetSelection(); setApiKey(""); navigate(value, "", "create"); };
+  const chooseModel = (value: string) => { const model = models.find(item => item.id === value); if (!model) return; resetSelection(); setSeconds(model.defaultSeconds ?? Math.min(model.maxSeconds ?? 5, Math.max(model.minSeconds ?? 2, 5))); navigate(model.modality, model.id, "create"); };
   const chooseVideoMode = (value: BusinessSeedanceMode) => {
-    if (submitLock.current) return;
     const count = assetIds.length + imageBusinessAssets.length + providerAssets.length;
     if ((value === "text-to-video" && count > 0) || ((value === "image-to-video" || value === "first-last-frame") && (count > (value === "image-to-video" ? 1 : 2) || providerAssets.some(asset => asset.type !== "image")))) {
       setError(d.referenceLimitError); return;
@@ -281,10 +335,9 @@ export default function BusinessWorkspace() {
     if (value === "video-edit" || value === "video-extend") setSeconds(-1);
     else if (seconds === -1 && !providerAssets.some(asset => asset.type === "video")) setSeconds(selected?.defaultSeconds ?? 5);
   };
-  const toggleLocalReference = (id: number) => { if (submitLock.current) return; const exists = assetIds.includes(id); const key = `local:${id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setAssetIds(current => exists ? current.filter(value => value !== id) : [...current, id]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
-  const toggleProviderReference = (asset: BusinessProviderAsset) => { if (submitLock.current) return; const exists = providerAssets.some(value => value.id === asset.id); const key = `provider:${asset.id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setProviderAssets(current => exists ? current.filter(value => value.id !== asset.id) : [...current, asset]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
+  const toggleLocalReference = (id: number) => { const exists = assetIds.includes(id); const key = `local:${id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setAssetIds(current => exists ? current.filter(value => value !== id) : [...current, id]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
+  const toggleProviderReference = (asset: BusinessProviderAsset) => { const exists = providerAssets.some(value => value.id === asset.id); const key = `provider:${asset.id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setProviderAssets(current => exists ? current.filter(value => value.id !== asset.id) : [...current, asset]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
   const chooseDedicatedOptions = (value: BusinessDedicatedVideoOptions) => {
-    if (submitLock.current) return;
     if (value.mode !== dedicatedOptions.mode) {
       const capability = selected?.dedicatedVideo;
       if (capability?.supportsPersonalReferences) {
@@ -301,7 +354,7 @@ export default function BusinessWorkspace() {
   };
   const addWanPersonalReference = (asset: BusinessAsset): boolean => {
     const capability = selected?.dedicatedVideo;
-    if (submitLock.current || !capability?.supportsPersonalReferences || !Number.isSafeInteger(asset.id) || asset.id < 1 ||
+    if (!capability?.supportsPersonalReferences || !Number.isSafeInteger(asset.id) || asset.id < 1 ||
       !["image/png", "image/jpeg", "image/webp"].includes(asset.contentType ?? "image/png") ||
       (asset.size !== undefined && Number(asset.size) > (capability.referenceImageRules?.maxBytes ?? 20 * 1024 * 1024))) return false;
     if (assetIds.includes(asset.id)) return true;
@@ -319,7 +372,6 @@ export default function BusinessWorkspace() {
     return true;
   };
   const removeDedicatedReference = (key: string) => {
-    if (submitLock.current) return;
     if (key.startsWith("local:")) setAssetIds(current => current.filter(id => `local:${id}` !== key));
     if (key.startsWith("business:")) setImageBusinessAssets(current => current.filter(asset => `business:${asset.uploadId}` !== key));
     setReferenceOrder(current => current.filter(value => value !== key));
@@ -331,7 +383,7 @@ export default function BusinessWorkspace() {
     if (asset) addWanPersonalReference(asset);
   };
   const selectManagedAsset = (asset: BusinessAssetRecord) => {
-    if (submitLock.current || !selected) return;
+    if (!selected) return;
     if (kind === "video" && selected.seedance) {
       if (asset.status !== "active") return;
       const next = providerAssets.some(value => value.id === asset.id) ? providerAssets.filter(value => value.id !== asset.id) : [...providerAssets, asset];
@@ -368,7 +420,7 @@ export default function BusinessWorkspace() {
     setApiKey("");
   }, [kind, modelId, selected?.id, tab, resetSelection]);
   function pickMention(candidate: MentionCandidate): string | null {
-    if (submitLock.current || navigationPending || !selected?.supportsReferences) return null;
+    if (navigationPending || !selected?.supportsReferences) return null;
     const existing = candidate.localId ? assetIds.includes(candidate.localId) : selected.seedance && candidate.key.startsWith("provider:") ? providerAssets.some(asset => asset.id === candidate.asset?.id) : imageBusinessAssets.some(asset => asset.uploadId === candidate.asset?.uploadId);
     if (!existing) {
       const count = assetIds.length + imageBusinessAssets.length + (selected.seedance ? providerAssets.filter(asset => asset.type === "image").length : 0);
@@ -400,7 +452,7 @@ export default function BusinessWorkspace() {
     return tag;
   }
   const requestConfirmation = (event: React.FormEvent) => {
-    event.preventDefault(); if (submitLock.current || navigationPending || uncertain || !selected || !prompt.trim()) return;
+    event.preventDefault(); if (submitLock.current || unresolvedRequest.current || navigationPending || uncertain || !selected || !prompt.trim()) return;
     const wan3 = selected.dedicatedVideo?.family === "wan3.0";
     const wanPersonal = selected.dedicatedVideo?.supportsPersonalReferences === true;
     if (prompt.length > (selected.promptMaxChars ?? 12000)) { setError(wan3 ? dedicatedCopy.wan3PromptLimit : klingText.promptLimit); return; }
@@ -504,30 +556,34 @@ export default function BusinessWorkspace() {
     setError(""); setConfirmation({ clientRequestId: crypto.randomUUID(), kind, parameters, ...(Object.keys(editorMentions).length ? { editor: { prompt: prompt.trim(), mentions: editorMentions } } : {}) });
   };
   const submitGeneration = async () => {
-    if (submitLock.current || !confirmation) return;
-    const request = confirmation; submitLock.current = true; setSubmitting(true); setError(""); setNotice(""); unresolvedRequest.current = request.clientRequestId;
+    if (submitLock.current || unresolvedRequest.current || !confirmation) return;
+    const request = confirmation;
+    submitLock.current = true;
+    setConfirmation(null);
+    setSubmitting(true); setError(""); setNotice("");
+    saveReceipt({ requestId: request.clientRequestId, expiresAt: Date.now() + RECEIPT_EXPIRY });
     try {
-      const response = await fetch("/api/business/generations", { method: "POST", headers: REQUEST_HEADERS, body: JSON.stringify(request) });
+      const response = await fetch("/api/business/generations", {
+        method: "POST", headers: { ...REQUEST_HEADERS, Prefer: "respond-async" },
+        body: JSON.stringify(request), signal: AbortSignal.timeout(SUBMISSION_TIMEOUT),
+      });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        if (!PRE_SUBMIT_ERRORS.has(data?.error?.code) && (response.status >= 500 || response.status === 408 || data?.error?.code === "outcome_unknown")) { setUncertain(true); setError(t.uncertain); }
-        else { unresolvedRequest.current = null; setError(businessError(t, data?.error?.code)); }
+        if (!PRE_SUBMIT_ERRORS.has(data?.error?.code) && (response.status >= 500 || response.status === 408 || data?.error?.code === "outcome_unknown")) setUncertain(true);
+        else { saveReceipt(null); setError(businessError(t, data?.error?.code)); }
         return;
       }
       const job = data?.generation as BusinessGeneration | undefined;
-      if (!job) { setUncertain(true); setError(t.uncertain); return; }
+      if (!job?.id || job.clientRequestId !== request.clientRequestId) { setUncertain(true); return; }
       historyVersion.current++;
       setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
       setSelectedJobId(job.id);
-      requestAnimationFrame(() => workspacePreview.current?.scrollIntoView({ block: "start", behavior: "instant" }));
-      if (job.status === "unknown" || job.status === "submitting") { setUncertain(true); setError(t.uncertain); }
-      else {
-        unresolvedRequest.current = null; setUncertain(false);
-        if (job.status === "failed") setError(businessError(t, job.errorCode));
-        else setNotice(resultsCopy.submitted);
-      }
-    } catch { setUncertain(true); setError(t.uncertain); }
-    finally { setConfirmation(null); submitLock.current = false; setSubmitting(false); }
+      saveReceipt(null);
+      setUncertain(false);
+      if (job.status === "failed" || job.status === "unknown") setError(businessError(t, job.errorCode ?? "outcome_unknown"));
+      else setNotice(resultsCopy.submitted);
+    } catch { setUncertain(true); }
+    finally { submitLock.current = false; setSubmitting(false); }
   };
   const selectedSize = selected?.sizes?.includes(size) ? size : selected?.sizes?.[0] ?? "";
   const [zWidth = "", zHeight = ""] = (size || selected?.zImage?.defaultSize || "").split("x");
@@ -558,7 +614,6 @@ export default function BusinessWorkspace() {
     ...imageBusinessAssets.flatMap(asset => asset.uploadId ? [{ key: `business:${asset.uploadId}`, name: asset.name, src: `/api/business/provider-assets/uploads/${asset.uploadId}/preview`, source: "business" as const }] : []),
   ], referenceOrder) : [];
   const moveDedicatedReference = (key: string, direction: -1 | 1) => {
-    if (submitLock.current) return;
     const keys = dedicatedReferenceItems.map(item => item.key);
     const index = keys.indexOf(key), destination = index + direction;
     if (index < 0 || destination < 0 || destination >= keys.length) return;
@@ -620,7 +675,7 @@ export default function BusinessWorkspace() {
   };
   useEffect(() => () => { reuseRequest.current?.abort(); }, [kind, modelId, tab, credential?.id]);
   const reusePrompt = async (job: BusinessGeneration) => {
-    if (submitLock.current || reuseRequest.current) return;
+    if (reuseRequest.current) return;
     if (!models.some(model => model.id === job.model && model.modality === job.kind)) { setError(resultsCopy.missingModel); return; }
     const request = new AbortController();
     reuseRequest.current = request;
@@ -656,7 +711,7 @@ export default function BusinessWorkspace() {
     <div className={studio.workspaceBody} ref={workspaceScroll}>
     <div className={approved ? studio.activeContent : studio.entry}>
     {!approved && <><h1>{t.workspace}</h1><p>{t.description}</p></>}
-    {error ? <p role="alert" className={styles.feedback}>{error}</p> : null}{notice || reuseLoading ? <p role="status" className={styles.success}>{reuseLoading ? resultsCopy.reuseLoading : notice}</p> : null}
+    {error ? <p role="alert" className={styles.feedback}>{error}</p> : null}{notice || reuseLoading || submitting ? <p role="status" className={styles.success}>{submitting ? resultsCopy.registering : reuseLoading ? resultsCopy.reuseLoading : notice}</p> : null}
     {auth === "loading" ? <p className={styles.description} role="status">{t.loading}</p> : auth === "signedOut" ? <section className={styles.panel}><div className={styles.row}><Link href={`/login?next=${encodeURIComponent(businessStudioHref({ kind, modelId, tab }))}`} className={styles.button}>{t.login}</Link></div></section> : auth === "unverified" ? <p className={styles.warning}>{t.verifyEmail}</p> : !access ? <section className={styles.panel}><button className={styles.secondary} onClick={refresh} disabled={loading}>{loading ? t.checking : t.refresh}</button></section> : !approved ? <section className={styles.panel}>
       <div className={styles.panelHead}><div><h2 className={styles.heading}>{t.applyTitle}</h2><p className={styles.description}>{t.applyText}</p></div><button type="button" className={styles.small} onClick={refresh} disabled={loading}>{loading ? t.checking : t.refresh}</button></div>
       {access.account ? <div className={styles.stateCard}><span className={styles.status}>{t[access.account.status]}</span><p>{access.account.status === "pending" ? t.pendingText : access.account.status === "rejected" ? t.rejectedText : t.suspendedText}</p>{access.account.reviewNote ? <p className={styles.review}><strong>{t.reviewNote}</strong><br />{access.account.reviewNote}</p> : null}</div> : null}
@@ -676,7 +731,7 @@ export default function BusinessWorkspace() {
             </> : kind === "image" && selected?.sizes?.length ? <label className={styles.field}>{t.size}<select value={selectedSize} onChange={e => setSize(e.target.value)}>{selected.sizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}
               {kind === "video" ? <>
                 <label className={styles.field}>{t.duration}
-                  {wan3Capability ? <BusinessWan3DurationSelect capability={wan3Capability} seconds={selectedSeconds} disabled={submitting} onChange={setSeconds} /> : selected?.seedance ? <>
+                  {wan3Capability ? <BusinessWan3DurationSelect capability={wan3Capability} seconds={selectedSeconds} onChange={setSeconds} /> : selected?.seedance ? <>
                     <select aria-label={t.duration} value={seedanceAutoDuration ? "auto" : "fixed"} disabled={seedanceVideoDuration} onChange={e => setSeconds(e.target.value === "auto" ? -1 : selected.defaultSeconds ?? 5)}><option value="fixed">{d.fixed}</option><option value="auto">{d.automatic}</option></select>
                     {!seedanceAutoDuration ? <input type="number" min={selected.minSeconds} max={selected.maxSeconds} step={1} value={selectedSeconds} required aria-label={t.duration} onChange={e => setSeconds(Number(e.target.value))} /> : <span className={styles.note}>{d.autoDurationNotice}</span>}
                   </> : selected?.secondsOptions?.length ? <select value={selectedSeconds} onChange={e => setSeconds(Number(e.target.value))}>{selected.secondsOptions.map(value => <option key={value} value={value}>{value}</option>)}</select> : <input type="number" min={selected?.minSeconds ?? 2} max={selected?.maxSeconds ?? 15} step={1} value={selectedSeconds} required onChange={e => setSeconds(Number(e.target.value))} />}
@@ -697,14 +752,13 @@ export default function BusinessWorkspace() {
                 value={dedicatedOptions}
                 onChange={chooseDedicatedOptions}
                 referenceCount={imageBusinessAssets.length}
-                disabled={submitting}
                 onOpenAssets={() => chooseTab("assets")}
                 personalLibrary={wanPersonal ? { assets, selectedIds: assetIds, onToggle: toggleWanPersonalReference, loading: personalAssetsStatus === "loading", unavailable: personalAssetsStatus === "unavailable", onRetry: () => void loadPersonalAssets() } : undefined}
                 referenceItems={wanPersonal ? dedicatedReferenceItems : undefined}
                 onRemoveReference={wanPersonal ? removeDedicatedReference : undefined}
                 onMoveReference={wanPersonal ? moveDedicatedReference : undefined}
               />
-              {!wanPersonal && imageBusinessAssets.length > 0 ? <div className={styles.row}>{imageBusinessAssets.map((asset, index) => <button key={asset.id} type="button" className={styles.small} disabled={submitting} onClick={() => { setImageBusinessAssets(current => current.filter(value => value.id !== asset.id)); setConfirmation(null); }}><span>{index + 1}. {asset.name} ×</span></button>)}</div> : null}
+              {!wanPersonal && imageBusinessAssets.length > 0 ? <div className={styles.row}>{imageBusinessAssets.map((asset, index) => <button key={asset.id} type="button" className={styles.small} onClick={() => { setImageBusinessAssets(current => current.filter(value => value.id !== asset.id)); setConfirmation(null); }}><span>{index + 1}. {asset.name} ×</span></button>)}</div> : null}
             </> : null}
             {seedanceAdaptive ? <p className={styles.note}>{d.adaptiveNotice}</p> : null}
             {kind === "image" && selected?.supportsReferences ? <div><button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button>{imageBusinessAssets.length > 0 && <div className={styles.row} style={{marginTop:12}}>{imageBusinessAssets.map(asset => <button key={asset.id} type="button" className={styles.small} onClick={() => setImageBusinessAssets(current => current.filter(value => value.id !== asset.id))}>{asset.name} ×</button>)}</div>}</div> : null}{selected?.supportsReferences && !selected.seedance && !selected.dedicatedVideo ? <details className={styles.promptDetails}><summary>{t.references} · {assetIds.length + (kind === "image" ? imageBusinessAssets.length : 0)} / {referenceLimit}</summary><p className={styles.note}>{t.referenceText.replace("{n}", String(referenceLimit))}</p>{assets.length ? <div className={styles.assetGrid}>{assets.slice(0, 100).map(asset => <button type="button" key={asset.id} className={styles.asset} aria-pressed={assetIds.includes(asset.id)} title={assetIds.includes(asset.id) ? t.removeReference : t.selectReference} disabled={!assetIds.includes(asset.id) && assetIds.length + (kind === "image" ? imageBusinessAssets.length : 0) >= referenceLimit} onClick={() => setAssetIds(current => current.includes(asset.id) ? current.filter(id => id !== asset.id) : [...current, asset.id])}><Image src={asset.src} alt={asset.name} loading="lazy" width={200} height={100} unoptimized /><span>{asset.name}</span></button>)}</div> : <p className={styles.note}>{t.noAssets}</p>}<button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button></details> : null}

@@ -50,18 +50,20 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
   const recovery = useRef<AbortController | null>(null);
   useEffect(() => () => recovery.current?.abort(), []);
   const video = useRef<HTMLVideoElement>(null);
-  const pending = job && ["processing", "submitting", "unknown"].includes(job.status);
+  const pending = job?.status === "processing" || job?.status === "submitting";
   const hasOutput = !!(job?.videoUrl || job?.images?.length || job?.text);
   const canRecoverVideo = !!onJobUpdated && job?.kind === "video" && job.nsfw && job.status === "failed" &&
     job.errorCode === "result_missing" && isBusinessWan3SpicyModel(job.model);
+  const canRecheck = !!onJobUpdated && (canRecoverVideo || job?.canRecheck);
   const image = job?.images?.[imageIndex] ?? job?.images?.[0];
+  const unknownMessage = job?.canRecheck ? c.unknown : c.untrackable;
   const url = job?.videoUrl ?? image?.url;
   const downloadUrl = url?.startsWith("/api/business/media/") ? `${url}${url.includes("?") ? "&" : "?"}download=1` : url;
   const title = job ? modelLabel(job.model) : model?.displayName ?? business[kind];
   const open = () => { video.current?.pause(); setExpanded(true); };
   const copyPrompt = async () => { try { await navigator.clipboard.writeText(job?.prompt ?? ""); setFeedback(c.copied); } catch { setFeedback(c.copyFailed); } };
-  const recoverVideo = async () => {
-    if (!canRecoverVideo || !job || recovery.current) return;
+  const recheckResult = async () => {
+    if (!canRecheck || !job || recovery.current) return;
     const controller = new AbortController();
     recovery.current = controller;
     setRecovering(true); setFeedback("");
@@ -73,10 +75,10 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
       if (body?.generation?.id !== job.id) throw new Error("recheck_unavailable");
       if (controller.signal.aborted) return;
       onJobUpdated?.(body.generation);
-      setFeedback(body.generation.status === "completed" && body.generation.videoUrl ? c.videoRecovered :
-        body.generation.status === "processing" ? c.pending : c.videoNotRecovered);
+      setFeedback(body.generation.status === "completed" ? (canRecoverVideo ? c.videoRecovered : c.resultRecovered) :
+        body.generation.status === "processing" ? c.pending : canRecoverVideo ? c.videoNotRecovered : c.unknown);
     } catch {
-      if (!controller.signal.aborted) setFeedback(c.videoNotRecovered);
+      if (!controller.signal.aborted) setFeedback(canRecoverVideo ? c.videoNotRecovered : c.unknown);
     } finally {
       recovery.current = null;
       if (!controller.signal.aborted) setRecovering(false);
@@ -91,7 +93,7 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
     {hasOutput ? media() : <div className={styles.empty} role={pending ? "status" : undefined}>
       {pending && <span className={styles.spinner} aria-hidden="true" />}
       <h3>{job ? business[job.status] : copy.previewEmpty}</h3>
-      <p>{job?.status === "failed" ? businessError(business, job.errorCode ?? "generation_failed") : job?.status === "unknown" || job?.status === "submitting" ? c.unknown : pending ? c.pending : job ? c.emptyOutput : copy.previewEmptyText}</p>
+      <p>{job?.status === "failed" ? businessError(business, job.errorCode ?? "generation_failed") : job?.status === "unknown" ? unknownMessage : pending ? job.errorCode ? businessError(business, job.errorCode) : c.pending : job ? c.emptyOutput : copy.previewEmptyText}</p>
     </div>}
     {thumbnails}
     {job && <div className={styles.info}><span className={styles.badge} data-status={job.status}>{business[job.status]}</span>{job.nsfw && <span className={styles.badge}>{business.nsfw}</span>}<time dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString(locale)}</time></div>}
@@ -100,7 +102,7 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
       {hasOutput && !inDialog && <button type="button" className={styles.button} onClick={open}>{c.expand}</button>}
       {url && <a href={downloadUrl} download target="_blank" rel="noreferrer">{business.download} ↓</a>}
       {job && <button type="button" className={styles.button} onClick={copyPrompt}>{c.copy}</button>}
-      {(pending || job && !hasOutput) && <button type="button" className={styles.button} onClick={canRecoverVideo ? recoverVideo : onRefresh} disabled={refreshing || recovering}>{refreshing || recovering ? business.checking : canRecoverVideo ? c.recoverVideo : business.checkOriginal}</button>}
+      {(canRecheck || pending || job && !hasOutput && job.status !== "unknown") && <button type="button" className={styles.button} onClick={canRecheck ? recheckResult : onRefresh} disabled={refreshing || recovering}>{refreshing || recovering ? business.checking : canRecoverVideo ? c.recoverVideo : business.checkOriginal}</button>}
     </div>}
     {feedback && <p className={styles.notice} role="status">{feedback}</p>}
     {job?.videoUrl && /\.mov(?:\?|$)/i.test(job.videoUrl) && movNotice && <p className={styles.notice}>{movNotice}</p>}

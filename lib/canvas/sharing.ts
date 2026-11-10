@@ -13,6 +13,7 @@ export function shareableGraph(value: unknown) {
     const { shotTitle, shotOrder } = n.data;
     if (typeof shotTitle === "string" && shotTitle.length <= 120) data.shotTitle = shotTitle;
     if (typeof shotOrder === "number" && Number.isSafeInteger(shotOrder) && shotOrder >= 0 && shotOrder < 200) data.shotOrder = shotOrder;
+    if (typeof n.data.generate_audio === "boolean") data.generate_audio = n.data.generate_audio;
   }
   return { id:n.id, type:n.type, x:n.x, y:n.y, ...(n.width ? {width:n.width}:{}), ...(n.textHeight ? {textHeight:n.textHeight}:{}), data };
  }) };

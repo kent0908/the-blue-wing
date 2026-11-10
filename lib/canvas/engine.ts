@@ -7,7 +7,7 @@ import { officialCharacter } from "./officialCharacters";
  */
 import type { CanvasGraph, CanvasNode, LoadImageItem, NodeOutput } from "./types";
 import { sizeOptionsFor } from "@/lib/imageModels";
-import { videoConstraintFor } from "@/lib/videoModels";
+import { supportsSeedanceNativeAudio, videoConstraintFor } from "@/lib/videoModels";
 import { notifyCreditsUpdated } from "@/lib/creditEvents";
 
 /** Kahn's algorithm. Returns null if the graph has a cycle. */
@@ -149,6 +149,9 @@ export async function runNode(
       seconds: Math.max(constraint.minSeconds, Math.min(Number(node.data.seconds) || 5, constraint.maxSeconds)),
       resolution: constraint.resolutions.includes(requestedResolution) ? requestedResolution : constraint.resolutions[0],
     };
+    if (supportsSeedanceNativeAudio(String(node.data.model)) && typeof node.data.generate_audio === "boolean") {
+      body.generate_audio = node.data.generate_audio;
+    }
     if (refAssetIds.length) body.assetIds = refAssetIds;
     if (refUrls.length) body.imageUrls = refUrls;
     const res = await fetch("/api/videos", {

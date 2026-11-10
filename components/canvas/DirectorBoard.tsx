@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTr } from '@/lib/i18n/client';
 import type { CanvasGraph } from '@/lib/canvas/types';
 import { orderedShots, shotPrompt, storyParagraphs, type ShotNotes } from '@/lib/canvas/storyboard';
-import { videoConstraintFor, videoResolutionsForModel } from '@/lib/videoModels';
+import { supportsSeedanceNativeAudio, videoConstraintFor, videoResolutionsForModel } from '@/lib/videoModels';
 import { modelLabel } from '@/lib/modelLabel';
 import styles from './directorBoard.module.css';
 const field = styles.field;
@@ -90,6 +90,7 @@ export default function DirectorBoard({ graph, selectedId, onSelect, onChange, o
         <div className="mt-5 space-y-3 border-t border-[#333333] pt-4"><label className="block text-xs text-[#b4b4b4]">{tr("生成模型")}<select aria-label={tr("生成模型")} className={`${field} mt-2`} value={String(shot.data.model)} onChange={e => { const c = videoConstraintFor(e.target.value); onChange(shot.id, { model: e.target.value, resolution: c.resolutions[0], seconds: Math.max(c.minSeconds, Math.min(Number(shot.data.seconds || 5), c.maxSeconds)) }); }}>{!models.some(m => m.id === shot.data.model) && <option value={String(shot.data.model)}>{modelLabel(String(shot.data.model))}</option>}{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
           <div className="grid grid-cols-2 gap-3"><label className="text-xs text-[#b4b4b4]">{tr("秒數")}<input aria-label={tr("分鏡秒數")} type="number" min={constraint.minSeconds} max={constraint.maxSeconds} className={`${field} mt-2`} value={Number(shot.data.seconds || 5)} onChange={e => onChange(shot.id, { seconds: Math.max(constraint.minSeconds, Math.min(constraint.maxSeconds, Number(e.target.value) || constraint.minSeconds)) })}/></label><label className="text-xs text-[#b4b4b4]">{tr("解析度")}<select aria-label={tr("分鏡解析度")} className={`${field} mt-2`} value={String(shot.data.resolution || '480p')} onChange={e => onChange(shot.id, { resolution: e.target.value })}>{resolutions.map(r => <option key={r}>{r}</option>)}</select></label></div>
           <label className="block text-xs text-[#b4b4b4]">{tr("畫幅")}<select aria-label={tr("分鏡畫幅")} className={`${field} mt-2`} value={String(shot.data.aspect_ratio || '16:9')} onChange={e => onChange(shot.id, { aspect_ratio: e.target.value })}>{['16:9', '9:16', '1:1'].map(r => <option key={r}>{r}</option>)}</select></label>
+          {supportsSeedanceNativeAudio(String(shot.data.model)) && <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-[#c9c9c9]"><input type="checkbox" checked={shot.data.generate_audio !== false} onChange={event => onChange(shot.id, { generate_audio: event.target.checked })}/>{tr("生成聲音")}</label>}
           <button disabled={busy || price === null || !shotPrompt(prompt, notes).trim()} className={styles.primary} onClick={() => onRun(shot.id)}>{shot.status === 'running' ? tr('生成中…') : tr('生成這一鏡 · {cost}', { cost: price === null ? tr('費率待確認') : tr('約 {n} 點', { n: price }) })}</button>
           <p className="text-xs leading-5 text-[#aaaaaa]">{tr("含尚未完成的上游素材費用；已完成的素材沿用。送出前再確認，本次只執行所需節點。")}</p>
         </div>

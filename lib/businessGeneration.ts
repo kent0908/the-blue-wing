@@ -49,7 +49,12 @@ export interface BusinessModel {
   zImage?: BusinessZImageCapability;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const pending = ["submitting", "processing", "unknown"];
+const pending = ["submitting", "processing"];
+const SUBMISSION_EXPIRY_SECONDS = 6 * 60;
+const submissionExpiry = `coalesce(submitted_at,created_at)<now()-interval '${SUBMISSION_EXPIRY_SECONDS} seconds'`;
+const STATUS_GRACE_SECONDS = 2 * 60;
+const STATUS_MAX_UNAVAILABLE_SECONDS = 30 * 60;
+const providerStillProcessing = new Set(["processing", "pending", "running", "queued", "submitted", "starting", "in_progress", "in-progress", "created"]);
 function fail(code = "invalid_parameters", status = 400): never { throw new BusinessError(code, status); }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const baseModel = (model: string) => model.replace(/^NSFW-/i, "");
@@ -80,6 +85,7 @@ export function publicBusinessGeneration(row: BusinessGenerationRow) {
     billingStatus: row.billing_status ?? "pending", billingCheckedAt: row.billing_checked_at ?? null,
     providerBillingOutcome: row.provider_billing_outcome ?? null,
     providerDurationMs: row.provider_duration_ms === null || row.provider_duration_ms === undefined ? null : Number(row.provider_duration_ms),
+    ...(row.status === "unknown" && (row.provider_output || row.provider_task_id) ? { canRecheck: true } : {}),
     ...(row.output?.images !== undefined ? { images: row.output.images } : {}),
     ...(row.output?.videoUrl !== undefined ? { videoUrl: row.output.videoUrl } : {}),
     ...(row.output?.text !== undefined ? { text: row.output.text } : {}),
@@ -265,7 +271,10 @@ async function reserveGeneration(user: UserRow, account: BusinessAccount, creden
     if (duplicate.rows[0]) { await client.query("COMMIT"); return { row: duplicate.rows[0], duplicate: true }; }
     const active = await client.query("select id from business_credentials where id=$1 and account_id=$2 and user_id=$3 and is_active and revoked_at is null", [credentialId, account.id, user.id]);
     if (!active.rows.length) fail("credential_changed", 409);
-    const count = await client.query<{ count: string }>("select count(*) from business_generations where account_id=$1 and status=any($2::text[])", [account.id, pending]);
+    const count = await client.query<{ count: string }>(`select count(*) from business_generations
+      where account_id=$1 and status=any($2::text[]) and not (status='submitting' and ${submissionExpiry})
+      and not (status='processing' and provider_task_id is null and provider_output is null
+        and coalesce(submitted_at,created_at)<now()-interval '${STATUS_GRACE_SECONDS} seconds')`, [account.id, pending]);
     if (Number(count.rows[0]?.count ?? 0) >= 4) fail("too_many_concurrent", 429);
     const reuseInput = snapshotBusinessGeneration(submission.parameters, submission.editor, model.dedicatedVideo?.family === "wan3.0");
     const inserted = await client.query<BusinessGenerationRow>(`insert into business_generations(id,account_id,user_id,credential_id,client_request_id,kind,model,prompt,nsfw,status,output)
@@ -337,8 +346,6 @@ async function updateGeneration(row: BusinessGenerationRow, status: BusinessGene
 }
 
 async function finishMedia(row: BusinessGenerationRow, source: BusinessOutput) {
-  // Persist recovery sources before touching Blob. Retrying this download never invokes a paid model call.
-  row = await updateGeneration(row, "processing", null, null, source);
   try {
     const output: BusinessOutput = {};
     if (source.images) output.images = await Promise.all(source.images.map(async image => ({ url: await persistBusinessMedia(image.url, row, "image") })));
@@ -376,7 +383,18 @@ function providerErrorCode(error: unknown) {
   return "outcome_unknown";
 }
 
-export async function createBusinessGeneration(user: UserRow, account: BusinessAccount, body: unknown) {
+/** A worker that stopped after dispatch leaves an uncertain receipt. A worker that never dispatched can fail safely. */
+async function settleInterruptedSubmission(row: BusinessGenerationRow, expiredOnly: boolean) {
+  const result = await sql.query<BusinessGenerationRow>(`update business_generations
+    set status=case when submitted_at is null then 'failed' else 'unknown' end,
+        error_code=case when submitted_at is null then 'submission_interrupted' else 'outcome_unknown' end,
+        completed_at=case when submitted_at is null then now() else completed_at end,updated_at=now()
+    where id=$1 and account_id=$2 and user_id=$3 and status='submitting' and (not $4::boolean or ${submissionExpiry}) returning *`,
+    [row.id, row.account_id, row.user_id, expiredOnly]);
+  return result.rows[0] ?? row;
+}
+
+export async function createBusinessGeneration(user: UserRow, account: BusinessAccount, body: unknown, schedule?: (work: () => Promise<void>) => void) {
   const submission = validateSubmission(body);
   // Durable replay before credential lookup/model catalog changes; never call a model twice for the same UUID.
   const existing = await sql.query<BusinessGenerationRow>("select * from business_generations where account_id=$1 and user_id=$2 and client_request_id=$3", [account.id, user.id, submission.clientRequestId]);
@@ -392,16 +410,27 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
   const payload = await normalizedParameters(submission.kind, submission.parameters, model, user.id, account.id, credential);
   const reservation = await reserveGeneration(user, account, credential.id, submission, model);
   if (reservation.duplicate) { assertBusinessGenerationAge(reservation.row, user); return reservation; }
-  let row = reservation.row;
+  if (schedule) {
+    schedule(async () => {
+      try { await submitReservedGeneration(user, account, reservation.row, model, payload); }
+      catch { await settleInterruptedSubmission(reservation.row, false); }
+    });
+    return reservation;
+  }
+  return { row: await submitReservedGeneration(user, account, reservation.row, model, payload), duplicate: false };
+}
+
+async function submitReservedGeneration(user: UserRow, account: BusinessAccount, row: BusinessGenerationRow, model: BusinessModel, payload: Record<string, unknown>) {
   // Recheck approval/revocation immediately before paid I/O, while pinning this job's original key version.
   const pinned = await getBusinessCredential(user.id, account.id, row.credential_id);
-  if (!pinned) return { row: await updateGeneration(row, "failed", null, "credential_missing"), duplicate: false };
+  if (!pinned) return updateGeneration(row, "failed", null, "credential_missing");
   // Use a stable local timestamp immediately before the paid POST. It measures
   // observed end-to-end completion, never a claim about provider inference time.
   const submittedAt = new Date().toISOString();
   const marked = await sql.query<BusinessGenerationRow>(`update business_generations set submitted_at=coalesce(submitted_at,$1::timestamptz),updated_at=now()
-    where id=$2 and account_id=$3 and user_id=$4 returning *`, [submittedAt, row.id, row.account_id, row.user_id]);
-  if (!marked.rows[0]) fail("generation_not_found", 404);
+    where id=$2 and account_id=$3 and user_id=$4 and status='submitting' and submitted_at is null and not (${submissionExpiry}) returning *`,
+    [submittedAt, row.id, row.account_id, row.user_id]);
+  if (!marked.rows[0]) return getBusinessGeneration(user, account, row.id);
   row = marked.rows[0];
   let result: unknown;
   try {
@@ -421,11 +450,11 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
     else result = await createChatCompletion(payload as unknown as Parameters<typeof createChatCompletion>[0], options);
   } catch (error) {
     const code = providerErrorCode(error);
-    return { row: await updateGeneration(row, code === "outcome_unknown" ? "unknown" : "failed", null, code), duplicate: false };
+    return updateGeneration(row, code === "outcome_unknown" ? "unknown" : "failed", null, code);
   }
-  if (!record(result)) return { row: await updateGeneration(row, "unknown", null, "outcome_unknown"), duplicate: false };
+  if (!record(result)) return updateGeneration(row, "unknown", null, "outcome_unknown");
   if (isProviderContentPolicy(result.error)) {
-    return { row: await updateGeneration(row, "failed", null, "provider_content_policy"), duplicate: false };
+    return updateGeneration(row, "failed", null, "provider_content_policy");
   }
   if (row.kind === "text") {
     const choice = Array.isArray(result.choices) ? result.choices[0] : null;
@@ -437,15 +466,21 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
       const url = typeof image.url === "string" ? image.url : typeof image.b64_json === "string" ? `data:${sniffImageMimeFromBase64(image.b64_json)};base64,${image.b64_json}` : "";
       return url && validSource(url, "image") ? [{ url }] : [];
     }).slice(0, Number(payload.n ?? 1));
-    row = images.length ? await finishMedia(row, { images }) : await updateGeneration(row, "failed", null, "result_missing");
+    if (!images.length) return updateGeneration(row, "failed", null, "result_missing");
+    // Store the provider result before Blob I/O, then use the same lease as status lookups.
+    await updateGeneration(row, "processing", null, null, { images });
+    return getBusinessGeneration(user, account, row.id);
   } else {
     const url = videoUrl(result, row.model);
     const id = typeof result.id === "string" && /^[a-zA-Z0-9_-]{1,2000}$/.test(result.id) ? result.id : null;
-    if (url) row = await finishMedia(row, { videoUrl: url });
+    if (url) {
+      await updateGeneration(row, "processing", null, null, { videoUrl: url });
+      return getBusinessGeneration(user, account, row.id);
+    }
     else if (id) row = await updateGeneration(row, "processing", null, null, null, id);
     else row = await updateGeneration(row, "unknown", null, "outcome_unknown");
   }
-  return { row, duplicate: false };
+  return row;
 }
 
 function videoUrl(result: Record<string, unknown>, model: string) {
@@ -457,6 +492,14 @@ function videoUrl(result: Record<string, unknown>, model: string) {
 export async function listBusinessGenerations(user: UserRow, account: BusinessAccount) {
   const { rows } = await sql.query<BusinessGenerationRow>("select * from business_generations where account_id=$1 and user_id=$2 and ($3::boolean or nsfw=false) order by created_at desc limit 100", [account.id, user.id, isAdultVerified(user)]);
   return rows.map(publicBusinessGeneration);
+}
+
+export async function findBusinessSubmission(user: UserRow, account: BusinessAccount, requestId: string) {
+  if (!UUID.test(requestId)) fail();
+  const { rows } = await sql.query<BusinessGenerationRow>(`select * from business_generations
+    where account_id=$1 and user_id=$2 and client_request_id=$3 and ($4::boolean or nsfw=false)`,
+    [account.id, user.id, requestId, isAdultVerified(user)]);
+  return rows[0] ? publicBusinessGeneration(rows[0]) : null;
 }
 
 /** Owner-only read. Reusing an editor draft must never poll or submit a provider job. */
@@ -524,36 +567,59 @@ export async function getBusinessGeneration(user: UserRow, account: BusinessAcco
   let row = owned.rows[0];
   if (!row) fail("generation_not_found", 404);
   assertBusinessGenerationAge(row, user);
+  const ageSeconds = (Date.now() - new Date(row.submitted_at ?? row.created_at).getTime()) / 1000;
+  if (row.status === "submitting") {
+    return ageSeconds >= SUBMISSION_EXPIRY_SECONDS ? settleInterruptedSubmission(row, true) : row;
+  }
   const recheckMissing = recheck && row.status === "failed" && row.error_code === "result_missing"
     && row.kind === "video" && row.nsfw && !!row.provider_task_id && isBusinessWan3SpicyModel(row.model);
-  if (row.status !== "processing" && !recheckMissing) return row;
+  const recheckUnknown = recheck && row.status === "unknown" && Boolean(row.provider_output || row.provider_task_id);
+  if (row.status !== "processing" && !recheckMissing && !recheckUnknown) return row;
   // One read-only reconciliation per job. Concurrent tabs cannot duplicate Blob uploads.
   const claimed = await sql.query<BusinessGenerationRow>(`update business_generations set reconcile_after=now()+interval '5 minutes'
     where id=$1 and account_id=$2 and user_id=$3
-    and (status='processing' or ($4::boolean and status='failed' and error_code='result_missing' and provider_task_id is not null))
-    and (reconcile_after is null or reconcile_after<now()) returning *`, [id, account.id, user.id, recheckMissing]);
+    and (status='processing' or ($4::boolean and status='failed' and error_code='result_missing' and provider_task_id is not null)
+      or ($5::boolean and status='unknown' and (provider_task_id is not null or provider_output is not null)))
+    and (reconcile_after is null or reconcile_after<now()) returning *`, [id, account.id, user.id, recheckMissing, recheckUnknown]);
   if (!claimed.rows[0]) return row;
   row = claimed.rows[0];
   const recovering = row.status === "failed";
+  const stale = ageSeconds >= STATUS_MAX_UNAVAILABLE_SECONDS;
   try {
-    if (row.provider_output && !recovering) return await finishMedia(row, row.provider_output);
-    if (row.kind !== "video" || !row.provider_task_id) return row;
+    if (row.provider_output && !recovering) {
+      const saved = await finishMedia(row, row.provider_output);
+      return saved.status === "processing" && stale ? await updateGeneration(saved, "unknown", null, "storage_unavailable") : saved;
+    }
+    if (row.kind !== "video" || !row.provider_task_id) {
+      return ageSeconds >= STATUS_GRACE_SECONDS ? await updateGeneration(row, "unknown", null, "outcome_unknown") : row;
+    }
     const credential = await getBusinessCredential(user.id, account.id, row.credential_id);
-    if (!credential) return recovering ? row : await updateGeneration(row, "processing", null, "credential_missing");
+    if (!credential) return recovering ? row : await updateGeneration(row, "failed", null, "credential_missing");
     let result: unknown;
     try { result = await getVideoStatus(row.provider_task_id, { apiKey: credential.apiKey }); }
     catch (error) {
-      if (error instanceof SirayaApiError && isProviderContentPolicy(error)) return await updateGeneration(row, "failed", null, "provider_content_policy");
+      const code = providerErrorCode(error);
+      if (code === "provider_content_policy" || code === "provider_unauthorized") return await updateGeneration(row, "failed", null, code);
+      const missingTask = error instanceof SirayaApiError && [400, 404, 410].includes(error.status);
+      if (!recovering && (stale || missingTask && ageSeconds >= STATUS_GRACE_SECONDS)) {
+        return await updateGeneration(row, "unknown", null, "outcome_unknown");
+      }
       return row; // Read-only lookup may be retried, never resubmit the paid POST.
     }
-    if (!record(result)) return row;
-    const status = String(result.status ?? "processing").toLowerCase();
+    if (!record(result)) return stale && !recovering ? await updateGeneration(row, "unknown", null, "outcome_unknown") : row;
+    const status = typeof result.status === "string" ? result.status.toLowerCase() : "";
     const completed = ["completed", "succeeded", "success"].includes(status);
     const url = videoUrl(result, row.model);
     if (isProviderContentPolicy(result.error)) row = await updateGeneration(row, "failed", null, "provider_content_policy");
     else if (["failed", "cancelled", "canceled", "error"].includes(status)) row = await updateGeneration(row, "failed", null, "provider_failed");
-    else if (url && (completed || !recovering)) row = await finishMedia(row, { videoUrl: url });
+    else if (url && (completed || !recovering)) {
+      // Recover the same provider result if storing the video is interrupted.
+      row = await updateGeneration(row, "processing", null, null, { videoUrl: url });
+      row = await finishMedia(row, { videoUrl: url });
+    }
     else if (completed) row = await updateGeneration(row, "failed", null, "result_missing");
+    else if (providerStillProcessing.has(status) && row.status === "unknown") row = await updateGeneration(row, "processing", null, null);
+    else if (stale && !recovering && !providerStillProcessing.has(status)) row = await updateGeneration(row, "unknown", null, "outcome_unknown");
     return row;
   } finally { await sql.query("update business_generations set reconcile_after=null where id=$1 and account_id=$2 and user_id=$3", [id, account.id, user.id]); }
 }

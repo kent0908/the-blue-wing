@@ -6,6 +6,7 @@ let rotateDuringReservation=false;
 let sourceFetches=[],downloadRedirect=false,localReferenceCalls=0,providerReferenceCalls=0,registeredAssets=[],downloadMime='video/mp4',metadataWriteFails=false,businessUploadCalls=0,businessUploads=[],catalogFailure=false,removedModels=[];
 let generatedReferenceCalls=0,generatedSources=[];
 let exactImageCalls=0;
+const scheduledWork=[];
 const models=[['Dola-Seedream-5.0-pro','image'],['NSFW-Dola-Seedream-5.0-pro','image'],['SIRAYA-Seedance-2.5','video'],['NSFW-SIRAYA-Seedance-2.5','video'],['deepseek-v4.1-flash','text'],['veo-3.1-generate-001','video'],['happyhorse-1.0-t2v','video'],['unreviewed-video','video'],['kling-avatar-v2','text'],['embedding-v1','text'],['retired-image','image']];
 models.push(...['SIRAYA-Seedance-2.0','SIRAYA-Seedance-2.0-fast','SIRAYA-Seedance-2.0-mini','NSFW-SIRAYA-Seedance-2.0'].map(id=>[id,'video']));
 models.push(...['kling-2.5-turbo','kling-2.6','kling-3.0','kling-3.0-turbo','kling-3.0-omni','kling-o1'].map(id=>[id,'video']));
@@ -31,20 +32,31 @@ async function query(q,p=[]){q=q.replace(/\s+/g,' ').toLowerCase();
  if(q==='begin'||q==='commit'||q==='rollback')return {rows:[]};
  if(q.includes('from business_accounts')){if(rotateDuringReservation){activeCredential='22222222-2222-4222-8222-222222222222';credentials.set(activeCredential,'sk-fixture-key-rotated');rotateDuringReservation=false;}return {rows:approval?[{id:account.id}]:[]};}
  if(q.includes('from business_credentials'))return {rows:!revoked&&p[0]===activeCredential?[{id:activeCredential}]:[]};
- if(q.startsWith('select count(*)'))return {rows:[{count:String(jobs.filter(j=>j.account_id===p[0]&&p[1].includes(j.status)).length)}]};
+ if(q.startsWith('select count(*)'))return {rows:[{count:String(jobs.filter(j=>j.account_id===p[0]&&p[1].includes(j.status)&&
+   !(j.status==='submitting'&&Date.now()-new Date(j.submitted_at??j.created_at).getTime()>=360_000)&&
+   !(j.status==='processing'&&!j.provider_task_id&&!j.provider_output&&Date.now()-new Date(j.submitted_at??j.created_at).getTime()>=120_000)).length)}]};
  if(q.startsWith('insert into business_generations')){const row={id:p[0],account_id:p[1],user_id:p[2],credential_id:p[3],client_request_id:p[4],kind:p[5],model:p[6],prompt:p[7],nsfw:p[8],status:'submitting',provider_task_id:null,provider_output:null,output:p[9]?JSON.parse(p[9]):null,error_code:null,provider_request_id:null,provider_http_status:null,provider_request_ids:[],provider_receipt_count:0,submitted_at:null,completed_at:null,duration_ms:null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};jobs.push(row);return {rows:[clone(row)]};}
- if(q.startsWith('select * from business_generations')){if(q.includes('client_request_id=$3'))return {rows:jobs.filter(j=>j.account_id===p[0]&&j.user_id===p[1]&&j.client_request_id===p[2]).map(clone)};if(q.includes('id=$1 and account_id=$2'))return {rows:jobs.filter(j=>j.id===p[0]&&j.account_id===p[1]&&j.user_id===p[2]).map(clone)};return {rows:jobs.filter(j=>j.account_id===p[0]&&j.user_id===p[1]&&(p[2]||!j.nsfw)).map(clone)};}
+ if(q.startsWith('select * from business_generations')){if(q.includes('client_request_id=$3'))return {rows:jobs.filter(j=>j.account_id===p[0]&&j.user_id===p[1]&&j.client_request_id===p[2]&&(p.length===3||p[3]||!j.nsfw)).map(clone)};if(q.includes('id=$1 and account_id=$2'))return {rows:jobs.filter(j=>j.id===p[0]&&j.account_id===p[1]&&j.user_id===p[2]).map(clone)};return {rows:jobs.filter(j=>j.account_id===p[0]&&j.user_id===p[1]&&(p[2]||!j.nsfw)).map(clone)};}
  if(q.startsWith("select jsonb_build_object('reuseinput'"))return {rows:jobs.filter(j=>j.id===p[0]&&j.account_id===p[1]&&j.user_id===p[2]).map(({output,nsfw})=>({output:{reuseInput:clone(output?.reuseInput)??null},nsfw}))};
  if(q.startsWith('select id,content_type,size from assets'))return {rows:assetRows.filter(a=>a.user_id===p[0]&&p[1].includes(a.id))};
  if(q.startsWith('select id,user_id,url,pathname,content_type,size,filename,created_at from assets'))return {rows:assetRows.filter(a=>a.user_id===p[0]&&p[1].includes(a.id)).map(a=>({pathname:`assets/${a.user_id}/${a.id}.png`,url:'https://private-blob.invalid/source',filename:'Mio.png',created_at:'2026-11-10',...a}))};
- if(q.startsWith('update business_generations set submitted_at=')){const row=jobs.find(j=>j.id===p[1]&&j.account_id===p[2]&&j.user_id===p[3]);assert.ok(row);row.submitted_at??=p[0];return {rows:[clone(row)]};}
+ if(q.startsWith('update business_generations set submitted_at=')){const row=jobs.find(j=>j.id===p[1]&&j.account_id===p[2]&&j.user_id===p[3]&&j.status==='submitting'&&!j.submitted_at&&Date.now()-new Date(j.created_at).getTime()<360_000);if(!row)return {rows:[]};row.submitted_at=p[0];return {rows:[clone(row)]};}
+ if(q.startsWith('update business_generations set status=case')){
+   const row=jobs.find(j=>j.id===p[0]&&j.account_id===p[1]&&j.user_id===p[2]&&j.status==='submitting');
+   if(!row || (p[3]&&Date.now()-new Date(row.submitted_at??row.created_at).getTime()<360_000))return {rows:[]};
+   row.status=row.submitted_at?'unknown':'failed';
+   row.error_code=row.submitted_at?'outcome_unknown':'submission_interrupted';
+   if(!row.submitted_at)row.completed_at=new Date().toISOString();
+   return {rows:[clone(row)]};
+ }
  if(q.startsWith('update business_generations set provider_request_id=')){if(metadataWriteFails){metadataWriteFails=false;throw Error('fixture transient receipt write failure');}const row=jobs.find(j=>j.id===p[2]&&j.account_id===p[3]&&j.user_id===p[4]);assert.ok(row);row.provider_request_id=p[0];row.provider_http_status=p[1];row.provider_request_ids=p[5];row.provider_receipt_count=p[6];return {rows:[]};}
  if(q.startsWith('update business_generations set status=')){const row=jobs.find(j=>j.id===p[5]&&j.account_id===p[6]&&j.user_id===p[7]);assert.ok(row);row.status=p[0];const output=p[1]?JSON.parse(p[1]):null;assert.match(q,/coalesce\(\$2::jsonb,'\{\}'::jsonb\) \|\| jsonb_build_object\('reuseinput',output->'reuseinput'\)/);row.output=row.output?.reuseInput?{...output,reuseInput:row.output.reuseInput}:output;row.error_code=p[2];if(p[3])row.provider_output=JSON.parse(p[3]);if(p[4])row.provider_task_id=p[4];if(p[8])row.provider_request_id=p[8];if(p[9])row.provider_http_status=p[9];row.provider_request_ids=p[10];row.provider_receipt_count=p[11];row.completed_at??=p[12];row.duration_ms??=p[13];return {rows:[clone(row)]};}
  if(q.startsWith('update business_generations set reconcile_after=now()')){
    assert.match(q, /\$4::boolean and status='failed' and error_code='result_missing' and provider_task_id is not null/);
    const row=jobs.find(j=>j.id===p[0]&&j.account_id===p[1]&&j.user_id===p[2]);
    const recoverable=p[3] && row?.status==='failed' && row.error_code==='result_missing' && row.provider_task_id;
-   if(!row || (row.status!=='processing' && !recoverable) || row.reconcile_after)return {rows:[]};
+   const retryUnknown=p[4] && row?.status==='unknown' && (row.provider_task_id || row.provider_output);
+   if(!row || (row.status!=='processing' && !recoverable && !retryUnknown) || row.reconcile_after)return {rows:[]};
    row.reconcile_after=true;
    return {rows:[clone(row)]};
  }
@@ -54,7 +66,7 @@ async function query(q,p=[]){q=q.replace(/\s+/g,' ').toLowerCase();
 const sql={query,connect:async()=>{let release;return {query:async(q,p)=>{if(q.includes('business_accounts')&&q.includes('for update')){const prior=lock;lock=new Promise(r=>release=r);await prior;}return query(q,p)},release:()=>release?.()}}};
 async function provider(kind,payload,options){providerCalls++;lastPayload=payload;seenKeys.push(options.apiKey);assert.ok(!JSON.stringify(payload).includes('sk-fixture'));if(!failProvider||failProvider instanceof SirayaApiError){try{await options.onRequestMetadata?.({requestId:'fixture-provider-request',httpStatus:failProvider?.status??200});}catch{/* Real Siraya client keeps the accepted result after a receipt writer failure. */}}if(failProvider)throw failProvider;await new Promise(resolve=>setTimeout(resolve,3));if(kindResult)return kindResult;if(kind==='text')return {choices:[{message:{content:'A paper city unfolds.'}}]};if(kind==='image')return {data:[{b64_json:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'}]};return upstreamVideo;}
 const mocks={
- 'next/server':{NextRequest,NextResponse},
+ 'next/server':{NextRequest,NextResponse,after:callback=>scheduledWork.push(callback)},
  './db':{sql},'./assets':{blobConfigured:()=>blobReady,assetPathPrefix:id=>`assets/${id}/`,toPublicAsset:a=>({id:a.id,src:`/api/assets/${a.id}/raw`,name:a.filename,contentType:a.content_type,size:a.size,createdAt:a.created_at})},'./assetData':{assetsToDataUrls:async(_user,ids,limit)=>{assert.ok(ids.length<=limit);return ids.map(()=> 'data:image/png;base64,aW1hZ2U=')}},
  './businessReferenceUrls':{createBusinessReferenceUrls:async(userId,accountId,credentialId,ids,nsfw,profile)=>{
    localReferenceCalls++;
@@ -82,7 +94,11 @@ const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const body=(n=1,kind='video',parameters={})=>({clientRequestId:uuid(n),kind,parameters:{model:kind==='video'?'SIRAYA-Seedance-2.5':kind==='image'?'Dola-Seedream-5.0-pro':'deepseek-v4.1-flash',prompt:'A blue feather crosses a paper city',...parameters}});
 const request=(payload,origin='https://fixture.invalid')=>new NextRequest('https://fixture.invalid/api/business/generations',{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify(payload)});
 const send=(payload=body(),origin)=>routes.POST(request(payload,origin));
+const queue=(payload=body())=>routes.POST(new NextRequest('https://fixture.invalid/api/business/generations',{
+  method:'POST',headers:{'content-type':'application/json',origin:'https://fixture.invalid',prefer:'respond-async'},body:JSON.stringify(payload),
+}));
 const get=(id,query='',headers)=>single.GET(new NextRequest(`https://fixture.invalid/api/business/generations/${id}${query}`,{headers}),{params:Promise.resolve({id})});
+const lookupSubmission=id=>routes.GET(new NextRequest(`https://fixture.invalid/api/business/generations?clientRequestId=${encodeURIComponent(id)}`));
 const getReuse=id=>reuse.GET(new NextRequest(`https://fixture.invalid/api/business/generations/${id}/reuse`),{params:Promise.resolve({id})});
 function reset(){jobs.length=0;providerCalls=lookupCalls=uploads=localReferenceCalls=providerReferenceCalls=0;approval=adult=blobReady=true;revoked=failStorage=rotateDuringReservation=downloadRedirect=metadataWriteFails=false;failProvider=kindResult=null;seenKeys=[];sourceFetches=[];lastPayload=null;assetRows=[];registeredAssets=[];downloadMime='video/mp4';businessUploadCalls=0;businessUploads=[];generatedReferenceCalls=0;generatedSources=[];catalogFailure=false;removedModels=[];activeCredential='11111111-1111-4111-8111-111111111111';credentials.set(activeCredential,'sk-fixture-key-original');upstreamVideo={id:'provider-owned-job',status:'processing'};pollVideo={status:'processing'};lock=Promise.resolve()}
 let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();count++;console.log('PASS '+name)}
@@ -91,6 +107,89 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
  await test('cross-origin POST is rejected before provider I/O',async()=>{assert.equal((await send(body(),'https://evil.invalid')).status,403);assert.equal(providerCalls,0)});
  await test('own-key catalog exposes all grants with executable or explicit unavailable status, independent of C prices',async()=>{const response=await catalog.GET(new NextRequest('https://fixture.invalid/api/business/models'));const json=await response.json();assert.equal(lookupCalls,1);assert.deepEqual(seenKeys,['sk-fixture-key-original']);for(const id of ['happyhorse-1.0-t2v','unreviewed-video','kling-avatar-v2','embedding-v1','retired-image'])assert.ok(!json.models.some(m=>m.id===id));assert.ok(json.models.some(m=>m.nsfw));assert.equal(json.upstreamTotal,models.length);assert.equal(json.models.length+json.unavailableModels.length,models.length);assert.ok(json.unavailableModels.find(m=>m.id==='kling-avatar-v2'&&m.reason==='dedicated_tool'));assert.ok(json.models.find(m=>m.id==='gpt-6.1'));assert.ok(json.models.find(m=>m.id==='gpt-image-2.5-flare'));assert.ok(json.models.find(m=>m.id==='NSFW-Seedream-4.5'));assert.ok(json.models.find(m=>m.id==='uncensored-gpt-6'&&m.nsfw));assert.ok(json.models.find(m=>m.id==='veo-3.1-generate-001').secondsOptions.includes(8))});
  await test('same UUID concurrent requests reserve once and perform only one paid POST',async()=>{const responses=await Promise.all([send(),send()]);assert.ok(responses.every(r=>[200,201].includes(r.status)));assert.equal(providerCalls,1);assert.equal(jobs.length,1);assert.ok((await responses[0].json()).generation.id);assert.equal(lookupCalls,2)});
+ await test('async image response returns a durable receipt before provider I/O and duplicate replays do not schedule another worker',async()=>{
+   const payload=body(1,'image');
+   const responses=await Promise.all([queue(payload),queue(payload)]);
+   assert.deepEqual(responses.map(response=>response.status).sort(),[200,202]);
+   assert.equal(responses[0].headers.get('Preference-Applied'),'respond-async');
+   const queued=await responses[0].json();
+   assert.equal(queued.generation.status,'submitting');
+   assert.equal(queued.generation.clientRequestId,payload.clientRequestId);
+   assert.equal(providerCalls,0);
+   assert.equal(scheduledWork.length,1);
+   assert.equal((await (await get(queued.generation.id)).json()).generation.status,'submitting');
+   await scheduledWork.shift()();
+   assert.equal((await (await get(queued.generation.id)).json()).generation.status,'completed');
+   assert.equal(providerCalls,1);
+   assert.equal(uploads,1);
+ });
+ await test('background provider rejection becomes a terminal failure and frees the next submission',async()=>{
+   const response=await queue(body(1,'image'));
+   const queued=await response.json();
+   failProvider=new SirayaApiError(402,'fixture quota error');
+   await scheduledWork.shift()();
+   const failed=(await(await get(queued.generation.id)).json()).generation;
+   assert.equal(failed.status,'failed');
+   assert.equal(failed.errorCode,'provider_quota');
+   assert.equal(providerCalls,1);
+   assert.equal((await queue(body(2,'image'))).status,202);
+   assert.equal(providerCalls,1);
+   scheduledWork.shift();
+ });
+ await test('abandoned reservations settle safely, and a late worker cannot dispatch an expired reservation',async()=>{
+   const first=await(await queue(body(1))).json();
+   const second=await(await queue(body(2))).json();
+   jobs.forEach(job=>job.created_at=new Date(Date.now()-420_000).toISOString());
+   jobs[1].submitted_at=jobs[1].created_at;
+   const neverSubmitted=(await(await get(first.generation.id)).json()).generation;
+   const unconfirmed=(await(await get(second.generation.id)).json()).generation;
+   assert.equal(neverSubmitted.status,'failed');
+   assert.equal(neverSubmitted.errorCode,'submission_interrupted');
+   assert.equal(unconfirmed.status,'unknown');
+   assert.equal(unconfirmed.errorCode,'outcome_unknown');
+   while(scheduledWork.length)await scheduledWork.shift()();
+   assert.equal(providerCalls,0);
+   assert.equal((await queue(body(2))).status,200);
+   assert.equal(scheduledWork.length,0);
+ });
+ await test('acknowledgement recovery finds only the exact allowed receipt without dispatching or polling',async()=>{
+   const payload=body(1,'video',{model:'NSFW-SIRAYA-Seedance-2.5'});
+   const queued=await(await queue(payload)).json();
+   assert.equal((await(await lookupSubmission(payload.clientRequestId)).json()).generation.id,queued.generation.id);
+   assert.equal((await(await lookupSubmission(uuid(2))).json()).generation,null);
+   assert.equal((await lookupSubmission('invalid')).status,400);
+   adult=false;
+   assert.equal((await(await lookupSubmission(payload.clientRequestId)).json()).generation,null);
+   adult=true;
+   jobs[0].user_id=8;
+   assert.equal((await(await lookupSubmission(payload.clientRequestId)).json()).generation,null);
+   assert.equal(providerCalls,0);
+   assert.equal(lookupCalls,1);
+   scheduledWork.shift();
+ });
+ await test('newly accepted videos tolerate status propagation, and stale missing tasks can be rechecked without resubmitting',async()=>{
+   const queued=await(await send()).json();
+   pollVideo=new SirayaApiError(404,'fixture task unavailable');
+   assert.equal((await(await get(queued.generation.id)).json()).generation.status,'processing');
+   jobs[0].submitted_at=new Date(Date.now()-180_000).toISOString();
+   const stale=(await(await get(queued.generation.id)).json()).generation;
+   assert.equal(stale.status,'unknown');
+   assert.equal(stale.canRecheck,true);
+   assert.equal(stale.provider_task_id,undefined);
+   pollVideo={status:'processing'};
+   assert.equal((await(await get(queued.generation.id,'?recheck=1')).json()).generation.status,'processing');
+   assert.equal(providerCalls,1);
+ });
+ await test('old processing records with no provider information become unknown and stop occupying the active queue',async()=>{
+   for(let index=1;index<=4;index++)await send(body(index));
+   for(const row of jobs){row.provider_task_id=null;row.submitted_at=new Date(Date.now()-180_000).toISOString();}
+   const settled=(await(await get(jobs[0].id)).json()).generation;
+   assert.equal(settled.status,'unknown');
+   assert.equal(settled.canRecheck,undefined);
+   assert.equal((await queue(body(5))).status,202);
+   assert.equal(providerCalls,4);
+   scheduledWork.shift();
+ });
  await test('maximum four pending reservations enforced across concurrent calls',async()=>{const responses=await Promise.all([1,2,3,4,5,6].map(n=>send(body(n))));assert.equal(responses.filter(r=>r.status===429).length,2);assert.equal(providerCalls,4);assert.equal(jobs.length,4)});
  await test('duplicate request stays recoverable after key removal and does not repeat',async()=>{await send();revoked=true;const response=await send();assert.equal(response.status,200);assert.equal((await response.json()).duplicate,true);assert.equal(providerCalls,1)});
  await test('new calls fail closed if key is absent',async()=>{revoked=true;assert.equal((await send()).status,409);assert.equal(providerCalls,0);assert.equal(jobs.length,0)});

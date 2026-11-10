@@ -7,7 +7,9 @@ import styles from "./guide.module.css";
 
 const GUIDE = "/canvas/guide";
 const TEMPLATE = "/canvas/templates/-114";
+const DEMO = "/official-canvas-previews/114-demo";
 const COVER = "/official-canvas-previews/114.svg";
+const DEMO_AVAILABLE = false;
 const SHOT_TIMES = ["00:00–00:06", "00:06–00:12", "00:12–00:18", "00:18–00:24"];
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,12 +19,13 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t.description,
     alternates: { canonical: GUIDE },
     robots: { index: true, follow: true },
-    openGraph: { title: t.title, description: t.description, url: GUIDE, images: [COVER] },
+    openGraph: { title: t.title, description: t.description, url: GUIDE, images: [DEMO_AVAILABLE ? `${DEMO}.jpg` : COVER] },
   };
 }
 
 export default async function WorkflowGuide() {
-  const t = guideCopy[await getLocale()];
+  const locale = await getLocale();
+  const t = guideCopy[locale];
 
   return (
     <div className={styles.scroll}>
@@ -38,11 +41,23 @@ export default async function WorkflowGuide() {
 
         <section className={styles.template} aria-labelledby="ferry-title">
           <div className={styles.cover}>
-            <Image src={COVER} alt={t.cover} width={1200} height={675} unoptimized preload />
+            {DEMO_AVAILABLE ? <video
+              aria-labelledby="ferry-title"
+              aria-describedby="ferry-format"
+              controls
+              playsInline
+              poster={`${DEMO}.jpg`}
+              preload="metadata"
+            >
+              <source src={`${DEMO}.mp4`} type="video/mp4" />
+              <track kind="captions" src={`${DEMO}.${locale}.vtt`} srcLang={locale} label={t.captions} />
+              <a href={`${DEMO}.mp4`}>{t.openVideo}</a>
+            </video> : <Image src={COVER} alt={t.templateName} width={1200} height={675} unoptimized preload />}
           </div>
           <div className={styles.ticket}>
+            {DEMO_AVAILABLE && <p className={styles.demo}>{t.demo}</p>}
             <h2 id="ferry-title">{t.templateName}</h2>
-            <p className={styles.duration}>{t.duration}</p>
+            <p className={styles.duration} id="ferry-format">{t.duration}</p>
             <p className={styles.synopsis}>{t.synopsis}</p>
           </div>
         </section>

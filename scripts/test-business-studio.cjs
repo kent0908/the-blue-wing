@@ -206,8 +206,9 @@ for (const [method, value] of [['chooseModel', 'minimax-h3'], ['chooseKind', 'im
   const { state, pushes } = context();
   state.submitLock.current = true;
   state[method](value);
-  assert.equal(pushes.length, 0, `An in-flight paid submit cannot be changed by ${method}`);
-  assert.ok(state.confirmation, 'An in-flight confirmation remains owned by the original submit');
+  assert.equal(pushes.length, 1, `An in-flight submission leaves ${method} available`);
+  assert.equal(state.confirmation, null);
+  assert.equal(state.unresolvedRequest.current, 'fixture-original-request', 'Navigation preserves the exact request being acknowledged');
 }
 {
   const {state,pushes}=context();
@@ -229,10 +230,11 @@ for (const [method, value] of [['chooseModel', 'minimax-h3'], ['chooseKind', 'im
   assert.equal(state.uncertain,true,'Changing modes cannot clear an ambiguous prior paid request');
 }
 {
-  const {state}=context(); state.submitLock.current=true;
-  const before=JSON.stringify({mode:state.videoMode,assets:state.assetIds,provider:state.providerAssets,order:state.referenceOrder,seconds:state.seconds});
+  const {state}=context(); state.resetSelection(); state.submitLock.current=true;
   state.chooseVideoMode('first-last-frame'); state.toggleLocalReference(99); state.toggleProviderReference({id:'inflight-provider',type:'image'});
-  assert.equal(JSON.stringify({mode:state.videoMode,assets:state.assetIds,provider:state.providerAssets,order:state.referenceOrder,seconds:state.seconds}),before,'An in-flight paid submit locks mode and both reference sources');
+  assert.equal(state.videoMode,'first-last-frame');
+  assert.deepEqual(Array.from(state.referenceOrder),['local:99','provider:inflight-provider']);
+  assert.equal(state.unresolvedRequest.current,'fixture-original-request','Edits affect the next draft while the original job remains recoverable');
 }
 {
   const { state, pushes } = context();
@@ -420,7 +422,7 @@ assert.ok(JobToasts(), 'Consumer job notifications continue working in the norma
   state.chooseDedicatedOptions({...state.dedicatedOptions,mode:'first-last-frame'});
   assert.equal(state.imageBusinessAssets.length,0,'Changing first-frame mode clears prior source order');assert.equal(state.confirmation,null);
   state.submitLock.current=true;state.imageBusinessAssets=[{id:'locked'}];state.chooseDedicatedOptions({...state.dedicatedOptions,watermark:true});
-  assert.equal(state.dedicatedOptions.watermark,false,'In-flight paid confirmation locks dedicated controls');assert.equal(state.imageBusinessAssets.length,1);
+  assert.equal(state.dedicatedOptions.watermark,true,'Dedicated settings remain editable during acknowledgement');assert.equal(state.imageBusinessAssets.length,1);
 }
 {
   const {state,pushes}=context();

@@ -81,6 +81,10 @@ export function supportsVideoRefInput(modelId: string | null | undefined): boole
   return /seedance-2\.(0|5)(-|$)/.test(id);
 }
 
+export function supportsSeedanceNativeAudio(modelId: string | null | undefined): boolean {
+  return /^siraya-seedance-2\.(?:0(?:-fast|-mini)?|5)$/i.test(modelId ?? "");
+}
+
 export function isWanVideo(modelId: string | null | undefined): boolean {
   return /^wan3\.0-video(?:-prime)?$/i.test(modelId ?? "");
 }

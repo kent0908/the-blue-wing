@@ -8,6 +8,7 @@ const zh = {
   providerRejected: "SIRAYA 拒絕提交。請核對模型設定、素材規格與作品詳情中的請求編號。",
   providerFailed: "SIRAYA 接受請求後回報生成失敗。可在作品詳情查看請求編號。",
   resultMissing: "藍翼未取得可播放的成品。請先查原有請求。",
+  submissionInterrupted: "任務在送達供應商前中斷，可以重新送出。",
   assetServiceUnavailable: "目前金鑰無法讀取 SIRAYA 素材。請使用已開通 Asset API 的 Root Account Key。",
   minimaxH3References: "參考圖額外費用：H3 原廠前 5 張不加收，第 6 張起每張 USD 0.04。這是原廠參考規則，SIRAYA 的實際費用與折扣仍以你的帳單為準。", minimaxH3MaxReferences: "參考圖額外費用：H3 Max 原廠前 2 張不加收，第 3 張起每張 USD 0.074。這是原廠參考規則，SIRAYA 的實際費用與折扣仍以你的帳單為準。",
   keyValidationFailed: "無法使用這組金鑰取得模型，請確認金鑰權限與額度。尚未送出生成。", keyChanged: "金鑰已變更。請重新整理並確認新的金鑰後，再開始創作。", concurrency: "同時處理的任務已達上限。請先查詢現有工作，等待完成後再試。", storageWaiting: "成果保存暫時無法完成。請查詢原有工作，無需再次生成。", modelUnavailable: "此模型尚未開放或未完成串接驗證，請選擇其他模型。", contentBlocked: "藍翼的內容檢查未通過，這筆生成未送出。",
@@ -22,6 +23,7 @@ const en: BusinessCopy = {
   providerRejected: "SIRAYA rejected the submission. Check the model settings, references, and request ID in the creation details.",
   providerFailed: "SIRAYA accepted the request but reported a generation failure. See the creation details for the request ID.",
   resultMissing: "The Blue Wing did not receive a playable result. Check the original request first.",
+  submissionInterrupted: "The job stopped before it reached the provider. You can submit it again.",
   assetServiceUnavailable: "This key cannot access SIRAYA assets. Use a Root Account key with the Asset API enabled.",
   minimaxH3References: "Extra reference-image costs: MiniMax lists the first 5 H3 images at no extra charge, then USD 0.04 per image. These are original-provider reference rules; your SIRAYA invoice determines actual charges and discounts.", minimaxH3MaxReferences: "Extra reference-image costs: MiniMax lists the first 2 H3 Max images at no extra charge, then USD 0.074 per image. These are original-provider reference rules; your SIRAYA invoice determines actual charges and discounts.",
   keyValidationFailed: "This key could not retrieve models. Check its permissions and balance. No generation was submitted.", keyChanged: "Your key changed. Refresh and confirm the new key before creating.", concurrency: "The concurrent job limit has been reached. Check existing jobs and wait for one to finish.", storageWaiting: "Result storage is temporarily unavailable. Check the existing job without generating again.", modelUnavailable: "This model is unavailable or its integration has not been verified. Choose another model.", contentBlocked: "The Blue Wing content check blocked this request before submission.",
@@ -35,6 +37,7 @@ const ja: BusinessCopy = {
   providerRejected: "SIRAYA が送信を拒否しました。モデル設定、参照素材、作品詳細のリクエスト ID を確認してください。",
   providerFailed: "SIRAYA はリクエストを受理しましたが、生成に失敗しました。作品詳細でリクエスト ID を確認できます。",
   resultMissing: "藍翼が再生可能な結果を取得できませんでした。まず元のリクエストを確認してください。",
+  submissionInterrupted: "提供元に届く前にジョブが中断されました。再送信できます。",
   assetServiceUnavailable: "このキーで SIRAYA 素材を取得できません。Asset API を有効にした Root Account キーを使用してください。",
   minimaxH3References: "参考画像の追加料金：MiniMax の公表条件では H3 は最初の5枚が追加料金なし、6枚目から1枚 USD 0.04。これは原提供元の参考条件です。SIRAYA の実際の料金と割引は請求書で確認してください。", minimaxH3MaxReferences: "参考画像の追加料金：MiniMax の公表条件では H3 Max は最初の2枚が追加料金なし、3枚目から1枚 USD 0.074。これは原提供元の参考条件です。SIRAYA の実際の料金と割引は請求書で確認してください。",
   keyValidationFailed: "このキーでモデルを取得できません。権限と残高を確認してください。生成は送信していません。", keyChanged: "キーが変更されました。再読み込みして新しいキーを確認してから制作してください。", concurrency: "同時処理の上限に達しています。既存の処理を確認し、完了をお待ちください。", storageWaiting: "成果の保存を一時的に利用できません。再生成せずに既存の処理を確認してください。", modelUnavailable: "このモデルは未公開または接続未検証です。別のモデルを選択してください。", contentBlocked: "藍翼のコンテンツチェックにより、生成リクエストは送信されませんでした。",
@@ -59,6 +62,8 @@ export function businessError(copy: BusinessCopy, code?: string): string {
   if (code === "provider_rejected") return copy.providerRejected;
   if (code === "provider_failed") return copy.providerFailed;
   if (code === "result_missing") return copy.resultMissing;
+  if (code === "submission_interrupted") return copy.submissionInterrupted;
+  if (code === "outcome_unknown") return copy.uncertain;
   if (code && /conflict|stale/.test(code)) return copy.conflict;
   if (code && /key_required|credential_missing|credential_required|credential_unavailable/.test(code)) return copy.keyNeeded;
   if (code && /rate_limit/.test(code)) return copy.rateLimited;

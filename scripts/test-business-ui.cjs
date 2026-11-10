@@ -61,15 +61,17 @@ function makeContext() {
     dedicatedOptions: {mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
     dedicatedCopy: { wan3PromptLimit: 'wan3-prompt-limit' },
     access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved', invalidRequest: 'invalid' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' }, d: { referenceLimitError: 'seedance-refs' },
-    REQUEST_HEADERS: { 'Content-Type': 'application/json' },
+    REQUEST_HEADERS: { 'Content-Type': 'application/json' }, AbortSignal,
+    SUBMISSION_TIMEOUT: 60_000, RECEIPT_EXPIRY: 360_000,
     businessError: (_copy, code) => code || 'error', confirmation: null, jobs: [],
     apiKey: 'sk-this-is-a-disposable-fixture-key', keyLabel: 'Fixture',
     setError: value => { context.error = value; }, setNotice: value => { context.notice = value; }, setSubmitting: noop, setTab: noop, setKeySaving: noop, setCredential: noop,
     resetSelection:noop, setUnavailableModels:noop,setUpstreamTotal:noop, setApiKey: value => { context.apiKey = value; }, refreshAccess: async () => {}, loadModels: async () => { context.catalogReloads = (context.catalogReloads ?? 0) + 1; }, setModels: value => { context.models = value; },
     setConfirmation: value => { context.confirmation = value; },
     setUncertain: value => { context.uncertain = value; },
+    saveReceipt: value => { context.unresolvedRequest.current = value; },
     setJobs: update => { context.jobs = typeof update === 'function' ? update(context.jobs) : update; },
-    fetch: async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({ generation: { id: 'fixture-job', status: 'processing' }, credential: { last4: 'ture' } }) }; },
+    fetch: async (url, init) => { const body = JSON.parse(init.body); calls.push({ url, body }); return { ok: true, status: 200, json: async () => ({ generation: { id: 'fixture-job', clientRequestId: body.clientRequestId, status: 'processing' }, credential: { last4: 'ture' } }) }; },
   };
   vm.runInNewContext(`globalThis.PRE_SUBMIT_ERRORS = ${preSubmitErrorsSource};`, context);
   for (const [name, handler] of Object.entries(handlers)) vm.runInNewContext(ts.transpileModule(`globalThis.${name} = ${handler};`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, context);
@@ -109,19 +111,28 @@ function reviewWan3(context) {
   context.requestConfirmation(event);
   assert.notEqual(context.confirmation.clientRequestId, firstId, 'New confirmation has its own UUID');
   let release;
-  context.fetch = async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); await new Promise(resolve => { release = resolve; }); return { ok: true, status: 200, json: async () => ({ generation: { id: 'fixture-job', status: 'processing' } }) }; };
+  context.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url, body, headers: init.headers });
+    await new Promise(resolve => { release = resolve; });
+    return { ok: true, status: 202, json: async () => ({ generation: { id: 'fixture-job', clientRequestId: body.clientRequestId, status: 'submitting' } }) };
+  };
   const pending = context.submitGeneration();
   await context.submitGeneration();
   assert.equal(calls.length, 1, 'Stale double click submits only once');
+  assert.equal(context.confirmation, null, 'The dialog closes while the POST is still waiting');
+  assert.equal(calls[0].headers.Prefer, 'respond-async');
+  assert.equal(context.unresolvedRequest.current.requestId, calls[0].body.clientRequestId);
   release(); await pending;
   assert.equal(context.confirmation, null);
   assert.equal(context.unresolvedRequest.current, null);
   assert.equal(context.jobs.length, 1);
   assert.equal(context.notice, context.resultsCopy.submitted);
+  assert.equal(context.uncertain, false, 'An acknowledged background job leaves the composer available');
 
   ({ context, calls } = makeContext());
   context.requestConfirmation(event);
-  const failedJob = { id: 'provider-rejected-job', status: 'failed', errorCode: 'provider_content_policy' };
+  const failedJob = { id: 'provider-rejected-job', clientRequestId: context.confirmation.clientRequestId, status: 'failed', errorCode: 'provider_content_policy' };
   context.fetch = async () => ({ ok: true, status: 201, json: async () => ({ generation: failedJob }) });
   await context.submitGeneration();
   assert.equal(context.jobs[0], failedJob, 'The provider failure stays in the job history');
@@ -361,6 +372,9 @@ function reviewWan3(context) {
   assert.equal(context.apiKey, '', 'Key input is cleared after saving');
   assert.equal(context.catalogReloads, 1, 'Replacing an already connected key refreshes its model permissions');
   assert.ok(Array.isArray(context.models) && context.models.length === 0, 'Old-key catalog is cleared before refreshing');
-  assert.ok(!source.includes('localStorage') && !source.includes('sessionStorage'), 'No credential browser-storage path exists');
+  assert.ok(!source.includes('localStorage'));
+  const storageWrites = [...source.matchAll(/sessionStorage\.setItem\(([^\n]+)\)/g)].map(match => match[1]);
+  assert.deepEqual(storageWrites, ['receiptStorageKey, JSON.stringify({ requestId: receipt.requestId, expiresAt: receipt.expiresAt })'],
+    'Only the original request ID and expiry may be persisted in browser storage');
   console.log('PASS business UI: actual confirm/cancel/double-click/UUID/unknown/validation/adult/key/audio/duration/aspect handlers, Seedance 2.0/2.5 references and advanced settings, Wan 3.0 exact settings across all tiers and owned-image modes; no paid calls.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

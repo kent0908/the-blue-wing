@@ -14,7 +14,9 @@ interface GuideCopy {
   preview: string;
   canvas: string;
   duration: string;
-  cover: string;
+  demo: string;
+  captions: string;
+  openVideo: string;
   shotHeading: string;
   shots: { title: string; detail: string }[];
   stepsHeading: string;
@@ -29,16 +31,18 @@ export const guideCopy: Record<Locale, GuideCopy> = {
     title: "短劇工作流教學",
     description: "跟著一部 24 秒短劇，練習定角色與場景、接上節點。逐鏡生成後，再下載素材完成剪輯。",
     templateName: "最後一班渡船",
-    synopsis: "雨中，守夜人發現長椅上有隻紅手套。那是有人還在等船的暗號。她提燈示意，讓已離岸的渡船回頭。",
+    synopsis: "雨中，守夜人發現長椅上有隻紅手套。那是有人還在等船的暗號。守夜人提燈示意，讓已離岸的渡船回頭。",
     preview: "預覽與複製範本",
     canvas: "前往智慧畫布",
     duration: "4 鏡 · 24 秒 · 16:9",
-    cover: "《最後一班渡船》範本封面",
+    demo: "成片示範",
+    captions: "繁體中文（音效）",
+    openVideo: "開啟《最後一班渡船》MP4",
     shotHeading: "四個鏡頭",
     shots: [
       { title: "渡船離岸", detail: "以雨幕和遠處的船交代碼頭位置。" },
       { title: "發現紅手套", detail: "切到長椅，讓觀眾和守夜人一起看見手套。" },
-      { title: "提燈示意", detail: "一個清楚的動作，讓遠處的船看見她的信號。" },
+      { title: "提燈示意", detail: "一個清楚的動作，讓遠處的船看見提燈的信號。" },
       { title: "渡船回頭", detail: "回到遠景，留一點時間讓觀眾看見船改變方向。" },
     ],
     stepsHeading: "從劇本到交片",
@@ -82,11 +86,13 @@ export const guideCopy: Record<Locale, GuideCopy> = {
     title: "Short film workflow guide",
     description: "Follow a 24-second film from story and reference art to connected nodes, shot generation, and a finished edit.",
     templateName: "The Last Ferry",
-    synopsis: "In the rain, a harbor keeper spots a red mitten on a bench. It signals that someone is still waiting. She raises her lantern, and the departing ferry turns back.",
+    synopsis: "In the rain, a harbor keeper spots a red mitten on a bench. It signals that someone is still waiting. The keeper raises a lantern, and the departing ferry turns back.",
     preview: "Preview and copy template",
     canvas: "Open Smart Canvas",
     duration: "4 shots · 24 seconds · 16:9",
-    cover: "Cover of The Last Ferry template",
+    demo: "Finished film",
+    captions: "English (sound effects)",
+    openVideo: "Open The Last Ferry MP4",
     shotHeading: "Four shots",
     shots: [
       { title: "The ferry departs", detail: "Rain and a distant ferry establish the harbor." },
@@ -126,7 +132,7 @@ export const guideCopy: Record<Locale, GuideCopy> = {
       },
       {
         title: "Edit and export the film",
-        detail: "Import the four clips into your video editor and lay out roughly 24 seconds using the timecodes above. Carry the rain across the cuts. Open with a distant engine, add a quiet clink as she raises the lantern, and bring back the water as the ferry turns. Check the picture, sound levels, and ending, then export the MP4 from your editor.",
+        detail: "Import the four clips into your video editor and lay out roughly 24 seconds using the timecodes above. Carry the rain across the cuts. Open with a distant engine, add a quiet clink as the keeper raises the lantern, and bring back the water as the ferry turns. Check the picture, sound levels, and ending, then export the MP4 from your editor.",
         check: "Play the exported MP4 all the way through to check the cuts, sound, and runtime.",
       },
     ],
@@ -135,11 +141,13 @@ export const guideCopy: Record<Locale, GuideCopy> = {
     title: "短編映画の制作ガイド",
     description: "24秒の短編を題材に、脚本、参照素材、ノードの接続、ショットの生成から編集と書き出しまでをたどります。",
     templateName: "最後の渡し船",
-    synopsis: "雨の中、船着場の番人はベンチに赤い手袋を見つけます。まだ船を待つ人がいるという合図です。彼女がランタンを掲げると、岸を離れた渡し船が引き返します。",
+    synopsis: "雨の中、船着場の番人はベンチに赤い手袋を見つけます。まだ船を待つ人がいるという合図です。番人がランタンを掲げると、岸を離れた渡し船が引き返します。",
     preview: "テンプレートを確認して複製",
     canvas: "スマートキャンバスを開く",
     duration: "4カット · 24秒 · 16:9",
-    cover: "『最後の渡し船』のテンプレート表紙",
+    demo: "完成した短編",
+    captions: "日本語（効果音）",
+    openVideo: "『最後の渡し船』のMP4を開く",
     shotHeading: "4つのカット",
     shots: [
       { title: "渡し船が岸を離れる", detail: "雨と遠ざかる渡し船で、舞台となる船着場を見せます。" },
