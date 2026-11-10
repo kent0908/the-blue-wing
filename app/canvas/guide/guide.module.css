@@ -136,12 +136,16 @@
 .timecode {
   color: var(--bw-mint);
   font-variant-numeric: tabular-nums;
+}
+
+.timecode {
   white-space: nowrap;
 }
 
 .ticket .duration {
   margin-top: 10px;
   font-size: .875rem;
+  text-wrap: balance;
 }
 
 .ticket .synopsis {
