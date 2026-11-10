@@ -7,6 +7,8 @@ import styles from "./guide.module.css";
 const GUIDE = "/canvas/guide";
 const TEMPLATE = "/canvas/templates/-114";
 const DEMO = "/official-canvas-previews/114-demo";
+const FILM_FILE = "the-last-ferry.mp4";
+const FILM = `/official-canvas-previews/${FILM_FILE}`;
 const SHOT_TIMES = ["00:00.00–00:06.04", "00:06.04–00:11.29", "00:11.29–00:17.42", "00:17.17–00:23.25"];
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -46,9 +48,9 @@ export default async function WorkflowGuide() {
               poster={`${DEMO}.jpg`}
               preload="metadata"
             >
-              <source src={`${DEMO}.mp4`} type="video/mp4" />
+              <source src={FILM} type="video/mp4" />
               <track kind="captions" src={`${DEMO}.${locale}.vtt`} srcLang={locale} label={t.captions} />
-              <a href={`${DEMO}.mp4`}>{t.openVideo}</a>
+              <a href={FILM}>{t.openVideo}</a>
             </video>
           </div>
           <div className={styles.ticket}>
@@ -56,7 +58,7 @@ export default async function WorkflowGuide() {
             <h2 id="ferry-title">{t.templateName}</h2>
             <p className={styles.duration} id="ferry-format">{t.duration}</p>
             <p className={styles.synopsis}>{t.synopsis}</p>
-            <a className={`${styles.secondary} ${styles.download}`} href={`${DEMO}.mp4`} download="the-last-ferry.mp4">{t.download}</a>
+            <a className={`${styles.secondary} ${styles.download}`} href={FILM} download={FILM_FILE}>{t.download}</a>
           </div>
         </section>
 
