@@ -17,6 +17,7 @@ interface GuideCopy {
   demo: string;
   captions: string;
   openVideo: string;
+  download: string;
   shotHeading: string;
   shots: { title: string; detail: string }[];
   stepsHeading: string;
@@ -29,15 +30,16 @@ interface GuideCopy {
 export const guideCopy: Record<Locale, GuideCopy> = {
   "zh-Hant": {
     title: "短劇工作流教學",
-    description: "跟著一部 24 秒短劇，練習定角色與場景、接上節點。逐鏡生成後，再下載素材完成剪輯。",
+    description: "跟著一部約 24 秒的短劇，練習定角色與場景、接上節點。逐鏡生成後，再下載素材完成剪輯。",
     templateName: "最後一班渡船",
     synopsis: "雨中，守夜人發現長椅上有隻紅手套。那是有人還在等船的暗號。守夜人提燈示意，讓已離岸的渡船回頭。",
     preview: "預覽與複製範本",
     canvas: "前往智慧畫布",
-    duration: "4 鏡 · 24 秒 · 16:9",
+    duration: "4 鏡 · 23.25 秒 · 16:9",
     demo: "成片示範",
     captions: "繁體中文（音效）",
     openVideo: "開啟《最後一班渡船》MP4",
+    download: "下載成片 MP4",
     shotHeading: "四個鏡頭",
     shots: [
       { title: "渡船離岸", detail: "以雨幕和遠處的船交代碼頭位置。" },
@@ -77,22 +79,23 @@ export const guideCopy: Record<Locale, GuideCopy> = {
       },
       {
         title: "剪輯與交片",
-        detail: "把四段影片匯入剪輯軟體，按上方時間碼建立約 24 秒的時間軸。讓雨聲跨過剪接點。開場保留遠處引擎聲，提燈時加入一聲輕響，船回頭時把水聲帶回來。檢查畫面、音量與片尾後，由剪輯軟體匯出 MP4。",
+        detail: "匯入四段影片。跟著守夜人的視線切到手套，再趁他走出畫面切到提燈。最後兩鏡短暫疊化，讓觀眾感覺船掉頭需要一點時間。用同一段雨聲跨過切點，再加上把手輕響與逐漸靠近的船聲。檢查畫面、音量和片尾後，匯出 MP4。",
         check: "完整播放匯出的 MP4，確認剪接點、聲音和交付長度。",
       },
     ],
   },
   en: {
     title: "Short film workflow guide",
-    description: "Follow a 24-second film from story and reference art to connected nodes, shot generation, and a finished edit.",
+    description: "Follow a film of roughly 24 seconds from story and reference art to connected nodes, shot generation, and a finished edit.",
     templateName: "The Last Ferry",
     synopsis: "In the rain, a harbor keeper spots a red mitten on a bench. It signals that someone is still waiting. The keeper raises a lantern, and the departing ferry turns back.",
     preview: "Preview and copy template",
     canvas: "Open Smart Canvas",
-    duration: "4 shots · 24 seconds · 16:9",
+    duration: "4 shots · 23.25 seconds · 16:9",
     demo: "Finished film",
     captions: "English (sound effects)",
     openVideo: "Open The Last Ferry MP4",
+    download: "Download the film (MP4)",
     shotHeading: "Four shots",
     shots: [
       { title: "The ferry departs", detail: "Rain and a distant ferry establish the harbor." },
@@ -132,22 +135,23 @@ export const guideCopy: Record<Locale, GuideCopy> = {
       },
       {
         title: "Edit and export the film",
-        detail: "Import the four clips into your video editor and lay out roughly 24 seconds using the timecodes above. Carry the rain across the cuts. Open with a distant engine, add a quiet clink as the keeper raises the lantern, and bring back the water as the ferry turns. Check the picture, sound levels, and ending, then export the MP4 from your editor.",
+        detail: "Import the four clips. Follow the keeper’s eyeline to the mitten, then cut to the lantern as he leaves the frame. Briefly dissolve between the last two shots to let time pass as the ferry turns. Carry one bed of rain across the cuts, then add the lantern’s clink and the approaching engine. Check the picture, sound levels, and ending before exporting an MP4.",
         check: "Play the exported MP4 all the way through to check the cuts, sound, and runtime.",
       },
     ],
   },
   ja: {
     title: "短編映画の制作ガイド",
-    description: "24秒の短編を題材に、脚本、参照素材、ノードの接続、ショットの生成から編集と書き出しまでをたどります。",
+    description: "約24秒の短編を題材に、脚本、参照素材、ノードの接続、ショットの生成から編集と書き出しまでをたどります。",
     templateName: "最後の渡し船",
     synopsis: "雨の中、船着場の番人はベンチに赤い手袋を見つけます。まだ船を待つ人がいるという合図です。番人がランタンを掲げると、岸を離れた渡し船が引き返します。",
     preview: "テンプレートを確認して複製",
     canvas: "スマートキャンバスを開く",
-    duration: "4カット · 24秒 · 16:9",
+    duration: "4カット · 23.25秒 · 16:9",
     demo: "完成した短編",
     captions: "日本語（効果音）",
     openVideo: "『最後の渡し船』のMP4を開く",
+    download: "完成動画をダウンロード（MP4）",
     shotHeading: "4つのカット",
     shots: [
       { title: "渡し船が岸を離れる", detail: "雨と遠ざかる渡し船で、舞台となる船着場を見せます。" },
@@ -187,7 +191,7 @@ export const guideCopy: Record<Locale, GuideCopy> = {
       },
       {
         title: "編集して書き出す",
-        detail: "4本を動画編集ソフトに読み込み、上のタイムコードに沿って約24秒に並べます。カットをまたいで雨音を流します。冒頭では遠くのエンジン音、ランタンを掲げる場面では小さな金属音、船が引き返す場面では水音を重ねます。画、音量、ラストを確認し、編集ソフトからMP4を書き出します。",
+        detail: "4本の素材を読み込みます。番人の視線を追って手袋を映し、番人が画面から出るところでランタンのカットへ。最後の2カットは短く重ね、船が方向を変えるまでの時間を表します。同じ雨音をカットの間も流し、持ち手の金属音と近づくエンジン音を重ねます。画、音量、ラストを確認してMP4を書き出します。",
         check: "書き出したMP4を最後まで再生し、カットのつながり、音、尺を確認します。",
       },
     ],

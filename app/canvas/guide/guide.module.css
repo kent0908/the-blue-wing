@@ -148,6 +148,11 @@
   margin-top: 14px;
 }
 
+.ticket .download {
+  align-self: flex-start;
+  margin-top: 10px;
+}
+
 .sequence,
 .method {
   margin-top: clamp(44px, 7vw, 80px);
