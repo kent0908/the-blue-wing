@@ -60,6 +60,14 @@ async function currentCredential(userId: number | string, accountId: string) {
 function validStoredPath(row: UploadRow): boolean {
   return row.pathname === `business-assets/${row.account_id}/${row.id}/source.${BUSINESS_UPLOAD_TYPES[row.content_type]?.ext}`;
 }
+/** History restores private metadata only. Submit revalidates the actual stored bytes. */
+export async function reusableBusinessUploads(userId: number | string, accountId: string, ids: string[]) {
+  if (!ids.length) return [];
+  const { rows } = await sql.query<UploadRow>(`select t.* from business_asset_uploads t join business_accounts a on a.id=t.account_id and a.user_id=t.user_id
+    where t.user_id=$1 and t.account_id=$2 and t.id=any($3::uuid[]) and a.status='approved' and t.blob_etag is not null`,
+    [safeUserId(userId), accountId, ids]);
+  return rows.filter(row => validStoredPath(row) && row.media_type === "image").map(publicBusinessUpload);
+}
 async function ownedUpload(userId: number | string, accountId: string, id: string): Promise<UploadRow> {
   userId = safeUserId(userId);
   if (!UUID.test(id)) fail();
@@ -168,7 +176,7 @@ function sniffMedia(bytes: Buffer, mime: string): boolean {
   return false;
 }
 
-export interface BusinessImageSourceConstraints { minSide: number; maxBytes: number; mimeTypes: readonly string[] }
+export interface BusinessImageSourceConstraints { minSide: number; maxBytes: number; mimeTypes: readonly string[]; minAspectRatio?: number; maxAspectRatio?: number; opaquePng?: boolean }
 async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSourceConstraints): Promise<string> {
   if (!validStoredPath(row)) fail();
   if(constraints&&(!constraints.mimeTypes.includes(row.content_type)||Number(row.expected_bytes)>constraints.maxBytes))fail("invalid_reference");
@@ -198,10 +206,13 @@ async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSou
       if (bytes !== Number(row.expected_bytes)) fail();
       const info = await sharp(prefix, { animated: false, limitInputPixels: 36_000_000 }).metadata();
       const types: Record<string,string> = { png:"image/png",jpeg:"image/jpeg",webp:"image/webp",gif:"image/gif" };
-      const width = info.width ?? 0, height = info.height ?? 0;
+      const width = info.width ?? 0, height = info.height ?? 0, ratio = width / height;
       // This is a general B-side library, not a Seedance-only image picker.
       // Per-model dimensions and duration remain the model's contract.
       if (types[info.format ?? ""] !== row.content_type || width < (constraints?.minSide??1) || width > 6000 || height < (constraints?.minSide??1) || height > 6000) fail();
+      if ((constraints?.minAspectRatio !== undefined && ratio < constraints.minAspectRatio) ||
+        (constraints?.maxAspectRatio !== undefined && ratio > constraints.maxAspectRatio) ||
+        (constraints?.opaquePng && info.format === "png" && info.hasAlpha)) fail("invalid_reference");
       // Metadata can succeed for a truncated raster. Decode the first frame
       // before registering or granting the private source to a paid model.
       await sharp(prefix, { animated: false, limitInputPixels: 36_000_000 }).stats();

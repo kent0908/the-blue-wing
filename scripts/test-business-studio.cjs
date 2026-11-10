@@ -105,7 +105,7 @@ function context() {
     kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video' },
     size: 'old-size', resolution: '4k', assetIds: [71, 72], audio: true, seconds: 30,
     videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123', imageCount:3, imageQuality:'high', imageNegative:'old', imageBusinessAssets:[{id:'old-b',uploadId:'fixture-old-upload'}], selectionContext:{current:'video:previous-model'},
-    apiKey: 'fixture-unsaved-value', prompt: 'A paper garden opens.', error: 'old-error', notice: 'old-notice',
+    restoredContext:{current:null}, apiKey: 'fixture-unsaved-value', prompt: 'A paper garden opens.', error: 'old-error', notice: 'old-notice',
     confirmation: { clientRequestId: 'fixture-stale-confirmation' }, submitLock: { current: false },
     uncertain: true, unresolvedRequest: { current: 'fixture-original-request' }, navigationPending: false,
     dedicatedOptions:{mode:'first-last-frame',watermark:true,seed:'77',negativePrompt:'old-negative',promptExtend:true},
@@ -208,16 +208,18 @@ for (const [method, value] of [['chooseModel', 'minimax-h3'], ['chooseKind', 'im
 {
   const {state,pushes}=context();
   state.resetSelection(); state.chooseVideoMode('first-last-frame');
-  assert.equal(state.videoMode,'first-last-frame'); assert.equal(state.seconds,5); assert.equal(state.confirmation,null);
+  assert.equal(state.videoMode,'first-last-frame'); assert.equal(state.seconds,30,'A compatible mode does not reset the selected duration'); assert.equal(state.confirmation,null);
   state.toggleLocalReference(71); state.toggleProviderReference({id:'provider-image',type:'image',status:'active'}); state.toggleLocalReference(72);
   assert.deepEqual(Array.from(state.referenceOrder),['local:71','provider:provider-image','local:72'],'Reference order follows actual cross-source click order');
   state.toggleLocalReference(71); state.toggleLocalReference(71);
   assert.deepEqual(Array.from(state.referenceOrder),['provider:provider-image','local:72','local:71'],'Removing and reselecting a frame moves it to the end');
   state.toggleProviderReference({id:'provider-image',type:'image',status:'active'});
   assert.equal(state.providerAssets.length,0); assert.deepEqual(Array.from(state.referenceOrder),['local:72','local:71']);
+  state.chooseVideoMode('text-to-video');
+  assert.equal(state.videoMode,'first-last-frame','An incompatible mode is rejected instead of silently losing the reference images');
   state.chooseVideoMode('video-edit');
   assert.equal(state.seconds,-1,'Edit mode starts with provider-determined duration');
-  assert.deepEqual(Array.from(state.assetIds),[]); assert.deepEqual(Array.from(state.providerAssets),[]); assert.deepEqual(Array.from(state.referenceOrder),[]);
+  assert.deepEqual(Array.from(state.assetIds),[72,71]); assert.deepEqual(Array.from(state.providerAssets),[]); assert.deepEqual(Array.from(state.referenceOrder),['local:72','local:71']);
   state.chooseVideoMode('video-extend'); assert.equal(state.seconds,-1);
   assert.equal(pushes.length,0,'Changing modes and frame references does not navigate, fetch or submit');
   assert.equal(state.uncertain,true,'Changing modes cannot clear an ambiguous prior paid request');
@@ -279,6 +281,15 @@ assert.ok(generateDisabled, 'The actual generate control includes the URL-transi
   state.onLocationChanged();
   assertReset(state);
   assert.equal(pushes.length, 0, 'A URL change does not create another history entry');
+}
+{
+  const { state } = context();
+  install({ onLocationChanged: locationEffect }, state);
+  state.restoredContext.current = 'video:fixture-old-video';
+  state.onLocationChanged();
+  assert.deepEqual(Array.from(state.referenceOrder), ['local:71','provider:old-video','local:72']);
+  assert.equal(state.videoMode, 'video-edit', 'Cross-model navigation does not clear the setup just restored');
+  assert.equal(state.restoredContext.current, null, 'The restore guard is used only for its destination');
 }
 
 // Render the real navigation component into a lightweight JSX tree and invoke

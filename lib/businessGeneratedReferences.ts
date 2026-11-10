@@ -25,7 +25,7 @@ interface SourceGrant {
 }
 export interface BusinessGeneratedImageConstraints {
   minSide: number; maxBytes: number; mimeTypes: readonly string[];
-  minAspectRatio?: number; maxAspectRatio?: number;
+  minAspectRatio?: number; maxAspectRatio?: number; opaquePng?: boolean;
 }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const positiveInt = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
@@ -146,7 +146,8 @@ async function verifiedImage(row: SourceRow, constraints: BusinessGeneratedImage
     const info = await image.metadata(), formats: Record<string, string> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp" };
     const width = info.width ?? 0, height = info.height ?? 0, ratio = width / height;
     if (formats[info.format ?? ""] !== mime || width < constraints.minSide || width > 6000 || height < constraints.minSide || height > 6000 ||
-      constraints.minAspectRatio !== undefined && ratio < constraints.minAspectRatio || constraints.maxAspectRatio !== undefined && ratio > constraints.maxAspectRatio) missing();
+      constraints.minAspectRatio !== undefined && ratio < constraints.minAspectRatio || constraints.maxAspectRatio !== undefined && ratio > constraints.maxAspectRatio ||
+      constraints.opaquePng && mime === "image/png" && info.hasAlpha) missing();
     // Metadata alone accepts truncated rasters; fully decode before charging or emitting HTTP 200.
     await image.stats();
     return { bytes, mime, size: metadata.size, etag: metadata.etag };
@@ -177,6 +178,14 @@ export async function resolveBusinessGeneratedImageSources(
   const iat = Math.floor(Date.now() / 1000);
   return ids.map(id => ({ type: "image", url: new URL(`/api/business/generated-references/${seal({ v: 1, id, uid: ownerId, aid: accountId, cid: credentialId, adult: nsfw,
     ...verified.get(id)!, iat, exp: iat + BUSINESS_GENERATED_REFERENCE_TTL_SECONDS })}`, SITE_URL).toString() }));
+}
+
+/** Reuse history gets eligible IDs only. No storage grant is minted until submit. */
+export async function reusableBusinessGeneratedImageIds(userId: number | string, accountId: string, credentialId: string, ids: string[], nsfw: boolean) {
+  if (!ids.length) return [];
+  const owner = safeUserId(userId);
+  const rows = await sourceRows(owner, accountId, credentialId, ids);
+  return rows.filter(row => validRow(row, owner, accountId, credentialId, nsfw)).map(row => row.id);
 }
 
 /** Cookie-free provider fetch; no private storage read is possible before live account/key/source authorization. */

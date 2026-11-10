@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { put } from "@vercel/blob";
 import { sql } from "./db";
-import { blobConfigured } from "./assets";
+import { assetPathPrefix, blobConfigured, toPublicAsset, type AssetRow } from "./assets";
 import { assetsToDataUrls } from "./assetData";
 import { BusinessError, getBusinessCredential, type BusinessAccount } from "./business";
 import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type BusinessSeedanceCapability, type BusinessSeedanceMode } from "./businessSeedance";
 import { assertBusinessImageParameters, getBusinessImageCapability, type BusinessImageControl } from "./businessImageCapabilities";
 import { buildBusinessModelCatalog } from "./businessModelCatalog";
 import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
-import { resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
+import { buildBusinessWan3Payload } from "./businessWan3";
+import { getBusinessProviderAsset, resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
-import { resolveBusinessUploadSources } from "./businessAssetUploads";
-import { resolveBusinessGeneratedImageSources } from "./businessGeneratedReferences";
+import { resolveBusinessUploadSources, reusableBusinessUploads } from "./businessAssetUploads";
+import { resolveBusinessGeneratedImageSources, reusableBusinessGeneratedImageIds } from "./businessGeneratedReferences";
+import { snapshotBusinessGeneration, type BusinessGenerationReuseSnapshot } from "./businessGenerationReuse";
 import { validateGeneration } from "./generationValidation";
 import { assertPromptSafety, PromptSafetyError } from "./promptSafety";
 import { isAdultVerified } from "./adultGate";
@@ -24,7 +26,8 @@ export type BusinessGenerationStatus = "submitting" | "processing" | "completed"
 export interface BusinessGenerationRow {
   id: string; account_id: string; user_id: number; credential_id: string; client_request_id: string;
   kind: BusinessKind; model: string; prompt: string; nsfw: boolean; status: BusinessGenerationStatus;
-  provider_task_id: string | null; provider_output: BusinessOutput | null; output: BusinessOutput | null;
+  provider_task_id: string | null; provider_output: BusinessOutput | null;
+  output: (BusinessOutput & { reuseInput?: BusinessGenerationReuseSnapshot }) | null;
   error_code: string | null; created_at: string; updated_at: string;
   provider_request_id: string | null; provider_http_status: number | null;
   provider_request_ids: string[]; provider_receipt_count: number;
@@ -75,14 +78,17 @@ export function publicBusinessGeneration(row: BusinessGenerationRow) {
     billingStatus: row.billing_status ?? "pending", billingCheckedAt: row.billing_checked_at ?? null,
     providerBillingOutcome: row.provider_billing_outcome ?? null,
     providerDurationMs: row.provider_duration_ms === null || row.provider_duration_ms === undefined ? null : Number(row.provider_duration_ms),
-    ...(row.output ?? {}), ...(row.error_code ? { errorCode: row.error_code } : {}) };
+    ...(row.output?.images !== undefined ? { images: row.output.images } : {}),
+    ...(row.output?.videoUrl !== undefined ? { videoUrl: row.output.videoUrl } : {}),
+    ...(row.output?.text !== undefined ? { text: row.output.text } : {}),
+    ...(row.error_code ? { errorCode: row.error_code } : {}) };
 }
 export function assertBusinessGenerationAge(row: { nsfw: boolean }, user: UserRow) {
   if (row.nsfw && !isAdultVerified(user)) fail("age_unverified", 403);
 }
 
 function validateSubmission(value: unknown) {
-  if (!record(value) || Object.keys(value).some(key => !["clientRequestId", "kind", "parameters"].includes(key)) ||
+  if (!record(value) || Object.keys(value).some(key => !["clientRequestId", "kind", "parameters", "editor"].includes(key)) ||
     typeof value.clientRequestId !== "string" || !UUID.test(value.clientRequestId) ||
     !["image", "video", "text"].includes(String(value.kind)) || !record(value.parameters)) fail();
   const kind = value.kind as BusinessKind;
@@ -117,7 +123,7 @@ function validateSubmission(value: unknown) {
     if (new Set(order).size !== order.length) fail("invalid_reference");
     parameters.referenceOrder = order;
   }
-  return { clientRequestId: value.clientRequestId, kind, parameters };
+  return { clientRequestId: value.clientRequestId, kind, parameters, editor: value.editor };
 }
 
 async function normalizedParameters(kind: BusinessKind, parameters: Record<string, unknown>, model: BusinessModel, userId: number, accountId: string, credential: { id: string; apiKey: string }) {
@@ -182,13 +188,21 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
   if (kind === "video" && model.dedicatedVideo) {
     // These dedicated providers need HTTPS media, not Seedance's asset:// IDs.
     // B-native immutable uploads have an independent account-scoped resolver.
-    if (["assetIds", "providerAssets", "referenceOrder", "output_format"].some(key => parameters[key] !== undefined)) fail();
-    const types = [...ownUploads, ...generatedIds].map((_, index) => ({ type: "image" as const, url: `https://owned.invalid/reference-${index}.png` }));
-    try { buildBusinessDedicatedVideoPayload(adapterParameters, types); } catch { fail(); }
+    const wan3 = model.dedicatedVideo.family === "wan3.0";
+    if (["assetIds", "providerAssets", "output_format"].some(key => parameters[key] !== undefined) || !wan3 && parameters.referenceOrder !== undefined) fail();
+    const keys = [...ownUploads.map(id => `business:${id}`), ...generatedIds.map(id => `generated:${id}`)];
+    const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
+    if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
+    delete adapterParameters.referenceOrder;
+    const buildPayload = wan3 ? buildBusinessWan3Payload : buildBusinessDedicatedVideoPayload;
+    const types = referenceOrder.map((_, index) => ({ type: "image" as const, url: `https://owned.invalid/reference-${index}.png` }));
+    try { buildPayload(adapterParameters, types); } catch { fail(); }
     const refs = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
     const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, model.dedicatedVideo.referenceImageRules) : [];
     if (refs.length !== ownUploads.length || generated.length !== generatedIds.length || [...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
-    try { return buildBusinessDedicatedVideoPayload(adapterParameters, [...refs, ...generated]); } catch { fail(); }
+    const resolved = [...refs, ...generated];
+    const byKey = new Map(keys.map((key, index) => [key, resolved[index]]));
+    try { return buildPayload(adapterParameters, referenceOrder.map(key => byKey.get(key)!)); } catch { fail(); }
   }
   // Seedance-only controls must never leak to another adapter or bypass its reviewed contract.
   if (generatedIds.length) fail("invalid_reference");
@@ -242,9 +256,10 @@ async function reserveGeneration(user: UserRow, account: BusinessAccount, creden
     if (!active.rows.length) fail("credential_changed", 409);
     const count = await client.query<{ count: string }>("select count(*) from business_generations where account_id=$1 and status=any($2::text[])", [account.id, pending]);
     if (Number(count.rows[0]?.count ?? 0) >= 4) fail("too_many_concurrent", 429);
-    const inserted = await client.query<BusinessGenerationRow>(`insert into business_generations(id,account_id,user_id,credential_id,client_request_id,kind,model,prompt,nsfw,status)
-      values($1,$2,$3,$4,$5,$6,$7,$8,$9,'submitting') returning *`,
-    [randomUUID(), account.id, user.id, credentialId, submission.clientRequestId, submission.kind, model.id, submission.parameters.prompt, model.nsfw]);
+    const reuseInput = snapshotBusinessGeneration(submission.parameters, submission.editor, model.dedicatedVideo?.family === "wan3.0");
+    const inserted = await client.query<BusinessGenerationRow>(`insert into business_generations(id,account_id,user_id,credential_id,client_request_id,kind,model,prompt,nsfw,status,output)
+      values($1,$2,$3,$4,$5,$6,$7,$8,$9,'submitting',$10::jsonb) returning *`,
+    [randomUUID(), account.id, user.id, credentialId, submission.clientRequestId, submission.kind, model.id, submission.parameters.prompt, model.nsfw, JSON.stringify({ reuseInput })]);
     await client.query("COMMIT");
     return { row: inserted.rows[0], duplicate: false };
   } catch (error) { await client.query("ROLLBACK"); throw error; }
@@ -296,7 +311,8 @@ async function updateGeneration(row: BusinessGenerationRow, status: BusinessGene
   const completedAt = ["completed", "failed"].includes(status) ? new Date().toISOString() : null;
   const started = row.submitted_at ? new Date(row.submitted_at).getTime() : NaN;
   const duration = completedAt && Number.isFinite(started) ? Math.max(0, new Date(completedAt).getTime() - started) : null;
-  const result = await sql.query<BusinessGenerationRow>(`update business_generations set status=$1,output=$2::jsonb,error_code=$3,
+  const result = await sql.query<BusinessGenerationRow>(`update business_generations set status=$1,
+    output=case when output ? 'reuseInput' then coalesce($2::jsonb,'{}'::jsonb) || jsonb_build_object('reuseInput',output->'reuseInput') else $2::jsonb end,error_code=$3,
     provider_output=coalesce($4::jsonb,provider_output),provider_task_id=coalesce($5,provider_task_id),
     provider_request_id=coalesce($9,provider_request_id),provider_http_status=coalesce($10,provider_http_status),
     provider_request_ids=$11::text[],provider_receipt_count=$12,
@@ -405,6 +421,65 @@ function videoUrl(result: Record<string, unknown>) {
 export async function listBusinessGenerations(user: UserRow, account: BusinessAccount) {
   const { rows } = await sql.query<BusinessGenerationRow>("select * from business_generations where account_id=$1 and user_id=$2 and ($3::boolean or nsfw=false) order by created_at desc limit 100", [account.id, user.id, isAdultVerified(user)]);
   return rows.map(publicBusinessGeneration);
+}
+
+/** Owner-only read. Reusing an editor draft must never poll or submit a provider job. */
+export async function getBusinessGenerationReuse(user: UserRow, account: BusinessAccount, id: string) {
+  if (!UUID.test(id)) fail("generation_not_found", 404);
+  const owned = await sql.query<Pick<BusinessGenerationRow, "output" | "nsfw">>(
+    "select jsonb_build_object('reuseInput',output->'reuseInput') as output,nsfw from business_generations where id=$1 and account_id=$2 and user_id=$3", [id, account.id, user.id]);
+  const row = owned.rows[0];
+  if (!row) fail("generation_not_found", 404);
+  assertBusinessGenerationAge(row, user);
+  const snapshot = row.output?.reuseInput;
+  if (snapshot?.version !== 1) return null;
+
+  const references = snapshot.references;
+  const ids = (prefix: string) => references.filter(reference => reference.key.startsWith(prefix)).map(reference => reference.key.slice(prefix.length));
+  const localIds = ids("local:").map(Number), uploadIds = ids("business:"), generatedIds = ids("generated:");
+  const provider = references.filter(reference => reference.key.startsWith("provider:"));
+  const [local, uploads, credential] = await Promise.all([
+    localIds.length ? sql.query<AssetRow>("select id,user_id,url,pathname,content_type,size,filename,created_at from assets where user_id=$1 and id=any($2::bigint[])", [user.id, localIds]).then(({ rows }) => rows) : [],
+    reusableBusinessUploads(user.id, account.id, uploadIds),
+    (provider.length || generatedIds.length) ? getBusinessCredential(user.id, account.id) : null,
+  ]);
+  const localByKey = new Map(local.filter(asset => asset.pathname.startsWith(assetPathPrefix(user.id)) &&
+    ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(asset.content_type)).map(asset => [`local:${asset.id}`, toPublicAsset(asset)]));
+  const uploadsByKey = new Map(uploads.map(asset => [`business:${asset.uploadId}`, asset]));
+  const providerByKey = new Map<string, Awaited<ReturnType<typeof getBusinessProviderAsset>>>();
+  async function verifyProviderAssets(apiKey: string) {
+    // The active customer's key is the ownership proof, including after rotation.
+    // Allow the last round of requests to finish within the route deadline.
+    const deadline = Date.now() + 35_000;
+    let next = 0;
+    async function worker() {
+      while (next < provider.length && Date.now() < deadline) {
+        const reference = provider[next++];
+        try {
+          const asset = await getBusinessProviderAsset(reference.key.slice("provider:".length), { apiKey });
+          if (asset.type === reference.type && asset.status === "active") providerByKey.set(reference.key, asset);
+        } catch { /* A missing or inaccessible asset cannot be restored. */ }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(4, provider.length) }, worker));
+  }
+  const [generated] = credential ? await Promise.all([
+    reusableBusinessGeneratedImageIds(user.id, account.id, credential.id, generatedIds, row.nsfw), verifyProviderAssets(credential.apiKey),
+  ]) : [[]];
+  const generatedSet = new Set(generated);
+  const restored = references.map(({ key }) => {
+    const localAsset = localByKey.get(key);
+    if (localAsset) return { key, source: "local" as const, id: localAsset.id, asset: localAsset };
+    const upload = uploadsByKey.get(key);
+    if (upload) return { key, source: "upload" as const, asset: { id: upload.id, uploadId: upload.uploadId, name: upload.name, type: upload.type, status: upload.status, storageReady: upload.storageReady } };
+    const registered = providerByKey.get(key);
+    if (registered) return { key, source: "provider" as const, asset: registered };
+    const generatedId = key.startsWith("generated:") ? key.slice("generated:".length) : "";
+    return generatedSet.has(generatedId) ? { key, source: "generated" as const, id: generatedId } : null;
+  }).filter(reference => reference !== null);
+  const missingReferences = references.length - restored.length;
+  return { parameters: snapshot.parameters, references: restored, missingReferences,
+    ...(!missingReferences && snapshot.editor ? { editor: snapshot.editor } : {}) };
 }
 
 export async function getBusinessGeneration(user: UserRow, account: BusinessAccount, id: string) {

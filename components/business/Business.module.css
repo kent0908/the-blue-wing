@@ -68,6 +68,9 @@
 [data-business-workspace] .dialog::backdrop { background: #000b; backdrop-filter: none; }
 [data-business-workspace] .dialog h2 { font: 650 22px/1.35 system-ui, sans-serif; }
 [data-business-workspace] .dialog p, [data-business-workspace] .dialog dl { color: #d0d4d7; font-size: 14px; line-height: 1.5; }
+.confirmationReferences { max-height: 12rem; overflow: auto; list-style: decimal; padding-inline-start: 1.4rem; margin: 0; }
+.confirmationReferences li + li { margin-block-start: .25rem; }
+.confirmationReferences small { color: #a5b5a7; }
 [data-business-workspace] .dialog dt { color: #b2b7bc; }
 [data-business-workspace] .dialogActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }
 @media (max-width: 600px) {

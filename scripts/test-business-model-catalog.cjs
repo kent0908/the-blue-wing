@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file);const mod={exports:{}};cache.set(file,mod.exports);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;new Function('require','module','exports',code)(id=>id.startsWith('.')?load(path.resolve(path.dirname(file),id)+'.ts'):require(id),mod,mod.exports);cache.set(file,mod.exports);return mod.exports;}
 const {buildBusinessModelCatalog}=load('lib/businessModelCatalog.ts');
 const {getBusinessImageCapability,assertBusinessImageParameters}=load('lib/businessImageCapabilities.ts');
+const {isGenerationPickerModel}=load('lib/generationPickerModels.ts');
 const fixture=JSON.parse(fs.readFileSync('scripts/fixtures/business-model-catalog-20261020.json','utf8'));
 let count=0;function test(name,fn){fn();count++;console.log('PASS '+name);}
 const result=buildBusinessModelCatalog({data:fixture.ids.map(id=>({id,object:'model',owned_by:'openai'}))});
@@ -17,4 +18,30 @@ test('GPT quality is version-specific and output geometry enforces native constr
 test('Gemini Lite cannot claim 2K and seed/n controls reject incompatible types',()=>{const params={model:'gemini-3.1-flash-lite-image',prompt:'A blue feather',seed:5,n:1,size:'1024x1024'};assert.doesNotThrow(()=>assertBusinessImageParameters(params,14));for(const extra of [{size:'2048x2048'},{quality:'high'},{seed:-1},{seed:1.1},{seed:'5'},{n:2}])assert.throws(()=>assertBusinessImageParameters({...params,...extra},0));assert.throws(()=>assertBusinessImageParameters(params,15));});
 test('Seedream advertises only single-output documented controls and exact per-version reference counts',()=>{for(const model of ['ByteDance-Seedream-4.0','ByteDance-Seedream-4.5','Dola-Seedream-5.0-lite','Dola-Seedream-5.0-pro']){const caps=getBusinessImageCapability(model);assert.equal(caps.maxImageCount,1);assert.deepEqual(caps.controls,[]);assert.doesNotThrow(()=>assertBusinessImageParameters({model,prompt:'A paper garden',size:caps.sizes[0]},caps.maxReferenceImages));for(const extra of [{seed:5},{negative_prompt:'blur'},{n:2},{quality:'high'}])assert.throws(()=>assertBusinessImageParameters({model,prompt:'A paper garden',...extra},0));}});
 test('advanced GPT output options remain bounded and unknown passthrough never enters a payload',()=>{const params={model:'gpt-image-2',prompt:'A paper feather',output_format:'jpeg',output_compression:80,background:'opaque',moderation:'auto'};assert.doesNotThrow(()=>assertBusinessImageParameters(params,0));for(const extra of [{output_compression:101},{output_compression:1.5},{output_format:'webp'},{background:'transparent'},{extra_body:{}},{image:'https://evil.invalid'},{callback_url:'https://evil.invalid'}])assert.throws(()=>assertBusinessImageParameters({...params,...extra},0));assert.throws(()=>assertBusinessImageParameters({...params,model:'gemini-3-pro-image'},0));});
-console.log(`Business model catalog/image: ${count} cases passed (${result.upstreamTotal} sanitized live model IDs, ${result.models.length} executable contracts).`);
+test('current Wan grants are executable and documented Pro tiers appear only when granted',()=>{
+  const base=['wan3.0-video','wan3.0-video-prime'];
+  const pro=['wan3.0-video-pro','wan3.0-video-prime-pro'];
+  const rows=ids=>buildBusinessModelCatalog({data:ids.map(id=>({id}))}).models;
+  assert.deepEqual(new Set(rows(base).map(model=>model.id)),new Set(base));
+  for(const model of rows([...base,...pro])) {
+    assert.equal(model.dedicatedVideo.family,'wan3.0');
+    assert.deepEqual(model.resolutions,pro.includes(model.id)?['1080p','2k','4k']:['480p','720p','1080p']);
+    assert.equal(model.maxReferenceImages,10);
+    assert.equal(model.maxSeconds,30);
+  }
+  for(const id of pro) assert.equal(isGenerationPickerModel(id),false);
+});
+test('granted Spicy and Gemini Omni IDs are shown as pending and cannot enter the consumer picker',()=>{
+  const spicy=['z-image-spicy','qwen-image-edit-spicy','face-swap-spicy','head-swap-spicy','wan2.2-i2v-spicy','wan2.7-i2v-spicy','wan3.0-video-spicy','wan3.0-video-prime-spicy','wan3.0-video-pro-spicy','wan3.0-video-prime-pro-spicy'];
+  const omni='gemini-omni-1.1-flash-preview';
+  const rows=buildBusinessModelCatalog({data:[...spicy,omni].map(id=>({id}))});
+  assert.equal(rows.models.length,0);
+  assert.equal(rows.unavailableModels.length,11);
+  for(const row of rows.unavailableModels) {
+    assert.equal(row.reason,'adapter_pending');
+    assert.equal(row.nsfw,row.id!==omni);
+    assert.equal(isGenerationPickerModel(row.id),false);
+  }
+  assert.equal(rows.unavailableModels.find(row=>row.id===omni).category,'video');
+});
+console.log(`Business model catalog/image: ${count} cases passed (${result.upstreamTotal} fixture IDs, ${result.models.length} executable contracts in the historical fixture).`);

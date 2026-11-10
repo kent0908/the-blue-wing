@@ -62,11 +62,12 @@ export function createBusinessCanvasRunner(options: RunnerOptions) {
       if (node.data.quality && model.imageControls?.some(control => control.key === "quality" && control.options?.includes(String(node.data.quality)))) parameters.quality = node.data.quality;
     } else {
       const seconds = Number(node.data.seconds);
-      parameters.seconds = model.secondsOptions?.includes(seconds) ? seconds : model.secondsOptions?.[0] ?? Math.max(model.minSeconds ?? 2, Math.min(Number.isFinite(seconds) && seconds > 0 ? seconds : model.defaultSeconds ?? 5, model.maxSeconds ?? 15));
-      parameters.resolution = model.resolutions?.includes(String(node.data.resolution)) ? node.data.resolution : model.resolutions?.[0];
+      const wan3 = model.dedicatedVideo?.family === "wan3.0";
+      parameters.seconds = wan3 && seconds === -1 ? -1 : model.secondsOptions?.includes(seconds) ? seconds : model.secondsOptions?.[0] ?? Math.max(model.minSeconds ?? 2, Math.min(Number.isFinite(seconds) && seconds > 0 ? seconds : model.defaultSeconds ?? 5, model.maxSeconds ?? 15));
+      parameters.resolution = model.resolutions?.includes(String(node.data.resolution)) ? node.data.resolution : model.dedicatedVideo?.defaultResolution ?? model.resolutions?.[0];
       parameters.aspect_ratio = model.aspectRatios?.includes(String(node.data.aspect_ratio)) ? node.data.aspect_ratio : model.aspectRatios?.includes("16:9") ? "16:9" : model.aspectRatios?.[0];
       if (model.supportsAudio) parameters.generate_audio = model.nativeAudioOnly || node.data.generate_audio === true;
-      if (model.seedance) {
+      if (model.seedance || wan3) {
         parameters.mode = String(node.data.mode || "freestyle");
         parameters.referenceOrder = sourceKeys;
       }

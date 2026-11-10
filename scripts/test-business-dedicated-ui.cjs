@@ -27,8 +27,10 @@ function loader(hookMock = false) {
   return read;
 }
 const read = loader();
-const { default: Controls, DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS: defaults } = read('components/business/BusinessDedicatedVideoControls.tsx');
+const { default: Controls, BusinessWan3DurationSelect: WanDuration, DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS: defaults } = read('components/business/BusinessDedicatedVideoControls.tsx');
 const { getBusinessDedicatedVideoCapability: caps } = read('lib/businessDedicatedVideo.ts');
+const { getBusinessWan3Capability: wanCaps } = read('lib/businessWan3.ts');
+const { businessDedicatedVideoCopy } = read('lib/i18n/businessDedicatedVideo.ts');
 let combinations = 0;
 for (locale of ['zh-Hant', 'en', 'ja']) {
   for (const model of ['wan2.7-t2v', 'wan2.7-i2v', 'wan2.7-r2v', 'happyhorse-1.1-t2v', 'happyhorse-1.1-i2v', 'happyhorse-1.1-r2v']) {
@@ -46,6 +48,26 @@ for (locale of ['zh-Hant', 'en', 'ja']) {
     assert.ok(html.includes(`/${model.startsWith('wan') ? 'wan' : 'happyhorse'}/`), `${context}: documentation targets the actual provider family`);
     combinations++;
   }
+  const wan = wanCaps('wan3.0-video');
+  const copy = businessDedicatedVideoCopy(locale);
+  for (const [mode, count, max] of [['freestyle', 0, 0], ['image-to-video', 1, 1], ['first-last-frame', 1, 2], ['subject-reference', 3, 10]]) {
+    const html = renderToStaticMarkup(React.createElement(Controls, { capability: wan, value: { ...defaults, mode }, onChange: () => {}, referenceCount: count, onOpenAssets: () => {} }));
+    assert.equal(html.includes(copy.openAssets), max > 0, `${locale}/${mode}: only image modes link to assets`);
+    assert.equal(html.includes(copy.wan3ImageRules), max > 0);
+    assert.equal(html.includes(copy.wan3ReferenceInfo), mode === 'subject-reference');
+    if (max) assert.ok(html.includes(copy.selected.replace('{count}', String(count)).replace('{max}', String(max))));
+    assert.ok(html.includes(copy.wan3Seed));
+    assert.ok(html.includes(copy.promptExtend));
+    assert.ok(!html.includes(copy.watermarkInfo) && !html.includes('maxlength="4000"'));
+    assert.equal((html.match(/<option /g) ?? []).length, 4);
+    combinations++;
+  }
+  const duration = renderToStaticMarkup(React.createElement(WanDuration, { capability: wan, seconds: -1, disabled: true, onChange: () => {} }));
+  assert.ok(duration.includes('<select disabled="">'));
+  assert.ok(duration.includes(`<option value="-1" selected="">${copy.durationAuto}</option>`));
+  assert.ok(duration.includes(`<option value="2">${copy.durationSeconds.replace('{value}', '2')}</option>`));
+  assert.ok(duration.includes(`<option value="30">${copy.durationSeconds.replace('{value}', '30')}</option>`));
+  assert.equal((duration.match(/<option /g) ?? []).length, 30, 'Auto plus all 29 supported fixed durations');
 }
 function flatten(tree) {
   if (!tree || typeof tree !== 'object') return [];
@@ -74,4 +96,7 @@ assert.equal(changes.length, before, 'A stale handler cannot mutate locked setti
 const overflow = renderToStaticMarkup(React.createElement(Controls, { ...props, referenceCount: 3 }));
 assert.ok(overflow.includes('role="alert"'), 'An over-capacity source selection produces a visible warning');
 assert.equal(Controlled({ ...props, capability: caps('happyhorse-1.0-video-edit') }), null, 'Unintegrated video-edit is not advertised as usable');
-console.log(`PASS business dedicated UI: ${combinations} actual SSR locale/model combinations, controlled mode/watermark handlers, native asset action, overflow warning and submission lock; no network or paid calls.`);
+const durationChanges = [];
+WanDuration({ capability: wanCaps('wan3.0-video-pro'), seconds: 5, onChange: seconds => durationChanges.push(seconds) }).props.onChange({ target: { value: '-1' } });
+assert.deepEqual(durationChanges, [-1], 'Wan 3.0 duration handler preserves the automatic value');
+console.log(`PASS business dedicated UI: ${combinations} actual SSR locale/model and mode combinations, localized Wan 3.0 duration range, controlled mode/watermark handlers, native asset action, overflow warning and submission lock; no network or paid calls.`);

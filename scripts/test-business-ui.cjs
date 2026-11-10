@@ -8,10 +8,13 @@ const ts = require('typescript');
 const source = fs.readFileSync('components/business/BusinessWorkspace.tsx', 'utf8');
 const ast = ts.createSourceFile('BusinessWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const handlers = {};
+const outputSettings = [];
+const outputSettingNames = ['wan3Capability', 'dedicatedMode', 'wan3Text', 'aspectOptions', 'defaultAspect', 'selectedResolution', 'seedanceAdaptive', 'seedanceVideoDuration', 'seedanceAutoDuration', 'selectedAspect', 'selectedSeconds'];
 let preSubmitErrorsSource;
 function visit(node) {
   if (ts.isVariableDeclaration(node) && ['requestConfirmation', 'submitGeneration', 'saveKey'].includes(node.name.getText(ast)) && ts.isArrowFunction(node.initializer)) handlers[node.name.getText(ast)] = node.initializer.getText(ast);
   if (ts.isVariableDeclaration(node) && node.name.getText(ast) === 'PRE_SUBMIT_ERRORS') preSubmitErrorsSource = node.initializer.getText(ast);
+  if (ts.isVariableDeclaration(node) && outputSettingNames.includes(node.name.getText(ast))) outputSettings.push(`const ${node.getText(ast)};`);
   ts.forEachChild(node, visit);
 }
 visit(ast);
@@ -40,6 +43,9 @@ const { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSe
 const dedicatedModule = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessDedicatedVideo.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(dedicatedModule, dedicatedModule.exports);
 const { getBusinessDedicatedVideoCapability, buildBusinessDedicatedVideoPayload } = dedicatedModule.exports;
+const wan3Module = { exports: {} };
+new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessWan3.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(wan3Module, wan3Module.exports);
+const { getBusinessWan3Capability, buildBusinessWan3Payload } = wan3Module.exports;
 const noop = () => {};
 function makeContext() {
   let sequence = 0;
@@ -51,8 +57,9 @@ function makeContext() {
     prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
     mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, resolveMentionPrompt: mentionsModule.exports.resolveMentionPrompt, promptLimit: 12000,
     resultsCopy: { submitted: 'sent' }, historyVersion: { current: 0 }, setSelectedJobId: noop, workspacePreview: { current: null }, requestAnimationFrame: callback => callback(),
-    videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', assertBusinessSeedanceReferences, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload,
+    videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', assertBusinessSeedanceReferences, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload, buildBusinessWan3Payload,
     dedicatedOptions: {mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
+    dedicatedCopy: { wan3PromptLimit: 'wan3-prompt-limit' },
     access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved', invalidRequest: 'invalid' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' }, d: { referenceLimitError: 'seedance-refs' },
     REQUEST_HEADERS: { 'Content-Type': 'application/json' },
     businessError: (_copy, code) => code || 'error', confirmation: null, jobs: [],
@@ -77,13 +84,18 @@ function seedanceContext(modelId = 'NSFW-SIRAYA-Seedance-2.5') {
   return result;
 }
 function dedicatedContext(modelId, referenceCount = 0) {
-  const result = makeContext(); const c = result.context; const capability = getBusinessDedicatedVideoCapability(modelId);
+  const result = makeContext(); const c = result.context; const capability = getBusinessDedicatedVideoCapability(modelId) ?? getBusinessWan3Capability(modelId);
   c.selected = { id:modelId,modality:'video',nsfw:false,supportsAudio:capability.supportsAudio,supportsReferences:capability.maxReferenceImages>0,resolutions:capability.resolutions,aspectRatios:capability.aspectRatios,minSeconds:capability.minSeconds,maxSeconds:capability.maxSeconds,defaultSeconds:capability.defaultSeconds,maxReferenceImages:capability.maxReferenceImages,promptMaxChars:capability.promptMaxChars,dedicatedVideo:capability };
   c.seconds=5;c.resolution='720p';c.aspect='16:9';
-  c.imageBusinessAssets=Array.from({length:referenceCount},(_,index)=>({id:`upload:${index}`,uploadId:`10000000-0000-4000-8000-${String(index).padStart(12,'0')}`,name:`Own image ${index+1}`,type:'image',status:'processing'}));
+  c.imageBusinessAssets=Array.from({length:referenceCount},(_,index)=>({id:`upload:${index}`,uploadId:`10000000-0000-4000-8000-${String(index).padStart(12,'0')}`,name:`Own image ${index+1}`,type:'image',status:'processing',storageReady:true}));
   return result;
 }
 const event = { preventDefault: noop };
+function reviewWan3(context) {
+  assert.equal(outputSettings.length, outputSettingNames.length, 'Actual editor output settings found');
+  Object.assign(context, vm.runInNewContext(`(() => { ${outputSettings.join('\n')} return { selectedResolution, selectedAspect, selectedSeconds, aspectOptions }; })()`, context));
+  context.requestConfirmation(event);
+}
 (async () => {
   let { context, calls } = makeContext();
   context.requestConfirmation(event);
@@ -267,6 +279,53 @@ const event = { preventDefault: noop };
     ['image on text model','happyhorse-1.1-t2v',1,()=>{}],
   ]) {const result=dedicatedContext(model,count);configure(result.context);result.context.requestConfirmation(event);assert.equal(result.context.confirmation,null,`${name} cannot open paid confirmation`);assert.equal(result.uuids(),0);assert.equal(result.calls.length,0);}
 
+  for (const [model, mode, count, seconds, resolution, aspect] of [
+    ['wan3.0-video', 'freestyle', 0, -1, '4k', 'adaptive'],
+    ['wan3.0-video-pro', 'image-to-video', 1, 2, '2k', ''],
+    ['wan3.0-video-prime', 'first-last-frame', 2, 5, '720p', ''],
+    ['wan3.0-video-prime-pro', 'subject-reference', 10, 30, '4k', '9:16'],
+  ]) {
+    const result = dedicatedContext(model, count), c = result.context;
+    Object.assign(c, { seconds, resolution, aspect, audio: true, promptLimit: 2000 });
+    Object.assign(c.dedicatedOptions, { mode, seed: '0', promptExtend: true, watermark: true, negativePrompt: 'stale' });
+    if (mode === 'subject-reference') {
+      c.mentionBindings.current.first = `business:${c.imageBusinessAssets[0].uploadId}`;
+      c.prompt = 'The feather in @first begins to glow.';
+    }
+    reviewWan3(c);
+    assert.ok(c.confirmation, `${model}: ${mode} opens the paid review using Wan 3.0 validation`);
+    const submitted = c.confirmation.parameters;
+    assert.equal(submitted.mode, mode === 'freestyle' ? 'text-to-video' : mode);
+    assert.equal(submitted.seconds, seconds, 'Automatic duration and exact boundaries survive confirmation');
+    assert.equal(submitted.resolution, mode === 'freestyle' ? '1080p' : resolution, 'Stale or valid resolution matches the displayed value');
+    assert.equal(submitted.aspect_ratio, mode === 'freestyle' ? '16:9' : aspect || 'adaptive', 'Only media modes can use adaptive aspect');
+    assert.equal(submitted.generate_audio, true);
+    assert.equal(submitted.prompt_extend, true);
+    assert.equal(submitted.seed, 0);
+    assert.equal(submitted.watermark, undefined);
+    assert.equal(submitted.negative_prompt, undefined);
+    assert.deepEqual(Array.from(submitted.businessAssetIds ?? []), c.imageBusinessAssets.map(asset => asset.uploadId), 'Only private Business Asset IDs are sent in picker order');
+    if (mode === 'subject-reference') assert.equal(submitted.prompt, 'The feather in Image 1 begins to glow.');
+    assert.equal(result.uuids(), 1);
+    assert.equal(result.calls.length, 0);
+  }
+  for (const [name, count, configure, error] of [
+    ['prompt exceeds 2,000 characters', 0, c => { c.prompt = '影'.repeat(2001); }, 'wan3-prompt-limit'],
+    ['incomplete first-last pair', 1, c => { c.dedicatedOptions.mode = 'first-last-frame'; }, 'invalid'],
+    ['reference overflow', 11, c => { c.dedicatedOptions.mode = 'subject-reference'; }, 'seedance-refs'],
+    ['unavailable native upload', 1, c => { c.dedicatedOptions.mode = 'image-to-video'; c.imageBusinessAssets[0].storageReady = false; }, 'invalid'],
+    ['consumer asset', 0, c => { c.assetIds = [1]; }, 'invalid'],
+    ['out-of-range seed', 0, c => { c.dedicatedOptions.seed = '-1'; }, 'invalid'],
+  ]) {
+    const result = dedicatedContext('wan3.0-video', count), c = result.context;
+    configure(c);
+    reviewWan3(c);
+    assert.equal(c.confirmation, null, `${name} cannot open paid confirmation`);
+    assert.equal(c.error, error);
+    assert.equal(result.uuids(), 0);
+    assert.equal(result.calls.length, 0);
+  }
+
   ({ context, calls } = makeContext());
   await context.saveKey(event);
   assert.equal(calls.length, 1);
@@ -274,5 +333,5 @@ const event = { preventDefault: noop };
   assert.equal(context.catalogReloads, 1, 'Replacing an already connected key refreshes its model permissions');
   assert.ok(Array.isArray(context.models) && context.models.length === 0, 'Old-key catalog is cleared before refreshing');
   assert.ok(!source.includes('localStorage') && !source.includes('sessionStorage'), 'No credential browser-storage path exists');
-  console.log('PASS business UI: actual confirm/cancel/double-click/UUID/unknown/validation/adult/key/audio/duration/aspect handlers plus Seedance2.5 fifty references, per-type limits,2.0 restrictions, mixed-source frame order,auto duration,MOV and preflight errors; no paid calls.');
+  console.log('PASS business UI: actual confirm/cancel/double-click/UUID/unknown/validation/adult/key/audio/duration/aspect handlers, Seedance 2.0/2.5 references and advanced settings, Wan 3.0 exact settings across all tiers and owned-image modes; no paid calls.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

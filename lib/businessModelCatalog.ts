@@ -1,6 +1,8 @@
 import { getSeedanceCapability } from "./businessSeedance";
 import { getBusinessImageCapability } from "./businessImageCapabilities";
 import { getBusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
+import { getBusinessWan3Capability } from "./businessWan3";
+import { getBusinessAdditionalModel } from "./businessAdditionalModels";
 import { videoConstraintFor, maxRefsForVideoModel } from "./videoModels";
 import { getKlingVideoModel } from "./klingVideo";
 import { getMiniMaxVideoModel } from "./minimaxVideo";
@@ -9,7 +11,7 @@ import { modelLabel } from "./modelLabel";
 import type { BusinessModel } from "./businessGeneration";
 
 export type BusinessCatalogCategory = "image" | "video" | "text" | "audio" | "embedding" | "avatar" | "tool" | "unknown";
-export interface BusinessUnavailableModel { id: string; displayName: string; category: BusinessCatalogCategory; reason: "dedicated_tool" | "adapter_pending" | "retired" | "unsupported_model" }
+export interface BusinessUnavailableModel { id: string; displayName: string; category: BusinessCatalogCategory; nsfw: boolean; reason: "dedicated_tool" | "adapter_pending" | "retired" | "unsupported_model" }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const safeId = (value: unknown): value is string => typeof value === "string" && /^[a-zA-Z0-9._:-]{1,150}$/.test(value) && !/^(?:sk|csk)-/i.test(value);
 function category(id: string): BusinessCatalogCategory {
@@ -35,9 +37,11 @@ export function buildBusinessModelCatalog(raw: unknown) {
     if (!record(entry) || !safeId(entry.id) || seen.has(entry.id.toLowerCase())) continue;
     const id = entry.id;
     seen.add(id.toLowerCase());
-    const common = { id, displayName: modelLabel(id), nsfw: /(?:^|-)(?:nsfw|uncensored)(?:-|$)/i.test(id) };
-    const kind = category(id);
-    const unavailable = (reason: BusinessUnavailableModel["reason"]) => unavailableModels.push({ id, displayName: common.displayName, category: kind, reason });
+    const additional = getBusinessAdditionalModel(id);
+    const common = { id, displayName: additional?.displayName ?? modelLabel(id), nsfw: additional?.nsfw ?? /(?:^|-)(?:nsfw|uncensored|spicy)(?:-|$)/i.test(id) };
+    const kind = additional?.category ?? category(id);
+    const unavailable = (reason: BusinessUnavailableModel["reason"]) => unavailableModels.push({ ...common, category: kind, reason });
+    if (additional || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id)) { unavailable("adapter_pending"); continue; }
     if (isRetiredGenerationModel(id)) { unavailable("retired"); continue; }
     if (["audio", "embedding", "avatar", "tool"].includes(kind)) { unavailable("dedicated_tool"); continue; }
     const image = getBusinessImageCapability(id);
@@ -48,10 +52,11 @@ export function buildBusinessModelCatalog(raw: unknown) {
     if (seedance) {
       models.push({ ...common, modality: "video", supportsReferences: true, resolutions: [...seedance.resolutions], minSeconds: seedance.minSeconds, maxSeconds: seedance.maxSeconds, defaultSeconds: seedance.defaultSeconds, aspectRatios: [...seedance.aspectRatios], supportsAudio: true, maxReferenceImages: seedance.references.image, seedance }); continue;
     }
-    const dedicatedVideo = getBusinessDedicatedVideoCapability(id);
+    const wan3 = getBusinessWan3Capability(id);
+    const dedicatedVideo = wan3 ?? getBusinessDedicatedVideoCapability(id);
     // Source-video grants need their own resolver before editing can be enabled.
     if (dedicatedVideo && dedicatedVideo.capability !== "video-edit") {
-      models.push({ ...common, modality: "video", supportsReferences: dedicatedVideo.maxReferenceImages > 0,
+      models.push({ ...common, displayName: wan3?.label ?? common.displayName, modality: "video", supportsReferences: dedicatedVideo.maxReferenceImages > 0,
         resolutions: [...dedicatedVideo.resolutions], minSeconds: dedicatedVideo.minSeconds, maxSeconds: dedicatedVideo.maxSeconds,
         defaultSeconds: dedicatedVideo.defaultSeconds, aspectRatios: [...dedicatedVideo.aspectRatios], supportsAudio: dedicatedVideo.supportsAudio,
         maxReferenceImages: dedicatedVideo.maxReferenceImages, promptMaxChars: dedicatedVideo.promptMaxChars, dedicatedVideo }); continue;
@@ -64,11 +69,11 @@ export function buildBusinessModelCatalog(raw: unknown) {
     if (minimax) {
       models.push({ ...common, modality: "video", supportsReferences: true, ...videoConstraintFor(id), aspectRatios: [...minimax.aspectRatios], supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: [...minimax.nativeAudioResolutions], defaultSeconds: minimax.defaultSeconds, maxReferenceImages: 9 }); continue;
     }
-    if (/^(?:veo-3\.1-generate-001|wan3\.0-video(?:-prime)?|(?:(?:NSFW|SIRAYA)-)*(?:ByteDance-)?Seedance-1\.(?:0|5)-pro(?:-fast)?)$/i.test(id)) {
+    if (/^(?:veo-3\.1-generate-001|(?:(?:NSFW|SIRAYA)-)*(?:ByteDance-)?Seedance-1\.(?:0|5)-pro(?:-fast)?)$/i.test(id)) {
       const caps = videoConstraintFor(id.replace(/^NSFW-/i, ""));
       if (caps.resolutions.length) {
         const veo = /^veo/i.test(id);
-        models.push({ ...common, modality: "video", ...caps, supportsReferences: maxRefsForVideoModel(id) > 0, aspectRatios: veo ? ["16:9", "9:16"] : ["16:9", "9:16", "1:1"], supportsAudio: veo || /^wan3/i.test(id), defaultSeconds: veo ? 8 : 5, maxReferenceImages: 4, ...(veo ? { secondsOptions: [4, 6, 8] } : {}) }); continue;
+        models.push({ ...common, modality: "video", ...caps, supportsReferences: maxRefsForVideoModel(id) > 0, aspectRatios: veo ? ["16:9", "9:16"] : ["16:9", "9:16", "1:1"], supportsAudio: veo, defaultSeconds: veo ? 8 : 5, maxReferenceImages: 4, ...(veo ? { secondsOptions: [4, 6, 8] } : {}) }); continue;
       }
     }
     if (kind === "text") { models.push({ ...common, modality: "text", supportsReferences: false }); continue; }

@@ -2,6 +2,7 @@ import type { BusinessModel } from "@/components/business/types";
 import type { BusinessWorkflowsCopy } from "@/lib/i18n/businessWorkflows";
 import { assertBusinessSeedanceReferences, type BusinessSeedanceMode } from "../businessSeedance";
 import { assertBusinessDedicatedVideoReferences, type BusinessDedicatedVideoMode } from "../businessDedicatedVideo";
+import { buildBusinessWan3Payload } from "../businessWan3";
 import type { CanvasGraph, CanvasNode, PortType } from "./types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -66,6 +67,18 @@ export function assertBusinessCanvasPreflight(graph: CanvasGraph, order: string[
     }
     if (node.type !== "video") bad(copy.unavailableModel);
     const requestedSeconds = node.data.seconds;
+    if (model.dedicatedVideo?.family === "wan3.0") {
+      try {
+        buildBusinessWan3Payload({
+          model: model.id, prompt, seconds: requestedSeconds,
+          resolution: model.resolutions?.includes(String(node.data.resolution)) ? node.data.resolution : model.dedicatedVideo.defaultResolution,
+          aspect_ratio: model.aspectRatios?.includes(String(node.data.aspect_ratio)) ? node.data.aspect_ratio : undefined,
+          mode: node.data.mode || "freestyle",
+        }, Array.from({ length: count }, (_, index) => ({ type: "image", url: `https://owned.invalid/reference-${index}.png` })));
+      } catch { bad(copy.invalidSettings); }
+      facts.set(id, { kind: "video" });
+      continue;
+    }
     // A saved/user-entered duration must match the declared contract. Do not
     // let the runner silently clamp or replace it after the user confirms.
     if (requestedSeconds !== undefined && (typeof requestedSeconds !== "number" || !Number.isSafeInteger(requestedSeconds) ||

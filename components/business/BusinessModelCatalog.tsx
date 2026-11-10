@@ -13,16 +13,25 @@ export default function BusinessModelCatalog({ models, unavailableModels, upstre
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const entries = useMemo(() => [
-    ...models.map(model => ({ id: model.id, name: model.displayName, category: model.modality as string, ready: true, reason: "" })),
-    ...unavailableModels.map(model => ({ id: model.id, name: model.displayName, category: model.category as string, ready: false, reason: model.reason })),
+    ...models.map(model => ({ id: model.id, name: model.displayName, category: model.modality as string, adult: model.nsfw, ready: true, reason: "" })),
+    ...unavailableModels.map(model => ({ id: model.id, name: model.displayName, category: model.category as string, adult: !!model.nsfw, ready: false, reason: model.reason })),
   ].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)), [models, unavailableModels]);
-  const categories = ["all", "image", "video", "text", "tool"] as const;
-  const visible = entries.filter(entry => (category === "all" || category === "tool" ? category === "all" || !["image", "video", "text"].includes(entry.category) : entry.category === category) && `${entry.id} ${entry.name}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const categories = ["all", "image", "video", "text", "tool", "adultModels"] as const;
+  const visible = entries.filter(entry => (category === "all" || (category === "adultModels" ? entry.adult : category === "tool" ? !["image", "video", "text"].includes(entry.category) : entry.category === category)) && `${entry.id} ${entry.name}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const categoryText = (value: string) => value === "image" || value === "video" || value === "text" || value === "audio" ? t[value] : t.tool;
   return <section className={styles.page} aria-label={t.modelsTitle}>
     <div className={styles.toolbar}><label className={styles.search} htmlFor={searchId}><span className={styles.visuallyHidden}>{t.search}</span><input id={searchId} type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t.search} /></label><button type="button" className={styles.button} onClick={onRefresh} disabled={loading}>{loading ? t.refreshing : t.refresh}</button></div>
     <div className={styles.catalogMeta}><div className={styles.filters} role="group" aria-label={t.models}>{categories.map(value => <button key={value} type="button" aria-pressed={category === value} onClick={() => setCategory(value)}>{t[value]}</button>)}</div><span role="status" title={t.count.replace("{count}", String(upstreamTotal || entries.length))}>{t.count.replace("{count}", String(visible.length))}</span></div>
-    <div className={styles.modelRows} aria-busy={loading}>{visible.map(entry => <article className={styles.modelRow} key={entry.id}><ModelLogo id={entry.id} size={32} /><div className={styles.modelIdentity}><h3>{entry.name}</h3><p>{entry.id}</p>{!entry.ready && <p>{entry.reason === "retired" ? t.retired : t.adapterRequired}</p>}</div><span className={styles.category}>{categoryText(entry.category)}</span><div className={styles.modelAction}>{entry.ready ? <button type="button" className={styles.button} onClick={() => onChoose(entry.id)}>{t.useModel}<span aria-hidden="true">↗</span></button> : <span className={styles.notReady}>{entry.reason === "retired" ? t.disabled : t.dedicated}</span>}</div></article>)}</div>
+    <div className={styles.modelRows} aria-busy={loading}>{visible.map(entry => <article className={styles.modelRow} key={entry.id}>
+      <ModelLogo id={entry.id} size={32} />
+      <div className={styles.modelIdentity}><h3>{entry.name}</h3><p>{entry.id}</p>
+        {!entry.ready && <p>{entry.reason === "retired" ? t.retired : entry.reason === "adapter_pending" ? t.adapterPending : t.adapterRequired}</p>}
+      </div>
+      <span className={styles.category}>{categoryText(entry.category)}{entry.adult ? ` · ${t.adultModels}` : ""}</span>
+      <div className={styles.modelAction}>{entry.ready
+        ? <button type="button" className={styles.button} onClick={() => onChoose(entry.id)}>{t.useModel}<span aria-hidden="true">↗</span></button>
+        : <span className={styles.notReady}>{entry.reason === "dedicated_tool" ? t.dedicated : t.disabled}</span>}</div>
+    </article>)}</div>
     {!visible.length && <p className={styles.empty} role="status">{loading ? t.refreshing : t.noModels}</p>}
   </section>;
 }

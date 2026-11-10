@@ -9,12 +9,14 @@
  */
 export type BusinessDedicatedVideoMode = "freestyle" | "text-to-video" | "image-to-video" | "first-last-frame" | "subject-reference" | "video-edit" | "video-extend";
 export interface BusinessDedicatedVideoCapability {
-  family: "wan2.7" | "happyhorse";
+  family: "wan2.7" | "wan3.0" | "happyhorse";
   capability: "text-to-video" | "image-to-video" | "subject-reference" | "video-edit";
   resolutions: string[];
   minSeconds: number;
   maxSeconds: number;
   defaultSeconds: number;
+  defaultResolution?: string;
+  autoDuration?: boolean;
   sourceDuration: boolean;
   aspectRatios: string[];
   aspectRatioFromSource: boolean;
@@ -26,7 +28,7 @@ export interface BusinessDedicatedVideoCapability {
   promptMaxChars: number;
   /** The router also caps all prompts at 5000 characters; CJK text has a 2500-character limit. */
   cjkPromptMaxChars?: number;
-  referenceImageRules?: { minSide: number; maxBytes: number; mimeTypes: string[] };
+  referenceImageRules?: { minSide: number; maxBytes: number; mimeTypes: string[]; minAspectRatio?: number; maxAspectRatio?: number; opaquePng?: boolean };
 }
 const STANDARD_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
 const HAPPY_RATIOS = [...STANDARD_RATIOS, "4:5", "5:4", "9:21"];
