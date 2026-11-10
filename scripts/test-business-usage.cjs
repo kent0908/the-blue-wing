@@ -5,21 +5,38 @@ function load(file, mocks = {}) { const loaded = { exports: {} }; new Function('
 const { BusinessError } = load('lib/businessTypes.ts');
 const adult = load('lib/adultGate.ts', { './i18n/k': { k: value => value } });
 const range = load('lib/crmRange.ts');
+const consoleApi = load('lib/sirayaConsole.ts');
 const account = { id: '11111111-1111-4111-8111-111111111111' };
+const visibleId = '22222222-2222-4222-8222-222222222222';
+const anotherId = '33333333-3333-4333-8333-333333333333';
 let calls = [], approved = true, user = { id: 7, birth_date: '1994-09-08' };
-let stats = { requests: 137, completed: 100, failed: 20, pending: 17, matched_count: 3, matched_cost: '0.123457', unmatched_count: 134 };
+let stats = { requests: 137, completed: 100, failed: 20, pending: 17, matched_count: 3, matched_usd_count: 3, matched_cost: '0.123457', unmatched_count: 134 };
+let selected;
+const billing = load('lib/businessBilling.ts', { 'server-only': {}, './db': {}, './adultGate': adult, './businessTypes': { BusinessError }, './sirayaConsole': consoleApi });
 const helper = load('lib/businessUsage.ts', { 'server-only': {}, './db': { sql: { query: async (query, values) => {
   calls.push({ query, values });
   if (query.startsWith('select distinct')) return { rows: [{ model: 'SIRAYA-Seedance-2.5' }] };
   if (query.startsWith('select count')) return { rows: [{ ...stats }] };
-  return { rows: [{ id: 'fixture-owned-job' }] };
+  return { rows: [{ id: visibleId, status: 'completed', provider_request_id: 'request-1', provider_receipt_count: 1 }] };
 } } }, './adultGate': adult, './businessTypes': { BusinessError }, './crmRange': range,
+  './businessBilling': { ...billing, reconcileBusinessBillingPage: (owner, org, rows) => {
+    assert.equal(owner, user); assert.equal(org, account); selected = rows.map(row => row.id);
+    return { configured: true, results: [], summary: { matched: 0, pending: 0, unavailable: 0, skipped: 0, error: 0 } };
+  } },
+  './sirayaConsole': { consoleConfig: () => ({ configured: true, token: 'fixture-secret', accountId: 'fixture-provider-account' }) },
   './businessGeneration': { publicBusinessGeneration: row => ({ id: row.id, providerCost: null }) } });
-const route = load('app/api/business/usage/route.ts', { '@/lib/businessUsage': helper, '@/lib/business': {
+const businessMocks = {
   requireBusiness: async () => approved ? { user, account } : { error: NextResponse.json({ error: { code: 'business_not_approved' } }, { status: 403 }) },
+  assertBusinessOrigin: req => { if (req.headers.get('origin') !== req.nextUrl.origin) throw new BusinessError('invalid_origin', 403); },
+  readBusinessJson: async req => req.json(),
   businessJson: value => NextResponse.json(value, { headers: { 'cache-control': 'private, no-store' } }),
   businessErrorResponse: (_req, error) => NextResponse.json({ error: { code: error.code || 'unavailable' } }, { status: error.status || 503 }),
-} });
+};
+const route = load('app/api/business/usage/route.ts', { '@/lib/businessUsage': helper, '@/lib/business': businessMocks });
+const reconcileRoute = load('app/api/business/usage/reconcile/route.ts', { '@/lib/businessUsage': helper, '@/lib/business': businessMocks });
+const post = (body = {}, query = '', origin = 'https://thebluewing.studio') => reconcileRoute.POST(new NextRequest(
+  'https://thebluewing.studio/api/business/usage/reconcile?' + query,
+  { method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body) }));
 (async () => {
   const f = helper.businessUsageFilters(new URLSearchParams({ from: '2026-10-01', to: '2026-10-20', model: 'SIRAYA-Seedance-2.5', status: 'completed', kind: 'video', page: '2' }));
   assert.equal(f.range.since, '2026-09-30T16:00:00.000Z'); assert.equal(f.range.until, '2026-10-20T16:00:00.000Z'); assert.equal(f.page, 2);
@@ -27,12 +44,31 @@ const route = load('app/api/business/usage/route.ts', { '@/lib/businessUsage': h
   const result = await helper.businessUsageReport(user, account, new URLSearchParams({ from: '2026-10-01', to: '2026-10-20', page: '2' }));
   assert.equal(result.pagination.pageSize, 50); assert.equal(result.pagination.total, 137); assert.equal(result.pagination.totalPages, 3); assert.equal(result.pagination.hasMore, true);
   assert.equal(result.generations.length, 1); assert.equal(result.stats.requests, 137, 'filtered totals must not be derived from the current page length'); assert.equal(result.stats.matchedCost, '0.123457'); assert.equal(result.stats.unmatchedCount, 134); assert.deepEqual(result.models, ['SIRAYA-Seedance-2.5']);
+  assert.equal(result.generations[0].billingEligibility, 'ready'); assert.equal(result.stats.matchedCount, 3);
+  assert.deepEqual(result.billing, { configured: true, reconcilableCount: 1 });
   for (const call of calls) { assert.equal(call.values[0], account.id); assert.equal(call.values[1], 7); assert.equal(call.values[2], true); assert.match(call.query, /account_id=\$1 and user_id=\$2 and \(\$3::boolean or nsfw=false\)/); }
   const pageQuery = calls.find(call => call.query.startsWith('select *')); assert.deepEqual(pageQuery.values.slice(-2), [50, 50]);
   user.birth_date = '2015-09-08'; calls = []; await helper.businessUsageReport(user, account, new URLSearchParams()); assert.equal(calls.every(call => call.values[2] === false), true, 'models, rows and totals all respect current age');
-  stats = { requests: 0, completed: 0, failed: 0, pending: 0, matched_count: 0, matched_cost: null, unmatched_count: 0 };
+  stats = { requests: 0, completed: 0, failed: 0, pending: 0, matched_count: 0, matched_usd_count: 0, matched_cost: null, unmatched_count: 0 };
   assert.equal((await helper.businessUsageReport(user, account, new URLSearchParams())).stats.matchedCost, null, 'no invoice coverage must not be shown as a known zero spend');
+  stats = { ...stats, requests: 1, matched_count: 1, matched_usd_count: 1, matched_cost: '0.000000' };
+  assert.equal((await helper.businessUsageReport(user, account, new URLSearchParams())).stats.matchedCost, '0.000000', 'an exact zero receipt is a known spend value');
+  stats = { ...stats, matched_usd_count: 0, matched_cost: null };
+  const foreign = (await helper.businessUsageReport(user, account, new URLSearchParams())).stats;
+  assert.equal(foreign.matchedCount, 1); assert.equal(foreign.matchedUsdCount, 0); assert.equal(foreign.matchedCost, null); assert.equal(foreign.unmatchedCount, 0);
   const response = await route.GET(new NextRequest('https://thebluewing.studio/api/business/usage?from=2026-10-01&to=2026-10-20')); assert.equal(response.status, 200); assert.match(response.headers.get('cache-control'), /private.*no-store/);
+  calls = [];
+  const filtered = 'from=2026-10-01&to=2026-10-20&model=SIRAYA-Seedance-2.5&status=completed&kind=video&page=2';
+  const reconciled = await post({ ids: [anotherId, visibleId] }, filtered);
+  assert.equal(reconciled.status, 200); assert.match(reconciled.headers.get('cache-control'), /private.*no-store/);
+  assert.deepEqual(selected, [visibleId], 'caller can only narrow the exact owned page');
+  assert.equal(calls[0].query, pageQuery.query, 'report and reconciliation must use identical page selection');
+  assert.deepEqual(calls[0].values, [account.id, user.id, false, '2026-09-30T16:00:00.000Z', '2026-10-20T16:00:00.000Z', 'SIRAYA-Seedance-2.5', 'completed', 'video', 50, 50]);
+  const called = calls.length;
+  for (const body of [{ requestId: 'request-1' }, { ids: ['request-1'] }, { ids: [visibleId, visibleId] }, { ids: Array(51).fill(visibleId) }]) assert.equal((await post(body, filtered)).status, 400);
+  assert.equal((await post({}, 'page=1&page=2')).status, 400); assert.equal((await post({}, filtered, 'https://attacker.invalid')).status, 403);
+  assert.equal(calls.length, called, 'malformed and cross-origin requests never access the ledger');
   approved = false; const before = calls.length; assert.equal((await route.GET(new NextRequest('https://thebluewing.studio/api/business/usage'))).status, 403); assert.equal(calls.length, before);
-  console.log('PASS BYOK usage: Taipei date boundaries, 366-day/50-row pagination limits, model/status/kind filters, full filtered totals, current owner/age scope in every query, unknown costs remain null, private route and approval gate. No network or paid calls.');
+  assert.equal((await post()).status, 403); assert.equal(calls.length, before);
+  console.log('PASS BYOK usage: Taipei filters, full filtered exact totals, current owner/age and page scope, snapshot-ID intersection, private route and approval gate. No network or paid calls.');
 })().catch(error => { console.error('FAIL BYOK usage:', error.stack); process.exitCode = 1; });

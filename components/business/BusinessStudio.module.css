@@ -179,6 +179,8 @@
 }
 @media (max-width: 440px) {
   .kindButton, .utilityButton { font-size: 12px; }
+  .utilityButton { padding-inline: 0; }
+  .utilityButton > span { white-space: nowrap; }
   .workspaceHeaderInner { gap: 6px 10px; }
   .workspaceHeader h1 { font-size: 20px; }
   .keyStatus { font-size: 12px; }

@@ -146,9 +146,16 @@ async function run() {
   assert.equal(search.catalog.at(-1).get("name"), "vase");
   console.log("PASS assets: search commits only on submit");
 
-  const usage = hooks(), calls = [], exports = [], clicks = [];
-  const row = { id: "job", providerRequestId: "request", kind: "image", model: "  =FORMULA()", status: "completed", createdAt: "2026-11-08T01:00:00Z", durationMs: 5000, billingStatus: "pending" };
-  const report = { generations: [row], models: ["sample"], range: { from: "2026-11-01", to: "2026-11-08", timezone: "Asia/Taipei" }, pagination: { page: 1, total: 51, totalPages: 2, hasMore: true }, stats: { requests: 51, completed: 51, failed: 0, pending: 0, matchedCost: null, currency: "USD", unmatchedCount: 51 } };
+  const usage = hooks(), calls = [], exports = [], clicks = [], batches = [];
+  const row = { id: "job", providerRequestId: "request", kind: "image", model: "  =FORMULA()", status: "completed", createdAt: "2026-11-08T01:00:00Z", durationMs: 5000, billingStatus: "pending", billingEligibility: "ready" };
+  const noId = { ...row, id: "legacy", providerRequestId: null, billingEligibility: "missing_request" };
+  const zero = { ...row, billingStatus: "matched", billingEligibility: "already_matched", providerCost: "0.000000", providerCurrency: "USD", billingCheckedAt: "2026-11-08T02:00:00Z" };
+  let report = { generations: [row, noId], models: ["sample"], range: { from: "2026-11-01", to: "2026-11-08", timezone: "Asia/Taipei" }, pagination: { page: 1, total: 51, totalPages: 2, hasMore: true }, stats: { requests: 51, completed: 51, failed: 0, pending: 0, matchedCost: null, currency: "USD", matchedCount: 0, unmatchedCount: 51 }, billing: { configured: true, reconcilableCount: 1 } };
+  const receipt = load("components/business/BusinessGenerationReceipt.tsx", {
+    react: usage.react,
+    "@/lib/i18n/client": { useLocale: () => "en" },
+    "@/lib/i18n/businessOperations": { businessOperationsCopy },
+  });
   const ReceiptMarker = function ReceiptMarker() {};
   const { default: Usage } = load("components/business/BusinessUsage.tsx", {
     react: usage.react,
@@ -156,12 +163,20 @@ async function run() {
     "@/lib/i18n/business": { businessCopy: () => ({ completed: "Completed", failed: "Failed", unknown: "Unknown", processing: "Processing", submitting: "Submitting" }) },
     "@/lib/i18n/businessOperations": { businessOperationsCopy },
     "@/lib/modelLabel": { modelLabel: id => id },
-    "./BusinessGenerationReceipt": { __esModule: true, default: ReceiptMarker, businessCostText: () => "Awaiting billing", businessDurationText: () => "5 s" },
+    "./BusinessGenerationReceipt": { ...receipt, __esModule: true, default: ReceiptMarker },
   }, {
     URL: { createObjectURL: blob => { exports.push(blob); return "blob:fixture"; }, revokeObjectURL() {} },
     document: { createElement: () => ({ click() { clicks.push(this.download); }, remove() {} }), body: { append() {} } },
     setTimeout: fn => fn(),
-    fetch: async url => { calls.push(url); return response(report); },
+    fetch: async (url, init) => {
+      calls.push(url);
+      if (init.method === "POST") {
+        batches.push(JSON.parse(init.body));
+        report = { ...report, generations: [zero, noId], billing: { configured: true, reconcilableCount: 0 }, stats: { ...report.stats, matchedCost: "0.000000", matchedCount: 1, unmatchedCount: 50 } };
+        return response({ configured: true, results: [{ id: row.id, outcome: "matched" }], summary: { matched: 1, pending: 0, unavailable: 0, skipped: 0, error: 0 } });
+      }
+      return response(report);
+    },
   });
   const renderUsage = () => usage.render(Usage, {});
   renderUsage(); usage.mount(); await flush();
@@ -171,16 +186,39 @@ async function run() {
   const downloaded = await exports[0].text();
   assert.ok(downloaded.includes("'  =FORMULA()"));
   assert.ok(downloaded.includes("Awaiting billing"));
-  assert.ok(!downloaded.includes("USD 0"));
+  assert.ok(downloaded.includes('"Awaiting billing","","",""'));
   assert.ok(text(renderUsage()).includes(usageCopy.downloadStarted));
   elements(renderUsage()).find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
   await flush();
   assert.ok(calls.at(-1).includes("from=2026-11-01&to=2026-11-08"));
   assert.ok(text(renderUsage()).includes(usageCopy.filterOn));
+  const action = button(renderUsage(), usageCopy.reconcilePage);
+  const reconciling = action.onClick();
+  await action.onClick();
+  assert.equal(button(renderUsage(), usageCopy.download).disabled, true);
+  await reconciling;
+  assert.deepEqual(batches, [{ ids: [row.id] }]);
+  assert.equal(calls.at(-2), "/api/business/usage/reconcile?from=2026-11-01&to=2026-11-08&page=1");
+  assert.equal(calls.at(-1), "/api/business/usage?from=2026-11-01&to=2026-11-08&page=1");
+  assert.equal(button(renderUsage(), usageCopy.reconcilePage).disabled, true);
+  assert.ok(text(renderUsage()).includes(usageCopy.batchFinished));
+  assert.ok(text(renderUsage()).includes("0.000000"));
+  button(renderUsage(), usageCopy.download).onClick();
+  assert.ok((await exports.at(-1).text()).includes('"Reconciled","0.000000","USD","2026-11-08T02:00:00Z"'));
   button(renderUsage(), usageCopy.clear).onClick(); await flush();
   assert.equal(calls.at(-1), "/api/business/usage?page=1");
   assert.ok(!text(renderUsage()).includes(usageCopy.filterOn));
-  console.log("PASS usage: filter/reset, reachable receipt, page CSV action with spreadsheet escaping and no inferred costs");
+  assert.ok(!text(renderUsage()).includes(usageCopy.batchFinished));
+  for (const locale of ["zh-Hant", "en", "ja"]) {
+    const t = businessOperationsCopy(locale);
+    assert.equal(receipt.businessCostText(zero, t), "USD 0.000000");
+    assert.equal(receipt.businessBillingStateText(row, t), t.pendingCost);
+    assert.equal(receipt.businessBillingStateText(noId, t), t.legacyCost);
+    assert.equal(receipt.businessBillingStateText({ ...row, billingCheckedAt: zero.billingCheckedAt }, t), t.checkedCost);
+    assert.equal(receipt.businessBillingStateText({ ...row, billingStatus: "unavailable" }, t), t.blockedCost);
+    assert.equal(receipt.businessBillingStateText({ ...row, status: "processing" }, t), t.unfinishedCost);
+  }
+  console.log("PASS usage: filters, owned visible IDs, duplicate guard, report refresh, exact zero and blank unknown CSV, and distinct billing states in three locales");
 
   const businessStrings = load("lib/i18n/business.ts");
   const resultStrings = load("lib/i18n/businessResults.ts");

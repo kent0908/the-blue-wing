@@ -10,7 +10,7 @@ const { BusinessError } = load('lib/businessTypes.ts');
 const adult = load('lib/adultGate.ts', { './i18n/k': { k: value => value } });
 const actualConsole = load('lib/sirayaConsole.ts');
 const account = { id: '11111111-1111-4111-8111-111111111111' }, id = '22222222-2222-4222-8222-222222222222';
-let job, user, configured, calls, receipts, denied, claimAllowed, onLookup;
+let job, user, configured, calls, receipts, denied, claimAllowed, onLookup, jobs;
 function receipt(requestId, cost = 0.123456, changes = {}) {
   return actualConsole.normalizeBillingRecord({ request_id: requestId, account_id: 'fixture-provider-account', timestamp: new Date().toISOString(), model: 'SIRAYA-Seedance-2.5', cost, currency: 'USD', status: 'success', usage: { video_seconds: 4 }, performance: { latency_ms: 12345 }, ...changes });
 }
@@ -18,23 +18,40 @@ function reset() {
   user = { id: 7, birth_date: '1994-09-08', adult_confirmed_at: null };
   job = { id, account_id: account.id, user_id: '7', model: 'SIRAYA-Seedance-2.5', nsfw: false, status: 'completed', provider_request_id: 'exact-request-1', provider_request_ids: ['exact-request-1'], provider_receipt_count: 1,
     submitted_at: new Date(Date.now() - 60000).toISOString(), created_at: new Date(Date.now() - 65000).toISOString(), provider_cost: null, provider_currency: null, billing_status: 'pending', billing_checked_at: null, provider_billing_outcome: null, provider_duration_ms: null };
-  configured = true; denied = false; claimAllowed = true; onLookup = null; calls = []; receipts = new Map([['exact-request-1', receipt('exact-request-1')]]);
+  configured = true; denied = false; claimAllowed = true; onLookup = null; calls = []; receipts = new Map([['exact-request-1', receipt('exact-request-1')]]); jobs = new Map();
 }
 const db = { sql: { query: async (query, values) => {
-  if (query.startsWith('select ')) return { rows: job ? [{ ...job, provider_request_ids: [...job.provider_request_ids] }] : [] };
-  if (query.includes('returning id')) return { rows: claimAllowed ? [{ id }] : [] };
+  const row = jobs.get(values[0]) || job;
+  if (query.startsWith('select ')) return { rows: row ? [{ ...row, provider_request_ids: [...row.provider_request_ids] }] : [] };
+  if (query.includes('returning billing_checked_at')) {
+    assert.match(query, /interval '60 seconds'/);
+    assert.match(query, /billing_checked_at::text as billing_checked_at/);
+    if (!claimAllowed) return { rows: [] };
+    row.billing_checked_at = new Date().toISOString().replace('Z', '123Z');
+    return { rows: [{ billing_checked_at: row.billing_checked_at }] };
+  }
+  const sameVersion = row.provider_request_id === values[3] && row.provider_receipt_count === values[4] &&
+    JSON.stringify(row.provider_request_ids) === JSON.stringify(values[5]) && row.status === values[6] && row.billing_checked_at === values[7] && row.billing_status !== 'matched';
+  assert.equal(typeof values[7], 'string', 'claim value must preserve PostgreSQL microseconds through the final update');
   if (query.includes("billing_status='matched'")) {
-    if (job.provider_request_id === values[7] && JSON.stringify(job.provider_request_ids) === JSON.stringify(values[8]) && job.provider_receipt_count === values[9]) Object.assign(job, { provider_cost: values[3], provider_currency: values[4], billing_status: 'matched', billing_checked_at: new Date().toISOString(), provider_billing_outcome: values[5], provider_duration_ms: values[6] });
-    return { rows: [] };
+    if (sameVersion) Object.assign(row, { provider_cost: values[8], provider_currency: values[9], billing_status: 'matched', provider_billing_outcome: values[10], provider_duration_ms: values[11] });
+    return { rows: sameVersion ? [{ ...row }] : [] };
   }
   if (query.includes('set billing_status=')) {
-    if (job.billing_status !== 'matched' && job.provider_request_id === values[4] && JSON.stringify(job.provider_request_ids) === JSON.stringify(values[5])) Object.assign(job, { billing_status: values[3], billing_checked_at: new Date().toISOString() });
-    return { rows: [] };
+    if (sameVersion) row.billing_status = values[8];
+    return { rows: sameVersion ? [{ ...row }] : [] };
   }
   throw new Error('Unexpected billing fixture query');
 } } };
 const helper = load('lib/businessBilling.ts', { 'server-only': {}, './db': db, './adultGate': adult, './businessTypes': { BusinessError }, './sirayaConsole': { ...actualConsole,
-  consoleConfig: () => ({ configured }), fetchUsageRequest: async requestId => { calls.push(requestId); if (onLookup) onLookup(); if (!receipts.has(requestId)) throw new Error('fixture missing scoped receipt'); return receipts.get(requestId); } } });
+  consoleConfig: () => ({ configured }), fetchUsageRequest: async requestId => {
+    calls.push(requestId);
+    if (onLookup) await onLookup(requestId);
+    if (!receipts.has(requestId)) throw new actualConsole.BillingError('console_http_404', 404);
+    const value = receipts.get(requestId);
+    if (value instanceof Error) throw value;
+    return value;
+  } } });
 const route = load('app/api/business/generations/[id]/billing/route.ts', { '@/lib/businessBilling': helper, '@/lib/db': db, '@/lib/businessGeneration': { publicBusinessGeneration: row => helper.publicBusinessBilling(row) }, '@/lib/business': {
   BusinessError, assertBusinessOrigin: req => { if (req.headers.get('origin') !== req.nextUrl.origin) throw new BusinessError('invalid_origin', 403); },
   requireBusiness: async () => denied ? { error: NextResponse.json({ error: { code: 'business_not_approved' } }, { status: 403 }) } : { user, account },
@@ -60,10 +77,10 @@ async function test(name, run) { reset(); await run(); passed++; console.log('PA
   });
   await test('missing any separately billed attempt cannot become a complete or zero cost', async () => {
     job.provider_request_ids.push('unreachable-request'); job.provider_receipt_count = 2;
-    const result = await sync(); assert.equal(result.providerCost, null); assert.equal(result.billingStatus, 'pending');
+    const result = await sync(); assert.equal(result.providerCost, null); assert.equal(result.billingStatus, 'pending'); assert.equal(result.reason, 'not_found');
   });
   await test('a headerless HTTP attempt prevents a partial invoice total being called complete', async () => {
-    job.provider_receipt_count = 2; const result = await sync(); assert.equal(result.billingStatus, 'unavailable'); assert.equal(result.providerCost, null); assert.equal(calls.length, 0);
+    job.provider_receipt_count = 2; const result = await sync(); assert.equal(result.reason, 'incomplete_request'); assert.equal(result.billingCheckedAt, null); assert.equal(result.providerCost, null); assert.equal(calls.length, 0);
   });
   await test('foreign account and user jobs are denied before Console access', async () => {
     job.account_id = 'foreign'; await assert.rejects(sync, error => error.code === 'generation_not_found'); job.account_id = account.id; job.user_id = 99; await assert.rejects(sync, error => error.code === 'generation_not_found'); assert.equal(calls.length, 0);
@@ -89,13 +106,17 @@ async function test(name, run) { reset(); await run(); passed++; console.log('PA
     job.model = 'NSFW-SIRAYA-Seedance-2.5'; assert.equal((await sync()).billingStatus, 'matched');
   });
   await test('unsupported Console account scope and missing configuration remain unknown', async () => {
-    configured = false; assert.equal((await sync()).providerCost, null); assert.equal(calls.length, 0); configured = true; receipts.clear(); assert.equal((await sync()).billingStatus, 'unavailable'); assert.equal(job.provider_cost, null);
+    configured = false; const noConfig = await sync();
+    assert.equal(noConfig.providerCost, null); assert.equal(noConfig.billingCheckedAt, null); assert.equal(noConfig.reason, 'not_configured'); assert.equal(calls.length, 0);
+    configured = true; receipts.set('exact-request-1', new actualConsole.BillingError('request_outside_scope', 404));
+    const outOfScope = await sync(); assert.equal(outOfScope.billingStatus, 'unavailable'); assert.equal(outOfScope.reason, 'outside_scope'); assert.equal(job.provider_cost, null);
   });
   await test('a transient lookup failure never erases a verified invoice value', async () => {
     await sync(); receipts.clear(); const result = await sync(); assert.equal(result.providerCost, '0.123456'); assert.equal(result.billingStatus, 'matched');
   });
   await test('pending generation without a request ID stays pending; legacy terminal missing-ID remains unknown', async () => {
-    job.provider_request_ids = []; job.provider_request_id = null; job.provider_receipt_count = 0; job.status = 'processing'; assert.equal((await sync()).billingStatus, 'pending'); job.status = 'failed'; assert.equal((await sync()).billingStatus, 'unavailable'); assert.equal(calls.length, 0);
+    job.provider_request_ids = []; job.provider_request_id = null; job.provider_receipt_count = 0; job.status = 'processing'; assert.equal((await sync()).reason, 'generation_pending');
+    job.status = 'failed'; const old = await sync(); assert.equal(old.reason, 'missing_request'); assert.equal(old.billingCheckedAt, null); assert.equal(old.providerCost, null); assert.equal(calls.length, 0);
   });
   await test('a zero-dollar receipt is not final while the asynchronous generation or billing record remains pending', async () => {
     job.status = 'processing'; receipts.set('exact-request-1', receipt('exact-request-1', 0));
@@ -115,13 +136,56 @@ async function test(name, run) { reset(); await run(); passed++; console.log('PA
     onLookup = () => { job.provider_request_ids = ['new-request']; job.provider_request_id = 'new-request'; job.provider_receipt_count = 2; }; assert.equal((await sync()).providerCost, null); assert.equal(job.billing_status, 'pending');
   });
   await test('concurrent/cooldown claim returns owned cached state without another Console read', async () => {
-    claimAllowed = false; assert.equal((await sync()).billingStatus, 'pending'); assert.equal(calls.length, 0);
+    claimAllowed = false; const result = await sync(); assert.equal(result.billingStatus, 'pending'); assert.equal(result.reason, 'recently_checked'); assert.equal(calls.length, 0);
   });
   await test('actual route checks business access, same origin and rejects caller-supplied receipt IDs', async () => {
     assert.equal((await send({ requestId: 'stolen-request' })).status, 400); assert.equal((await send({}, 'https://attacker.invalid')).status, 403); denied = true; assert.equal((await send()).status, 403); assert.equal(calls.length, 0);
   });
   await test('actual route returns only scoped private billing DTO', async () => {
-    const response = await send(); assert.equal(response.status, 200); assert.match(response.headers.get('cache-control'), /private.*no-store/); const body = await response.json(); assert.equal(body.generation.providerCost, '0.123456'); assert.equal(JSON.stringify(body).includes('fixture-provider-account'), false);
+    const response = await send(); assert.equal(response.status, 200); assert.match(response.headers.get('cache-control'), /private.*no-store/); const body = await response.json(); assert.equal(body.generation.providerCost, '0.123456'); assert.equal(body.billing.outcome, 'matched'); assert.equal(JSON.stringify(body).includes('fixture-provider-account'), false);
+  });
+  function fixtures(count) {
+    return Array.from({ length: count }, (_, i) => {
+      const rowId = '22222222-2222-4222-8222-' + String(i + 1).padStart(12, '0');
+      const requestId = 'exact-fixture-' + i;
+      const row = { ...job, id: rowId, provider_request_id: requestId, provider_request_ids: [requestId] };
+      jobs.set(rowId, row);
+      receipts.set(requestId, receipt(requestId, i === 0 ? 0 : 0.010001));
+      return row;
+    });
+  }
+  await test('batch bounds concurrency and receipts, skips incomplete jobs and preserves exact zero', async () => {
+    const rows = fixtures(25);
+    rows[20].provider_receipt_count = 2;
+    rows[21].status = 'processing';
+    rows[22].billing_status = 'matched';
+    let active = 0, peak = 0;
+    onLookup = async () => { peak = Math.max(peak, ++active); await new Promise(resolve => setImmediate(resolve)); active--; };
+    const result = await helper.reconcileBusinessBillingPage(user, account, rows);
+    assert.equal(peak, 3); assert.equal(calls.length, 20); assert.equal(result.summary.matched, 20); assert.equal(result.summary.skipped, 5);
+    assert.equal(result.results[0].providerCost, '0.000000'); assert.equal(result.results[0].outcome, 'matched');
+    assert.deepEqual(result.results.slice(20).map(item => item.reason), ['incomplete_request', 'generation_pending', 'already_matched', 'deferred', 'deferred']);
+    assert.equal(rows[23].billing_checked_at, null);
+    calls = [];
+    const repeat = await helper.reconcileBusinessBillingPage(user, account, rows);
+    assert.deepEqual(calls, ['exact-fixture-23', 'exact-fixture-24']); assert.equal(repeat.summary.matched, 2);
+  });
+  await test('batch stops scheduling after rate limiting and does not convert failed checks to zero', async () => {
+    const rows = fixtures(7);
+    receipts.set(rows[0].provider_request_id, new actualConsole.BillingError('console_http_429', 429, 75));
+    onLookup = async requestId => { if (requestId !== rows[0].provider_request_id) await new Promise(resolve => setImmediate(resolve)); };
+    const result = await helper.reconcileBusinessBillingPage(user, account, rows);
+    assert.equal(calls.length, 3); assert.equal(result.results[0].outcome, 'error');
+    assert.equal(result.results[0].reason, 'rate_limited'); assert.equal(result.results[0].retryAfter, 75);
+    assert.equal(result.results[0].providerCost, null); assert.equal(result.results[3].reason, 'deferred');
+  });
+  await test('batch validates owner and current age before any Console lookup', async () => {
+    const rows = fixtures(3);
+    rows[1].account_id = 'foreign';
+    await assert.rejects(helper.reconcileBusinessBillingPage(user, account, rows), error => error.code === 'generation_not_found');
+    rows[1].account_id = account.id; rows[1].nsfw = true; user.birth_date = '2015-09-08';
+    await assert.rejects(helper.reconcileBusinessBillingPage(user, account, rows), error => error.code === 'age_unverified');
+    assert.equal(calls.length, 0);
   });
   console.log(`PASS ${passed} BYOK invoice reconciliation/ownership/route cases; no network, credentials, paid calls or consumer credit coupling.`);
 })().catch(error => { console.error('FAIL BYOK billing:', error.stack); process.exitCode = 1; });

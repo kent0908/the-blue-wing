@@ -116,6 +116,12 @@
 .stat dd span { display: inline-block; margin-inline-start: 5px; color: #a8b2ad; font-size: 12px; }
 .stat dd.statNote { font-size: 12px; font-weight: 400; line-height: 1.5; color: #a8b2ad; }
 .tableBar { color: #a8b2ad; font-size: 13px; padding-top: 4px; }
+.tableScope { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.tableScope strong, .reconciliation strong { color: #edf2ef; font-weight: 600; }
+.reconciliation { display: grid; gap: 5px; padding: 10px 12px; border-inline-start: 2px solid #b7e1cb; background: #181c1a; color: #a8b2ad; font-size: 13px; }
+.reconciliation ul { display: flex; flex-wrap: wrap; gap: 3px 15px; margin: 0; padding: 0; list-style: none; }
+.reconciliation b { color: #edf2ef; font-variant-numeric: tabular-nums; font-weight: 600; }
+.reconciliation small { font-size: 12px; }
 .table {
   border-collapse: collapse;
   width: 100%;
@@ -131,7 +137,7 @@
 .table th:last-child { width: 30%; }
 .table th, .table td { padding: 8px 9px; border-bottom: 1px solid #303934; text-align: start; overflow-wrap: anywhere; }
 .table td { vertical-align: top; padding-block: 12px; }
-.table td:nth-child(4), .table th:nth-child(4) { text-align: end; }
+.table td:nth-child(4), .table th:nth-child(4), .table th:last-child { text-align: end; }
 .table td :is(time, .status), .table td:nth-child(4), .cost { font-variant-numeric: tabular-nums; }
 .table td strong { font-weight: 600; }
 .table td small { display: block; color: #a8b2ad; font-size: 12px; }
@@ -151,8 +157,12 @@
 .details summary:hover { color: #edf2ef; background: #181c1a; }
 .details .notice { margin-top: 8px; }
 .tableDetails { border: 0; }
-.tableDetails summary { border: 1px solid #3a433e; background: #181c1a; }
-.tableDetails summary:hover { background: #272e2a; }
+.tableDetails summary { display: flex; align-items: center; justify-content: flex-end; gap: 10px; list-style: none; padding-inline: 0; text-align: end; }
+.tableDetails summary::-webkit-details-marker { display: none; }
+.tableDetails summary::after { content: ""; flex: 0 0 6px; height: 6px; margin-inline-end: 2px; border-block-end: 1px solid; border-inline-end: 1px solid; transform: rotate(45deg); }
+.tableDetails[open] summary::after { transform: rotate(225deg); }
+.tableDetails summary:hover { background: transparent; }
+.tableDetails summary:hover span { color: #edf2ef; text-decoration: underline; text-underline-offset: 3px; }
 .receipt { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 14px; margin: 10px 0; }
 .receipt div { min-width: 0; }
 .receipt dt, .receipt small { color: #a8b2ad; font-size: 12px; }
@@ -185,6 +195,11 @@
   .table td, .table td:last-child { display: block; padding: 0; border: 0; }
   .table td:first-child, .table td:last-child { grid-column: 1/-1; }
   .table td:nth-child(4) { text-align: start; }
+  .table td:last-child { display: grid; grid-template-columns: minmax(0,auto) minmax(0,1fr); align-items: start; column-gap: 10px; }
+  .table td:last-child > .mobileLabel { padding-top: 13px; }
+  .table td:last-child:has(details[open]) { grid-template-columns: minmax(0,1fr); }
+  .table td:last-child:has(details[open]) > .mobileLabel { display: none; }
+  .tableScope { flex-basis: 100%; }
   .mobileLabel { display: block; margin-bottom: 2px; color: #a8b2ad; font-size: 12px; }
   .modelRow { grid-template-columns: 32px minmax(0,1fr) auto; column-gap: 10px; }
   .modelAction { grid-column: 2/-1; text-align: start; }
