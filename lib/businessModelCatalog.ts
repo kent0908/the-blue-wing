@@ -1,8 +1,9 @@
 import { getSeedanceCapability } from "./businessSeedance";
 import { getBusinessImageCapability } from "./businessImageCapabilities";
-import { getBusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
+import { getBusinessDedicatedVideoCapability, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
 import { getBusinessWan3Capability } from "./businessWan3";
 import { getBusinessAdditionalModel } from "./businessAdditionalModels";
+import { getBusinessZImageCapability } from "./businessZImage";
 import { videoConstraintFor, maxRefsForVideoModel } from "./videoModels";
 import { getKlingVideoModel } from "./klingVideo";
 import { getMiniMaxVideoModel } from "./minimaxVideo";
@@ -41,7 +42,18 @@ export function buildBusinessModelCatalog(raw: unknown) {
     const common = { id, displayName: additional?.displayName ?? modelLabel(id), nsfw: additional?.nsfw ?? /(?:^|-)(?:nsfw|uncensored|spicy)(?:-|$)/i.test(id) };
     const kind = additional?.category ?? category(id);
     const unavailable = (reason: BusinessUnavailableModel["reason"]) => unavailableModels.push({ ...common, category: kind, reason });
-    if (additional || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id)) { unavailable("adapter_pending"); continue; }
+    const zImage = getBusinessZImageCapability(id);
+    if (zImage) {
+      models.push({
+        ...common, displayName: zImage.label, nsfw: true, modality: "image", supportsReferences: false,
+        sizes: zImage.sizes, maxReferenceImages: 0, maxImageCount: 1, zImage,
+        imageControls: [{ key: "seed", kind: "number", min: 0, max: zImage.maxSeed }],
+      });
+      continue;
+    }
+    const wan3 = getBusinessWan3Capability(id);
+    const dedicatedVideo: BusinessDedicatedVideoCapability | undefined = wan3 ?? getBusinessDedicatedVideoCapability(id);
+    if (!dedicatedVideo && (additional || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id))) { unavailable("adapter_pending"); continue; }
     if (isRetiredGenerationModel(id)) { unavailable("retired"); continue; }
     if (["audio", "embedding", "avatar", "tool"].includes(kind)) { unavailable("dedicated_tool"); continue; }
     const image = getBusinessImageCapability(id);
@@ -52,13 +64,13 @@ export function buildBusinessModelCatalog(raw: unknown) {
     if (seedance) {
       models.push({ ...common, modality: "video", supportsReferences: true, resolutions: [...seedance.resolutions], minSeconds: seedance.minSeconds, maxSeconds: seedance.maxSeconds, defaultSeconds: seedance.defaultSeconds, aspectRatios: [...seedance.aspectRatios], supportsAudio: true, maxReferenceImages: seedance.references.image, seedance }); continue;
     }
-    const wan3 = getBusinessWan3Capability(id);
-    const dedicatedVideo = wan3 ?? getBusinessDedicatedVideoCapability(id);
     // Source-video grants need their own resolver before editing can be enabled.
     if (dedicatedVideo && dedicatedVideo.capability !== "video-edit") {
       models.push({ ...common, displayName: wan3?.label ?? common.displayName, modality: "video", supportsReferences: dedicatedVideo.maxReferenceImages > 0,
         resolutions: [...dedicatedVideo.resolutions], minSeconds: dedicatedVideo.minSeconds, maxSeconds: dedicatedVideo.maxSeconds,
-        defaultSeconds: dedicatedVideo.defaultSeconds, aspectRatios: [...dedicatedVideo.aspectRatios], supportsAudio: dedicatedVideo.supportsAudio,
+        defaultSeconds: dedicatedVideo.defaultSeconds,
+        ...(dedicatedVideo.secondsOptions ? { secondsOptions: dedicatedVideo.secondsOptions } : {}),
+        aspectRatios: [...dedicatedVideo.aspectRatios], supportsAudio: dedicatedVideo.supportsAudio,
         maxReferenceImages: dedicatedVideo.maxReferenceImages, promptMaxChars: dedicatedVideo.promptMaxChars, dedicatedVideo }); continue;
     }
     const kling = getKlingVideoModel(id);

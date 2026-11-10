@@ -1,5 +1,6 @@
 /** Dedicated BYOK video contracts; deliberately independent of C-end billing and adapters.
  * Sources checked 2026-10-20:
+ * https://docs.siraya.ai/docs/api-reference/generative-model-api/image-to-video/wan/
  * https://docs.siraya.ai/docs/api-reference/generative-model-api/text-to-video/wan/
  * https://docs.siraya.ai/docs/api-reference/generative-model-api/text-to-video/happyhorse/
  * https://help.aliyun.com/zh/model-studio/wan2-7-r2v
@@ -9,13 +10,16 @@
  */
 export type BusinessDedicatedVideoMode = "freestyle" | "text-to-video" | "image-to-video" | "first-last-frame" | "subject-reference" | "video-edit" | "video-extend";
 export interface BusinessDedicatedVideoCapability {
-  family: "wan2.7" | "wan3.0" | "happyhorse";
+  family: "wan2.2" | "wan2.7" | "wan3.0" | "happyhorse";
   capability: "text-to-video" | "image-to-video" | "subject-reference" | "video-edit";
   resolutions: string[];
   minSeconds: number;
   maxSeconds: number;
   defaultSeconds: number;
+  secondsOptions?: number[];
   defaultResolution?: string;
+  promptExtendSurcharged?: boolean;
+  acceptsReferenceOrder?: boolean;
   autoDuration?: boolean;
   sourceDuration: boolean;
   aspectRatios: string[];
@@ -34,6 +38,35 @@ const STANDARD_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
 const HAPPY_RATIOS = [...STANDARD_RATIOS, "4:5", "5:4", "9:21"];
 export function getBusinessDedicatedVideoCapability(model: string | null | undefined): BusinessDedicatedVideoCapability | undefined {
   const id = model ?? "";
+  if (id === "wan2.2-i2v-spicy" || id === "wan2.7-i2v-spicy") {
+    const wan22 = id === "wan2.2-i2v-spicy";
+    return {
+      family: wan22 ? "wan2.2" : "wan2.7",
+      capability: "image-to-video",
+      resolutions: wan22 ? ["480p", "720p"] : ["720p", "1080p"],
+      defaultResolution: wan22 ? "480p" : "1080p",
+      minSeconds: wan22 ? 5 : 2,
+      maxSeconds: wan22 ? 8 : 15,
+      defaultSeconds: 5,
+      ...(wan22 ? { secondsOptions: [5, 8], promptExtendSurcharged: true } : {}),
+      acceptsReferenceOrder: true,
+      sourceDuration: false,
+      aspectRatios: [...STANDARD_RATIOS],
+      aspectRatioFromSource: true,
+      maxReferenceImages: 2,
+      // The BYOK source resolvers verify raster images. Audio/clip inputs need
+      // a separate owned-source resolver before they can be offered here.
+      maxReferenceVideos: 0,
+      maxReferenceAudio: 0,
+      supportsAudio: !wan22,
+      modes: ["freestyle", "image-to-video", "first-last-frame"],
+      promptMaxChars: 12000,
+      ...(wan22 ? { referenceImageRules: {
+        minSide: 240, maxBytes: 20 * 1024 * 1024, mimeTypes: ["image/jpeg", "image/png", "image/webp"],
+        minAspectRatio: 1 / 8, maxAspectRatio: 8, opaquePng: true,
+      } } : {}),
+    };
+  }
   const wan = /^wan2\.7-(t2v|i2v|r2v|videoedit)$/.exec(id);
   const happy = /^happyhorse-1\.(0|1)-(t2v|i2v|r2v|video-edit)$/.exec(id);
   if (!wan && !happy) return undefined;
@@ -95,6 +128,8 @@ export function assertBusinessDedicatedVideoReferences(caps: BusinessDedicatedVi
   if (caps.capability === "video-edit" && (videos !== 1 || audio)) bad();
   if (caps.capability === "image-to-video") {
     if (caps.family === "happyhorse" && (images !== 1 || videos || audio)) bad();
+    if (caps.family === "wan2.2" &&
+      (!images || mode === "image-to-video" && images !== 1 || mode === "first-last-frame" && images !== 2)) bad();
     if (caps.family === "wan2.7") {
       if (videos ? images || audio : !images) bad();
       // Driving audio is documented with a first frame, not with a last frame.
@@ -108,21 +143,28 @@ export function assertBusinessDedicatedVideoReferences(caps: BusinessDedicatedVi
 
 /** Strict reconstruction is intentional: no client URL, passthrough, callback or
  * unknown provider control can bypass the caller's ownership and age checks.
- * UI resolutions remain lowercase; these two provider families require uppercase.
+ * UI resolutions remain lowercase; Wan 2.7 and HappyHorse need uppercase on wire.
  */
 export function buildBusinessDedicatedVideoPayload(parameters: Record<string, unknown>, refs: readonly ResolvedBusinessDedicatedVideoReference[]): Record<string, unknown> {
   const caps = getBusinessDedicatedVideoCapability(typeof parameters.model === "string" ? parameters.model : undefined);
   if (!caps) bad();
   const wan = caps.family === "wan2.7";
+  const wan22 = caps.family === "wan2.2";
   const editing = caps.capability === "video-edit";
-  const allowed = [...DATA_KEYS, ...COMMON_KEYS, ...(wan ? ["negative_prompt", "generate_audio", "prompt_extend"] : []), ...(editing ? ["audio_setting"] : [])];
+  const allowed = [
+    ...DATA_KEYS,
+    ...COMMON_KEYS.filter(key => !wan22 || key !== "watermark"),
+    ...(wan ? ["negative_prompt", "generate_audio"] : []),
+    ...(wan || wan22 ? ["prompt_extend"] : []),
+    ...(editing ? ["audio_setting"] : []),
+  ];
   if (Object.keys(parameters).some(key => !allowed.includes(key))) bad();
   const mode = (parameters.mode ?? "freestyle") as BusinessDedicatedVideoMode;
   assertBusinessDedicatedVideoReferences(caps, mode, refs);
   if (refs.some(ref => !validResolvedUrl(ref.url, ref.type) || (ref.voiceUrl !== undefined && !validResolvedUrl(ref.voiceUrl, "audio")))) bad();
   const prompt = parameters.prompt;
   if (typeof prompt !== "string" || !prompt.trim() || prompt.length > caps.promptMaxChars || (caps.cjkPromptMaxChars && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) && prompt.length > caps.cjkPromptMaxChars)) bad();
-  const resolution = parameters.resolution ?? "720p";
+  const resolution = parameters.resolution ?? caps.defaultResolution ?? "720p";
   if (typeof resolution !== "string" || !caps.resolutions.includes(resolution)) bad();
   if (parameters.aspect_ratio !== undefined && (typeof parameters.aspect_ratio !== "string" || !caps.aspectRatios.includes(parameters.aspect_ratio))) bad();
   if (parameters.seed !== undefined && (typeof parameters.seed !== "number" || !Number.isSafeInteger(parameters.seed) || parameters.seed < (wan ? -1 : 0) || parameters.seed > 2147483647)) bad();
@@ -134,16 +176,22 @@ export function buildBusinessDedicatedVideoPayload(parameters: Record<string, un
   const seconds = parameters.seconds ?? caps.defaultSeconds;
   if (editing && !wan) {
     if (parameters.seconds !== undefined) bad();
-  } else if (typeof seconds !== "number" || !Number.isSafeInteger(seconds) || (!(wan && editing && seconds === 0) && (seconds < caps.minSeconds || seconds > caps.maxSeconds))) bad();
-  const payload: Record<string, unknown> = { model: parameters.model, prompt, resolution: resolution.toUpperCase(), watermark: parameters.watermark ?? false, async: true };
+  } else if (typeof seconds !== "number" || !Number.isSafeInteger(seconds) ||
+    (!(wan && editing && seconds === 0) && (seconds < caps.minSeconds || seconds > caps.maxSeconds)) ||
+    (caps.secondsOptions && !caps.secondsOptions.includes(seconds))) bad();
+  const payload: Record<string, unknown> = { model: parameters.model, prompt, resolution: wan22 ? resolution : resolution.toUpperCase(), async: true };
+  if (!wan22) payload.watermark = parameters.watermark ?? false;
   if (!(editing && !wan)) payload.seconds = seconds;
   if (!caps.aspectRatioFromSource) payload.aspect_ratio = parameters.aspect_ratio ?? "16:9";
   if (parameters.seed !== undefined) payload.seed = parameters.seed;
-  if (wan) {
-    payload.prompt_extend = parameters.prompt_extend ?? false;
-    for (const key of ["negative_prompt", "generate_audio"]) if (parameters[key] !== undefined) payload[key] = parameters[key];
-  }
+  if (wan || wan22) payload.prompt_extend = parameters.prompt_extend ?? false;
+  if (wan) for (const key of ["negative_prompt", "generate_audio"]) if (parameters[key] !== undefined) payload[key] = parameters[key];
   if (editing) payload.audio_setting = parameters.audio_setting ?? "auto";
+  if (wan22) {
+    payload.image = refs[0].url;
+    if (refs[1]) payload.last_image = refs[1].url;
+    return payload;
+  }
   if (caps.capability === "text-to-video") {
     if (refs[0]) payload.audio_url = refs[0].url;
   } else if (caps.capability === "subject-reference") {

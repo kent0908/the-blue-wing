@@ -67,7 +67,7 @@ export function createBusinessCanvasRunner(options: RunnerOptions) {
       parameters.resolution = model.resolutions?.includes(String(node.data.resolution)) ? node.data.resolution : model.dedicatedVideo?.defaultResolution ?? model.resolutions?.[0];
       parameters.aspect_ratio = model.aspectRatios?.includes(String(node.data.aspect_ratio)) ? node.data.aspect_ratio : model.aspectRatios?.includes("16:9") ? "16:9" : model.aspectRatios?.[0];
       if (model.supportsAudio) parameters.generate_audio = model.nativeAudioOnly || node.data.generate_audio === true;
-      if (model.seedance || wan3) {
+      if (model.seedance || wan3 || model.dedicatedVideo?.acceptsReferenceOrder) {
         parameters.mode = String(node.data.mode || "freestyle");
         parameters.referenceOrder = sourceKeys;
       }

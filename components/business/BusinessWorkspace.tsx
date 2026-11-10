@@ -26,6 +26,7 @@ import { businessMentionsCopy } from "@/lib/i18n/businessMentions";
 import BusinessDedicatedVideoControls, { BusinessWan3DurationSelect, DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS, type BusinessDedicatedVideoOptions } from "./BusinessDedicatedVideoControls";
 import { buildBusinessDedicatedVideoPayload } from "@/lib/businessDedicatedVideo";
 import { buildBusinessWan3Payload } from "@/lib/businessWan3";
+import { buildBusinessZImagePayload } from "@/lib/businessZImage";
 import { businessDedicatedVideoCopy } from "@/lib/i18n/businessDedicatedVideo";
 import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
 import { businessWorkflowsCopy } from "@/lib/i18n/businessWorkflows";
@@ -91,6 +92,7 @@ export default function BusinessWorkspace() {
   const [imageCount, setImageCount] = useState(1);
   const [imageQuality, setImageQuality] = useState("");
   const [imageNegative, setImageNegative] = useState("");
+  const [imagePromptExtend, setImagePromptExtend] = useState(false);
   const [imageBusinessAssets, setImageBusinessAssets] = useState<BusinessProviderAsset[]>([]);
   const [dedicatedOptions, setDedicatedOptions] = useState<BusinessDedicatedVideoOptions>({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS });
   const [jobs, setJobs] = useState<BusinessGeneration[]>([]);
@@ -237,7 +239,7 @@ export default function BusinessWorkspace() {
     } catch { setError(t.unavailable); }
     finally { keyLock.current = false; setKeySaving(false); }
   };
-  const resetSelection = useCallback(() => { setSize(""); setResolution(""); setAssetIds([]); setAudio(false); setApiKey(""); setVideoMode("freestyle"); setProviderAssets([]); setReferenceOrder([]); setOutputFormat("mp4"); setSeed(""); setImageCount(1); setImageQuality(""); setImageNegative(""); setImageBusinessAssets([]); setDedicatedOptions({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS }); if (!submitLock.current) setConfirmation(null); }, [setConfirmation, setApiKey]);
+  const resetSelection = useCallback(() => { setSize(""); setResolution(""); setAssetIds([]); setAudio(false); setApiKey(""); setVideoMode("freestyle"); setProviderAssets([]); setReferenceOrder([]); setOutputFormat("mp4"); setSeed(""); setImageCount(1); setImageQuality(""); setImageNegative(""); setImagePromptExtend(false); setImageBusinessAssets([]); setDedicatedOptions({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS }); if (!submitLock.current) setConfirmation(null); }, [setConfirmation, setApiKey]);
   const navigate = (nextKind: BusinessKind, nextModel: string, nextTab: BusinessStudioTab) => startTransition(() => router.push(businessStudioHref({ kind: nextKind, modelId: nextModel, tab: nextTab }), { scroll: false }));
   const setTab = (value: BusinessStudioTab) => navigate(kind, modelId || selected?.id || "", value);
   const chooseTab = (value: BusinessStudioTab) => { if (submitLock.current) return; if (!submitLock.current) setConfirmation(null); setApiKey(""); setError(""); setNotice(""); setTab(value); };
@@ -363,10 +365,15 @@ export default function BusinessWorkspace() {
       if (imageNegative.trim() && selected.imageControls?.some(control => control.key === "negative_prompt")) parameters.negative_prompt = imageNegative.trim();
       if (seed.trim() && selected.imageControls?.some(control => control.key === "seed")) { const value = Number(seed); if (!Number.isSafeInteger(value) || value < -1 || value > 2147483647) { setError(t.invalidRequest); return; } parameters.seed = value; }
       if (imageBusinessAssets.length) parameters.businessAssetIds = imageBusinessAssets.map(asset => asset.uploadId!);
+      if (selected.zImage) {
+        parameters.prompt_extend = imagePromptExtend;
+        try { buildBusinessZImagePayload(parameters, references.length); }
+        catch { setError(t.invalidRequest); return; }
+      }
     }
     if (kind === "video") {
       parameters.seconds = wan3 ? selectedSeconds : selected.secondsOptions?.length && !selected.secondsOptions.includes(seconds) ? selected.defaultSeconds ?? selected.secondsOptions[0] : Math.max(selected.minSeconds ?? 2, Math.min(seconds, selected.maxSeconds ?? 30));
-      parameters.resolution = wan3 ? selectedResolution : resolution || selected.resolutions?.[0];
+      parameters.resolution = wan3 ? selectedResolution : resolution || selected.dedicatedVideo?.defaultResolution || selected.resolutions?.[0];
       const outputAspect = wan3 ? selectedAspect : selected.aspectRatios?.includes(aspect) ? aspect : selected.aspectRatios?.[0];
       if (outputAspect) parameters.aspect_ratio = outputAspect;
       if (selected.supportsAudio) parameters.generate_audio = selected.nativeAudioOnly || (!selected.nativeAudioResolutions || selected.nativeAudioResolutions.includes(parameters.resolution ?? "")) && audio;
@@ -397,10 +404,11 @@ export default function BusinessWorkspace() {
       // and Seedance's provider asset:// handles are deliberately not accepted.
       if (assetIds.length || providerAssets.length || referenceOrder.length || imageBusinessAssets.some(asset => asset.type !== "image" || !asset.uploadId || (wan3 && !asset.storageReady))) { setError(t.invalidRequest); return; }
       parameters.mode = dedicatedOptions.mode === "freestyle" ? selected.dedicatedVideo.capability : dedicatedOptions.mode;
-      if (!wan3) parameters.watermark = dedicatedOptions.watermark;
+      const wan22 = selected.dedicatedVideo.family === "wan2.2";
+      if (!wan3 && !wan22) parameters.watermark = dedicatedOptions.watermark;
       if (imageBusinessAssets.length) parameters.businessAssetIds = imageBusinessAssets.map(asset => asset.uploadId!);
       if (dedicatedOptions.seed.trim()) { const value = Number(dedicatedOptions.seed); if (!Number.isSafeInteger(value)) { setError(t.invalidRequest); return; } parameters.seed = value; }
-      if (wan3 || selected.dedicatedVideo.family === "wan2.7") parameters.prompt_extend = dedicatedOptions.promptExtend;
+      if (wan3 || wan22 || selected.dedicatedVideo.family === "wan2.7") parameters.prompt_extend = dedicatedOptions.promptExtend;
       if (selected.dedicatedVideo.family === "wan2.7" && dedicatedOptions.negativePrompt.trim()) parameters.negative_prompt = dedicatedOptions.negativePrompt.trim();
       if (selected.dedicatedVideo.aspectRatioFromSource) delete parameters.aspect_ratio;
       try {
@@ -438,12 +446,13 @@ export default function BusinessWorkspace() {
     finally { setConfirmation(null); submitLock.current = false; setSubmitting(false); }
   };
   const selectedSize = selected?.sizes?.includes(size) ? size : selected?.sizes?.[0] ?? "";
+  const [zWidth = "", zHeight = ""] = (size || selected?.zImage?.defaultSize || "").split("x");
   const wan3Capability = selected?.dedicatedVideo?.family === "wan3.0" ? selected.dedicatedVideo : undefined;
   const dedicatedMode = dedicatedOptions.mode === "freestyle" ? selected?.dedicatedVideo?.capability : dedicatedOptions.mode;
   const wan3Text = wan3Capability && dedicatedMode === "text-to-video";
   const aspectOptions = wan3Text ? selected?.aspectRatios?.filter(value => value !== "adaptive") : selected?.aspectRatios;
   const defaultAspect = wan3Capability && (dedicatedMode === "image-to-video" || dedicatedMode === "first-last-frame") ? "adaptive" : aspectOptions?.[0] ?? "";
-  const selectedResolution = selected?.resolutions?.includes(resolution) ? resolution : wan3Capability?.defaultResolution ?? selected?.resolutions?.[0] ?? "";
+  const selectedResolution = selected?.resolutions?.includes(resolution) ? resolution : selected?.dedicatedVideo?.defaultResolution ?? selected?.resolutions?.[0] ?? "";
   const seedanceAdaptive = selected?.seedance?.version === "2.5" && ["image-to-video", "first-last-frame", "video-edit", "video-extend"].includes(videoMode);
   const seedanceVideoDuration = !!selected?.seedance && (providerAssets.some(asset => asset.type === "video") || videoMode === "video-edit" || videoMode === "video-extend");
   const seedanceAutoDuration = !!selected?.seedance && (seconds === -1 || seedanceVideoDuration);
@@ -484,6 +493,7 @@ export default function BusinessWorkspace() {
       if (typeof p.n === "number") setImageCount(p.n);
       if (typeof p.quality === "string") setImageQuality(p.quality);
       if (typeof p.negative_prompt === "string" && job.kind === "image") setImageNegative(p.negative_prompt);
+      if (model.zImage) setImagePromptExtend(p.prompt_extend === true);
       if (typeof p.seed === "number") setSeed(String(p.seed));
       if (typeof p.resolution === "string") setResolution(p.resolution);
       if (typeof p.seconds === "number") setSeconds(p.seconds);
@@ -558,7 +568,10 @@ export default function BusinessWorkspace() {
             {!modelsLoading && modelId && !selected && <p className={styles.warning} role="alert">{s.modelUnavailable}</p>}
             {selected?.nsfw ? <span className={styles.sensitive}>{t.nsfw}</span> : null}
             <BusinessPrompt value={prompt} onChange={setPrompt} maxLength={promptLimit} label={t.prompt} placeholder={t.promptPlaceholder} note={t.keyWarning} assets={assets} mode={!selected?.supportsReferences ? "none" : selected.seedance ? "seedance" : selected.dedicatedVideo ? "native" : kind === "image" ? "image" : "local"} onPick={pickMention} selectedKeys={selectedReferenceKeys} />
-            <div className={styles.settings}>{kind === "image" && selected?.sizes?.length ? <label className={styles.field}>{t.size}<select value={selectedSize} onChange={e => setSize(e.target.value)}>{selected.sizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}
+            <div className={styles.settings}>{kind === "image" && selected?.zImage ? <>
+              <label className={styles.field}>{operations.imageWidth}<input type="number" inputMode="numeric" min={selected.zImage.minDimension} max={selected.zImage.maxDimension} step={1} value={zWidth} required onChange={e => setSize(`${e.target.value}x${zHeight}`)} /></label>
+              <label className={styles.field}>{operations.imageHeight}<input type="number" inputMode="numeric" min={selected.zImage.minDimension} max={selected.zImage.maxDimension} step={1} value={zHeight} required onChange={e => setSize(`${zWidth}x${e.target.value}`)} /></label>
+            </> : kind === "image" && selected?.sizes?.length ? <label className={styles.field}>{t.size}<select value={selectedSize} onChange={e => setSize(e.target.value)}>{selected.sizes.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}
               {kind === "video" ? <>
                 <label className={styles.field}>{t.duration}
                   {wan3Capability ? <BusinessWan3DurationSelect capability={wan3Capability} seconds={selectedSeconds} disabled={submitting} onChange={setSeconds} /> : selected?.seedance ? <>
@@ -570,6 +583,11 @@ export default function BusinessWorkspace() {
                 {aspectOptions?.length ? <label className={styles.field}>{t.aspect}<select value={selected?.dedicatedVideo?.aspectRatioFromSource ? "source" : selectedAspect} disabled={seedanceAdaptive || selected?.dedicatedVideo?.aspectRatioFromSource} onChange={e => setAspect(e.target.value)}>{selected?.dedicatedVideo?.aspectRatioFromSource ? <option value="source">{dedicatedCopy.sourceAspect}</option> : aspectOptions.map(value => <option value={value} key={value}>{wan3Capability && value === "adaptive" ? dedicatedCopy.automaticAspect : value}</option>)}</select></label> : null}
               </> : null}
             </div>{kind === "image" && selected ? <BusinessImageControls model={selected} count={imageCount} onCount={setImageCount} quality={imageQuality} onQuality={setImageQuality} seed={seed} onSeed={setSeed} negative={imageNegative} onNegative={setImageNegative} /> : null}{kind === "video" && selected?.supportsAudio ? <label className={styles.check}><input type="checkbox" checked={selected.nativeAudioOnly || (supportsAudioAtResolution && audio)} disabled={selected.nativeAudioOnly || !supportsAudioAtResolution} onChange={e => setAudio(e.target.checked)} />{t.audio}</label> : null}
+            {kind === "image" && selected?.zImage ? <div>
+              <p className={styles.note}>{operations.textImageOnly}</p>
+              <label className={styles.check}><input type="checkbox" checked={imagePromptExtend} onChange={e => setImagePromptExtend(e.target.checked)} aria-describedby={selected.zImage.promptExtendSurcharged ? "business-z-rewrite-cost" : undefined} />{operations.promptRewrite}</label>
+              {selected.zImage.promptExtendSurcharged ? <p className={styles.note} id="business-z-rewrite-cost">{operations.promptRewriteSurcharge}</p> : null}
+            </div> : null}
             {selected?.seedance ? <BusinessSeedanceControls key={credential?.id ?? "current-key"} capability={selected.seedance} mode={videoMode} onMode={chooseVideoMode} assets={assets} assetIds={assetIds} onLocalSelection={toggleLocalReference} providerAssets={providerAssets} nativeAssets={imageBusinessAssets} onNativeRemove={id => { setImageBusinessAssets(current => current.filter(asset => asset.uploadId !== id)); setReferenceOrder(current => current.filter(key => key !== `business:${id}`)); setConfirmation(null); }} onProviderSelection={toggleProviderReference} referenceOrder={referenceOrder} outputFormat={outputFormat} onOutputFormat={setOutputFormat} seed={seed} onSeed={setSeed} onOpenAssets={() => chooseTab("assets")} /> : null}
             {selected?.dedicatedVideo ? <><BusinessDedicatedVideoControls capability={selected.dedicatedVideo} value={dedicatedOptions} onChange={chooseDedicatedOptions} referenceCount={imageBusinessAssets.length} disabled={submitting} onOpenAssets={() => chooseTab("assets")} />{imageBusinessAssets.length > 0 ? <div className={styles.row}>{imageBusinessAssets.map((asset, index) => <button key={asset.id} type="button" className={styles.small} disabled={submitting} onClick={() => { setImageBusinessAssets(current => current.filter(value => value.id !== asset.id)); setConfirmation(null); }}><span>{index + 1}. {asset.name} ×</span></button>)}</div> : null}</> : null}
             {seedanceAdaptive ? <p className={styles.note}>{d.adaptiveNotice}</p> : null}
@@ -593,6 +611,7 @@ export default function BusinessWorkspace() {
         {confirmation.kind === "video" ? <><dt>{t.duration}</dt><dd>{confirmation.parameters.seconds === -1 ? d.automatic : `${confirmation.parameters.seconds}s`} · {confirmation.parameters.resolution} · {confirmation.parameters.aspect_ratio ?? (models.find(model => model.id === confirmation.parameters.model)?.dedicatedVideo?.aspectRatioFromSource ? dedicatedCopy.sourceAspect : "")}{confirmation.parameters.output_format ? ` · ${confirmation.parameters.output_format.toUpperCase()}` : ""}</dd></> : null}
       </dl>
       <p className={styles.dialogPrompt}>{confirmation.editor?.prompt ?? confirmation.parameters.prompt}</p><p>{t.noQuote}</p>
+      {confirmation.parameters.prompt_extend && models.some(model => model.id === confirmation.parameters.model && (model.zImage?.promptExtendSurcharged || model.dedicatedVideo?.promptExtendSurcharged)) ? <p className={styles.warning}>{operations.promptRewriteSurcharge}</p> : null}
       {confirmation.parameters.model === "minimax-h3" || confirmation.parameters.model === "minimax-h3-max" ? <p className={styles.warning}>{confirmation.parameters.model === "minimax-h3" ? t.minimaxH3References : t.minimaxH3MaxReferences}</p> : null}
       <p className={styles.note}>{t.billingNotice}</p>
       <div className={styles.dialogActions}><button className={styles.button} type="button" onClick={submitGeneration} disabled={submitting}>{submitting ? t.generating : t.confirm}</button><button className={styles.secondary} type="button" onClick={() => setConfirmation(null)} disabled={submitting}>{t.cancel}</button></div>

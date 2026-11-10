@@ -31,17 +31,47 @@ test('current Wan grants are executable and documented Pro tiers appear only whe
   }
   for(const id of pro) assert.equal(isGenerationPickerModel(id),false);
 });
-test('granted Spicy and Gemini Omni IDs are shown as pending and cannot enter the consumer picker',()=>{
+test('reviewed Z-Image and Wan Spicy grants use exact settings, while the remaining grants stay pending',()=>{
   const spicy=['z-image-spicy','qwen-image-edit-spicy','face-swap-spicy','head-swap-spicy','wan2.2-i2v-spicy','wan2.7-i2v-spicy','wan3.0-video-spicy','wan3.0-video-prime-spicy','wan3.0-video-pro-spicy','wan3.0-video-prime-pro-spicy'];
   const omni='gemini-omni-1.1-flash-preview';
   const rows=buildBusinessModelCatalog({data:[...spicy,omni].map(id=>({id}))});
-  assert.equal(rows.models.length,0);
-  assert.equal(rows.unavailableModels.length,11);
+  assert.equal(rows.models.length,7);
+  const z=rows.models.find(row=>row.id==='z-image-spicy');
+  assert.equal(z.id,'z-image-spicy');
+  assert.equal(z.nsfw,true);
+  assert.equal(z.supportsReferences,false);
+  assert.equal(z.maxImageCount,1);
+  assert.equal(z.zImage.maxDimension,1536);
+  assert.equal(z.zImage.defaultSize,'1024x1536');
+  assert.equal(z.zImage.promptExtendSurcharged,true);
+  assert.equal(isGenerationPickerModel(z.id),false);
+  const wan22=rows.models.find(row=>row.id==='wan2.2-i2v-spicy');
+  const wan27=rows.models.find(row=>row.id==='wan2.7-i2v-spicy');
+  assert.deepEqual(wan22.secondsOptions,[5,8]);
+  assert.deepEqual(wan22.resolutions,['480p','720p']);
+  assert.equal(wan22.supportsAudio,false);
+  assert.deepEqual(wan27.resolutions,['720p','1080p']);
+  assert.equal(wan27.dedicatedVideo.defaultResolution,'1080p');
+  for (const model of rows.models.filter(row=>row.id.startsWith('wan3.0-'))) {
+    assert.equal(model.dedicatedVideo.family,'wan3.0');
+    assert.deepEqual(model.resolutions,model.id.endsWith('-pro-spicy')?['1080p','2k','4k']:['480p','720p','1080p']);
+    assert.equal(model.maxReferenceImages,10);
+  }
+  for (const row of rows.models) {
+    assert.equal(row.nsfw,true);
+    assert.equal(isGenerationPickerModel(row.id),false);
+  }
+  assert.equal(rows.unavailableModels.length,4);
   for(const row of rows.unavailableModels) {
     assert.equal(row.reason,'adapter_pending');
     assert.equal(row.nsfw,row.id!==omni);
     assert.equal(isGenerationPickerModel(row.id),false);
   }
   assert.equal(rows.unavailableModels.find(row=>row.id===omni).category,'video');
+  const pro=buildBusinessModelCatalog({data:[{id:'z-image-spicy-pro'}]}).models[0];
+  assert.equal(pro.id,'z-image-spicy-pro');
+  assert.equal(pro.nsfw,true);
+  assert.equal(pro.zImage.maxDimension,2560);
+  assert.equal(isGenerationPickerModel(pro.id),false);
 });
 console.log(`Business model catalog/image: ${count} cases passed (${result.upstreamTotal} fixture IDs, ${result.models.length} executable contracts in the historical fixture).`);

@@ -17,6 +17,8 @@ const zh = {
   syncCost: "查詢實際費用", syncing: "正在對帳…", billingFailed: "暫時無法取得帳單，請稍後再試。", billingUnavailable: "目前無法核對這組金鑰的帳單。生成金鑰仍可使用；帳單查詢需要相符的 SIRAYA Console 授權。",
   dateFrom: "開始日期", dateTo: "結束日期", status: "狀態", model: "模型", apply: "套用", clear: "重設", totalJobs: "請求數", completedJobs: "完成", failedJobs: "失敗", pendingJobs: "處理中", download: "下載本頁 CSV", noHistory: "這段期間沒有生成紀錄。", unknown: "未取得", seconds: "秒", generationId: "工作編號", inspect: "查看作品", reload: "重新整理",
   imageCount: "圖片張數", quality: "品質", seed: "隨機種子", negative: "不希望出現的內容", automatic: "由模型決定", selectedAssets: "已選素材", openAssets: "管理商務素材", downloadImage: "下載圖片", downloadVideo: "下載影片",
+  imageWidth: "寬度（px）", imageHeight: "高度（px）", textImageOnly: "只接受文字提示詞，每次生成一張。",
+  promptRewrite: "改寫提示詞", promptRewriteSurcharge: "開啟後，SIRAYA 會另外收取改寫費用。",
 };
 export type BusinessOperationsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessOperationsCopy = {
@@ -36,6 +38,8 @@ const en: BusinessOperationsCopy = {
   syncCost: "Check actual cost", syncing: "Checking billing…", billingFailed: "Billing is temporarily unavailable. Try again later.", billingUnavailable: "Billing for this key cannot currently be reconciled. Generation remains available; billing requires matching SIRAYA Console authorization.",
   dateFrom: "From", dateTo: "To", status: "Status", model: "Model", apply: "Apply", clear: "Reset", totalJobs: "Requests", completedJobs: "Completed", failedJobs: "Failed", pendingJobs: "Processing", download: "Download page CSV", noHistory: "No generations in this period.", unknown: "Unavailable", seconds: "s", generationId: "Job ID", inspect: "View work", reload: "Refresh",
   imageCount: "Image count", quality: "Quality", seed: "Random seed", negative: "Content to avoid", automatic: "Let the model decide", selectedAssets: "Selected assets", openAssets: "Manage business assets", downloadImage: "Download image", downloadVideo: "Download video",
+  imageWidth: "Width (px)", imageHeight: "Height (px)", textImageOnly: "Uses a text prompt and creates one image per request.",
+  promptRewrite: "Rewrite prompt", promptRewriteSurcharge: "SIRAYA charges extra for prompt rewriting.",
 };
 const ja: BusinessOperationsCopy = {
   assets: "素材", work: "作品", usage: "利用料金", models: "モデル", keys: "キー",
@@ -54,6 +58,8 @@ const ja: BusinessOperationsCopy = {
   syncCost: "実際の料金を確認", syncing: "請求を確認中…", billingFailed: "請求記録を取得できません。後ほど再試行してください。", billingUnavailable: "現在、このキーの請求を照合できません。生成は利用できますが、請求照会には対応する SIRAYA Console 権限が必要です。",
   dateFrom: "開始日", dateTo: "終了日", status: "状態", model: "モデル", apply: "適用", clear: "リセット", totalJobs: "リクエスト", completedJobs: "完了", failedJobs: "失敗", pendingJobs: "処理中", download: "このページのCSVを保存", noHistory: "この期間に生成履歴はありません。", unknown: "未取得", seconds: "秒", generationId: "ジョブID", inspect: "作品を見る", reload: "更新",
   imageCount: "画像枚数", quality: "品質", seed: "ランダムシード", negative: "避けたい内容", automatic: "モデルに任せる", selectedAssets: "選択した素材", openAssets: "ビジネス素材を管理", downloadImage: "画像を保存", downloadVideo: "映像を保存",
+  imageWidth: "幅（px）", imageHeight: "高さ（px）", textImageOnly: "テキストのみを使い、1回につき1枚を生成します。",
+  promptRewrite: "プロンプトを書き換える", promptRewriteSurcharge: "書き換えには SIRAYA の追加料金がかかります。",
 };
 const COPY: Record<Locale, BusinessOperationsCopy> = { "zh-Hant": zh, en, ja };
 export const businessOperationsCopy = (locale: Locale) => COPY[locale];

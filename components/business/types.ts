@@ -1,5 +1,6 @@
 import type { BusinessSeedanceCapability, BusinessSeedanceMode } from "@/lib/businessSeedance";
 import type { BusinessDedicatedVideoCapability } from "@/lib/businessDedicatedVideo";
+import type { BusinessZImageCapability } from "@/lib/businessZImage";
 export type BusinessStatus = "pending" | "approved" | "rejected" | "suspended";
 export interface BusinessAccount { id: string; userId: number; companyName: string; useCase: string; status: BusinessStatus; reviewNote: string | null; createdAt: string; updatedAt: string; email?: string }
 export interface BusinessAccess { account: BusinessAccount | null; keyConfigured: boolean; encryptionReady: boolean; adultVerified: boolean }
@@ -11,7 +12,7 @@ export interface BusinessUnavailableModel { id: string; displayName: string; cat
 export interface BusinessAsset { id: number; name: string; src: string; contentType?: string }
 export interface BusinessProviderAsset { id: string; name: string; type: "image" | "video" | "audio"; status: string }
 export interface BusinessImageControl { key: "quality" | "seed" | "negative_prompt"; kind: "select" | "number" | "text"; options?: string[]; min?: number; max?: number }
-export interface BusinessModel { imageControls?: BusinessImageControl[]; maxImageCount?: number; dedicatedVideo?: BusinessDedicatedVideoCapability }
+export interface BusinessModel { imageControls?: BusinessImageControl[]; maxImageCount?: number; dedicatedVideo?: BusinessDedicatedVideoCapability; zImage?: BusinessZImageCapability }
 export interface BusinessProviderAsset { uploadId?: string; storageReady?: boolean }
 export interface BusinessEditorPrompt { prompt: string; mentions: Record<string, string> }
 export interface BusinessReuseSetup {

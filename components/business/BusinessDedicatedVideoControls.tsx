@@ -4,6 +4,7 @@ import { useId } from "react";
 import type { BusinessDedicatedVideoCapability, BusinessDedicatedVideoMode } from "@/lib/businessDedicatedVideo";
 import { useLocale } from "@/lib/i18n/client";
 import { businessDedicatedVideoCopy, type BusinessDedicatedVideoCopy } from "@/lib/i18n/businessDedicatedVideo";
+import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
 import styles from "./BusinessDedicatedVideo.module.css";
 
 export interface BusinessDedicatedVideoOptions {
@@ -46,7 +47,9 @@ export function BusinessWan3DurationSelect({ capability, seconds, disabled, onCh
  * This first UI surface intentionally does not advertise edit/continuation.
  */
 export default function BusinessDedicatedVideoControls({ capability, value, onChange, referenceCount = 0, disabled = false, onOpenAssets }: Props) {
-  const t = businessDedicatedVideoCopy(useLocale());
+  const locale = useLocale();
+  const t = businessDedicatedVideoCopy(locale);
+  const wan22 = capability.family === "wan2.2";
   const id = useId();
   const wan27 = capability.family === "wan2.7";
   const wan3 = capability.family === "wan3.0";
@@ -74,21 +77,21 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
       {onOpenAssets ? <button type="button" onClick={onOpenAssets}>{t.openAssets}</button> : null}
       {referenceCount > maximum ? <p role="alert" className={styles.warning}>{t.referenceLimit}</p> : null}
       <p className={styles.note}>{t.assetsNote}</p>
-      {wan3 ? <p className={styles.note}>{t.wan3ImageRules}</p> : !wan27 ? <p className={styles.note}>{t.happyRules}</p> : null}
+      {wan3 || wan22 ? <p className={styles.note}>{t.wan3ImageRules}</p> : !wan27 ? <p className={styles.note}>{t.happyRules}</p> : null}
       {!wan27 && mode === "subject-reference" ? <p className={styles.note}>{wan3 ? t.wan3ReferenceInfo : t.happyReferenceInfo}</p> : null}
     </div> : null}
     <details className={styles.advanced}>
       <summary>{t.advanced}</summary>
       <div className={styles.body}>
-        {!wan3 ? <>
+        {!wan3 && !wan22 ? <>
           <label className={styles.check}><input type="checkbox" checked={value.watermark} onChange={event => update({ watermark: event.target.checked })} aria-describedby={`${id}-watermark-info`} /><span>{t.watermark}</span></label>
           <p id={`${id}-watermark-info`} className={styles.note}>{t.watermarkInfo}</p>
         </> : null}
         <label className={styles.field} htmlFor={`${id}-seed`}>{t.seed}<input id={`${id}-seed`} type="text" inputMode="numeric" autoComplete="off" value={value.seed} onChange={event => update({ seed: event.target.value })} placeholder={t.seedPlaceholder} aria-describedby={`${id}-seed-info`} /></label>
-        <p id={`${id}-seed-info`} className={styles.note}>{wan3 ? t.wan3Seed : wan27 ? t.seedWan : t.seedHappy}</p>
-        {wan27 || wan3 ? <>
+        <p id={`${id}-seed-info`} className={styles.note}>{wan3 || wan22 ? t.wan3Seed : wan27 ? t.seedWan : t.seedHappy}</p>
+        {wan22 || wan27 || wan3 ? <>
           <label className={styles.check}><input type="checkbox" checked={value.promptExtend} onChange={event => update({ promptExtend: event.target.checked })} aria-describedby={`${id}-extend-info`} /><span>{t.promptExtend}</span></label>
-          <p id={`${id}-extend-info`} className={styles.note}>{t.promptExtendInfo}</p>
+          <p id={`${id}-extend-info`} className={styles.note}>{capability.promptExtendSurcharged ? businessOperationsCopy(locale).promptRewriteSurcharge : t.promptExtendInfo}</p>
           {wan27 ? <>
             <label className={styles.field} htmlFor={`${id}-negative`}>{t.negative}<textarea id={`${id}-negative`} value={value.negativePrompt} maxLength={4000} onChange={event => update({ negativePrompt: event.target.value })} placeholder={t.negativePlaceholder} aria-describedby={`${id}-negative-count`} /></label>
             <span id={`${id}-negative-count`} className={styles.note}>{interpolate(t.negativeCount, { count: value.negativePrompt.length })}</span>
@@ -96,6 +99,6 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
         </> : null}
       </div>
     </details>
-    <a className={styles.docs} href={`https://docs.siraya.ai/docs/api-reference/generative-model-api/text-to-video/${wan27 || wan3 ? "wan" : "happyhorse"}/`} target="_blank" rel="noreferrer">{t.providerDocs} ↗</a>
+    <a className={styles.docs} href={`https://docs.siraya.ai/docs/api-reference/generative-model-api/${wan22 || wan27 && capability.capability === "image-to-video" ? "image-to-video" : "text-to-video"}/${wan22 || wan27 || wan3 ? "wan" : "happyhorse"}/`} target="_blank" rel="noreferrer">{t.providerDocs} ↗</a>
   </fieldset>;
 }

@@ -10,6 +10,10 @@ const MODELS = {
   "wan3.0-video-pro": { label: "Wan 3.0 Pro", pro: true },
   "wan3.0-video-prime": { label: "Wan 3.0 Prime", pro: false },
   "wan3.0-video-prime-pro": { label: "Wan 3.0 Prime Pro", pro: true },
+  "wan3.0-video-spicy": { label: "Wan 3.0 Spicy", pro: false },
+  "wan3.0-video-pro-spicy": { label: "Wan 3.0 Pro Spicy", pro: true },
+  "wan3.0-video-prime-spicy": { label: "Wan 3.0 Prime Spicy", pro: false },
+  "wan3.0-video-prime-pro-spicy": { label: "Wan 3.0 Prime Pro Spicy", pro: true },
 } as const;
 
 const WAN3_MODES = ["freestyle", "text-to-video", "image-to-video", "first-last-frame", "subject-reference"] as const;

@@ -30,8 +30,17 @@ for (const [model, resolutions] of Object.entries(tiers)) {
   assert.deepEqual(caps(model).resolutions, resolutions);
   for (const resolution of resolutions) assert.equal(build({ ...base, model, resolution }, []).resolution, resolution);
   for (const resolution of ["480p", "720p", "1080p", "2k", "4k", "1080P"].filter(value => !resolutions.includes(value))) reject({ ...base, model, resolution });
+  const spicy = `${model}-spicy`;
+  assert.deepEqual(caps(spicy), { ...caps(model), label: `${caps(model).label} Spicy` });
+  for (const resolution of resolutions) {
+    const parameters = { ...base, model, resolution, mode: "first-last-frame", seconds: -1 };
+    assert.deepEqual(build({ ...parameters, model: spicy }, [first, last]), {
+      ...build(parameters, [first, last]), model: spicy,
+    });
+  }
+  for (const resolution of ["480p", "720p", "1080p", "2k", "4k", "1080P"].filter(value => !resolutions.includes(value))) reject({ ...base, model: spicy, resolution });
 }
-for (const model of ["wan2.7-t2v", "wan3.0-t2v", "wan3.0-video-preview", "WAN3.0-VIDEO", "NSFW-wan3.0-video", "toString", "__proto__", "", undefined]) {
+for (const model of ["wan2.7-t2v", "wan3.0-t2v", "wan3.0-video-preview", "WAN3.0-VIDEO", "NSFW-wan3.0-video", "wan3.0-video-spicy-pro", "wan3.0-video-spicy-preview", "toString", "__proto__", "", undefined]) {
   assert.equal(caps(model), undefined);
   reject({ ...base, model });
 }

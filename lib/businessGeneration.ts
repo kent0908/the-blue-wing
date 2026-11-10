@@ -9,6 +9,7 @@ import { assertBusinessImageParameters, getBusinessImageCapability, type Busines
 import { buildBusinessModelCatalog } from "./businessModelCatalog";
 import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
 import { buildBusinessWan3Payload } from "./businessWan3";
+import { buildBusinessZImagePayload, type BusinessZImageCapability } from "./businessZImage";
 import { getBusinessProviderAsset, resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
 import { resolveBusinessUploadSources, reusableBusinessUploads } from "./businessAssetUploads";
@@ -19,7 +20,7 @@ import { assertPromptSafety, PromptSafetyError } from "./promptSafety";
 import { isAdultVerified } from "./adultGate";
 import type { UserRow } from "./db";
 import { sniffImageMimeFromBase64 } from "./imageMime";
-import { createImage, createVideo, createBusinessVideo, createChatCompletion, getVideoStatus, listModels, SirayaApiError, type ImageGenerationRequest, type VideoGenerationRequest } from "./siraya";
+import { createImage, createBusinessImage, createVideo, createBusinessVideo, createChatCompletion, getVideoStatus, listModels, SirayaApiError, type ImageGenerationRequest, type VideoGenerationRequest } from "./siraya";
 
 export type BusinessKind = "image" | "video" | "text";
 export type BusinessGenerationStatus = "submitting" | "processing" | "completed" | "failed" | "unknown";
@@ -45,6 +46,7 @@ export interface BusinessModel {
   seedance?: BusinessSeedanceCapability;
   dedicatedVideo?: BusinessDedicatedVideoCapability;
   maxImageCount?: number; imageControls?: BusinessImageControl[];
+  zImage?: BusinessZImageCapability;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const pending = ["submitting", "processing", "unknown"];
@@ -93,7 +95,7 @@ function validateSubmission(value: unknown) {
     !["image", "video", "text"].includes(String(value.kind)) || !record(value.parameters)) fail();
   const kind = value.kind as BusinessKind;
   const parameters = { ...value.parameters };
-  const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "referenceGenerationIds", "background", "output_format", "output_compression", "moderation"] :
+  const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "referenceGenerationIds", "background", "output_format", "output_compression", "moderation", "prompt_extend"] :
     kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "businessAssetIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
     ["model", "prompt", "max_tokens", "temperature"];
   if (Object.keys(parameters).some(key => !allowed.includes(key)) || typeof parameters.model !== "string" ||
@@ -126,7 +128,7 @@ function validateSubmission(value: unknown) {
   return { clientRequestId: value.clientRequestId, kind, parameters, editor: value.editor };
 }
 
-async function normalizedParameters(kind: BusinessKind, parameters: Record<string, unknown>, model: BusinessModel, userId: number, accountId: string, credential: { id: string; apiKey: string }) {
+async function normalizedParameters(kind: BusinessKind, parameters: Record<string, unknown>, model: BusinessModel, userId: number, accountId: string, credential: { id: string; apiKey: string }): Promise<Record<string, unknown>> {
   const payload = { ...parameters };
   const assetIds = payload.assetIds as number[] | undefined;
   const ownUploads = (parameters.businessAssetIds ?? []) as string[];
@@ -135,6 +137,10 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
   const adapterParameters = { ...parameters }; delete adapterParameters.referenceGenerationIds;
   delete payload.referenceGenerationIds;
   if (kind === "image") {
+    if (model.zImage) {
+      try { return buildBusinessZImagePayload(adapterParameters, (assetIds?.length ?? 0) + ownUploads.length + generatedIds.length); }
+      catch { fail(); }
+    }
     let caps: ReturnType<typeof getBusinessImageCapability>;
     try { caps = assertBusinessImageParameters(adapterParameters, (assetIds?.length ?? 0) + ownUploads.length + generatedIds.length); }
     catch { fail(); }
@@ -189,7 +195,8 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     // These dedicated providers need HTTPS media, not Seedance's asset:// IDs.
     // B-native immutable uploads have an independent account-scoped resolver.
     const wan3 = model.dedicatedVideo.family === "wan3.0";
-    if (["assetIds", "providerAssets", "output_format"].some(key => parameters[key] !== undefined) || !wan3 && parameters.referenceOrder !== undefined) fail();
+    if (["assetIds", "providerAssets", "output_format"].some(key => parameters[key] !== undefined) ||
+      !wan3 && !model.dedicatedVideo.acceptsReferenceOrder && parameters.referenceOrder !== undefined) fail();
     const keys = [...ownUploads.map(id => `business:${id}`), ...generatedIds.map(id => `generated:${id}`)];
     const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
     if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
@@ -383,7 +390,7 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
         where id=$3 and account_id=$4 and user_id=$5`, [metadata.requestId, metadata.httpStatus, row.id, row.account_id, row.user_id,
         row.provider_request_ids, row.provider_receipt_count]);
     } };
-    if (row.kind === "image") result = await createImage(payload as unknown as ImageGenerationRequest, options);
+    if (row.kind === "image") result = model.zImage ? await createBusinessImage(payload, options) : await createImage(payload as unknown as ImageGenerationRequest, options);
     else if (row.kind === "video") result = model.seedance || model.dedicatedVideo ? await createBusinessVideo(payload, options) : await createVideo(payload as unknown as VideoGenerationRequest, options);
     else result = await createChatCompletion(payload as unknown as Parameters<typeof createChatCompletion>[0], options);
   } catch (error) {
@@ -400,7 +407,7 @@ export async function createBusinessGeneration(user: UserRow, account: BusinessA
       if (!record(image)) return [];
       const url = typeof image.url === "string" ? image.url : typeof image.b64_json === "string" ? `data:${sniffImageMimeFromBase64(image.b64_json)};base64,${image.b64_json}` : "";
       return url && validSource(url, "image") ? [{ url }] : [];
-    }).slice(0, Number(payload.n));
+    }).slice(0, Number(payload.n ?? 1));
     row = images.length ? await finishMedia(row, { images }) : await updateGeneration(row, "failed", null, "result_missing");
   } else {
     const url = videoUrl(result);

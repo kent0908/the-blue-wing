@@ -5,6 +5,7 @@ const account={id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',userId:7,status:'approv
 let rotateDuringReservation=false;
 let sourceFetches=[],downloadRedirect=false,localReferenceCalls=0,providerReferenceCalls=0,registeredAssets=[],downloadMime='video/mp4',metadataWriteFails=false,businessUploadCalls=0,businessUploads=[],catalogFailure=false,removedModels=[];
 let generatedReferenceCalls=0,generatedSources=[];
+let exactImageCalls=0;
 const models=[['Dola-Seedream-5.0-pro','image'],['NSFW-Dola-Seedream-5.0-pro','image'],['SIRAYA-Seedance-2.5','video'],['NSFW-SIRAYA-Seedance-2.5','video'],['deepseek-v4.1-flash','text'],['veo-3.1-generate-001','video'],['happyhorse-1.0-t2v','video'],['unreviewed-video','video'],['kling-avatar-v2','text'],['embedding-v1','text'],['retired-image','image']];
 models.push(...['SIRAYA-Seedance-2.0','SIRAYA-Seedance-2.0-fast','SIRAYA-Seedance-2.0-mini','NSFW-SIRAYA-Seedance-2.0'].map(id=>[id,'video']));
 models.push(...['kling-2.5-turbo','kling-2.6','kling-3.0','kling-3.0-turbo','kling-3.0-omni','kling-o1'].map(id=>[id,'video']));
@@ -13,6 +14,8 @@ models.push(...['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst','ge
 models.push(...['claude-opus-5.5','gpt-6.1','uncensored-gpt-6','qwen3.8-max','kimi-k3','deepseek-v4-flash'].map(id=>[id,'text']));
 models.push(...['kling-tts','qwen3-asr-flash','gemini-embedding-2','wan2.7-t2v','wan2.7-i2v','wan2.7-r2v','wan2.7-videoedit','happyhorse-1.1-t2v','happyhorse-1.1-i2v','happyhorse-1.1-r2v'].map(id=>[id,'tool']));
 models.push(['wan3.0-video-pro','video']);
+models.push(['wan2.2-i2v-spicy','video'],['wan2.7-i2v-spicy','video']);
+models.push(['z-image-spicy','image'],['z-image-spicy-pro','image']);
 const rates=models.map(([modelId,modality])=>({modelId,modality,active:modelId!=='retired-image',credits:999}));
 class BusinessError extends Error{constructor(code,status=400){super(code);this.code=code;this.status=status;}}
 class SirayaApiError extends Error{constructor(status,message){super(message);this.status=status;}}
@@ -52,7 +55,7 @@ const mocks={
  './rateCard':{listRates:async()=>{throw Error('C retail catalog must never govern BYOK')}},
  './businessAssetUploads':{reusableBusinessUploads:async(userId,accountId,ids)=>{assert.equal(userId,7);assert.equal(accountId,account.id);return ids.filter(id=>businessUploads.includes(id)).map(id=>({id,uploadId:id,name:'Original upload',type:'image',status:'active',storageReady:true}));},resolveBusinessUploadSources:async(userId,accountId,credentialId,ids,nsfw)=>{businessUploadCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/provider-assets/source/opaque-${id}`}));}},
  './businessGeneratedReferences':{reusableBusinessGeneratedImageIds:async(userId,accountId,credentialId,ids,nsfw)=>{assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');return ids.filter(id=>generatedSources.includes(id));},resolveBusinessGeneratedImageSources:async(userId,accountId,credentialId,ids,nsfw)=>{generatedReferenceCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!generatedSources.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/generated-references/opaque-${id}`}));}},
- './siraya':{SirayaApiError,createImage:(payload,options)=>provider('image',payload,options),createVideo:(payload,options)=>provider('video',payload,options),createBusinessVideo:(payload,options)=>provider('video',payload,options),createChatCompletion:(payload,options)=>provider('text',payload,options),listModels:async options=>{lookupCalls++;seenKeys.push(options.apiKey);if(catalogFailure)throw Error('private upstream error');return {data:models.filter(([id])=>!removedModels.includes(id)).map(([id])=>({id}))}},getVideoStatus:async(id,options)=>{lookupCalls++;assert.equal(id,'provider-owned-job');seenKeys.push(options.apiKey);return pollVideo}},
+ './siraya':{SirayaApiError,createImage:(payload,options)=>provider('image',payload,options),createBusinessImage:(payload,options)=>{exactImageCalls++;return provider('image',payload,options)},createVideo:(payload,options)=>provider('video',payload,options),createBusinessVideo:(payload,options)=>provider('video',payload,options),createChatCompletion:(payload,options)=>provider('text',payload,options),listModels:async options=>{lookupCalls++;seenKeys.push(options.apiKey);if(catalogFailure)throw Error('private upstream error');return {data:models.filter(([id])=>!removedModels.includes(id)).map(([id])=>({id}))}},getVideoStatus:async(id,options)=>{lookupCalls++;assert.equal(id,'provider-owned-job');seenKeys.push(options.apiKey);return pollVideo}},
 };
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const mod={exports:{}};cache.set(file,mod);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;new Function('require','module','exports',code)(id=>{const canonical=id.startsWith('@/lib/')?'./'+id.slice(6):id;if(canonical in mocks)return mocks[canonical];if(id.startsWith('@/'))return load(path.resolve(id.slice(2))+'.ts');if(id.startsWith('.'))return load(path.resolve(path.dirname(file),id)+'.ts');return require(id)},mod,mod.exports);return mod.exports;}
 const routes=load('app/api/business/generations/route.ts'),single=load('app/api/business/generations/[id]/route.ts'),reuse=load('app/api/business/generations/[id]/reuse/route.ts'),catalog=load('app/api/business/models/route.ts');
@@ -64,7 +67,7 @@ const send=(payload=body(),origin)=>routes.POST(request(payload,origin));
 const get=id=>single.GET(new NextRequest('https://fixture.invalid/api/business/generations/'+id),{params:Promise.resolve({id})});
 const getReuse=id=>reuse.GET(new NextRequest(`https://fixture.invalid/api/business/generations/${id}/reuse`),{params:Promise.resolve({id})});
 function reset(){jobs.length=0;providerCalls=lookupCalls=uploads=localReferenceCalls=providerReferenceCalls=0;approval=adult=blobReady=true;revoked=failStorage=rotateDuringReservation=downloadRedirect=metadataWriteFails=false;failProvider=kindResult=null;seenKeys=[];sourceFetches=[];lastPayload=null;assetRows=[];registeredAssets=[];downloadMime='video/mp4';businessUploadCalls=0;businessUploads=[];generatedReferenceCalls=0;generatedSources=[];catalogFailure=false;removedModels=[];activeCredential='11111111-1111-4111-8111-111111111111';credentials.set(activeCredential,'sk-fixture-key-original');upstreamVideo={id:'provider-owned-job',status:'processing'};pollVideo={status:'processing'};lock=Promise.resolve()}
-let count=0;async function test(name,fn){reset();await fn();count++;console.log('PASS '+name)}
+let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();count++;console.log('PASS '+name)}
 (async()=>{
  await test('every model/list/create/poll route checks current approval',async()=>{approval=false;for(const response of [await catalog.GET(new NextRequest('https://fixture.invalid/api/business/models')),await routes.GET(new NextRequest('https://fixture.invalid/api/business/generations')),await send(),await get(uuid(1))]){assert.equal(response.status,403);assert.match(response.headers.get('cache-control'),/no-store/)}assert.equal(providerCalls+lookupCalls,0)});
  await test('cross-origin POST is rejected before provider I/O',async()=>{assert.equal((await send(body(),'https://evil.invalid')).status,403);assert.equal(providerCalls,0)});
@@ -86,6 +89,80 @@ let count=0;async function test(name,fn){reset();await fn();count++;console.log(
  await test('oversized or executable references rejected before provider',async()=>{for(const row of [{id:1,user_id:7,content_type:'image/svg+xml',size:10},{id:1,user_id:7,content_type:'image/png',size:11000000}]){assetRows=[row];assert.equal((await send(body(1,'image',{assetIds:[1]}))).status,400)}assert.equal(providerCalls,0)});
  await test('image gets native hires default and private business media output',async()=>{const response=await send(body(1,'image'));const json=await response.json();assert.equal(json.generation.status,'completed');assert.equal(lastPayload.size,'2048x2048');assert.match(json.generation.images[0].url,/^\/api\/business\/media\/.+\/standard\//);assert.ok(!JSON.stringify(json).includes('provider_output'));assert.equal(uploads,1)});
  await test('adult image output has adult namespace',async()=>{const response=await send(body(1,'image',{model:'NSFW-Dola-Seedream-5.0-pro'}));assert.match((await response.json()).generation.images[0].url,/\/adult\//)});
+ await test('Z-Image Spicy submits the exact own-key payload and stores the result in adult media', async () => {
+   const payload = body(1, 'image', {model:'z-image-spicy',size:'1024x1024',n:1});
+   const response = await send(payload);
+   assert.equal(response.status, 201);
+   const { generation } = await response.json();
+   assert.equal(generation.status, 'completed');
+   assert.match(generation.images[0].url, /^\/api\/business\/media\/.+\/adult\//);
+   assert.equal(jobs[0].nsfw, true);
+   assert.equal(exactImageCalls, 1);
+   assert.equal(providerCalls, 1);
+   assert.deepEqual(seenKeys, ['sk-fixture-key-original', 'sk-fixture-key-original']);
+   assert.equal(lastPayload.model, payload.parameters.model);
+   assert.equal(lastPayload.prompt, payload.parameters.prompt);
+   assert.equal(lastPayload.size, '1024x1024');
+   assert.equal(lastPayload.prompt_extend, false);
+   for (const key of ['n', 'image', 'watermark', 'extra_body']) assert.equal(lastPayload[key], undefined, key);
+   assert.equal((await send(payload)).status, 200);
+   assert.equal(providerCalls, 1);
+
+   const optIn = await send(body(2, 'image', {model:'z-image-spicy',size:'1024x1024',prompt_extend:true}));
+   assert.equal(optIn.status, 201);
+   assert.equal(lastPayload.prompt_extend, true);
+   const optInGeneration = (await optIn.json()).generation;
+   const reuseResponse = await getReuse(optInGeneration.id);
+   assert.equal(reuseResponse.status, 200);
+   assert.equal((await reuseResponse.json()).reuse.parameters.prompt_extend, true);
+
+   // The official example returns data[].url. Use a synthetic URL on an
+   // already allowed host because its example does not name the CDN.
+   const resultUrl = 'https://assets.siraya.ai/fixture.png';
+   kindResult = {created:1792557768,data:[{url:resultUrl}]};
+   downloadMime = 'image/png';
+   const proResponse = await send(body(3, 'image', {model:'z-image-spicy-pro',size:'2560x2560'}));
+   assert.equal(proResponse.status, 201);
+   assert.equal((await proResponse.json()).generation.status, 'completed');
+   assert.deepEqual(sourceFetches, [resultUrl]);
+   assert.equal(lastPayload.model, 'z-image-spicy-pro');
+   assert.equal(lastPayload.size, '2560x2560');
+   assert.equal(lastPayload.prompt_extend, false);
+   assert.equal(exactImageCalls, 3);
+ });
+ await test('Z-Image Spicy exact grants and adult checks fail before reservation or provider generation', async () => {
+   const regular = body(1, 'image', {model:'z-image-spicy'});
+   const pro = body(2, 'image', {model:'z-image-spicy-pro'});
+   removedModels = ['z-image-spicy-pro'];
+   assert.equal((await send(pro)).status, 400);
+   adult = false;
+   assert.equal((await send(regular)).status, 403);
+   assert.equal(jobs.length, 0);
+   assert.equal(providerCalls, 0);
+
+   adult = true;
+   assert.equal((await send(regular)).status, 201);
+   adult = false;
+   assert.equal((await send(regular)).status, 403);
+   assert.equal(providerCalls, 1);
+ });
+ await test('Z-Image Spicy rejects references and unsupported parameter shapes before reading assets', async () => {
+   for (const parameters of [
+     {assetIds:[1]},
+     {businessAssetIds:[uuid(20)]},
+     {referenceGenerationIds:[uuid(21)]},
+     {n:2},
+     {size:'123x123'},
+     {size:'2560x2560'},
+     {prompt_extend:'true'},
+   ]) {
+     const response = await send(body(1, 'image', {model:'z-image-spicy', ...parameters}));
+     assert.equal(response.status, 400, JSON.stringify(parameters));
+   }
+   assert.equal(businessUploadCalls + generatedReferenceCalls, 0);
+   assert.equal(jobs.length, 0);
+   assert.equal(providerCalls, 0);
+ });
  await test('storage failure keeps recovery source private and GET retries no paid model',async()=>{blobReady=false;const response=await send(body(1,'image'));let json=await response.json();assert.equal(json.generation.status,'processing');assert.equal(json.generation.errorCode,'storage_unavailable');assert.equal(json.generation.images,undefined);blobReady=true;json=await (await get(jobs[0].id)).json();assert.equal(json.generation.status,'completed');assert.equal(providerCalls,1)});
  await test('text creation supports bounded own-key prompt and no consumer credits',async()=>{const response=await send(body(1,'text',{max_tokens:500,temperature:0.5}));const json=await response.json();assert.equal(json.generation.text,'A paper city unfolds.');assert.equal(lastPayload.messages[0].role,'user');assert.equal(lastPayload.prompt,undefined);assert.equal(lastPayload.max_tokens,500);assert.equal(uploads,0)});
  await test('text token cap/temperature and image count are strict',async()=>{for(const payload of [body(1,'text',{max_tokens:4097}),body(1,'text',{temperature:Infinity}),body(1,'image',{n:5}),body(1,'image',{n:1.2})])assert.equal((await send(payload)).status,400);assert.equal(providerCalls,0)});
@@ -125,11 +202,83 @@ let count=0;async function test(name,fn){reset();await fn();count++;console.log(
  await test('fresh own-key grants are required for each new paid job, while durable replay survives catalog changes',async()=>{removedModels=['SIRAYA-Seedance-2.5'];let response=await send();assert.equal(response.status,400);assert.equal(jobs.length,0);assert.equal(providerCalls,0);removedModels=[];await send();removedModels=['SIRAYA-Seedance-2.5'];response=await send();assert.equal(response.status,200);assert.equal((await response.json()).duplicate,true);assert.equal(providerCalls,1);assert.equal(lookupCalls,2)});
  await test('catalog outage is known preflight and does not lock a UUID or fallback to platform credentials',async()=>{catalogFailure=true;const response=await send();assert.equal(response.status,502);assert.equal((await response.json()).error.code,'credential_validation_failed');assert.equal(providerCalls,0);assert.equal(jobs.length,0);catalogFailure=false;assert.equal((await send()).status,201);assert.equal(providerCalls,1)});
  await test('new text families use their exact granted ID without retail aliases',async()=>{for(const [i,model]of ['claude-opus-5.5','gpt-6.1','qwen3.8-max','kimi-k3','deepseek-v4-flash'].entries()){assert.equal((await send(body(i+1,'text',{model}))).status,201);assert.equal(lastPayload.model,model);assert.equal(lastPayload.max_tokens,1024)}assert.equal(providerCalls,5)});
- await test('all fourteen reviewed image IDs create with version-correct defaults and no retail rate dependency',async()=>{const imageIds=models.filter(([,kind])=>kind==='image').map(([id])=>id).filter(id=>id!=='retired-image');for(const [i,model]of imageIds.entries()){assert.equal((await send(body(i+1,'image',{model}))).status,201,model);assert.equal(lastPayload.model,model);assert.equal(lastPayload.n,1);if(/Seedream/i.test(model))assert.equal(lastPayload.sequential_image_generation,'disabled')}assert.equal(providerCalls,14)});
+ await test('the fourteen regular image IDs retain version-correct defaults and no retail rate dependency', async () => {
+   const separateContracts = new Set(['retired-image', 'z-image-spicy', 'z-image-spicy-pro']);
+   const imageIds = models.filter(([id,kind]) => kind === 'image' && !separateContracts.has(id)).map(([id]) => id);
+   for (const [i,model] of imageIds.entries()) {
+     assert.equal((await send(body(i+1, 'image', {model}))).status, 201, model);
+     assert.equal(lastPayload.model, model);
+     assert.equal(lastPayload.n, 1);
+     if (/Seedream/i.test(model)) assert.equal(lastPayload.sequential_image_generation, 'disabled');
+   }
+   assert.equal(providerCalls, 14);
+ });
  await test('image batch and quality contracts reject incompatible choices before reservation',async()=>{for(const extra of [{model:'gemini-3.1-flash-image',n:2},{model:'Dola-Seedream-5.0-lite',n:2},{model:'gpt-image-2',n:11},{model:'gpt-image-2',quality:'max'},{model:'gemini-3.1-flash-lite-image',size:'2048x2048'},{model:'Dola-Seedream-5.0-pro',seed:1},{model:'ByteDance-Seedream-4.5',negative_prompt:'unverified'},{model:'gpt-image-2',seed:1},{model:'gemini-3-pro-image',quality:'high'}])assert.equal((await send(body(1,'image',extra))).status,400,JSON.stringify(extra));assert.equal(jobs.length,0);assert.equal(providerCalls,0);assert.equal((await send(body(1,'image',{model:'gpt-image-2.5-flare',quality:'max',n:10,size:'3840x2160'}))).status,201);assert.equal(lastPayload.n,10);assert.equal(lastPayload.quality,'max');assert.equal((await send(body(2,'image',{model:'gemini-3.1-flash-image',seed:123,size:'512x512'}))).status,201);assert.equal(lastPayload.seed,123)});
  await test('native B uploads resolve HTTPS sources only under the current account and credential',async()=>{businessUploads=[uuid(20),uuid(21)];assert.equal((await send(body(1,'image',{model:'gpt-image-2.5-sunburst',businessAssetIds:businessUploads}))).status,201);assert.equal(businessUploadCalls,1);assert.equal(lastPayload.businessAssetIds,undefined);assert.ok(lastPayload.image.every(url=>url.startsWith('https://fixture.invalid/api/business/provider-assets/source/')));assert.ok(lastPayload.image.every(url=>!url.startsWith('asset://')));assert.equal((await send(body(2,'image',{businessAssetIds:[uuid(99)]}))).status,400);assert.equal(providerCalls,1);assert.equal(jobs.length,1)});
  await test('combined native B and legacy references honor each exact image-family cap',async()=>{assetRows=Array.from({length:10},(_,i)=>({id:i+1,user_id:7,content_type:'image/png',size:100}));businessUploads=Array.from({length:16},(_,i)=>uuid(100+i));for(const extra of [{model:'Dola-Seedream-5.0-pro',assetIds:[1],businessAssetIds:businessUploads.slice(0,10)},{model:'gemini-3.1-flash-image',assetIds:[1],businessAssetIds:businessUploads.slice(0,14)},{model:'gpt-image-2',assetIds:[1],businessAssetIds:businessUploads}])assert.equal((await send(body(1,'image',extra))).status,400);assert.equal(providerCalls,0);assert.equal(businessUploadCalls,0);assert.equal(jobs.length,0);for(const [i,extra]of [{model:'Dola-Seedream-5.0-pro',businessAssetIds:businessUploads.slice(0,10)},{model:'gemini-3.1-flash-image',businessAssetIds:businessUploads.slice(0,14)},{model:'gpt-image-2',businessAssetIds:businessUploads}].entries())assert.equal((await send(body(i+1,'image',extra))).status,201);assert.equal(providerCalls,3)});
  await test('dedicated Wan2.7 and Happy1.1 models use uppercase provider contracts and native B source images',async()=>{businessUploads=Array.from({length:9},(_,i)=>uuid(100+i));kindResult={output_url:'https://example.volces.com/own.mp4'};for(const [i,model]of ['wan2.7-t2v','wan2.7-i2v','wan2.7-r2v','happyhorse-1.1-t2v','happyhorse-1.1-i2v','happyhorse-1.1-r2v'].entries()){const count=model.endsWith('t2v')?0:model.endsWith('i2v')?1:3;const response=await send(body(i+1,'video',{model,...count?{businessAssetIds:businessUploads.slice(0,count)}:{}}));assert.equal(response.status,201,model);assert.equal(lastPayload.resolution,'720P');assert.equal(lastPayload.watermark,false);assert.equal(lastPayload.businessAssetIds,undefined);assert.equal(lastPayload.mode,undefined);assert.equal(lastPayload.extra_body,undefined);if(model.endsWith('i2v')){assert.equal(lastPayload.frame_images.length,1);assert.equal(lastPayload.aspect_ratio,undefined)}if(model.endsWith('r2v'))assert.ok(lastPayload.input_references.every(ref=>ref.role==='reference_image'&&ref.url.startsWith('https://fixture.invalid/')))}assert.equal(providerCalls,6)});
+ await test('Wan Spicy image-to-video preserves mixed source order and exact wire schemas by version', async () => {
+   const originalId = uuid(219), generatedId = uuid(220);
+   businessUploads = [originalId];
+   generatedSources = [generatedId];
+   kindResult = {output_url:'https://example.volces.com/own.mp4'};
+   const first = `https://fixture.invalid/api/business/generated-references/opaque-${generatedId}`;
+   const last = `https://fixture.invalid/api/business/provider-assets/source/opaque-${originalId}`;
+   const inputs = {
+     businessAssetIds:[originalId], referenceGenerationIds:[generatedId],
+     referenceOrder:[`generated:${generatedId}`, `business:${originalId}`], mode:'first-last-frame',
+   };
+   for (const [index,model] of ['wan2.2-i2v-spicy','wan2.7-i2v-spicy'].entries()) {
+     const old = index === 0;
+     const parameters = {...inputs, model, ...(old ? {seconds:8,resolution:'720p'} : {seconds:15,generate_audio:true})};
+     const response = await send(body(index+1, 'video', parameters));
+     assert.equal(response.status, 201);
+     const { generation } = await response.json();
+     assert.equal(generation.status, 'completed');
+     assert.match(generation.videoUrl, /\/adult\//);
+     assert.equal(lastPayload.model, model);
+     assert.equal(lastPayload.resolution, old ? '720p' : '1080P');
+     assert.equal(lastPayload.seconds, old ? 8 : 15);
+     assert.equal(lastPayload.prompt_extend, false);
+     assert.equal(lastPayload.input_references, undefined);
+     assert.equal(lastPayload.referenceOrder, undefined);
+     assert.equal(lastPayload.aspect_ratio, undefined);
+     if (old) {
+       assert.equal(lastPayload.image, first);
+       assert.equal(lastPayload.last_image, last);
+       assert.equal(lastPayload.frame_images, undefined);
+       assert.equal(lastPayload.generate_audio, undefined);
+     } else {
+       assert.deepEqual(lastPayload.frame_images, [
+         {frame_type:'first_frame',image_url:first}, {frame_type:'last_frame',image_url:last},
+       ]);
+       assert.equal(lastPayload.image, undefined);
+       assert.equal(lastPayload.generate_audio, true);
+     }
+   }
+   assert.equal(providerCalls, 2);
+   assert.equal(businessUploadCalls, 2);
+   assert.equal(generatedReferenceCalls, 2);
+ });
+ await test('Wan Spicy rejects age, wrong duration, model fields and non-image references before reading private media', async () => {
+   const model = 'wan2.2-i2v-spicy', originalId = uuid(230);
+   businessUploads = [originalId];
+   adult = false;
+   assert.equal((await send(body(1, 'video', {model,businessAssetIds:[originalId]}))).status, 403);
+   adult = true;
+   for (const extra of [
+     {seconds:6}, {generate_audio:true}, {watermark:true}, {resolution:'1080p'},
+     {referenceOrder:[`business:${uuid(999)}`]},
+     {model:'wan2.7-i2v-spicy',providerAssets:[{id:'some-audio',type:'audio'}]},
+     {model:'wan2.7-i2v-spicy',mode:'video-extend'},
+   ]) {
+     const response = await send(body(1, 'video', {model,businessAssetIds:[originalId],...extra}));
+     assert.equal(response.status, 400, JSON.stringify(extra));
+   }
+   assert.equal(providerCalls, 0);
+   assert.equal(jobs.length, 0);
+   assert.equal(businessUploadCalls + generatedReferenceCalls + providerReferenceCalls, 0);
+ });
  await test('dedicated references cannot use foreign asset IDs, unsupported sources or silent source-video editing',async()=>{businessUploads=Array.from({length:10},(_,i)=>uuid(200+i));for(const extra of [{model:'wan2.7-i2v'},{model:'happyhorse-1.1-i2v',businessAssetIds:businessUploads.slice(0,2)},{model:'wan2.7-r2v',businessAssetIds:businessUploads.slice(0,6)},{model:'happyhorse-1.1-r2v',businessAssetIds:businessUploads},{model:'happyhorse-1.1-r2v',assetIds:[1]},{model:'wan2.7-i2v',providerAssets:[{id:'owned',type:'image'}]},{model:'wan2.7-videoedit',businessAssetIds:businessUploads.slice(0,1)},{model:'wan2.7-i2v',businessAssetIds:businessUploads.slice(0,1),output_format:'mov'}])assert.equal((await send(body(1,'video',extra))).status,400,JSON.stringify(extra));assert.equal(providerCalls,0);assert.equal(jobs.length,0);assert.equal(businessUploadCalls,0)});
  await test('Wan2.7 first-last images retain ordered frames and Happyhorse prompt constraints reject before reservation',async()=>{businessUploads=[uuid(30),uuid(31)];assert.equal((await send(body(1,'video',{model:'wan2.7-i2v',mode:'first-last-frame',businessAssetIds:businessUploads,seed:5,negative_prompt:'low contrast'}))).status,201);assert.deepEqual(lastPayload.frame_images.map(ref=>ref.frame_type),['first_frame','last_frame']);assert.equal(lastPayload.frame_images[0].image_url.endsWith(uuid(30)),true);assert.equal(lastPayload.frame_images[1].image_url.endsWith(uuid(31)),true);assert.equal(lastPayload.seed,5);assert.equal(lastPayload.negative_prompt,'low contrast');for(const extra of [{model:'happyhorse-1.1-t2v',seed:-1},{model:'happyhorse-1.1-t2v',generate_audio:true},{model:'happyhorse-1.1-t2v',prompt:'語'.repeat(2501)},{model:'happyhorse-1.1-t2v',prompt:'a'.repeat(5001)},{model:'wan2.7-t2v',seconds:16}])assert.equal((await send(body(2,'video',extra))).status,400);assert.equal(providerCalls,1)});
  await test('completed B image job references reach all image families through owned HTTPS grants without ID passthrough',async()=>{generatedSources=[uuid(500)];for(const [i,model]of['gpt-image-2.5-sunburst','gemini-3.1-flash-image','Dola-Seedream-5.0-pro'].entries()){assert.equal((await send(body(i+1,'image',{model,referenceGenerationIds:generatedSources}))).status,201);assert.match(lastPayload.image,/^https:\/\/fixture.invalid\/api\/business\/generated-references\//);assert.equal(lastPayload.referenceGenerationIds,undefined);}assert.equal(generatedReferenceCalls,3);assert.equal(providerCalls,3);});

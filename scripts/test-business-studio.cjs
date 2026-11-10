@@ -127,7 +127,7 @@ function context() {
     setReferenceOrder: value => { state.referenceOrder = typeof value === 'function' ? value(state.referenceOrder) : value; },
     setOutputFormat: value => { state.outputFormat = value; },
     setSeed: value => { state.seed = value; },
-    setImageCount: value => { state.imageCount = value; }, setImageQuality: value => {state.imageQuality=value;}, setImageNegative:value=>{state.imageNegative=value;}, setImageBusinessAssets:value=>{state.imageBusinessAssets=value;},
+    setImageCount: value => { state.imageCount = value; }, setImageQuality: value => {state.imageQuality=value;}, setImageNegative:value=>{state.imageNegative=value;}, setImagePromptExtend:value=>{state.imagePromptExtend=value;}, setImageBusinessAssets:value=>{state.imageBusinessAssets=value;},
     setAudio: value => { state.audio = value; },
     setDedicatedOptions:value=>{state.dedicatedOptions=value;},
     setSeconds: value => { state.seconds = value; },

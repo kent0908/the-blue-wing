@@ -18,6 +18,7 @@ function loader(hookMock = false) {
       if (name === 'react/jsx-runtime') return require(name);
       if (name === '@/lib/i18n/client') return { useLocale: () => locale };
       if (name === '@/lib/i18n/businessDedicatedVideo') return read('lib/i18n/businessDedicatedVideo.ts');
+      if (name === '@/lib/i18n/businessOperations') return read('lib/i18n/businessOperations.ts');
       if (name.endsWith('.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
       throw new Error(`Unexpected import from ${path}: ${name}`);
     };
@@ -50,6 +51,17 @@ for (locale of ['zh-Hant', 'en', 'ja']) {
   }
   const wan = wanCaps('wan3.0-video');
   const copy = businessDedicatedVideoCopy(locale);
+  for (const version of ['2.2','2.7']) {
+    const profile=caps(`wan${version}-i2v-spicy`);
+    const html=renderToStaticMarkup(React.createElement(Controls,{capability:profile,value:{...defaults,mode:'first-last-frame'},onChange:()=>{},referenceCount:2}));
+    assert.ok(html.includes(copy.firstLastFrame.replaceAll('&','&amp;')));
+    assert.ok(html.includes('/image-to-video/wan/'));
+    assert.equal(html.includes(copy.watermark),version==='2.7');
+    assert.equal(html.includes(copy.negativePlaceholder),version==='2.7');
+    const notice=read('lib/i18n/businessOperations.ts').businessOperationsCopy(locale).promptRewriteSurcharge;
+    assert.equal(html.includes(notice),version==='2.2');
+    combinations++;
+  }
   for (const [mode, count, max] of [['freestyle', 0, 0], ['image-to-video', 1, 1], ['first-last-frame', 1, 2], ['subject-reference', 3, 10]]) {
     const html = renderToStaticMarkup(React.createElement(Controls, { capability: wan, value: { ...defaults, mode }, onChange: () => {}, referenceCount: count, onOpenAssets: () => {} }));
     assert.equal(html.includes(copy.openAssets), max > 0, `${locale}/${mode}: only image modes link to assets`);

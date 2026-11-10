@@ -17,11 +17,11 @@ const base = model => ({ model, prompt: 'A blue paper crane takes flight.', seco
 let count = 0;
 function test(name, fn) { fn(); count++; console.log('PASS ' + name); }
 
-test('only eleven exact published model identifiers gain a BYOK contract', () => {
-  const ids = ['wan2.7-t2v', 'wan2.7-i2v', 'wan2.7-r2v', 'wan2.7-videoedit', ...['1.0', '1.1'].flatMap(version => ['t2v', 'i2v', 'r2v'].map(mode => `happyhorse-${version}-${mode}`)), 'happyhorse-1.0-video-edit'];
-  assert.equal(ids.length, 11);
+test('only exact reviewed model identifiers gain a dedicated BYOK contract', () => {
+  const ids = ['wan2.2-i2v-spicy', 'wan2.7-i2v-spicy', 'wan2.7-t2v', 'wan2.7-i2v', 'wan2.7-r2v', 'wan2.7-videoedit', ...['1.0', '1.1'].flatMap(version => ['t2v', 'i2v', 'r2v'].map(mode => `happyhorse-${version}-${mode}`)), 'happyhorse-1.0-video-edit'];
+  assert.equal(ids.length, 13);
   ids.forEach(id => assert.ok(caps(id), id));
-  for (const id of ['happyhorse-1.1-video-edit', 'wan2.7-guessed', 'wan2.7-r2v-preview', 'wan3.0-video', 'NSFW-wan2.7-r2v', 'HAPPYHORSE-1.1-T2V', null, undefined]) assert.equal(caps(id), undefined);
+  for (const id of ['happyhorse-1.1-video-edit', 'wan2.7-guessed', 'wan2.7-r2v-preview', 'wan3.0-video', 'NSFW-wan2.7-r2v', 'HAPPYHORSE-1.1-T2V', 'wan2.2-i2v-spicy-preview', 'wan2.7-r2v-spicy', null, undefined]) assert.equal(caps(id), undefined);
 });
 test('catalog preserves lowercase UI resolutions and documented family limits', () => {
   assert.deepEqual(caps('happyhorse-1.1-r2v').resolutions, ['480p', '720p', '1080p']);
@@ -34,7 +34,7 @@ test('catalog preserves lowercase UI resolutions and documented family limits', 
   assert.equal(caps('happyhorse-1.0-video-edit').sourceDuration, true);
   assert.equal(caps('happyhorse-1.1-r2v').referenceImageRules.minSide, 400);
 });
-test('all families require case-sensitive uppercase resolutions on the wire', () => {
+test('regular Wan 2.7 and HappyHorse require case-sensitive uppercase resolutions on the wire', () => {
   for (const model of ['happyhorse-1.1-t2v', 'wan2.7-t2v']) for (const resolution of ['720p', '1080p']) {
     assert.equal(build({ ...base(model), resolution }, []).resolution, resolution.toUpperCase());
   }
@@ -92,6 +92,60 @@ test('Wan first-last frames are ordered and never sent as soft references', () =
   assert.deepEqual(p.frame_images, [{ frame_type: 'first_frame', image_url: image(0).url }, { frame_type: 'last_frame', image_url: image(1).url }]);
   assert.equal(p.input_references, undefined); assert.equal(p.aspect_ratio, undefined);
   for (const refs of [[], images(1), images(3), [video], [...images(2), audio]]) assert.throws(() => build({ ...base('wan2.7-i2v'), mode: 'first-last-frame' }, refs));
+});
+test('Wan 2.2 Spicy preserves exact size tiers and sends ordered flat frames', () => {
+  const model = 'wan2.2-i2v-spicy';
+  const settings = { model, prompt: base(model).prompt };
+  const profile = caps(model);
+  assert.deepEqual(profile.resolutions, ['480p', '720p']);
+  assert.deepEqual(profile.secondsOptions, [5, 8]);
+  assert.equal(profile.promptExtendSurcharged, true);
+  assert.equal(profile.supportsAudio, false);
+  assert.equal(profile.referenceImageRules.minSide, 240);
+  assert.equal(profile.referenceImageRules.opaquePng, true);
+  assert.deepEqual(build(settings, [image(1)]), {
+    model, prompt: settings.prompt, resolution: '480p', seconds: 5, async: true, prompt_extend: false, image: image(1).url,
+  });
+  assert.deepEqual(build({
+    ...settings, mode: 'first-last-frame', seconds: 8, resolution: '720p', prompt_extend: true, seed: 0,
+  }, [image(2), image(1)]), {
+    model, prompt: settings.prompt, resolution: '720p', seconds: 8, async: true,
+    prompt_extend: true, seed: 0, image: image(2).url, last_image: image(1).url,
+  });
+  for (const extra of [
+    {seconds: 6}, {resolution: '720P'}, {resolution: '1080p'}, {seed: -1},
+    {watermark: false}, {generate_audio: false}, {negative_prompt: ''}, {image: image(1).url},
+  ]) assert.throws(() => build({ ...settings, ...extra }, [image(1)]));
+  for (const refs of [[], images(3), [image(0), audio], [video]]) assert.throws(() => build(settings, refs));
+  assert.throws(() => build({ ...settings, mode: 'first-last-frame' }, [image(1)]));
+  assert.throws(() => build({ ...settings, mode: 'image-to-video' }, images(2)));
+});
+test('Wan 2.7 Spicy uses native controls and ordered frame_images without unverified audio or clips', () => {
+  const model = 'wan2.7-i2v-spicy';
+  const settings = { model, prompt: base(model).prompt };
+  assert.equal(caps(model).defaultResolution, '1080p');
+  assert.equal(caps(model).supportsAudio, true);
+  assert.deepEqual(build(settings, [image(1)]), {
+    model, prompt: settings.prompt, resolution: '1080P', seconds: 5, async: true, watermark: false,
+    prompt_extend: false, frame_images: [{frame_type: 'first_frame', image_url: image(1).url}],
+  });
+  assert.deepEqual(build({
+    ...settings, mode: 'first-last-frame', seconds: 15, resolution: '720p', seed: -1,
+    watermark: true, generate_audio: true, negative_prompt: 'blur', prompt_extend: true,
+  }, [image(2), image(1)]), {
+    model, prompt: settings.prompt, resolution: '720P', seconds: 15, async: true, seed: -1,
+    watermark: true, generate_audio: true, negative_prompt: 'blur', prompt_extend: true,
+    frame_images: [
+      {frame_type: 'first_frame', image_url: image(2).url},
+      {frame_type: 'last_frame', image_url: image(1).url},
+    ],
+  });
+  assert.equal(build({ ...settings, seconds: 2 }, [image(1)]).seconds, 2);
+  for (const extra of [{seconds: 1}, {seconds: 16}, {resolution: '480p'}, {seed: -2}]) {
+    assert.throws(() => build({ ...settings, ...extra }, [image(1)]));
+  }
+  for (const refs of [[], [image(0), audio], [video]]) assert.throws(() => build(settings, refs));
+  assert.throws(() => build({ ...settings, mode: 'video-extend' }, [video]));
 });
 test('Wan lip-sync requires one first frame plus one driving audio', () => {
   const p = build({ ...base('wan2.7-i2v'), mode: 'image-to-video' }, [image(0), audio]);

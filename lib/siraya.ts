@@ -304,6 +304,13 @@ export async function createImage(body: ImageGenerationRequest, credentials?: Si
   return res.json();
 }
 
+/** Exact synchronous image envelope for reviewed BYOK-only models. */
+export async function createBusinessImage(body: Record<string, unknown>, credentials: SirayaCredentials) {
+  if (credentials === undefined) throw new SirayaConfigError();
+  const res = await sirayaFetch("/images/generations", { method: "POST", body: JSON.stringify(body) }, credentials);
+  return res.json();
+}
+
 /**
  * A genuinely separate endpoint from /images/generations — verified live
  * on 2026-09-06: SIRAYA-Dola-Seedream-5.0-pro accepts real image_urls (http

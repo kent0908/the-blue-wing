@@ -75,5 +75,24 @@ async function check(name, fn) { await fn(); count++; console.log('PASS', name);
   await check('GET, network uncertainty and receipt callback failure cannot create paid retries',async()=>{let calls=0,metadataCalls=0;global.fetch=async()=>{calls++;return Response.json({data:[]},{headers:{'x-request-id':'read-only-receipt'}})};await api.listModels({...own,onRequestMetadata:()=>metadataCalls++});assert.equal(metadataCalls,0);await api.createImage({model:'gpt-image-2',prompt:'A city'},{...own,onRequestMetadata:()=>{throw Error('receipt writer unavailable')}});assert.equal(calls,2);global.fetch=async()=>{throw new TypeError('network')};await assert.rejects(()=>api.createImage({model:'gpt-image-2',prompt:'A city'},{...own,onRequestMetadata:()=>metadataCalls++}));assert.equal(metadataCalls,0);});
   await check('exact BYOK video builder survives transport without C adapters or extra watermark fields',async()=>{const payload={model:'wan2.7-r2v',prompt:'A blue crane',resolution:'720P',watermark:false,seconds:5,input_references:[{role:'reference_image',url:'https://owned.invalid/a.png'}]};let calls=0;global.fetch=async(_url,init)=>{calls++;assert.deepEqual(JSON.parse(init.body),payload);assert.equal(init.headers.get('Authorization'),'Bearer '+own.apiKey);return Response.json({data:[]});};await api.createBusinessVideo(payload,own);assert.equal(calls,1);await assert.rejects(()=>api.createBusinessVideo(payload),api.SirayaConfigError);assert.equal(calls,1)});
   await check('BYOK GPT image edit honors JPEG compression while C image edits preserve PNG behavior',async()=>{const formats=[];global.fetch=async(_url,init)=>{const body=JSON.parse(init.body);formats.push(body.output_format);if(body.output_format==='jpeg')assert.equal(body.output_compression,75);return Response.json({data:[]});};const payload={model:'gpt-image-2.5-flare',prompt:'A blue crane',image:'https://owned.invalid/a.png',output_format:'jpeg',output_compression:75};await api.createImage(payload,own);await api.createImage(payload);assert.deepEqual(formats,['jpeg','png'])});
+  await check('exact BYOK image sender uses only the reviewed payload, own key and request receipt', async () => {
+    const payload = {model:'z-image-spicy',prompt:'A paper city',size:'1024x1024',prompt_extend:false};
+    const receipts = [];
+    let calls = 0;
+    global.fetch = async (url, init) => {
+      calls++;
+      assert.equal(String(url), 'https://llm.siraya.ai/v1/images/generations');
+      assert.equal(init.method, 'POST');
+      assert.equal(init.headers.get('Authorization'), 'Bearer ' + own.apiKey);
+      assert.deepEqual(JSON.parse(init.body), payload);
+      return Response.json({data:[]}, {headers:{'x-request-id':'spicy-transport-receipt'}});
+    };
+    await api.createBusinessImage(payload, {...own,onRequestMetadata:metadata => receipts.push(metadata)});
+    assert.deepEqual(receipts, [{requestId:'spicy-transport-receipt',httpStatus:200}]);
+    for (const invalid of [undefined, null, {}, {apiKey:''}]) {
+      await assert.rejects(() => api.createBusinessImage(payload, invalid), api.SirayaConfigError);
+    }
+    assert.equal(calls, 1);
+  });
   console.log(`PASS ${count} business provider isolation cases; no paid network calls`);
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>{global.fetch=originalFetch;keys.forEach((key,i)=>saved[i]===undefined?delete process.env[key]:process.env[key]=saved[i]);});
