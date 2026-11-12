@@ -5,7 +5,8 @@ import { modelLabel } from "@/lib/modelLabel";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { IconClose, IconDownload, IconLock } from "./Icons";
-import { useTr } from "@/lib/i18n/client";
+import { useLocale, useTr } from "@/lib/i18n/client";
+import { LOCALE_INTL } from "@/lib/i18n/locale";
 
 interface Scene {
   id: number;
@@ -37,6 +38,7 @@ interface ScenesData {
  * 建議的 prompt/model、觸發生成、把結果記錄成這個角色的場景。
  */
 export default function CharacterScenes({ characterId, onClose, refreshKey }: { characterId: number; onClose: () => void; refreshKey?: number }) {
+  const locale = useLocale();
   const tr = useTr();
   const [data, setData] = useState<ScenesData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -188,7 +190,7 @@ export default function CharacterScenes({ characterId, onClose, refreshKey }: { 
                     ) : (
                       <video disablePictureInPicture disableRemotePlayback src={s.url} className="aspect-video w-full object-contain" controls playsInline preload="metadata" />
                     )}
-                    <p className="px-3 py-2 text-xs text-white/50">{new Date(s.createdAt).toLocaleDateString("zh-TW")} · {s.kind === "image" ? tr("生活照") : tr("互動影片")}</p>
+                    <p className="px-3 py-2 text-xs text-white/50">{new Date(s.createdAt).toLocaleDateString(LOCALE_INTL[locale])} · {s.kind === "image" ? tr("生活照") : tr("互動影片")}</p>
                     <a
                       href={s.url}
                       aria-label={tr("開啟回憶原檔")}

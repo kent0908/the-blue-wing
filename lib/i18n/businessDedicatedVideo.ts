@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   personalLibrary: "我的素材庫", personalSource: "個人素材", businessSource: "商務素材", searchPersonal: "搜尋圖片名稱",
@@ -43,5 +44,5 @@ const ja: BusinessDedicatedVideoCopy = {
   happyReferenceInfo: "[Image 1]、[Image 2] などの表記で、選択順の画像を指定できます。", sourceAspect: "開始フレームに合わせる", sourceRatio: "出力の画角は開始フレームで決まります。先に希望の比率に切り抜いてください。", selected: "画像 {count}／{max} 枚を選択中", referenceLimit: "この制作方法で使用できる画像数を超えています。選択を調整してから送信してください。", openAssets: "商務素材を選択・アップロード", assetsNote: "商務プラットフォームにアップロードした元画像を、このスタジオ内で選択できます。", happyRules: "JPEG・PNG・WebP、短辺400 px以上、1枚20 MB以下の画像を使用してください。",
   advanced: "詳細設定", watermark: "生成コンテンツの透かしを残す", watermarkInfo: "オフにすると、モデルの透かしを付けないよう明示的に指定します。", seed: "ランダムシード（任意）", seedPlaceholder: "空欄の場合はモデルが決定", seedWan: "-1〜2,147,483,647 の整数を指定できます。同じシードでも出力が同一になる保証はありません。", seedHappy: "0〜2,147,483,647 の整数を指定できます。同じシードでも出力が同一になる保証はありません。", promptExtend: "モデルによるプロンプトの調整", promptExtendInfo: "オンにすると生成前に説明文が書き換えられます。自分の文章をそのまま使用する場合はオフにしてください。", negative: "避けたい内容（任意）", negativePlaceholder: "例：ぼやけた映像、手ぶれ、不自然な手", negativeCount: "{count}／4,000文字", providerDocs: "モデルのパラメータ資料を見る",
 };
-const COPY: Record<Locale, BusinessDedicatedVideoCopy> = { "zh-Hant": zh, en, ja };
+const COPY: Record<Locale, BusinessDedicatedVideoCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessDedicatedVideoCopy(locale: Locale): BusinessDedicatedVideoCopy { return COPY[locale]; }

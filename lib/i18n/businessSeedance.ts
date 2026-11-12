@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   referenceGuide: "素材規格與人物參照", localRequirements: "一般參考圖：PNG、JPEG、WebP 或 GIF，寬高各 300–6,000 px、寬高比 0.4–2.5，檔案小於 30 MB。", providerMediaRequirements: "參考影片與音訊各自的累計時長：Seedance 2.0 最多 15 秒；2.5 最多 30 秒。SIRAYA 仍會檢查原檔規格與可用性。", faceNotice: "含真人臉部的圖片或影片，請在商務素材庫上傳，待 SIRAYA 素材處理完成後選取；不必離開商務工作室。", providerDocs: "SIRAYA 參數文件", assetDocs: "人物素材接入說明",
@@ -25,5 +26,5 @@ const ja: BusinessSeedanceCopy = {
   ownLibrary: "自分の画像庫", providerLibrary: "SIRAYA 素材", libraryDescription: "自分の画像庫から選択できます。映像と音声は SIRAYA 素材から追加してください。", noLocalAssets: "画像がありません。ご自身の画像を先にアップロードしてください。", openLibrary: "ビジネス素材庫を開く", selected: "選択した素材", remove: "外す", select: "選択", firstFrame: "開始フレーム", lastFrame: "終了フレーム", assetUnnamed: "素材 {id}", selectionOrder: "この順序で送信します。外して再選択すると順番を変えられます。", capReached: "このモードの素材数の上限です", imageOnly: "このモードは画像のみ対応しています", notActive: "この素材は準備中です", providerDescription: "接続中のキーに属する SIRAYA 素材を読み込み、名前と種類だけを表示します。送信前に素材の利用権限を確認します。", loadAssets: "SIRAYA 素材を読み込む", reload: "素材を再読み込み", more: "素材をさらに読み込む", search: "素材名で検索", searchButton: "検索", loading: "素材を読み込み中…", noProviderAssets: "利用可能な素材がありません。SIRAYA でアップロードと処理が完了しているか確認してください。", providerAccessNotice: "SIRAYA 素材 API は提供元によるアカウント別の有効化が必要です。現在は Root Account の生成キーのみ対応し、サブアカウントでは利用できない場合があります。", assetServiceUnavailable: "SIRAYA 素材を取得できません。素材機能の有効化と Root Account キーを確認するか、後ほど再試行してください。", keyNeeded: "先にご自身の SIRAYA API キーを接続してください。", accessDenied: "ビジネス権限が変更されました。制作室を再読み込みしてください。", openProvider: "ビジネス素材のアップロードと管理", readOnly: "素材の読み込みと選択で生成は送信されません。", active: "利用可能", selectedCount: "{count}点を選択", resultCount: "{total}点中{count}点を表示", providerAsset: "SIRAYA 素材", localAsset: "画像庫の素材",
   format: "出力形式", movNotice: "MOV は原本をダウンロードして使用できます。ブラウザで再生できない場合は、対応プレーヤーで開いてください。", seed: "ランダムシード（任意）", seedPlaceholder: "空欄の場合はモデルが決定", seedNotice: "-1〜2,147,483,647 の整数を指定できます。同じシードでも提供元の出力が同一になる保証はありません。", automatic: "長さを自動設定", fixed: "秒数を指定", autoDurationNotice: "参考映像を使用する場合、長さは自動設定が必要です。最終的な長さと料金は SIRAYA の処理結果で決まります。", adaptiveNotice: "参考フレームに合わせて画角を自動調整します。", modeChangeNotice: "対応する素材は引き継がれます。新しいモードで使えない素材は先に外してください。",
 };
-const COPY: Record<Locale, BusinessSeedanceCopy> = { "zh-Hant": zh, en, ja };
+const COPY: Record<Locale, BusinessSeedanceCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessSeedanceCopy(locale: Locale): BusinessSeedanceCopy { return COPY[locale]; }

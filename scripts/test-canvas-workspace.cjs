@@ -29,7 +29,10 @@ function install(context, names = wanted) {
 }
 function pure(file) {
   const fixtureModule = { exports: {} };
-  new Function('module', 'exports', ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: options }).outputText)(fixtureModule, fixtureModule.exports);
+  new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: options }).outputText)(id => {
+    if (id === './simplifyChinese') return pure('lib/i18n/simplifyChinese.ts');
+    return require(id);
+  }, fixtureModule, fixtureModule.exports);
   return fixtureModule.exports;
 }
 const { CanvasSaveState, CanvasRunLock } = pure('lib/canvas/saveState.ts');
@@ -78,11 +81,11 @@ async function test(name, fn) { await fn(); passed++; console.log('PASS canvas w
     listeners.get('pointermove')({ pointerId: 7, clientX: 40, clientY: 60 }); close(state.pan.x, 110, 'pan x'); close(state.pan.y, 100, 'pan y');
     listeners.get('pointercancel')({ pointerId: 7 }); assert.equal(state.ended, null); state.cleanup(); assert.equal(listeners.size, 0);
   });
-  await test('all workspace labels and count formats exist for zh/en/ja with matching keys', () => {
+  await test('all workspace labels and count formats exist for all four locales with matching keys', () => {
     const { canvasWorkspaceCopy: copies } = pure('lib/i18n/canvasWorkspace.ts');
     const keys = Object.keys(copies['zh-Hant']).sort();
-    for (const locale of ['zh-Hant', 'en', 'ja']) { assert.deepEqual(Object.keys(copies[locale]).sort(), keys); for (const value of Object.values(copies[locale])) assert.ok(typeof value === 'string' && value.trim()); for (const key of ['nodes', 'links']) assert.equal((copies[locale][key].match(/\{n\}/g) || []).length, 1); }
-    assert.equal(copies.en.focus, 'Go to node'); assert.equal(copies.ja.focus, 'ノードへ移動'); assert.equal(copies['zh-Hant'].focus, '前往節點');
+    for (const locale of ['zh-Hant', 'zh-Hans', 'en', 'ja']) { assert.deepEqual(Object.keys(copies[locale]).sort(), keys); for (const value of Object.values(copies[locale])) assert.ok(typeof value === 'string' && value.trim()); for (const key of ['nodes', 'links']) assert.equal((copies[locale][key].match(/\{n\}/g) || []).length, 1); }
+    assert.equal(copies.en.focus, 'Go to node'); assert.equal(copies.ja.focus, 'ノードへ移動'); assert.equal(copies['zh-Hant'].focus, '前往節點'); assert.equal(copies['zh-Hans'].focus, '前往节点');
   });
   await test('run lock blocks saves and draft export remains available without any API', async () => {
     const calls = [], revoked = [], clicked = [], blobs = [], lock = new CanvasRunLock();

@@ -84,10 +84,10 @@ async function test(name, fn) { await fn(); passed++; console.log('PASS industry
   await test('catalogue has sixteen distinct plans and complete localized fields', () => {
     assert.equal(INDUSTRY_SKILLS.length, 16); assert.equal(new Set(INDUSTRY_SKILLS.map(item => item.id)).size, 16);
     for (const category of ['commerce', 'advertising', 'games', 'art']) assert.equal(INDUSTRY_SKILLS.filter(item => item.category === category).length, 4);
-    for (const language of ['zh-Hant', 'en', 'ja']) for (const item of INDUSTRY_SKILLS) { const skill = getLocalizedSkill(item.id, language); assert.equal(skill.id, item.id); assert.ok(skill.title && skill.summary && skill.deliverable); assert.ok(['image', 'video'].includes(skill.mediaType)); assert.ok(skill.fields.some(field => field.required)); assert.equal(new Set(skill.fields.map(field => field.key)).size, skill.fields.length); for (const field of skill.fields) assert.ok(field.label && field.placeholder); assert.ok(skill.workflow.length); }
+    for (const language of ['zh-Hant', 'zh-Hans', 'en', 'ja']) for (const item of INDUSTRY_SKILLS) { const skill = getLocalizedSkill(item.id, language); assert.equal(skill.id, item.id); assert.ok(skill.title && skill.summary && skill.deliverable); assert.ok(['image', 'video'].includes(skill.mediaType)); assert.ok(skill.fields.some(field => field.required)); assert.equal(new Set(skill.fields.map(field => field.key)).size, skill.fields.length); for (const field of skill.fields) assert.ok(field.label && field.placeholder); assert.ok(skill.workflow.length); }
   });
   await test('category and keyword search change real rendered cards without API calls', () => {
-    for (const language of ['zh-Hant', 'en', 'ja']) {
+    for (const language of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
       const state = setup(language), first = INDUSTRY_SKILLS.find(item => item.category === 'commerce'), title = getLocalizedSkill(first.id, language).title;
       const cardCount = () => elements(state.render()).filter(node => node.type === 'article').length;
       assert.equal(cardCount(), 8); const more = elements(state.render()).find(node => node.type === 'button' && node.props['aria-expanded'] !== undefined); assert.ok(more); more.props.onClick(); assert.equal(cardCount(), 16);
@@ -99,7 +99,7 @@ async function test(name, fn) { await fn(); passed++; console.log('PASS industry
     }
   });
   await test('each real card opens its named modal and validates required fields before navigation', () => {
-    for (const language of ['zh-Hant', 'en', 'ja']) {
+    for (const language of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
       const id = INDUSTRY_SKILLS[0].id, state = setup(language); state.open(id); assert.equal(state.brief.dialog.showCount, 1);
       const dialog = elements(state.briefTree).find(node => node.type === 'dialog'), heading = elements(state.briefTree).find(node => node.props?.id === dialog.props['aria-labelledby']); assert.equal(text(heading), getLocalizedSkill(id, language).title);
       state.submit(); assert.equal(navigations.length, 0); assert.ok(elements(state.briefTree).some(node => node.props?.role === 'alert' && text(node).trim()));
@@ -107,12 +107,12 @@ async function test(name, fn) { await fn(); passed++; console.log('PASS industry
     }
   });
   await test('actual React can render each localized review including structured workflow steps', () => {
-    for (const language of ['zh-Hant', 'en', 'ja']) for (const category of ['commerce', 'advertising', 'games', 'art']) {
+    for (const language of ['zh-Hant', 'zh-Hans', 'en', 'ja']) for (const category of ['commerce', 'advertising', 'games', 'art']) {
       const item = INDUSTRY_SKILLS.find(skill => skill.category === category), state = setup(language); state.open(item.id); const html = renderToStaticMarkup(reactTree(state.briefTree)); assert.ok(html.startsWith('<dialog')); assert.equal((html.match(/<li>/g) || []).length, getLocalizedSkill(item.id, language).workflow.length); assert.ok(html.includes('industry-prompt')); unmount(state.brief);
     }
   });
   await test('filled brief rebuilds the prompt, manual edits survive into same-origin studio handoff', () => {
-    for (const language of ['zh-Hant', 'en', 'ja']) for (const category of ['commerce', 'advertising', 'games', 'art']) {
+    for (const language of ['zh-Hant', 'zh-Hans', 'en', 'ja']) for (const category of ['commerce', 'advertising', 'games', 'art']) {
       const item = INDUSTRY_SKILLS.find(skill => skill.category === category), state = setup(language); state.open(item.id); state.fillRequired(item.id);
       const builtPrompt = elements(state.renderBrief()).find(node => node.props?.name === 'editedPrompt').props.value; assert.ok(builtPrompt.includes('original cobalt study'));
       const manual = `  Original edited direction — 藍羽と光 / ${category} & 50%  `; state.change('editedPrompt', manual); state.submit(); assert.equal(navigations.length, 1);
@@ -144,10 +144,10 @@ async function test(name, fn) { await fn(); passed++; console.log('PASS industry
     const state = setup('en'); state.open(INDUSTRY_SKILLS[0].id); state.change('editedPrompt', 'Reviewable local text'); const button = elements(state.renderBrief()).find(node => node.type === 'button' && text(node) === 'Copy prompt'); await button.props.onClick(); state.renderBrief(); assert.deepEqual(copied, ['Reviewable local text']); assert.ok(text(state.briefTree).includes('Prompt copied')); assert.equal(fetches.length, 0);
   });
   await test('builder reports missing required fields and completes every plan without unresolved placeholders', () => {
-    for (const language of ['zh-Hant', 'en', 'ja']) for (const item of INDUSTRY_SKILLS) {
+    for (const language of ['zh-Hant', 'zh-Hans', 'en', 'ja']) for (const item of INDUSTRY_SKILLS) {
       const skill = getLocalizedSkill(item.id, language), empty = buildIndustryPrompt(item.id, {}, language); assert.equal(empty.isComplete, false); assert.ok(empty.missingFields.length);
       const values = Object.fromEntries(skill.fields.map(field => [field.key, `${field.label} original study`])); const built = buildIndustryPrompt(item.id, values, language); assert.equal(built.isComplete, true); assert.deepEqual(built.missingFields, []); assert.ok(built.prompt.trim().length > 100); assert.equal(/\{\{[^}]+\}\}|\[object Object\]|undefined/.test(built.prompt), false);
     }
   });
-  console.log(`PASS ${passed} actual industry UI/builder groups; three locales, zero network or paid requests. Browser layout/native dialog behavior is verified separately.`);
+  console.log(`PASS ${passed} actual industry UI/builder groups; four locales, zero network or paid requests. Browser layout/native dialog behavior is verified separately.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

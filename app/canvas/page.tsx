@@ -9,6 +9,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IconPlus, IconCanvas, IconTrash, IconGlobe, IconApps } from "@/components/Icons";
 import { useLocale, useTr } from "@/lib/i18n/client";
+import { LOCALE_INTL } from "@/lib/i18n/locale";
+import { simplifyChinese } from "@/lib/i18n/simplifyChinese";
 import { workflowGuideEntry } from "@/lib/i18n/workflowGuideEntry";
 
 interface WorkflowSummary {
@@ -98,10 +100,18 @@ function GalleryCard({
   );
 }
 
+const zhCanvas = { search: "搜尋我的畫布", noMatch: "找不到符合的畫布。", searchHint: "試試其他名稱。", deleteFailed: "刪除失敗，作品仍保留，請稍後再試。", deleting: "刪除中…", deleteTitle: "確定刪除這份作品？", deleteNote: "此動作無法復原。" };
+const CANVAS_COPY = {
+  "zh-Hant": zhCanvas,
+  "zh-Hans": simplifyChinese(zhCanvas),
+  en: { search: "Search my canvases", noMatch: "No matching canvases.", searchHint: "Try another name.", deleteFailed: "Could not delete. Your work is still saved.", deleting: "Deleting…", deleteTitle: "Delete this work?", deleteNote: "This action cannot be undone." },
+  ja: { search: "マイキャンバスを検索", noMatch: "一致するキャンバスがありません。", searchHint: "別の名前で検索してください。", deleteFailed: "削除できませんでした。内容はそのまま保存されています。", deleting: "削除中…", deleteTitle: "この作品を削除しますか？", deleteNote: "この操作は元に戻せません。" },
+};
+
 export default function CanvasHomePage() {
   const tr = useTr();
   const locale = useLocale();
-  const copy = locale === "ja" ? { search: "マイキャンバスを検索", noMatch: "一致するキャンバスがありません。", searchHint: "別の名前で検索してください。", deleteFailed: "削除できませんでした。内容はそのまま保存されています。", deleting: "削除中…", deleteTitle: "この作品を削除しますか？", deleteNote: "この操作は元に戻せません。" } : locale === "en" ? { search: "Search my canvases", noMatch: "No matching canvases.", searchHint: "Try another name.", deleteFailed: "Could not delete. Your work is still saved.", deleting: "Deleting…", deleteTitle: "Delete this work?", deleteNote: "This action cannot be undone." } : { search: "搜尋我的畫布", noMatch: "找不到符合的畫布。", searchHint: "試試其他名稱。", deleteFailed: "刪除失敗，作品仍保留，請稍後再試。", deleting: "刪除中…", deleteTitle: "確定刪除這份作品？", deleteNote: "此動作無法復原。" };
+  const copy = CANVAS_COPY[locale];
   const router = useRouter();
   const [shareId, setShareId] = useState<string | null>(null);
   const [workflows, setWorkflows] = useState<WorkflowSummary[] | null>(null);
@@ -330,7 +340,7 @@ export default function CanvasHomePage() {
                   </Link>
                   <div className={styles.workflowMeta}>
                     <span>{w.nodeCount} {tr("個節點")}</span>
-                    <time dateTime={w.updatedAt}>{new Date(w.updatedAt).toLocaleDateString(locale === "zh-Hant" ? "zh-TW" : locale === "ja" ? "ja-JP" : "en-US", { year: "numeric", month: "short", day: "numeric" })}</time>
+                    <time dateTime={w.updatedAt}>{new Date(w.updatedAt).toLocaleDateString(LOCALE_INTL[locale], { year: "numeric", month: "short", day: "numeric" })}</time>
                   </div>
                   <div className={styles.workflowActions}>
                     <button

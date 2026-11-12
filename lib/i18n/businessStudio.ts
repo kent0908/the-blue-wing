@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   shortWorkflows: "工作流",
@@ -104,5 +105,5 @@ const ja: BusinessStudioCopy = {
   ownKeyLabel: "ご自身の SIRAYA 残高を使用",
 };
 
-const COPY: Record<Locale, BusinessStudioCopy> = { "zh-Hant": zh, en, ja };
+const COPY: Record<Locale, BusinessStudioCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessStudioCopy(locale: Locale): BusinessStudioCopy { return COPY[locale]; }

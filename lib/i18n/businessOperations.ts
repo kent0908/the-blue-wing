@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   assets: "素材", work: "作品", usage: "費用", models: "模型", keys: "金鑰",
@@ -76,5 +77,5 @@ const ja: BusinessOperationsCopy = {
   imageWidth: "幅（px）", imageHeight: "高さ（px）", textImageOnly: "テキストのみを使い、1回につき1枚を生成します。",
   promptRewrite: "プロンプトを書き換える", promptRewriteSurcharge: "書き換えには SIRAYA の追加料金がかかります。",
 };
-const COPY: Record<Locale, BusinessOperationsCopy> = { "zh-Hant": zh, en, ja };
+const COPY: Record<Locale, BusinessOperationsCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export const businessOperationsCopy = (locale: Locale) => COPY[locale];

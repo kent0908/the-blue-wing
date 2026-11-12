@@ -1,6 +1,7 @@
 import type { Locale } from "./locale";
 import { EN } from "./strings/en";
 import { JA } from "./strings/ja";
+import { simplifyChinese } from "./simplifyChinese";
 
 /**
  * String-keyed translation for the long tail of UI copy: the Traditional
@@ -13,13 +14,16 @@ import { JA } from "./strings/ja";
  * `{name}`-style placeholders are substituted after lookup so the table
  * key stays stable regardless of the value.
  */
-const TABLES: Record<Locale, Record<string, string>> = { "zh-Hant": {}, en: EN, ja: JA };
+const TABLES = { en: EN, ja: JA };
 
 export type Tr = (zh: string | null | undefined, vars?: Record<string, string | number>) => string;
 
 export function translate(locale: Locale, zh: string | null | undefined, vars?: Record<string, string | number>): string {
   if (zh === null || zh === undefined) return "";
-  const out = locale === "zh-Hant" ? zh : (TABLES[locale][zh] ?? zh);
+  // Some existing callers pass through file names, model output, and other arbitrary text.
+  const authored = Object.hasOwn(EN, zh) || Object.hasOwn(JA, zh);
+  const out = locale === "zh-Hans" ? (authored ? simplifyChinese(zh) : zh)
+    : locale === "zh-Hant" ? zh : (TABLES[locale][zh] ?? zh);
   return vars ? out.replace(/\{(\w+)\}/g, (_, k) => (k in vars ? String(vars[k]) : `{${k}}`)) : out;
 }
 
@@ -36,6 +40,8 @@ export function trFor(locale: Locale): Tr {
 
 /** Which keys a locale is still missing — used by scripts/check-i18n.cjs. */
 export function missingKeys(locale: Locale, keys: Iterable<string>): string[] {
+  if (locale === "zh-Hant") return [];
+  if (locale === "zh-Hans") return [...keys].filter(key => !Object.hasOwn(EN, key) && !Object.hasOwn(JA, key));
   const table = TABLES[locale];
   return [...keys].filter((k) => !(k in table));
 }

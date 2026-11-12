@@ -1,16 +1,20 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
+
+const zh = {
+  more: "更多工作流操作", name: "工作流名稱", canvas: "流程畫布", studio: "藍翼工作流", business: "商務工作流 · BYOK",
+  nodes: "{n} 個節點", links: "{n} 條連線", focus: "前往節點", overview: "全貌",
+  emptyTitle: "讓第一個想法，有了下一步。", emptyBody: "從文字、素材或一個鏡頭開始，將它們連成你的創作流程。",
+  palette: "加入創作節點", close: "關閉節點選單", output: "輸出", input: "輸入",
+  add: "加節點", run: "執行", blankCanvas: "空白畫布", saveFailed: "儲存失敗", nameRequired: "請輸入工作流名稱。",
+  saveRetry: "未能儲存。請重試，或先匯出草稿。",
+  leaveTitle: "離開工作流？", leaveChanges: "這次編輯尚未儲存。", leaveRunning: "已送出的任務可到生成紀錄查看。",
+  keepEditing: "繼續編輯", leave: "離開", discard: "不儲存離開", saveAndLeave: "儲存並離開",
+};
 
 export const canvasWorkspaceCopy = {
-  "zh-Hant": {
-    more: "更多工作流操作", name: "工作流名稱", canvas: "流程畫布", studio: "藍翼工作流", business: "商務工作流 · BYOK",
-    nodes: "{n} 個節點", links: "{n} 條連線", focus: "前往節點", overview: "全貌",
-    emptyTitle: "讓第一個想法，有了下一步。", emptyBody: "從文字、素材或一個鏡頭開始，將它們連成你的創作流程。",
-    palette: "加入創作節點", close: "關閉節點選單", output: "輸出", input: "輸入",
-    add: "加節點", run: "執行", blankCanvas: "空白畫布", saveFailed: "儲存失敗", nameRequired: "請輸入工作流名稱。",
-    saveRetry: "未能儲存。請重試，或先匯出草稿。",
-    leaveTitle: "離開工作流？", leaveChanges: "這次編輯尚未儲存。", leaveRunning: "已送出的任務可到生成紀錄查看。",
-    keepEditing: "繼續編輯", leave: "離開", discard: "不儲存離開", saveAndLeave: "儲存並離開",
-  },
+  "zh-Hant": zh,
+  "zh-Hans": simplifyChinese(zh),
   en: {
     more: "More workflow actions", name: "Workflow name", canvas: "Workflow canvas", studio: "Blue Wing workflows", business: "Business workflows · BYOK",
     nodes: "{n} nodes", links: "{n} connections", focus: "Go to node", overview: "Overview",

@@ -1,5 +1,6 @@
 /* Editor page (rest) · help centre · models index · layers · studio (part 2). */
 export const EN2: Record<string, string> = {
+  "這份簡報已過期，或不在目前分頁。請回首頁重新開啟創作方案。": "This brief is unavailable in this tab or has expired. Reopen the creative plan from the home page.",
   "從資產庫選": "From assets",
   "T 新增文字圖層": "T Add text layer",
   "選一張加入畫布": "Pick one to add to the canvas",
@@ -153,6 +154,7 @@ export const EN2: Record<string, string> = {
 };
 
 export const JA2: Record<string, string> = {
+  "這份簡報已過期，或不在目前分頁。請回首頁重新開啟創作方案。": "このブリーフは別のタブ、または有効期限切れです。ホームで制作プランを開き直してください。",
   "從資產庫選": "アセットから選ぶ",
   "T 新增文字圖層": "T テキストレイヤーを追加",
   "選一張加入畫布": "1 枚選んでキャンバスに追加",

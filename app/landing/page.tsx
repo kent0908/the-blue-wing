@@ -12,6 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 import WingExperience from "@/components/WingExperience";
 import LandingMedia from "@/components/LandingMedia";
+import LanguageMenu from "@/components/LanguageMenu";
 import ClosingGlow from "@/components/ClosingGlow";
 import { landingGallerySlots } from "@/lib/landingSlots";
 import Image from "next/image";
@@ -47,7 +48,10 @@ export default async function LandingPage(){
   <header className={styles.header}>
     <Link href="/" className={styles.brand}><Image src="/wing-mark.png" width={38} height={38} alt=""/>The Blue Wing</Link>
     <nav aria-label={t.nav.mainNav} className={styles.nav}><a href="#video">{L.navVideo}</a><a href="#image">{L.navImage}</a><a href="#canvas">{L.navCanvas}</a><a href="#companions">{L.navCompanions}</a></nav>
-    <Link href="/studio?mode=video" className={styles.smallCta}>{L.start} <IconArrowRight className="h-4 w-4"/></Link>
+    <div className={styles.headerActions}>
+      <LanguageMenu />
+      <Link href="/studio?mode=video" className={styles.smallCta}>{L.start} <IconArrowRight className="h-4 w-4 shrink-0"/></Link>
+    </div>
   </header>
   <WingExperience/>
   {media.hero && <section className={styles.hero}>

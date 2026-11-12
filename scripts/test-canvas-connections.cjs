@@ -11,6 +11,7 @@ function load(file) {
   new Function('require', 'module', 'exports', source)(id => {
     if (id === './director3d') return { defaultDirector3DData: () => ({ characters: [], ground: {}, background: {} }) };
     if (id === '../i18n/k') return { k: text => text };
+    if (id === './simplifyChinese') return load('lib/i18n/simplifyChinese.ts');
     if (id === './types' || id === '@/lib/canvas/types') return load('lib/canvas/types.ts');
     if (id === '@/lib/canvas/connections') return load('lib/canvas/connections.ts');
     if (id.endsWith('.module.css')) return new Proxy({}, { get: (_, key) => String(key) });
@@ -74,7 +75,7 @@ check(() => assert.equal(path({ x: 10, y: 20 }, { x: 100, y: 50 }), 'M 10 20 C 6
 check(() => assert.deepEqual(position(nodes[1], 'out', { out: { x: 240.5, y: 20.5 } }), { x: 540.5, y: 30.5 }));
 check(() => assert.deepEqual(position({ ...nodes[1], x: 455, width: 420 }, 'out', { out: { x: 420.5, y: 20.5 } }), { x: 875.5, y: 30.5 }));
 const offsets = new Map([['imageA', { out: { x: 240.5, y: 20.5 } }], ['imageB', { image: { x: .5, y: 79.5 } }]]);
-for (const locale of ['zh-Hant', 'en', 'ja']) {
+for (const locale of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
   check(() => assert.ok(copy[locale].help && copy[locale].cycle && copy[locale].run.includes('{c}')));
   const html = renderToStaticMarkup(React.createElement(Connections, { graph: connected, offsets, session: null, zoom: 1, selectedEdge: 'ab', toWorld: (x, y) => ({ x, y }), onComplete() {}, onCancel() {}, onHover() {}, onSelect() {}, onDelete() {}, edgeLabel: copy[locale].edge }));
   check(() => assert.ok(html.includes('M 540.5 30.5 C')));
@@ -85,4 +86,4 @@ for (const locale of ['zh-Hant', 'en', 'ja']) {
 const css = fs.readFileSync('components/canvas/connections.module.css', 'utf8');
 check(() => assert.ok(css.includes('prefers-reduced-motion: reduce') && css.includes('.movingDot { display: none; }')));
 check(() => assert.ok(css.includes('width: 44px; height: 44px;')));
-console.log(`PASS ${checks} canvas connection checks: cycles, replacement, safe reconnect, zoom-independent snapping, real offset geometry, accessible SVG and three-language copy.`);
+console.log(`PASS ${checks} canvas connection checks: cycles, replacement, safe reconnect, zoom-independent snapping, real offset geometry, accessible SVG and four-language copy.`);

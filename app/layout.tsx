@@ -17,7 +17,7 @@ import { LocaleProvider } from "@/lib/i18n/client";
  * spread NOINDEX from lib/seo/site.ts. metadataBase makes relative OG /
  * canonical URLs resolve to the canonical origin, not the request host.
  */
-const OG_LOCALE: Record<Locale, string> = { "zh-Hant": "zh_TW", en: "en_US", ja: "ja_JP" };
+const OG_LOCALE: Record<Locale, string> = { "zh-Hant": "zh_TW", "zh-Hans": "zh_CN", en: "en_US", ja: "ja_JP" };
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale();
   const tr = trFor(locale);

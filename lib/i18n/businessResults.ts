@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   recoverVideo: "重新取得成品", videoRecovered: "已取回原本的影片。", videoNotRecovered: "目前還無法取回原影片。這次沒有重新生成。",
@@ -46,4 +47,5 @@ const ja: Copy = {
   reuseTextOnly: "プロンプトだけ使う", reuseTextLoaded: "プロンプトを読み込みました。生成前にモードと参照素材を確認してください。", reuseReferenceRequired: "プロンプトに未選択の参照素材があります。素材を追加するか、プロンプトを編集してください。",
   result: "作品", emptyOutput: "プレビューはまだありません。更新して結果を確認してください。", more: "さらに表示", count: "{n} 件の作品", latest: "新しい順", oldest: "古い順", sort: "並び順", original: "元ファイルを開く",
 };
-export const businessResultsCopy = (locale: Locale): Copy => ({ "zh-Hant": zh, en, ja })[locale];
+const COPY: Record<Locale, Copy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
+export const businessResultsCopy = (locale: Locale): Copy => COPY[locale];

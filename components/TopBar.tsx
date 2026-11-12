@@ -5,54 +5,14 @@ import { CREDITS_UPDATED_EVENT } from "@/lib/creditEvents";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AccountDialog from "./AccountDialog";
-import { IconGlobe, IconHelp, IconSparkle } from "./Icons";
-import { setLocaleCookie, useLocale, useT } from "@/lib/i18n/client";
-import { LOCALES, LOCALE_LABEL, type Locale } from "@/lib/i18n/locale";
+import LanguageMenu from "./LanguageMenu";
+import { IconHelp, IconSparkle } from "./Icons";
+import { useT } from "@/lib/i18n/client";
 
 interface Me {
   user: { email: string; role: string; nickname: string | null } | null;
   credits?: number;
   plan?: { code: string; name: string };
-}
-
-function LanguageMenu() {
-  const router = useRouter();
-  const locale = useLocale();
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [open]);
-  const choose = (l: Locale) => {
-    setOpen(false);
-    if (l === locale) return;
-    setLocaleCookie(l);
-    router.refresh();
-  };
-  return (
-    <div ref={ref} className="relative shrink-0">
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open} aria-label={t.top.switchLanguage} title={t.top.switchLanguage}
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13.5px] text-[#d4d4d4] transition-colors hover:text-white sm:px-2.5">
-        <IconGlobe className="h-[17px] w-[17px]" />
-        <span className="hidden text-[12.5px] md:inline">{LOCALE_LABEL[locale]}</span>
-      </button>
-      {open && (
-        <div role="menu" aria-label={t.top.language} className="bw-menu absolute right-0 top-full z-50 mt-1 w-[150px] p-1.5">
-          {LOCALES.map((l) => (
-            <button key={l} role="menuitemradio" aria-checked={l === locale} type="button" onClick={() => choose(l)} className="bw-menu-item w-full text-left text-[13px]">
-              <span className="flex-1">{LOCALE_LABEL[l]}</span>{l === locale && <span aria-hidden="true">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function TopBar({ business = false }: { business?: boolean }) {

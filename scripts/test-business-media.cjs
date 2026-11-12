@@ -23,6 +23,7 @@ let cancelled = 0;
 const business = load('lib/business.ts', {
   'server-only': {}, './businessTypes': types, './businessSecrets': {}, './adultGate': adult,
   './i18n/server': { localeFromRequest: () => 'en' },
+  './i18n/simplifyChinese': require('./fixtures/load-simplify-chinese.cjs'),
   './apiauth': { requireUser: async () => user ? { user } : { error: NextResponse.json({ error: { code: 'unauthorized' } }, { status: 401 }) } },
   './db': { sql: async () => { lookups++; return { rows: [{ id: accountId, user_id: 7, company_name: 'Media fixture', use_case: 'Private output ownership check', status, review_note: null, created_at: '2026-10-19T00:00:00.000Z', updated_at: '2026-10-19T00:00:00.000Z' }] }; } },
 });

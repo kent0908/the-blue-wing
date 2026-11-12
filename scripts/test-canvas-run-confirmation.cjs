@@ -10,7 +10,9 @@ function compile(file, resolver) {
   new Function('require', 'module', 'exports', source)(resolver, mod, mod.exports);
   return mod.exports;
 }
-const { canvasConnectionsCopy: copy } = compile('lib/i18n/canvasConnections.ts', require);
+const simplifiedCopy = compile('lib/i18n/simplifyChinese.ts', require);
+const { canvasConnectionsCopy: copy } = compile('lib/i18n/canvasConnections.ts', id => id === './simplifyChinese' ? simplifiedCopy : require(id));
+assert.equal(copy['zh-Hans'].runTitle, '运行前确认');
 const { default: Confirmation } = compile('components/canvas/CanvasRunConfirmation.tsx', id => {
   if (id === '@/lib/i18n/client') return { useLocale: () => locale };
   if (id === '@/lib/i18n/canvasConnections') return { canvasConnectionsCopy: copy };
@@ -18,7 +20,7 @@ const { default: Confirmation } = compile('components/canvas/CanvasRunConfirmati
   return require(id);
 });
 let checks = 0;
-for (locale of ['zh-Hant', 'en', 'ja']) {
+for (locale of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
   const message = copy[locale].run.replace('{n}', '4').replace('{c}', '99');
   const html = renderToStaticMarkup(React.createElement(Confirmation, { message, onDecision() {} }));
   assert.ok(html.startsWith('<dialog')); checks++;
@@ -38,4 +40,4 @@ assert.ok(editor.includes('runConfirmationResolver.current?.(false)')); checks++
 assert.ok(editor.includes('!runtime && runConfirmation !== null')); checks++;
 const styles = fs.readFileSync('components/canvas/runConfirmation.module.css', 'utf8');
 assert.ok(styles.includes('calc(100vw - 32px)') && styles.includes('max-height: calc(100dvh - 40px)')); checks++;
-console.log(`PASS ${checks} confirmation checks: real HTML dialog, labelled title/description, three languages, guarded consumer renderer and cancellable promise wiring.`);
+console.log(`PASS ${checks} confirmation checks: real HTML dialog, labelled title/description, four languages, guarded consumer renderer and cancellable promise wiring.`);

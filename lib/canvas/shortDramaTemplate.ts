@@ -1,4 +1,5 @@
 import type { Locale } from "../i18n/locale";
+import { simplifyChinese } from "../i18n/simplifyChinese";
 import type { OfficialCanvasTemplate } from "./officialTemplates";
 import type { CanvasGraph, CanvasNode } from "./types";
 
@@ -28,7 +29,7 @@ type DramaCopy = {
   shots: { title: string; still: string; motion: string }[];
 };
 
-const copy: Record<Locale, DramaCopy> = {
+const copy: Record<Exclude<Locale, "zh-Hans">, DramaCopy> = {
   "zh-Hant": {
     name: "短劇全流程 · 最後一班渡船",
     description: "24 秒無台詞短劇。從劇本、角色與場景定稿，到四張開場參考圖、四段影片及剪輯交付。",
@@ -116,7 +117,7 @@ const copy: Record<Locale, DramaCopy> = {
 };
 
 export function shortDramaTemplate(locale: Locale): OfficialCanvasTemplate {
-  const t = copy[locale];
+  const t = locale === "zh-Hans" ? simplifyChinese(copy["zh-Hant"]) : copy[locale];
   const nodes: CanvasNode[] = [];
   const edges: CanvasGraph["edges"] = [];
   const note = (id: string, title: string, content: string, x: number, y: number, story = false) => {

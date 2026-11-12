@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { formatDuration } from "@/lib/formatTime";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTr } from "@/lib/i18n/client";
+import { useLocale, useTr } from "@/lib/i18n/client";
+import { LOCALE_INTL } from "@/lib/i18n/locale";
 import { k } from "@/lib/i18n/tr";
 
 
@@ -126,6 +127,7 @@ function ChangePassword() {
 }
 
 export default function AccountDetails() {
+  const locale = useLocale();
   const tr = useTr();
   const router = useRouter();
   const [data, setData] = useState<AccountData | null>(null);
@@ -207,7 +209,7 @@ export default function AccountDetails() {
             <div className="mt-1 text-[20px] font-semibold">{tr(data.plan.name)}</div>
             {data.user.planRenewsAt && (
               <div className="mt-1 text-[12px] leading-6 text-[#8a8a8a]">
-                {tr("續期：")}{new Date(data.user.planRenewsAt).toLocaleDateString("zh-TW")}
+                {tr("續期：")}{new Date(data.user.planRenewsAt).toLocaleDateString(LOCALE_INTL[locale])}
               </div>
             )}
           </div>
@@ -218,7 +220,7 @@ export default function AccountDetails() {
 
         <h2 className="mt-8 text-lg font-semibold">{tr("最近生成・耗時")}</h2>
         <p className="mt-2 text-xs leading-6 text-neutral-400">{tr("從提交至取得結果的時間，包含排隊與輪詢等待；不是影片本身的長度。舊紀錄未量測時顯示「未記錄」。")}</p>
-        <div className="mt-4 divide-y divide-neutral-800 rounded-2xl border border-neutral-800 px-4">{data.generations?.length?data.generations.map(g=><div key={g.id} className="flex items-start justify-between gap-4 py-4"><div className="min-w-0"><p className="break-words text-sm">{modelLabel(g.model)}</p><p className="mt-1 text-xs text-neutral-500">{new Date(g.created_at).toLocaleString("zh-TW",{hour12:false})}</p></div><span className="shrink-0 text-sm text-[#7ff0cd]">{g.duration_ms == null?tr("未記錄"):formatDuration(g.duration_ms, tr)}</span></div>):<p className="py-5 text-sm text-neutral-500">{tr("還沒有生成紀錄")}</p>}</div>
+        <div className="mt-4 divide-y divide-neutral-800 rounded-2xl border border-neutral-800 px-4">{data.generations?.length?data.generations.map(g=><div key={g.id} className="flex items-start justify-between gap-4 py-4"><div className="min-w-0"><p className="break-words text-sm">{modelLabel(g.model)}</p><p className="mt-1 text-xs text-neutral-500">{new Date(g.created_at).toLocaleString(LOCALE_INTL[locale],{hour12:false})}</p></div><span className="shrink-0 text-sm text-[#7ff0cd]">{g.duration_ms == null?tr("未記錄"):formatDuration(g.duration_ms, tr)}</span></div>):<p className="py-5 text-sm text-neutral-500">{tr("還沒有生成紀錄")}</p>}</div>
 
         <h2 className="mt-8 text-[15px] font-semibold">{tr("點數紀錄")}</h2>
         <div className="mt-3 overflow-hidden rounded-xl border border-[#262626]">
@@ -237,7 +239,7 @@ export default function AccountDetails() {
               {data.ledger.map((row) => (
                 <tr key={row.id} className="border-t border-[#1e1e1e]">
                   <td className="px-3 py-2 text-[#9a9a9a]">
-                    {new Date(row.created_at).toLocaleString("zh-TW", { hour12: false })}
+                    {new Date(row.created_at).toLocaleString(LOCALE_INTL[locale], { hour12: false })}
                   </td>
                   <td className="px-3 py-2">
                     {tr(REASON_LABEL[row.reason] || row.reason)}

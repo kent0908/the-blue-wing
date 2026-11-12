@@ -19,10 +19,17 @@ const mocks = {
   '@/components/Icons': new Proxy({}, { get: () => function Icon() {} }),
   '@/lib/i18n/client': { useLocale: () => locale, useTr: () => text => text },
 };
-const guideCopy = { exports: {} };
-const guideSource = fs.readFileSync(path.join(repo, 'lib/i18n/workflowGuideEntry.ts'), 'utf8');
-new Function('exports', ts.transpileModule(guideSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(guideCopy.exports);
-mocks['@/lib/i18n/workflowGuideEntry'] = guideCopy.exports;
+function compileCopy(file, resolve = require) {
+  const result = { exports: {} };
+  const source = fs.readFileSync(path.join(repo, 'lib/i18n', file + '.ts'), 'utf8');
+  new Function('require', 'exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(resolve, result.exports);
+  return result.exports;
+}
+const simplifiedCopy = compileCopy('simplifyChinese');
+const { workflowGuideEntry: guideCopy } = compileCopy('workflowGuideEntry', id => id === './simplifyChinese' ? simplifiedCopy : require(id));
+mocks['@/lib/i18n/workflowGuideEntry'] = { workflowGuideEntry: guideCopy };
+mocks['@/lib/i18n/simplifyChinese'] = simplifiedCopy;
+mocks['@/lib/i18n/locale'] = compileCopy('locale');
 const moduleFixture = { exports: {} };
 new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync(path.join(repo, 'app/canvas/page.tsx'), 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText)(name => { if (name in mocks) return mocks[name]; throw Error('Unexpected import: ' + name); }, moduleFixture, moduleFixture.exports);
 const render = () => { index = 0; return moduleFixture.exports.default(); };
@@ -38,16 +45,16 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 let checks = 0;
 async function test(name, fn) { await fn(); checks++; console.log('PASS ' + name); }
 (async () => {
-  await test('workflow guide is discoverable from the canvas header in all three languages', () => {
-    for (const lang of ['zh-Hant', 'en', 'ja']) {
+  await test('workflow guide is discoverable from the canvas header in all four languages', () => {
+    for (const lang of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
       reset(); locale = lang;
       const link = elements().find(node => node.type === mockLink && node.props.href === '/canvas/guide');
-      assert.equal(link?.props.children, guideCopy.exports.workflowGuideEntry[lang].guide);
+      assert.equal(link?.props.children, guideCopy[lang].guide);
     }
   });
   await test('workflow controls are semantic siblings of the navigation link', () => { reset(); const nodes = elements(); const link = nodes.find(node => node.type === mockLink && node.props.href === '/canvas/one'); assert.ok(link); assert.equal(flatten(link).some(node => node?.type === 'button'), false); assert.ok(nodes.find(node => node.props?.['aria-label'] === '刪除')); });
-  await test('personal search filters actual workflow names and has translated labels', () => { for (const [lang, label] of [['zh-Hant', '搜尋我的畫布'], ['en', 'Search my canvases'], ['ja', 'マイキャンバスを検索']]) { reset(); locale = lang; const input = elements().find(node => node.type === 'input' && node.props.type === 'search'); assert.equal(input.props.placeholder, label); input.props.onChange({ target: { value: 'MISSING' } }); assert.equal(elements().some(node => node.type === mockLink && node.props.href === '/canvas/one'), false); input.props.onChange({ target: { value: 'COBALT' } }); assert.ok(elements().find(node => node.type === mockLink && node.props.href === '/canvas/one')); } });
-  await test('dates use the current zh/en/ja locale and retain the machine timestamp', () => { for (const lang of ['zh-Hant', 'en', 'ja']) { reset(); locale = lang; const time = elements().find(node => node.type === 'time'); assert.equal(time.props.dateTime, work.updatedAt); assert.equal(time.props.children, new Date(work.updatedAt).toLocaleDateString(lang === 'zh-Hant' ? 'zh-TW' : lang === 'ja' ? 'ja-JP' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })); } });
+  await test('personal search filters actual workflow names and has translated labels', () => { for (const [lang, label] of [['zh-Hant', '搜尋我的畫布'], ['zh-Hans', '搜索我的画布'], ['en', 'Search my canvases'], ['ja', 'マイキャンバスを検索']]) { reset(); locale = lang; const input = elements().find(node => node.type === 'input' && node.props.type === 'search'); assert.equal(input.props.placeholder, label); input.props.onChange({ target: { value: 'MISSING' } }); assert.equal(elements().some(node => node.type === mockLink && node.props.href === '/canvas/one'), false); input.props.onChange({ target: { value: 'COBALT' } }); assert.ok(elements().find(node => node.type === mockLink && node.props.href === '/canvas/one')); } });
+  await test('dates use the selected regional locale and retain the machine timestamp', () => { for (const lang of ['zh-Hant', 'zh-Hans', 'en', 'ja']) { reset(); locale = lang; const time = elements().find(node => node.type === 'time'); assert.equal(time.props.dateTime, work.updatedAt); assert.equal(time.props.children, new Date(work.updatedAt).toLocaleDateString(({ 'zh-Hant': 'zh-TW', 'zh-Hans': 'zh-CN', en: 'en-US', ja: 'ja-JP' })[lang], { year: 'numeric', month: 'short', day: 'numeric' })); } });
   await test('delete opens a named page dialog before any network mutation', () => { reset(); locale = 'en'; elements().find(node => node.props?.['aria-label'] === '刪除').props.onClick(click); assert.equal(calls.length, 0); const dialog = elements().find(node => node.props.role === 'alertdialog'); assert.ok(dialog); assert.equal(dialog.props['aria-modal'], 'true'); assert.ok(flatten(dialog).includes(work.name)); });
   await test('cancel closes the dialog without deleting', () => { reset(); elements().find(node => node.props?.['aria-label'] === '刪除').props.onClick(click); const dialog = elements().find(node => node.props.role === 'alertdialog'); flatten(dialog).find(node => node?.type === 'button' && node.props.children === '取消').props.onClick(); assert.equal(state[9], null); assert.equal(calls.length, 0); assert.equal(state[1].length, 1); });
   await test('failed DELETE preserves saved work and leaves an actionable error', async () => { reset(); elements().find(node => node.props?.['aria-label'] === '刪除').props.onClick(click); response = { ok: false }; const dialog = elements().find(node => node.props.role === 'alertdialog'); flatten(dialog).find(node => node?.type === 'button' && node.props.children === '刪除').props.onClick(); await flush(); assert.equal(calls.length, 1); assert.equal(calls[0].url, '/api/canvas/one'); assert.equal(calls[0].init.method, 'DELETE'); assert.equal(state[1].length, 1); assert.ok(state[9]); assert.ok(state[11]); assert.equal(state[10], false); });

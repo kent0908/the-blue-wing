@@ -1,7 +1,8 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 /**
- * UI strings for the three languages. zh-Hant is the source of truth and
+ * UI strings for the supported languages. zh-Hant is the source of truth and
  * fixes the shape; `en` and `ja` are typed against it so a missing key is a
  * compile error, never a blank label. Keep entries short and grouped by
  * surface. Model names are never translated (they are product names).
@@ -263,7 +264,7 @@ const ja: Dict = {
   common: { free10: "無料プランでは毎日 10 pt をお試しいただけます。" },
 };
 
-export const DICTS: Record<Locale, Dict> = { "zh-Hant": zh, en, ja };
+export const DICTS: Record<Locale, Dict> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 
 /** `{name}` / `{n}` substitution for the few strings that carry a value. */
 export function fmt(template: string, vars: Record<string, string | number>): string {

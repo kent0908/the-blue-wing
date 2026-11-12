@@ -101,7 +101,7 @@ const auth = {
   requireAdmin: async () => !actor ? { error: NextResponse.json({ error: { code: 'unauthorized' } }, { status: 401 }) } : actor.role === 'admin' ? { user: clone(actor) } : { error: NextResponse.json({ error: { code: 'forbidden' } }, { status: 403 }) },
 };
 const locale = req => req.cookies.get('bw_lang')?.value || 'en';
-const business = load('lib/business.ts', { 'server-only': {}, './apiauth': auth, './adultGate': adult, './db': { sql }, './i18n/server': { localeFromRequest: locale }, './businessSecrets': secrets, './businessTypes': types });
+const business = load('lib/business.ts', { 'server-only': {}, './apiauth': auth, './adultGate': adult, './db': { sql }, './i18n/server': { localeFromRequest: locale }, './i18n/simplifyChinese': require('./fixtures/load-simplify-chinese.cjs'), './businessSecrets': secrets, './businessTypes': types });
 const mocks = { '@/lib/business': business, '@/lib/apiauth': auth, '@/lib/adultGate': adult, '@/lib/db': { sql } };
 const access = load('app/api/business/access/route.ts', mocks);
 const credentials = load('app/api/business/credentials/route.ts', mocks);
@@ -217,14 +217,14 @@ async function expectResponse(promise, status, code) {
     await assert.rejects(() => business.readBusinessJson(request('/api/business/access', 'POST', [])), /invalid_body/);
     const bigger = await business.readBusinessJson(request('/api/business/jobs', 'POST', { prompt: '字'.repeat(12000) }), 65536);
     assert.equal(bigger.prompt.length, 12000, 'generation may explicitly raise its bounded byte limit');
-    for (const lang of ['zh-Hant', 'en', 'ja']) {
+    for (const [lang, languageEvidence] of [['zh-Hant', /企業.*管理員/u], ['zh-Hans', /企业.*管理员/u], ['en', /key encryption/u], ['ja', /ビジネスキー/u]]) {
       const error = await expectResponse(Promise.resolve(business.businessErrorResponse(request('/api/business/access', 'GET', undefined, { cookie: `bw_lang=${lang}` }), new types.BusinessError('encryption_unavailable', 503))), 503, 'encryption_unavailable');
-      assert.ok(error.error.message.length > 10);
+      assert.match(error.error.message, languageEvidence);
     }
     const safeError = await expectResponse(Promise.resolve(business.businessErrorResponse(request('/api/business/access'), new Error(secret))), 503, 'unavailable');
     assert.equal(JSON.stringify(safeError).includes(secret), false);
     assert.ok(reads > 30);
-    console.log('PASS business foundation: authenticated application isolation, admin-only review and concurrent version conflicts, fresh approval/adult checks, same-origin writes, bounded JSON, 3-language private errors, AES-256-GCM AAD isolation/tamper rejection, encrypted rotation, irreversible key revocation, metadata/audit secrecy. No paid/network calls.');
+    console.log('PASS business foundation: authenticated application isolation, admin-only review and concurrent version conflicts, fresh approval/adult checks, same-origin writes, bounded JSON, 4-language private errors, AES-256-GCM AAD isolation/tamper rejection, encrypted rotation, irreversible key revocation, metadata/audit secrecy. No paid/network calls.');
   } finally {
     if (original === undefined) delete process.env.BYOK_ENCRYPTION_KEY;
     else process.env.BYOK_ENCRYPTION_KEY = original;

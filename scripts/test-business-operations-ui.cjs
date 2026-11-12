@@ -30,6 +30,7 @@ function load(file, mocks = {}, globals = {}) {
   new Function("require", "module", "exports", ...Object.keys(globals), output)(name => {
     if (name.endsWith(".module.css")) return css;
     if (name === "react/jsx-runtime") return jsxRuntime;
+    if (name === "./simplifyChinese") return require("./fixtures/load-simplify-chinese.cjs");
     assert.ok(Object.hasOwn(mocks, name), `Unmocked import ${name}`);
     return mocks[name];
   }, loaded, loaded.exports, ...Object.values(globals));
@@ -209,7 +210,7 @@ async function run() {
   assert.equal(calls.at(-1), "/api/business/usage?page=1");
   assert.ok(!text(renderUsage()).includes(usageCopy.filterOn));
   assert.ok(!text(renderUsage()).includes(usageCopy.batchFinished));
-  for (const locale of ["zh-Hant", "en", "ja"]) {
+  for (const locale of ["zh-Hant", "zh-Hans", "en", "ja"]) {
     const t = businessOperationsCopy(locale);
     assert.equal(receipt.businessCostText(zero, t), "USD 0.000000");
     assert.equal(receipt.businessBillingStateText(row, t), t.pendingCost);
@@ -218,12 +219,12 @@ async function run() {
     assert.equal(receipt.businessBillingStateText({ ...row, billingStatus: "unavailable" }, t), t.blockedCost);
     assert.equal(receipt.businessBillingStateText({ ...row, status: "processing" }, t), t.unfinishedCost);
   }
-  console.log("PASS usage: filters, owned visible IDs, duplicate guard, report refresh, exact zero and blank unknown CSV, and distinct billing states in three locales");
+  console.log("PASS usage: filters, owned visible IDs, duplicate guard, report refresh, exact zero and blank unknown CSV, and distinct billing states in four locales");
 
   const businessStrings = load("lib/i18n/business.ts");
   const resultStrings = load("lib/i18n/businessResults.ts");
   const wan = load("lib/businessWan3.ts");
-  for (const locale of ["zh-Hant", "en", "ja"]) {
+  for (const locale of ["zh-Hant", "zh-Hans", "en", "ja"]) {
     const business = businessStrings.businessCopy(locale);
     const copy = resultStrings.businessResultsCopy(locale);
     const upstreamPolicy = businessStrings.businessError(business, "provider_content_policy");
@@ -271,6 +272,6 @@ async function run() {
     job = { ...previous, model: "wan3.0-video-prime-pro" };
     assert.ok(!text(render()).includes(copy.recoverVideo));
   }
-  console.log("PASS results: local and SIRAYA policy messages differ in all three locales; old Wan Spicy results recover by one GET and replace the failed preview");
+  console.log("PASS results: local and SIRAYA policy messages differ in all four locales; old Wan Spicy results recover by one GET and replace the failed preview");
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

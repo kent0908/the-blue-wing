@@ -18,10 +18,20 @@ function buttons(node,out=[]){if(!node||typeof node!=='object')return out;if(nod
 const category=FAQ_CATEGORIES[0],question=category.entries[0];
 let view=render();assert.ok(view.html.includes(encoded(translate('ja',category.label))));
 buttons(view.element).find(b=>renderToStaticMarkup(b).includes(encoded(translate('ja',category.label)))).props.onClick();view=render();assert.ok(view.html.includes(encoded(translate('ja',question.question))));
-for(const next of ['en','zh-Hant','ja']){locale=next;view=render();assert.ok(view.html.includes(encoded(translate(next,category.label))));assert.ok(view.html.includes(encoded(translate(next,question.question))));if(next!=='ja')assert.ok(!view.html.includes(encoded(translate('ja',question.question))));}
+for(const next of ['en','zh-Hant','zh-Hans','ja']){locale=next;view=render();assert.ok(view.html.includes(encoded(translate(next,category.label))));assert.ok(view.html.includes(encoded(translate(next,question.question))));if(next!=='ja')assert.ok(!view.html.includes(encoded(translate('ja',question.question))));}
 locale='zh-Hant';view=render();buttons(view.element).find(b=>renderToStaticMarkup(b).includes(question.question)).props.onClick();
-for(const next of ['en','ja','zh-Hant']){locale=next;view=render();assert.ok(view.html.includes(encoded(translate(next,question.answer))));assert.ok(!view.html.includes('{c}'));}
-console.log('PASS real SupportChat state survives locale changes: categories, questions, answers, and follow-up labels in zh/en/ja');
+for(const next of ['en','ja','zh-Hant','zh-Hans']){locale=next;view=render();assert.ok(view.html.includes(encoded(translate(next,question.answer))));assert.ok(!view.html.includes('{c}'));}
+assert.match(view.html,/常见问题/);
+assert.equal(translate('zh-Hans','檔案名稱「試做繁體文件」.png'),'檔案名稱「試做繁體文件」.png');
+console.log('PASS real SupportChat state survives locale changes: categories, questions, answers, and follow-up labels in zh-Hant/zh-Hans/en/ja');
+const {localeFromAcceptLanguage, isLocale}=load('lib/i18n/locale.ts');
+assert.ok(isLocale('zh-Hans'));
+for (const [header,expected] of [
+  [null,'zh-Hant'], ['zh-TW,zh;q=0.9','zh-Hant'], ['zh-CN,zh;q=0.9','zh-Hans'],
+  ['zh-Hans-SG','zh-Hans'], ['zh-Hant-CN','zh-Hant'], ['zh-HK','zh-Hant'],
+  ['en;q=0.3, zh-CN;q=0.9','zh-Hans'], ['zh-CN;q=0, ja;q=0.8','ja'], ['fr, en-US;q=0.8','en'],
+]) assert.equal(localeFromAcceptLanguage(header),expected);
+console.log('PASS site locale recognizes Simplified Chinese browser preferences and respects language weights');
 const {fitMaskPreview}=load('lib/layerPreview.ts');
 let count=0;for(const viewport of [[320,640],[390,844],[768,1024],[1024,768],[1920,1080]])for(const image of [[1920,1080],[1080,1920],[4096,4096],[1,1]]){
   const {w,h}=fitMaskPreview(...image,...viewport);assert.ok(w>=1&&h>=1);assert.ok(w<=image[0]&&h<=image[1]);assert.ok(w<=viewport[0]-(viewport[0]>=1024?482:32));assert.ok(h<=viewport[1]);count++;

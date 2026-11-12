@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Locale } from "@/lib/i18n/locale";
+import { LOCALES, LOCALE_INTL, LOCALE_LABEL, type Locale } from "@/lib/i18n/locale";
 import { Card, Notice, Table, Kpi, LineChart, btnCls, fieldCls, td } from "@/components/crm/ui";
 import { useTr, useLocale, setLocaleCookie } from "@/lib/i18n/client";
 import { BILLING_ERRORS } from "@/lib/billingMessages";
@@ -63,7 +63,7 @@ export default function BillingPage(){
       setNotice({key:"已查到並保存此 Request ID；單筆查詢不代表整日已完成同步。"});
     }catch(e){setError(e instanceof Error?e.message:"storage_failed");}finally{setBusy(false);}
   }
-  const fmtTime=(value:string)=>new Date(value).toLocaleString(locale==="ja"?"ja-JP":locale==="en"?"en-US":"zh-TW",{timeZone:"Asia/Taipei",hour12:false});
+  const fmtTime=(value:string)=>new Date(value).toLocaleString(LOCALE_INTL[locale],{timeZone:"Asia/Taipei",hour12:false});
   const sums=data?.totals??[];
   const dateLabels=data?.range.dates??[];
   const currencies=[...new Set(data?.days.map(d=>d.currency)??[])];
@@ -73,7 +73,7 @@ export default function BillingPage(){
     return {currency,labels,series:[{name:currency,color:"#7ff0cd",bars:chart==="bar",values:labels.map(date=>Number(entries.find(d=>d.date===date)?.cost??0)),format:(value:number)=>`${currency} ${value.toFixed(6)}`}]};
   });
   return <div className="space-y-6">
-    <header className="max-w-4xl space-y-3"><select aria-label={tr("介面語言")} value={locale} onChange={e=>{setLocaleCookie(e.target.value as Locale);router.refresh();}} className={fieldCls}><option value="zh-Hant">繁體中文</option><option value="ja">日本語</option><option value="en">English</option></select><p className="text-xs tracking-[.2em] text-[#7ff0cd]">SIRAYA / BILLING</p><h1 className="text-2xl font-semibold text-white">{tr("SIRAYA 實際成本對帳")}</h1><p className="text-sm leading-7 text-[#aaa]">{tr("以供應商折扣後計費金額認列。六位小數精確保存，重複同步不重算；不同幣別分開統計。")}</p></header>
+    <header className="max-w-4xl space-y-3"><select aria-label={tr("介面語言")} value={locale} onChange={e=>{setLocaleCookie(e.target.value as Locale);router.refresh();}} className={fieldCls}>{LOCALES.map(option=><option key={option} value={option}>{LOCALE_LABEL[option]}</option>)}</select><p className="text-xs tracking-[.2em] text-[#7ff0cd]">SIRAYA / BILLING</p><h1 className="text-2xl font-semibold text-white">{tr("SIRAYA 實際成本對帳")}</h1><p className="text-sm leading-7 text-[#aaa]">{tr("以供應商折扣後計費金額認列。六位小數精確保存，重複同步不重算；不同幣別分開統計。")}</p></header>
     {error&&<Notice kind="err">{errorText(error)}</Notice>}{notice&&<p role="status" className="text-sm text-[#7ff0cd]">{tr(notice.key,notice.params)}</p>}
     {data&&!data.configured&&<Notice kind="err">{tr(BILLING_ERRORS.not_configured)}</Notice>}
     <Card title={tr("帳號與查詢區間")} sub={tr("日期採台北時間。同步包含指定帳號及子帳號，帳號中其他用途的費用也會列入。")}>{data?.accountId&&<p className="mb-4 break-all font-mono text-xs text-[#aaa]">Account ID · {data.accountId}</p>}<button type="button" className={`${btnCls} mb-4`} disabled={busy||!data?.configured} onClick={()=>void checkAccounts()}>{tr("檢查 Console 帳號")}</button>{accounts.map(a=><p key={a.id} className="mb-2 break-all text-xs text-[#aaa]">{a.name} · {a.id}{a.isArchived?" (archived)":""}</p>)}

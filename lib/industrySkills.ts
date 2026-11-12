@@ -1,9 +1,10 @@
 import type { Locale } from "./i18n/locale";
+import { simplifyChinese } from "./i18n/simplifyChinese";
 
 /** Original production briefs. These are prompt recipes, not generated case studies or model guarantees. */
 export type IndustryCategory = "advertising" | "commerce" | "games" | "art";
 export type IndustryMediaType = "image" | "video";
-type LocalizedText = Readonly<Record<Locale, string>>;
+type LocalizedText = Readonly<Record<Exclude<Locale, "zh-Hans">, string>>;
 const text = (zh: string, en: string, ja: string): LocalizedText => ({ "zh-Hant": zh, en, ja });
 
 export interface IndustryBriefField {
@@ -304,7 +305,7 @@ const PRODUCTION_NOTE = text(
   "編集可能なオリジナル制作メモです。あなたの商品・人物での生成検証済み作例ではありません。参考ファイルは明示的に選択し、画像、動画、編集、文字入れを別工程で扱います。秒数・画角の文章はAPI設定ではありません。閲覧、入力、コピーだけで生成・ポイント消費は始まりません。",
 );
 const constraintHeading = text("製作約束", "Production constraints", "制作上の条件");
-const localized = (value: LocalizedText, locale: Locale) => value[locale] ?? value["zh-Hant"];
+const localized = (value: LocalizedText, locale: Locale) => locale === "zh-Hans" ? simplifyChinese(value["zh-Hant"]) : value[locale] ?? value["zh-Hant"];
 
 /** Localized catalog content only. No credentials, fetches, billing or generation side effects. */
 export function getLocalizedSkill(id: string, locale: Locale = "zh-Hant"): LocalizedIndustrySkill | undefined {

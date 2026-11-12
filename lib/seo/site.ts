@@ -1,4 +1,5 @@
 import { k } from "../i18n/k";
+import { LOCALES } from "../i18n/locale";
 /**
  * One source of truth for how the site presents itself to search engines
  * and AI assistants: canonical origin, name, the one-sentence definition
@@ -41,7 +42,7 @@ export function webSiteLd() {
     "@id": `${SITE_URL}/#website`,
     name: SITE_NAME,
     url: SITE_URL,
-    inLanguage: "zh-Hant",
+    inLanguage: LOCALES,
     publisher: { "@id": `${SITE_URL}/#organization` },
   });
 }

@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   title: "上傳素材", choose: "選擇檔案或拖曳到這裡", description: "圖片、影片、音訊 · 每個檔案最多 64 MB · 依序上傳",
@@ -19,4 +20,5 @@ const ja: Copy = {
   waiting: "転送またはストレージからの応答を待っています。完了すると自動で素材庫に追加されます。", retry: "再試行", cancel: "キャンセル", clear: "完了した項目を消去", progress: "アップロードの進行状況", timeout: "タイムアウトしました。再試行してください。送信済みファイルは登録から再開します。",
   personal: "自分の素材", review: "人物参照素材の登録（任意）", reviewHelp: "アップロード済みのファイルは下で管理できます。人物参照が必要な場合は、この項目を開いて審査に提出してください。", unavailable: "アップロードサービスの準備ができていません", refresh: "更新",
 };
-export const assetUploadCopy = (locale: Locale): Copy => ({ "zh-Hant": zh, en, ja })[locale];
+const COPY: Record<Locale, Copy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
+export const assetUploadCopy = (locale: Locale): Copy => COPY[locale];

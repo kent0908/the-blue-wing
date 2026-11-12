@@ -1,6 +1,7 @@
 import type { CanvasGraph, CanvasNode } from "./types";
 import { k } from "../i18n/k";
 import { DEFAULT_LOCALE, type Locale } from "../i18n/locale";
+import { simplifyChinese } from "../i18n/simplifyChinese";
 import { PREPRODUCTION_TEMPLATES } from "./preproductionTemplates";
 import { SHORT_DRAMA_TEMPLATE_ID, shortDramaTemplate } from "./shortDramaTemplate";
 const identity = "使用參考三視圖作為唯一角色身份依據。三個視角代表同一個人，不要生成三個不同人物。精確保留臉部、瞳色、髮型、髮色、服裝、配件及身體比例；維持精緻動漫插畫風格，不轉換為真人。配件數量和解剖位置一致，不複製、不鏡像換邊。";
@@ -42,11 +43,34 @@ export const OFFICIAL_CANVAS_TEMPLATES:OfficialCanvasTemplate[]=[
  ...PREPRODUCTION_TEMPLATES,
  shortDramaTemplate(DEFAULT_LOCALE),
 ];
-export function builtinCanvasTemplate(id: number, locale = DEFAULT_LOCALE) {
- return id === SHORT_DRAMA_TEMPLATE_ID ? shortDramaTemplate(locale) : OFFICIAL_CANVAS_TEMPLATES.find(t => t.id === id);
+/** Translate authored fields only. Saved workflows, model and character IDs, and graph connections are unchanged. */
+function localizeBuiltin(template: OfficialCanvasTemplate, locale: Locale): OfficialCanvasTemplate {
+ if (locale !== "zh-Hans") return template;
+ return {
+  ...template,
+  name: simplifyChinese(template.name),
+  description: simplifyChinese(template.description),
+  category: simplifyChinese(template.category),
+  stages: simplifyChinese(template.stages),
+  graph: {
+   ...template.graph,
+   nodes: template.graph.nodes.map(node => {
+    const data = { ...node.data };
+    for (const field of ["title", "text", "prompt"]) {
+     if (typeof data[field] === "string") data[field] = simplifyChinese(data[field]);
+    }
+    return { ...node, data };
+   }),
+  },
+ };
+}
+export function builtinCanvasTemplate(id: number, locale: Locale = DEFAULT_LOCALE) {
+ if (id === SHORT_DRAMA_TEMPLATE_ID) return shortDramaTemplate(locale);
+ const template = OFFICIAL_CANVAS_TEMPLATES.find(t => t.id === id);
+ return template ? localizeBuiltin(template, locale) : undefined;
 }
 export function officialCanvasTemplates(locale: Locale) {
- return [shortDramaTemplate(locale), ...OFFICIAL_CANVAS_TEMPLATES.filter(t => t.id !== SHORT_DRAMA_TEMPLATE_ID)];
+ return [shortDramaTemplate(locale), ...OFFICIAL_CANVAS_TEMPLATES.filter(t => t.id !== SHORT_DRAMA_TEMPLATE_ID).map(template => localizeBuiltin(template, locale))];
 }
 export function builtinCanvasSummary(t:OfficialCanvasTemplate){
  const generated = t.id <= -108 && t.id >= -111;

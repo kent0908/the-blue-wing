@@ -20,7 +20,6 @@ import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
 import { generationTimeLabel } from "@/lib/formatTime";
 import { useTr } from "@/lib/i18n/client";
-import { useLocale } from "@/lib/i18n/client";
 import { industryHandoffSnapshot, type IndustryBriefHandoff } from "@/lib/industryHandoff";
 
 const noBriefSubscription = () => () => {};
@@ -37,7 +36,6 @@ const MODE_FOR_KIND: Record<ResultItem["kind"], Mode> = { image: "image", video:
 
 function StudioInner() {
   const tr = useTr();
-  const locale = useLocale();
   const router = useRouter();
   const params = useSearchParams();
   const mode = (params.get("mode") as Mode) || "video";
@@ -54,7 +52,7 @@ function StudioInner() {
   const briefReady = !briefToken || briefSnapshot !== null;
   const briefPrompt = industryBrief?.mode === mode ? industryBrief.prompt : undefined;
   const briefMissing = briefReady && !!briefToken && !briefPrompt;
-  const briefMissingMessage = locale === "ja" ? "このブリーフは別のタブ、または有効期限切れです。ホームで制作プランを開き直してください。" : locale === "en" ? "This brief is unavailable in this tab or has expired. Reopen the creative plan from the home page." : "這份簡報已過期，或不在目前分頁。請回首頁重新開啟創作方案。";
+  const briefMissingMessage = tr("這份簡報已過期，或不在目前分頁。請回首頁重新開啟創作方案。");
 
   // A screenshot (or a recorded 運鏡's sampled frames) handed off from the
   // standalone 3D導演台 page (see app/canvas/director3d/page.tsx) — it
@@ -211,7 +209,7 @@ function StudioInner() {
                 {tr("同時最多")} {MAX_CONCURRENT_JOBS} {tr("個生成在跑（不限模式），等其中一個完成才能再送出")}
               </p>
             )}
-            {briefMissing && <p role="alert" className="mb-3 rounded-lg bg-[#242424] p-3 text-sm text-[#e6c6af]">{briefMissingMessage} <Link href="/" className="underline">{locale === "ja" ? "ホームへ" : locale === "en" ? "Go home" : "返回首頁"}</Link></p>}
+            {briefMissing && <p role="alert" className="mb-3 rounded-lg bg-[#242424] p-3 text-sm text-[#e6c6af]">{briefMissingMessage} <Link href="/" className="underline">{tr("返回首頁")}</Link></p>}
             {!briefToken && official ? <OfficialTemplateComposer key={official.id} template={official} composerProps={{initialModel:urlModel,mode,onModeChange:setMode,onSubmit:handleSubmit,busy:atCapacity}} /> : (briefToken || presetReady) && briefReady ? (
               <Composer
                 key={briefToken ? `industry-${briefToken}` : "regular-studio"}

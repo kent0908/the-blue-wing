@@ -11,6 +11,7 @@ function load(file, mocks = {}) {
   const code = ts.transpileModule(read(file), { compilerOptions }).outputText;
   new Function('require', 'module', 'exports', code)(name => {
     if (Object.hasOwn(mocks, name)) return mocks[name];
+    if (name === './simplifyChinese') return require('./fixtures/load-simplify-chinese.cjs');
     throw new Error(`Unexpected import from ${file}: ${name}`);
   }, fixtureModule, fixtureModule.exports);
   return fixtureModule.exports;
@@ -337,7 +338,7 @@ function navProps(locale = 'en') {
   return { props, events };
 }
 function buttonFor(tree, label) { return flatten(tree).find(node => node.type === 'button' && flatten(node.props.children).includes(label)); }
-for (const locale of ['zh-Hant', 'en', 'ja']) {
+for (const locale of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
   const { props, events } = navProps(locale);
   for (const [key, value] of Object.entries(props.copy)) assert.ok(typeof value === 'string' && value.trim(), `${locale} copy ${key} exists`);
   const tree = BusinessStudioNav(props);
@@ -445,4 +446,4 @@ assert.ok(JobToasts(), 'Consumer job notifications continue working in the norma
   assert.deepEqual(Array.from(state.referenceOrder),['local:15']);
   assert.equal(pushes.length,1,'Only the return from the business assets page navigates');
 }
-console.log('PASS business studio: URL validation/roundtrip, actual model/kind/tab actions, back-forward reset, unknown-request preservation, in-flight and URL-transition confirmation/button locks, responsive nav, real search, three-language labels, approval/key states and consumer-shell/toast isolation; no network or paid calls.');
+console.log('PASS business studio: URL validation/roundtrip, actual model/kind/tab actions, back-forward reset, unknown-request preservation, in-flight and URL-transition confirmation/button locks, responsive nav, real search, four-language labels, approval/key states and consumer-shell/toast isolation; no network or paid calls.');

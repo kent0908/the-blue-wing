@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   start: "確認並開始生成", cancel: "返回調整", reviewTitle: "執行前審閱",
@@ -55,6 +56,6 @@ const ja: BusinessWorkflowsCopy = {
   billing:"料金は SIRAYA が請求します。藍翼ポイントは消費しません。",history:"作品・生成履歴",costs:"実料金を確認",keyRequired:"先にビジネス制作室でご自身の SIRAYA キーを接続してください。",approval:"先にビジネス制作室の承認が必要です。",goStudio:"ビジネス制作室を開く",confirm:"接続順に{n}個のノードを実行し、うち{paid}個がご自身の SIRAYA 残高を使用して生成します。\n\n{models}\n\n再実行は新たな生成・課金になります。金額は SIRAYA の請求に基づきます。開始しますか？",
   model:"モデル",size:"画像サイズ",resolution:"解像度",seconds:"秒数",aspect:"画面比率",audio:"音声も生成",prompt:"作品の説明",promptHint:"文章ノードを接続するか、ここに説明を入力します。",references:"ビジネス画像素材",choose:"素材を選択・アップロード",done:"選択を完了",remove:"素材を外す",sourceHint:"ビジネス原本を使用します。生成画像をつなぐ場合、完了した各ジョブの最初の1枚を使います。",none:"素材は未選択です",originalRequired:"先にビジネス素材庫へ原画像をアップロードしてください。",unavailableModel:"現在のキーで利用できるモデルを選択してください。",missingPrompt:"説明を入力するか文章ノードを接続してください。",invalidReference:"ビジネス原本か、この制作室で生成済みの画像を使ってください。",missingCapture:"先に3D監督台で画像を撮影してください。",uncertain:"結果は未確認です。再送信の前にビジネス作品で元のジョブを確認してください。",failed:"生成が完了しませんでした。ビジネス作品でジョブを確認してください。",noOutput:"利用できる成果を取得できませんでした。",captureUploadFailed:"3D画像を保存できず、生成は送信していません。",draftOnly:"編集は無料です。生成は確認後に始まります。",feesUnknown:"請求待ち",blank:"空のキャンバス",imageVideo:"文章 → 画像 → 映像",sourceTemplate:"素材 → 画像",age:"成人向けモデルには制作室での年齢確認が必要です。",noModels:"利用できる生成モデルがありません。",newTab:"制作室で確認",nodeRun:"実行履歴",conflict:"別の画面で画布が更新されました。草稿を書き出し、再読み込みしてください。",
 };
-const COPY: Record<Locale, BusinessWorkflowsCopy> = { "zh-Hant": zh, en, ja };
+const COPY: Record<Locale, BusinessWorkflowsCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export const businessWorkflowsCopy = (locale: Locale) => COPY[locale];
 export const workflowText = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match));

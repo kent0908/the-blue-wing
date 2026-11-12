@@ -6,7 +6,8 @@ import { Card, Notice, Table, btnCls, fieldCls, pct, td, usd, useApi } from "@/c
 import { modelLabel } from "@/lib/modelLabel";
 import type { PriceComponent } from "@/lib/sirayaPublicPrices";
 import { simulateCost, promotionEconomics } from "@/lib/costEconomics";
-import { useTr } from "@/lib/i18n/client";
+import { useLocale, useTr } from "@/lib/i18n/client";
+import { LOCALE_INTL } from "@/lib/i18n/locale";
 
 type CostRow = { modelId: string; modality: "image" | "video" | "text" | "speech"; active: boolean; credits: number; sellUsd: number; source: string | null; checkedAt: string | null; verification: "official" | "pending"; components: PriceComponent[]; priceNote: string; discountPct: number | null; effectiveDiscountPct: number; notes: string };
 type Receipt = { model: string; kind: string; created_at: string; status: string; credits: number; list_cost_usd: number | null; estimated_cost_usd: number | null; provider_cost_usd: number | null; provider_usage: Record<string, number> | null; discount_pct: number | null };
@@ -14,6 +15,7 @@ type Costs = { settings: { credit_value_usd: number; default_discount_pct: numbe
 const unitLabel = (c: PriceComponent) => c.unit === "million_tokens" ? "百萬 Token" : c.unit === "second" ? "秒" : "張／層";
 
 export default function CrmCostsPage() {
+  const locale = useLocale();
   const tr = useTr();
   const { data, error, reload } = useApi<Costs>("/api/crm/costs");
   const [filter, setFilter] = useState("all");
@@ -46,7 +48,7 @@ export default function CrmCostsPage() {
     </div>
     <Card title="最近 100 筆呼叫的成本紀錄" sub="新版本開始保存上游費用與用量；舊資料不以今天的牌價回填。上游未回傳、串流缺少回執或其他未接入通道均顯示未知。">
       <Table minWidth={920} head={["時間／模型", "扣點／狀態", "牌價估算", "折後估算", "上游回報 USD", "用量回執"]}>
-        {data?.receipts.map((r, i) => <tr key={i}><td className={td}><div>{new Date(r.created_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}</div><div className="max-w-64 break-words text-xs text-[#999]">{r.model}</div></td><td className={td}>{r.credits} 點<br />{r.status === "refunded" ? "已退點（不代表供應商退款）" : "已扣點"}</td><td className={td}>{usd(r.list_cost_usd, 6)}</td><td className={td}>{usd(r.estimated_cost_usd, 6)}<br /><span className="text-xs text-[#999]">快照折扣 {pct(r.discount_pct)}</span></td><td className={td}>{usd(r.provider_cost_usd, 8)}<div className="text-xs text-[#999]">獨立顯示，不再乘折扣</div></td><td className={td}><details><summary className="cursor-pointer text-[#7ff0cd]">{Object.keys(r.provider_usage ?? {}).length ? "查看數值" : "尚無回執"}</summary>{Object.entries(r.provider_usage ?? {}).map(([k,v]) => <div key={k} className="mt-1 max-w-72 break-all font-mono text-xs">{k}: {v}</div>)}</details></td></tr>)}
+        {data?.receipts.map((r, i) => <tr key={i}><td className={td}><div>{new Date(r.created_at).toLocaleString(LOCALE_INTL[locale], { timeZone: "Asia/Taipei" })}</div><div className="max-w-64 break-words text-xs text-[#999]">{r.model}</div></td><td className={td}>{r.credits} 點<br />{r.status === "refunded" ? "已退點（不代表供應商退款）" : "已扣點"}</td><td className={td}>{usd(r.list_cost_usd, 6)}</td><td className={td}>{usd(r.estimated_cost_usd, 6)}<br /><span className="text-xs text-[#999]">快照折扣 {pct(r.discount_pct)}</span></td><td className={td}>{usd(r.provider_cost_usd, 8)}<div className="text-xs text-[#999]">獨立顯示，不再乘折扣</div></td><td className={td}><details><summary className="cursor-pointer text-[#7ff0cd]">{Object.keys(r.provider_usage ?? {}).length ? "查看數值" : "尚無回執"}</summary>{Object.entries(r.provider_usage ?? {}).map(([k,v]) => <div key={k} className="mt-1 max-w-72 break-all font-mono text-xs">{k}: {v}</div>)}</details></td></tr>)}
         {data?.receipts.length === 0 && <tr><td className={td} colSpan={6}>目前沒有用量紀錄。</td></tr>}
       </Table>
     </Card>

@@ -18,6 +18,7 @@ interface Option {
 interface Msg {
   role: "user" | "assistant";
   content: string;
+  localize?: true;
   categoryLabel?: string;
   /** Clickable follow-up chips attached to an assistant message — the QA
    *  browsing part (lib/supportFaq.ts's FAQ_CATEGORIES) is answered
@@ -31,6 +32,7 @@ const rootOptionsFor = (): Option[] => FAQ_CATEGORIES.map((c) => ({ label: c.lab
 const GREETING: Msg = {
   role: "assistant",
   content: k("嗨！我是 The Blue Wing 客服助手。挑一個類別看常見問題，或直接在下面打字問我。"),
+  localize: true,
   options: [],
 };
 
@@ -54,11 +56,15 @@ export default function SupportChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [msgs, open]);
 
+  const messageText = (message: Msg) => message.localize
+    ? tr(message.content, message.categoryLabel ? { c: tr(message.categoryLabel) } : undefined)
+    : message.content;
+
   const pickOption = (opt: Option) => {
-    const userMsg: Msg = { role: "user", content: opt.label, categoryLabel: opt.categoryLabel };
+    const userMsg: Msg = { role: "user", content: opt.label, categoryLabel: opt.categoryLabel, localize: true };
 
     if (opt.action.type === "root") {
-      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: k("回到主選單，想看哪個類別？"), options: rootOptions }]);
+      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: k("回到主選單，想看哪個類別？"), localize: true, options: rootOptions }]);
       return;
     }
 
@@ -69,7 +75,7 @@ export default function SupportChat() {
         ...cat.entries.map((e, i) => ({ label: e.question, action: { type: "question" as const, categoryId: cat.id, qIndex: i } })),
         { label: k("← 返回主選單"), action: { type: "root" } },
       ];
-      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: k("「{c}」常見問題："), categoryLabel: cat.label, options }]);
+      setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: k("「{c}」常見問題："), categoryLabel: cat.label, localize: true, options }]);
       return;
     }
 
@@ -81,7 +87,7 @@ export default function SupportChat() {
       { label: k("← 「{c}」其他問題"), categoryLabel: cat.label, action: { type: "category", id: cat.id } },
       { label: k("← 返回主選單"), action: { type: "root" } },
     ];
-    setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: entry.answer, options: followUps }]);
+    setMsgs((cur) => [...cur, userMsg, { role: "assistant", content: entry.answer, localize: true, options: followUps }]);
   };
 
   const send = async () => {
@@ -95,19 +101,18 @@ export default function SupportChat() {
       const res = await fetch("/api/support-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Only plain role/content — options are a client-only affordance,
-        // and mixing in the pre-scripted QA turns would just pad tokens for
-        // no benefit (the LLM already gets the same bank via its own system
-        // prompt).
-        body: JSON.stringify({ messages: next.map((m) => ({ role: m.role, content: tr(m.content, m.categoryLabel ? { c: tr(m.categoryLabel) } : undefined) })) }),
+        // FAQ turns use the display locale. Typed questions and model replies are sent as entered.
+        body: JSON.stringify({ messages: next.map(m => ({ role: m.role, content: messageText(m) })) }),
       });
       const j = await res.json().catch(() => ({}));
       setMsgs((cur) => [
         ...cur,
-        { role: "assistant", content: j.reply || j?.error?.message || tr("抱歉，我現在無法回答，請稍後再試。") },
+        j.reply
+          ? { role: "assistant", content: j.reply }
+          : { role: "assistant", content: j?.error?.message || k("抱歉，我現在無法回答，請稍後再試。"), localize: true },
       ]);
     } catch {
-      setMsgs((cur) => [...cur, { role: "assistant", content: tr("連線失敗，請稍後再試。") }]);
+      setMsgs((cur) => [...cur, { role: "assistant", content: k("連線失敗，請稍後再試。"), localize: true }]);
     } finally {
       setBusy(false);
     }
@@ -148,7 +153,7 @@ export default function SupportChat() {
                 m.role === "user" ? "bg-[#2a2a2a] text-white" : "bg-[#1a1a1a] text-[#d8d8d8]"
               }`}
             >
-              {tr(m.content, m.categoryLabel ? { c: tr(m.categoryLabel) } : undefined)}
+              {messageText(m)}
             </div>
             {m.options && (
               <div className="flex flex-wrap gap-1.5">

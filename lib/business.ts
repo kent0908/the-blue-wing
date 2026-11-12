@@ -6,6 +6,7 @@ import { requireUser } from "./apiauth";
 import { isAdultVerified } from "./adultGate";
 import { sql, type UserRow } from "./db";
 import { localeFromRequest } from "./i18n/server";
+import { simplifyChinese } from "./i18n/simplifyChinese";
 import { decryptBusinessSecret, encryptBusinessSecret } from "./businessSecrets";
 import { BusinessError, type BusinessAccount, type BusinessCredentialMetadata, type BusinessStatus } from "./businessTypes";
 
@@ -91,7 +92,8 @@ export function businessErrorResponse(req: NextRequest, error: unknown): NextRes
   const code = known && /^[a-z][a-z0-9_]{0,63}$/.test(error.code) ? error.code : "unavailable";
   const locale = localeFromRequest(req);
   const text = MESSAGES[code] ?? MESSAGES.unavailable;
-  return businessJson({ error: { code, message: text[locale === "en" ? 1 : locale === "ja" ? 2 : 0] } }, known ? error.status : 503);
+  const message = locale === "zh-Hans" ? simplifyChinese(text[0]) : text[locale === "en" ? 1 : locale === "ja" ? 2 : 0];
+  return businessJson({ error: { code, message } }, known ? error.status : 503);
 }
 
 /** Cookie-authenticated writes are deliberately unavailable to cross-origin callers. */

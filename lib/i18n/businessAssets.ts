@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   title: "素材庫", upload: "上傳素材", choose: "選擇檔案", replaceFiles: "換一批", queued: "待上傳",
@@ -76,7 +77,7 @@ const ja: BusinessAssetsCopy = {
   removeFile: "ファイルを外す", native: "ビジネス原本", provider: "SIRAYA 素材", capacity: "参照素材が上限に達しました",
   uploadFinished: "原本をアップロードしました。素材一覧で状態を確認できます。", progress: "アップロードの進捗", original: "元画像を使う",
 };
-const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, en, ja };
+const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessAssetsCopy(locale: Locale): BusinessAssetsCopy { return COPY[locale]; }
 export function businessAssetsError(t: BusinessAssetsCopy, code?: string): string {
   if (code === "business_asset_upload_uncertain") return t.uncertain;

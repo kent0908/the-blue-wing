@@ -6,6 +6,7 @@ import { IconChevronLeft, IconChevronRight } from "./Icons";
 import { useLocale, useTr } from "@/lib/i18n/client";
 import styles from "./HomeEditorial.module.css";
 import { k } from "@/lib/i18n/tr";
+import { simplifyChinese } from "@/lib/i18n/simplifyChinese";
 
 type Slide = {
   title: string;
@@ -37,8 +38,10 @@ function heroHref(b: HeroBlock): string {
 }
 
 const FILMS = ["worlds", "art", "sound", "door"];
+const zhCollection = { title: "藍翼原創選片", subtitle: "不同的畫風，同樣不設限的想像。" };
 const COLLECTION_COPY = {
-  "zh-Hant": { title: "藍翼原創選片", subtitle: "不同的畫風，同樣不設限的想像。" },
+  "zh-Hant": zhCollection,
+  "zh-Hans": simplifyChinese(zhCollection),
   en: { title: "Blue Wing originals", subtitle: "Different worlds. An imagination that keeps moving." },
   ja: { title: "藍翼オリジナル作品", subtitle: "画風を越えて、想像は動き続ける。" },
 };

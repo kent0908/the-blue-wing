@@ -38,7 +38,7 @@ function valid(data: unknown, token: string, now: number): data is IndustryBrief
   return typeof token === "string" && /^[a-zA-Z0-9_-]{16,80}$/.test(token) && value.token === token &&
     (value.mode === "image" || value.mode === "video") && typeof value.prompt === "string" &&
     value.prompt.trim().length > 0 && value.prompt.length <= 12000 &&
-    (value.locale === "zh-Hant" || value.locale === "en" || value.locale === "ja") &&
+    (value.locale === "zh-Hant" || value.locale === "zh-Hans" || value.locale === "en" || value.locale === "ja") &&
     typeof value.createdAt === "number" && Number.isFinite(value.createdAt) &&
     Number.isFinite(now) && now >= value.createdAt && now - value.createdAt < TTL_MS;
 }

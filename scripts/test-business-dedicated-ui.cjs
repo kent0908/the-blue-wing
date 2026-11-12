@@ -1,4 +1,4 @@
-/* Exercises the actual dedicated BYOK controls in all three locales, then
+/* Exercises the actual dedicated BYOK controls in all four locales, then
  * invokes their controlled handlers. No browser, network, credentials or fees.
  */
 const fs = require('node:fs');
@@ -21,6 +21,7 @@ function loader(hookMock = false) {
       if (name === '@/lib/i18n/client') return { useLocale: () => locale };
       if (name === '@/lib/i18n/businessDedicatedVideo') return read('lib/i18n/businessDedicatedVideo.ts');
       if (name === '@/lib/i18n/businessOperations') return read('lib/i18n/businessOperations.ts');
+      if (name === './simplifyChinese') return require('./fixtures/load-simplify-chinese.cjs');
       if (name.endsWith('.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
       throw new Error(`Unexpected import from ${path}: ${name}`);
     };
@@ -45,7 +46,7 @@ const fixtureReferences = [
   { key: 'business:closing', name: 'Business Closing', source: 'business' },
   { key: 'local:31', name: 'Garden Opening', source: 'personal', src: '/api/assets/31/raw' },
 ];
-for (locale of ['zh-Hant', 'en', 'ja']) {
+for (locale of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
   for (const model of ['wan2.7-t2v', 'wan2.7-i2v', 'wan2.7-r2v', 'happyhorse-1.1-t2v', 'happyhorse-1.1-i2v', 'happyhorse-1.1-r2v']) {
     const html = renderToStaticMarkup(React.createElement(Controls, { capability: caps(model), value: defaults, onChange: () => {}, referenceCount: 0, onOpenAssets: () => {} }));
     const context = `${locale}/${model}`;

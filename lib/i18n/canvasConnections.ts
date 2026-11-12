@@ -1,17 +1,21 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
+
+const zh = {
+  help: "拖曳圓點到相同顏色的接點，或依序點選兩端。按 Esc 取消。",
+  connecting: "選擇亮起的輸入接點；靠近時會自動吸附。",
+  connected: "連線已建立。輸入端已有連線時，新連線會取代原連線。",
+  cancelled: "已取消連線，原連線仍保留。",
+  type: "資料種類不同，請選擇相同顏色的接點。",
+  self: "節點不能連接自己。", cycle: "這條連線會形成循環，請選擇其他節點。", missing: "接點已不存在。",
+  output: "輸出：", input: "輸入：", edge: "連線：", remove: "刪除選取連線", removed: "已刪除連線。", cancel: "取消連線", selected: "已選取連線，可按 Delete 刪除。",
+  run: "即將執行 {n} 個節點，預估 {c} 點。每次重跑都會重新計費。是否繼續？",
+  runTitle: "執行前確認", runCancel: "先不要", runConfirm: "確認並執行",
+};
 
 export const canvasConnectionsCopy = {
-  "zh-Hant": {
-    help: "拖曳圓點到相同顏色的接點，或依序點選兩端。按 Esc 取消。",
-    connecting: "選擇亮起的輸入接點；靠近時會自動吸附。",
-    connected: "連線已建立。輸入端已有連線時，新連線會取代原連線。",
-    cancelled: "已取消連線，原連線仍保留。",
-    type: "資料種類不同，請選擇相同顏色的接點。",
-    self: "節點不能連接自己。", cycle: "這條連線會形成循環，請選擇其他節點。", missing: "接點已不存在。",
-    output: "輸出：", input: "輸入：", edge: "連線：", remove: "刪除選取連線", removed: "已刪除連線。", cancel: "取消連線", selected: "已選取連線，可按 Delete 刪除。",
-    run: "即將執行 {n} 個節點，預估 {c} 點。每次重跑都會重新計費。是否繼續？",
-    runTitle: "執行前確認", runCancel: "先不要", runConfirm: "確認並執行",
-  },
+  "zh-Hant": zh,
+  "zh-Hans": simplifyChinese(zh),
   en: {
     help: "Drag a dot to an input of the same color, or select both ends in sequence. Esc cancels.",
     connecting: "Choose a highlighted input. Nearby ports snap into place.",

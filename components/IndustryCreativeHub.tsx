@@ -4,25 +4,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/i18n/client";
 import type { Locale } from "@/lib/i18n/locale";
+import { simplifyChinese } from "@/lib/i18n/simplifyChinese";
 import { INDUSTRY_SKILLS, getLocalizedSkill, buildIndustryPrompt } from "@/lib/industrySkills";
 import { createIndustryHandoff } from "@/lib/industryHandoff";
 import styles from "./IndustryCreativeHub.module.css";
 
+const zh = {
+  title: "讓創意，有自己的樣子。", intro: "商品、廣告、遊戲與影像藝術。選一個方向，寫進你的想法。",
+  all: "精選", commerce: "電商商品", advertising: "品牌廣告", games: "遊戲世界", art: "影像藝術",
+  heading: "你想創作什麼？", search: "搜尋創作技能", searchPlaceholder: "找商品、角色、廣告…", count: "個創作方案",
+  configure: "打開創作簡報", pause: "暫停動態預覽", play: "播放動態預覽", image: "圖片", video: "影片",
+  style: "風格參考", layout: "概念版式", empty: "沒有相符的方案，換個關鍵字看看。", reset: "清除搜尋",
+  close: "關閉創作簡報", brief: "寫下你的簡報", required: "必填", output: "本次創作", workflow: "建議製作順序",
+  prompt: "可編輯提示詞", promptHint: "調整簡報會重新整理提示詞。完成後，可直接修改文字。",
+  apply: "帶入生成頁", copy: "複製提示詞", copied: "提示詞已複製", copyFailed: "無法自動複製，請選取上方提示詞後複製。", cancel: "先回去看看",
+  missing: "請填寫：", missingPrompt: "請先填寫提示詞。", tooLong: "提示詞請控制在 12,000 字以內。",
+  reviewNote: "先帶入提示詞與選擇素材；生成頁確認模型、規格與點數後，才會開始製作。",
+  mediaNote: "目前為提示詞方案初版；標示「風格參考」的是藍翼既有作品，新方案的專屬示範將陸續加入。",
+  link: "查看方案", studio: "自由創作", plan: "創作方案", build: "簡報 → 提示詞 → 創作", more: "探索全部方案", less: "收回精選", storageError: "瀏覽器無法暫存簡報。請複製提示詞，再開啟生成頁。",
+};
+
 const COPY = {
-  "zh-Hant": {
-    title: "讓創意，有自己的樣子。", intro: "商品、廣告、遊戲與影像藝術。選一個方向，寫進你的想法。",
-    all: "精選", commerce: "電商商品", advertising: "品牌廣告", games: "遊戲世界", art: "影像藝術",
-    heading: "你想創作什麼？", search: "搜尋創作技能", searchPlaceholder: "找商品、角色、廣告…", count: "個創作方案",
-    configure: "打開創作簡報", pause: "暫停動態預覽", play: "播放動態預覽", image: "圖片", video: "影片",
-    style: "風格參考", layout: "概念版式", empty: "沒有相符的方案，換個關鍵字看看。", reset: "清除搜尋",
-    close: "關閉創作簡報", brief: "寫下你的簡報", required: "必填", output: "本次創作", workflow: "建議製作順序",
-    prompt: "可編輯提示詞", promptHint: "調整簡報會重新整理提示詞。完成後，可直接修改文字。",
-    apply: "帶入生成頁", copy: "複製提示詞", copied: "提示詞已複製", copyFailed: "無法自動複製，請選取上方提示詞後複製。", cancel: "先回去看看",
-    missing: "請填寫：", missingPrompt: "請先填寫提示詞。", tooLong: "提示詞請控制在 12,000 字以內。",
-    reviewNote: "先帶入提示詞與選擇素材；生成頁確認模型、規格與點數後，才會開始製作。",
-    mediaNote: "目前為提示詞方案初版；標示「風格參考」的是藍翼既有作品，新方案的專屬示範將陸續加入。",
-    link: "查看方案", studio: "自由創作", plan: "創作方案", build: "簡報 → 提示詞 → 創作", more: "探索全部方案", less: "收回精選", storageError: "瀏覽器無法暫存簡報。請複製提示詞，再開啟生成頁。",
-  },
+  "zh-Hant": zh,
+  "zh-Hans": simplifyChinese(zh),
   en: {
     title: "Make it unmistakably yours.", intro: "Products, campaigns, game worlds and visual art. Pick a direction. Make it your own.",
     all: "Selected", commerce: "Commerce", advertising: "Advertising", games: "Game worlds", art: "Visual art",

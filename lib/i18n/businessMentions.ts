@@ -1,4 +1,5 @@
 import type { Locale } from "./locale";
+import { simplifyChinese } from "./simplifyChinese";
 const zh = {
   hint: "輸入 @ 可搜尋參考圖", add: "插入參考圖", list: "選擇參考圖", search: "搜尋圖片名稱", close: "關閉圖片選擇器",
   loading: "正在載入圖片…", empty: "素材庫還沒有可用的圖片。", noMatches: "找不到符合的圖片。",
@@ -21,4 +22,5 @@ const ja: Copy = {
   personal: "個人素材", business: "ビジネス素材", tooLong: "参照を挿入できるよう、プロンプトを短くしてください。",
   missing: "タグ付けした画像が削除されました。再選択するかタグを削除してください。", limit: "このモードには画像を追加できません。参照数と生成モードを確認してください。",
 };
-export const businessMentionsCopy = (locale: Locale): Copy => ({ "zh-Hant": zh, en, ja })[locale];
+const COPY: Record<Locale, Copy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
+export const businessMentionsCopy = (locale: Locale): Copy => COPY[locale];

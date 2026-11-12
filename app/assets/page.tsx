@@ -6,6 +6,7 @@ import AssetUploader from "@/components/AssetUploader";
 import { useRouter } from "next/navigation";
 import ProviderAssetLibrary from "@/components/ProviderAssetLibrary";
 import { useTr, useLocale } from "@/lib/i18n/client";
+import { LOCALE_INTL } from "@/lib/i18n/locale";
 import { assetUploadCopy } from "@/lib/i18n/assetUpload";
 
 interface Asset {
@@ -27,7 +28,8 @@ function fmtSize(n: number) {
 
 export default function AssetsPage() {
   const tr = useTr();
-  const copy = assetUploadCopy(useLocale());
+  const locale = useLocale();
+  const copy = assetUploadCopy(locale);
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [configured, setConfigured] = useState(true);
@@ -122,7 +124,7 @@ export default function AssetsPage() {
                   <div className="truncate text-[10.5px] text-white" title={tr(a.name)}>{tr(a.name)}</div>
                   <div className="flex items-center justify-between gap-1 text-[10.5px] text-[#c9c9c9]">
                     <span>{fmtSize(a.size)}</span>
-                    <span className="text-[#8a8a8a]">{new Date(a.createdAt).toLocaleDateString("zh-TW")}</span>
+                    <span className="text-[#8a8a8a]">{new Date(a.createdAt).toLocaleDateString(LOCALE_INTL[locale])}</span>
                   </div>
                 </div>
                 <div className="flex justify-end gap-1 px-2 pb-2">
