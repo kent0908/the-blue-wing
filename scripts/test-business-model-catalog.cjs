@@ -11,6 +11,23 @@ test('all 142 granted IDs appear exactly once in executable or explicitly unavai
 test('all 14 current image aliases are executable with correct metadata',()=>{const images=result.models.filter(m=>m.modality==='image');assert.equal(images.length,14);for(const image of images){const capability=getBusinessImageCapability(image.id);assert.ok(capability,image.id);assert.equal(image.maxReferenceImages,capability.maxReferenceImages);assert.equal(image.maxImageCount,capability.maxImageCount);assert.deepEqual(image.imageControls,capability.controls);}assert.ok(images.find(m=>m.id==='gpt-image-2.5-flare'));assert.ok(images.find(m=>m.id==='NSFW-Seedream-5.0-lite'));});
 test('image counts and references follow their provider family instead of C retail batch limits',()=>{for(const id of ['gpt-image-2','gpt-image-2.5-sunburst','gpt-image-2.5-flare']){const caps=getBusinessImageCapability(id);assert.equal(caps.maxImageCount,10);assert.equal(caps.maxReferenceImages,16);}for(const id of ['gemini-3.1-flash-image','gemini-3.1-flash-lite-image','gemini-3-pro-image']){assert.equal(getBusinessImageCapability(id).maxImageCount,1);assert.equal(getBusinessImageCapability(id).maxReferenceImages,14);}assert.equal(getBusinessImageCapability('Dola-Seedream-5.0-pro').maxReferenceImages,10);assert.equal(getBusinessImageCapability('NSFW-Seedream-4.5').maxReferenceImages,14);});
 test('current exact text grants remain executable without retail alias replacement',()=>{const text=result.models.filter(m=>m.modality==='text');assert.equal(text.length,86);for(const model of text)assert.ok(fixture.ids.includes(model.id));assert.ok(text.some(m=>m.id==='gpt-6.1-sol'));assert.ok(text.some(m=>/^claude-.*5\.5/.test(m.id)));assert.ok(text.some(m=>/^qwen3\.8/.test(m.id)));});
+test('new grants distinguish Nano Banana image generation from unconfirmed video adapters', () => {
+  const id = 'gemini-nano-banana-2.1';
+  const videos = ['kling-4.0', 'kling-4.0-flash', 'gemini-omni-1.1-flash-preview'];
+  const text = ['kimi-k3.1-pro', 'deepseek-v4.1-flash-economy'];
+  const catalog = buildBusinessModelCatalog({ data: [id, ...videos, ...text].map(id => ({ id })) });
+  const nano = catalog.models.find(model => model.id === id);
+  assert.equal(nano.displayName, 'Nano Banana 2.1');
+  assert.equal(nano.modality, 'image');
+  assert.equal(nano.maxReferenceImages, 14);
+  const request = { model: id, prompt: 'A blue paper feather', size: '1024x128', n: 1 };
+  assert.doesNotThrow(() => assertBusinessImageParameters(request, 14));
+  assert.throws(() => assertBusinessImageParameters(request, 15));
+  assert.throws(() => assertBusinessImageParameters({ ...request, n: 2 }, 1));
+  assert.equal(isGenerationPickerModel(id), false);
+  for (const model of text) assert.equal(catalog.models.find(row => row.id === model)?.modality, 'text');
+  for (const model of videos) assert.equal(catalog.unavailableModels.find(row => row.id === model)?.reason, 'adapter_pending');
+});
 test('specialized tools and retired Happyhorse cannot become chat models',()=>{for(const id of ['kling-avatar','kling-lip-sync','kling-face-recognition','kling-tts','qwen3-asr-flash','gemini-embedding-2'])assert.ok(result.unavailableModels.some(m=>m.id===id&&m.reason==='dedicated_tool'));for(const id of fixture.ids.filter(id=>id.startsWith('happyhorse-1.0-')))assert.ok(result.unavailableModels.some(m=>m.id===id&&m.reason==='retired'));assert.ok(!result.models.some(m=>m.modality==='text'&&/avatar|lip-sync|tts|asr|embedding/i.test(m.id)));});
 test('catalog does not infer modality from misleading provider owner labels or unknown family IDs',()=>{const catalog=buildBusinessModelCatalog({data:[{id:'novel-unknown',owned_by:'openai'},{id:'gpt-6.1',owned_by:'something-else'},{id:'gpt-6.1'},{id:'sk-do-not-expose'},{id:'contains spaces'}]});assert.equal(catalog.upstreamTotal,2);assert.equal(catalog.models[0].id,'gpt-6.1');assert.equal(catalog.unavailableModels[0].reason,'unsupported_model');assert.throws(()=>buildBusinessModelCatalog(null));assert.throws(()=>buildBusinessModelCatalog({data:{}}));});
 test('adult aliases retain age gates while stable ordering puts standard models first',()=>{const data=[{id:'uncensored-gpt-6'},{id:'NSFW-Seedream-4.0'},{id:'gpt-6.1'}];const catalog=buildBusinessModelCatalog({data});const byId=new Map(catalog.models.map(m=>[m.id,m.nsfw]));assert.equal(byId.get('uncensored-gpt-6'),true);assert.equal(byId.get('NSFW-Seedream-4.0'),true);assert.equal(byId.get('gpt-6.1'),false);assert.equal(catalog.models[0].id,'gpt-6.1');assert.deepEqual(catalog.models.map(m=>m.id),buildBusinessModelCatalog({data:[...data].reverse()}).models.map(m=>m.id));});

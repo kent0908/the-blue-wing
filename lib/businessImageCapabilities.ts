@@ -25,6 +25,21 @@ export function getBusinessImageCapability(id: string): BusinessImageCapability 
     const qualityOptions = ["auto", "low", "medium", "high", ...(/2\.5/.test(model) ? ["xhigh", "max"] : [])];
     return { family: "gpt-image", sizes: ["1024x1024", "1536x1024", "1024x1536", "2048x1152", "1152x2048", "3840x2160", "2160x3840", "auto"], maxImageCount: 10, maxReferenceImages: 16, controls: [{ key: "quality", kind: "select", options: qualityOptions }], qualityOptions };
   }
+  if (id.toLowerCase() === "gemini-nano-banana-2.1") {
+    return {
+      family: "gemini",
+      sizes: [
+        "1024x1024", "1024x576", "576x1024", "1024x768", "768x1024",
+        "1024x683", "683x1024", "1024x819", "819x1024",
+        "1024x256", "256x1024", "1024x128", "128x1024", "1024x439",
+        "2048x2048", "2048x1152", "1152x2048", "4096x4096", "3840x2160", "2160x3840",
+      ],
+      maxImageCount: 1,
+      maxReferenceImages: 14,
+      controls: [{ key: "seed", kind: "number", min: 0, max: 2147483647 }],
+      qualityOptions: [],
+    };
+  }
   if (/^gemini-(?:3-pro-image|3\.1-flash(?:-lite)?-image)$/.test(model)) {
     const lite = /flash-lite/.test(model);
     return { family: "gemini", sizes: lite ? ["1024x1024", "1024x768", "768x1024", "1024x576", "576x1024"] : ["1024x1024", "1536x1024", "1024x1536", "2048x2048", "3840x2160", "2160x3840", "4096x4096", ...(/3\.1-flash-image/.test(model) ? ["512x512"] : [])], maxImageCount: 1, maxReferenceImages: 14, controls: [{ key: "seed", kind: "number", min: 0, max: 2147483647 }], qualityOptions: [] };

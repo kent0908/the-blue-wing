@@ -53,13 +53,13 @@ export function buildBusinessModelCatalog(raw: unknown) {
     }
     const wan3 = getBusinessWan3Capability(id);
     const dedicatedVideo: BusinessDedicatedVideoCapability | undefined = wan3 ?? getBusinessDedicatedVideoCapability(id);
-    if (!dedicatedVideo && (additional || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id))) { unavailable("adapter_pending"); continue; }
-    if (isRetiredGenerationModel(id)) { unavailable("retired"); continue; }
-    if (["audio", "embedding", "avatar", "tool"].includes(kind)) { unavailable("dedicated_tool"); continue; }
     const image = getBusinessImageCapability(id);
     if (image) {
       models.push({ ...common, modality: "image", supportsReferences: true, sizes: image.sizes, maxReferenceImages: image.maxReferenceImages, maxImageCount: image.maxImageCount, imageControls: image.controls }); continue;
     }
+    if (!dedicatedVideo && (additional || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id))) { unavailable("adapter_pending"); continue; }
+    if (isRetiredGenerationModel(id)) { unavailable("retired"); continue; }
+    if (["audio", "embedding", "avatar", "tool"].includes(kind)) { unavailable("dedicated_tool"); continue; }
     const seedance = getSeedanceCapability(id);
     if (seedance) {
       models.push({ ...common, modality: "video", supportsReferences: true, resolutions: [...seedance.resolutions], minSeconds: seedance.minSeconds, maxSeconds: seedance.maxSeconds, defaultSeconds: seedance.defaultSeconds, aspectRatios: [...seedance.aspectRatios], supportsAudio: true, maxReferenceImages: seedance.references.image, seedance }); continue;

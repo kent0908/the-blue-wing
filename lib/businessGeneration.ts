@@ -155,9 +155,10 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     delete payload.assetIds; delete payload.businessAssetIds;
     const refs: string[] = [];
     if (assetIds?.length) {
+      const inlineMaxBytes = model.id.toLowerCase() === "gemini-nano-banana-2.1" ? 7_000_000 : 10 * 1024 * 1024;
       const { rows } = await sql.query<{ id: number; content_type: string; size: number }>(
         "select id,content_type,size from assets where user_id=$1 and id=any($2::bigint[])", [userId, assetIds]);
-      if (rows.length !== assetIds.length || rows.some(asset => !["image/png", "image/jpeg", "image/webp"].includes(asset.content_type) || Number(asset.size) > 10 * 1024 * 1024) || rows.reduce((sum, asset) => sum + Number(asset.size), 0) > 20 * 1024 * 1024) fail("invalid_reference");
+      if (rows.length !== assetIds.length || rows.some(asset => !["image/png", "image/jpeg", "image/webp"].includes(asset.content_type) || Number(asset.size) > inlineMaxBytes) || rows.reduce((sum, asset) => sum + Number(asset.size), 0) > 20 * 1024 * 1024) fail("invalid_reference");
       refs.push(...await assetsToDataUrls(userId, assetIds, caps.maxReferenceImages));
       if (refs.length !== assetIds.length) fail("invalid_reference");
     }

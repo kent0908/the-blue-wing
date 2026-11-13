@@ -18,6 +18,7 @@ const wanSpicyModels = ['wan3.0-video-spicy', 'wan3.0-video-pro-spicy', 'wan3.0-
 models.push(['wan3.0-video-pro','video'], ...wanSpicyModels.map(id => [id,'video']));
 models.push(['wan2.2-i2v-spicy','video'],['wan2.7-i2v-spicy','video']);
 models.push(['z-image-spicy','image'],['z-image-spicy-pro','image']);
+models.push(['gemini-nano-banana-2.1', 'image']);
 const rates=models.map(([modelId,modality])=>({modelId,modality,active:modelId!=='retired-image',credits:999}));
 class BusinessError extends Error{constructor(code,status=400){super(code);this.code=code;this.status=status;}}
 class SirayaApiError extends Error{constructor(status,message,type,code){super(message);this.status=status;this.type=type;this.code=code;}}
@@ -205,6 +206,15 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
  await test('owned raster references resolved only by ID; missing foreign asset rejects',async()=>{assetRows=[{id:1,user_id:99,content_type:'image/png',size:100}];assert.equal((await send(body(1,'image',{assetIds:[1]}))).status,400);assert.equal(providerCalls,0);assetRows=[{id:1,user_id:7,content_type:'image/png',size:100}];const response=await send(body(2,'image',{assetIds:[1]}));assert.equal(response.status,201);assert.match(lastPayload.image,/^data:image\/png/);assert.equal(lastPayload.assetIds,undefined)});
  await test('oversized or executable references rejected before provider',async()=>{for(const row of [{id:1,user_id:7,content_type:'image/svg+xml',size:10},{id:1,user_id:7,content_type:'image/png',size:11000000}]){assetRows=[row];assert.equal((await send(body(1,'image',{assetIds:[1]}))).status,400)}assert.equal(providerCalls,0)});
  await test('image gets native hires default and private business media output',async()=>{const response=await send(body(1,'image'));const json=await response.json();assert.equal(json.generation.status,'completed');assert.equal(lastPayload.size,'2048x2048');assert.match(json.generation.images[0].url,/^\/api\/business\/media\/.+\/standard\//);assert.ok(!JSON.stringify(json).includes('provider_output'));assert.equal(uploads,1)});
+ await test('Nano Banana 2.1 uses the exact image ID, panoramic size, and single output', async () => {
+   const model = 'gemini-nano-banana-2.1';
+   const response = await send(body(1, 'image', { model, size: '1024x128', n: 1 }));
+   assert.equal((await response.json()).generation.status, 'completed');
+   assert.equal(lastPayload.model, model);
+   assert.equal(lastPayload.size, '1024x128');
+   assert.equal(lastPayload.n, 1);
+   assert.equal(providerCalls, 1);
+ });
  await test('adult image output has adult namespace',async()=>{const response=await send(body(1,'image',{model:'NSFW-Dola-Seedream-5.0-pro'}));assert.match((await response.json()).generation.images[0].url,/\/adult\//)});
  await test('Z-Image Spicy submits the exact own-key payload and stores the result in adult media', async () => {
    const payload = body(1, 'image', {model:'z-image-spicy',size:'1024x1024',n:1});
@@ -456,7 +466,7 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
  await test('fresh own-key grants are required for each new paid job, while durable replay survives catalog changes',async()=>{removedModels=['SIRAYA-Seedance-2.5'];let response=await send();assert.equal(response.status,400);assert.equal(jobs.length,0);assert.equal(providerCalls,0);removedModels=[];await send();removedModels=['SIRAYA-Seedance-2.5'];response=await send();assert.equal(response.status,200);assert.equal((await response.json()).duplicate,true);assert.equal(providerCalls,1);assert.equal(lookupCalls,2)});
  await test('catalog outage is known preflight and does not lock a UUID or fallback to platform credentials',async()=>{catalogFailure=true;const response=await send();assert.equal(response.status,502);assert.equal((await response.json()).error.code,'credential_validation_failed');assert.equal(providerCalls,0);assert.equal(jobs.length,0);catalogFailure=false;assert.equal((await send()).status,201);assert.equal(providerCalls,1)});
  await test('new text families use their exact granted ID without retail aliases',async()=>{for(const [i,model]of ['claude-opus-5.5','gpt-6.1','qwen3.8-max','kimi-k3','deepseek-v4-flash'].entries()){assert.equal((await send(body(i+1,'text',{model}))).status,201);assert.equal(lastPayload.model,model);assert.equal(lastPayload.max_tokens,1024)}assert.equal(providerCalls,5)});
- await test('the fourteen regular image IDs retain version-correct defaults and no retail rate dependency', async () => {
+ await test('regular image IDs retain version-correct defaults and no retail rate dependency', async () => {
    const separateContracts = new Set(['retired-image', 'z-image-spicy', 'z-image-spicy-pro']);
    const imageIds = models.filter(([id,kind]) => kind === 'image' && !separateContracts.has(id)).map(([id]) => id);
    for (const [i,model] of imageIds.entries()) {
@@ -465,7 +475,7 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
      assert.equal(lastPayload.n, 1);
      if (/Seedream/i.test(model)) assert.equal(lastPayload.sequential_image_generation, 'disabled');
    }
-   assert.equal(providerCalls, 14);
+   assert.equal(providerCalls, imageIds.length);
  });
  await test('image batch and quality contracts reject incompatible choices before reservation',async()=>{for(const extra of [{model:'gemini-3.1-flash-image',n:2},{model:'Dola-Seedream-5.0-lite',n:2},{model:'gpt-image-2',n:11},{model:'gpt-image-2',quality:'max'},{model:'gemini-3.1-flash-lite-image',size:'2048x2048'},{model:'Dola-Seedream-5.0-pro',seed:1},{model:'ByteDance-Seedream-4.5',negative_prompt:'unverified'},{model:'gpt-image-2',seed:1},{model:'gemini-3-pro-image',quality:'high'}])assert.equal((await send(body(1,'image',extra))).status,400,JSON.stringify(extra));assert.equal(jobs.length,0);assert.equal(providerCalls,0);assert.equal((await send(body(1,'image',{model:'gpt-image-2.5-flare',quality:'max',n:10,size:'3840x2160'}))).status,201);assert.equal(lastPayload.n,10);assert.equal(lastPayload.quality,'max');assert.equal((await send(body(2,'image',{model:'gemini-3.1-flash-image',seed:123,size:'512x512'}))).status,201);assert.equal(lastPayload.seed,123)});
  await test('native B uploads resolve HTTPS sources only under the current account and credential',async()=>{businessUploads=[uuid(20),uuid(21)];assert.equal((await send(body(1,'image',{model:'gpt-image-2.5-sunburst',businessAssetIds:businessUploads}))).status,201);assert.equal(businessUploadCalls,1);assert.equal(lastPayload.businessAssetIds,undefined);assert.ok(lastPayload.image.every(url=>url.startsWith('https://fixture.invalid/api/business/provider-assets/source/')));assert.ok(lastPayload.image.every(url=>!url.startsWith('asset://')));assert.equal((await send(body(2,'image',{businessAssetIds:[uuid(99)]}))).status,400);assert.equal(providerCalls,1);assert.equal(jobs.length,1)});

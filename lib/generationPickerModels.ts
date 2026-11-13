@@ -10,6 +10,7 @@ export function isRetiredGenerationModel(id: string): boolean {
 export function isGenerationPickerModel(id: string): boolean {
   if (isRetiredGenerationModel(id)) return false;
   // These new grants have no reviewed consumer adapter or retail rate.
+  if (/^gemini-nano-banana-2\.1$/i.test(id)) return false;
   if (/(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)|^wan3\.0-video(?:-prime)?-pro$/i.test(id)) return false;
   if (/^(?:(?:NSFW|SIRAYA)-)*kling(?:-|$)/i.test(id)) return !!getKlingVideoModel(id);
   if (/^(?:(?:NSFW|SIRAYA)-)*minimax-h3(?:-|$)/i.test(id)) return !!getMiniMaxVideoModel(id);

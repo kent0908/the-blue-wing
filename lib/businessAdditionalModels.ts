@@ -10,7 +10,10 @@ export interface BusinessAdditionalModel {
 }
 
 const ADDITIONAL_MODELS = {
+  "gemini-nano-banana-2.1": { displayName: "Nano Banana 2.1", category: "image", nsfw: false },
   "gemini-omni-1.1-flash-preview": { displayName: "Gemini Omni 1.1 Flash Preview", category: "video", nsfw: false },
+  "kling-4.0": { displayName: "Kling 4.0", category: "video", nsfw: false },
+  "kling-4.0-flash": { displayName: "Kling 4.0 Flash", category: "video", nsfw: false },
   "z-image-spicy": { displayName: "Z-Image Spicy", category: "image", nsfw: true },
   "qwen-image-edit-spicy": { displayName: "Qwen Image Edit Spicy", category: "image", nsfw: true },
   "face-swap-spicy": { displayName: "Face Swap Spicy", category: "tool", nsfw: true },
