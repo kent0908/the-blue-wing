@@ -73,6 +73,18 @@
 .confirmationReferences small { color: #a5b5a7; }
 [data-business-workspace] .dialog dt { color: #b2b7bc; }
 [data-business-workspace] .dialogActions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: end; }
+.pricePreview { margin: 16px 0; padding: 14px 16px; border: 1px solid #435a51; border-left: 2px solid #9ac8b6; border-radius: 6px; background: #16231f; }
+.quoteHeading, .quoteTotal, .quoteRates li { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.quoteHeading h3 { font-size: 14px; margin: 0; }
+.quoteHeading a { font-size: 12px; color: #b9d8cc; text-underline-offset: 3px; }
+.quoteTotal { margin-top: 10px; color: #d7e6de; font-size: 13px; }
+.quoteTotal strong { font-size: clamp(18px, 4vw, 24px); color: #edf9f2; font-variant-numeric: tabular-nums; }
+.pricePreview p { margin: 6px 0 0; text-wrap: pretty; }
+.pricePreview details { margin-top: 8px; font-size: 13px; }
+.pricePreview summary { cursor: pointer; color: #b9d8cc; }
+.quoteRates { padding: 0; margin: 8px 0; list-style: none; }
+.quoteRates li { padding: 4px 0; font-size: 13px; border-bottom: 1px solid #435a51; }
+[data-business-workspace] .dialog .quoteFoot { margin-top: 10px; font-size: 12px; color: #b9c8c1; }
 @media (max-width: 600px) {
   [data-business-workspace] .field :is(input, textarea, select) { font-size: 16px; }
 }

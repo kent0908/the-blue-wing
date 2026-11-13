@@ -10,6 +10,7 @@ import { klingCopy } from "@/lib/i18n/kling";
 import type { BusinessAccess, BusinessCredential, BusinessGeneration, BusinessKind, BusinessModel, BusinessSubmission, BusinessAsset, BusinessProviderAsset, BusinessReuseSetup, BusinessUnavailableModel } from "./types";
 import BusinessAdultDeclaration from "./BusinessAdultDeclaration";
 import BusinessDialog from "./BusinessDialog";
+import BusinessPricePreview from "./BusinessPricePreview";
 import BusinessStudioNav from "./BusinessStudioNav";
 import BusinessStage from "./BusinessStage";
 import BusinessSeedanceControls from "./BusinessSeedanceControls";
@@ -119,6 +120,7 @@ export default function BusinessWorkspace() {
   const workspacePreview = useRef<HTMLDivElement>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [confirmation, setConfirmation] = useState<BusinessSubmission | null>(null);
+  const [previewedRequest, setPreviewedRequest] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const submitLock = useRef(false);
@@ -783,6 +785,15 @@ export default function BusinessWorkspace() {
     </div></div></div>
     {confirmation ? <BusinessDialog title={t.confirmTitle} busy={submitting} onClose={() => setConfirmation(null)}>
       <p>{t.confirmText}</p>
+      <BusinessPricePreview key={confirmation.clientRequestId} requestId={confirmation.clientRequestId} onSettled={setPreviewedRequest} locale={locale} settings={{
+        model: confirmation.parameters.model, kind: confirmation.kind, seconds: confirmation.parameters.seconds,
+        resolution: confirmation.parameters.resolution, aspect: confirmation.parameters.aspect_ratio,
+        size: confirmation.parameters.size, count: confirmation.parameters.n, audio: confirmation.parameters.generate_audio,
+        videoInput: confirmationReferences.some(reference => reference.type === "video") ||
+          confirmation.parameters.mode === "video-edit" || confirmation.parameters.mode === "video-extend",
+        referenceCount: confirmationReferences.length, rewrite: !!confirmation.parameters.prompt_extend &&
+          models.some(model => model.id === confirmation.parameters.model && (model.zImage?.promptExtendSurcharged || model.dedicatedVideo?.promptExtendSurcharged)),
+      }} />
       <dl>
         <dt>{t.model}</dt><dd>{models.find(model => model.id === confirmation.parameters.model)?.displayName ?? confirmation.parameters.model}</dd>
         <dt>{t.providerBilling}</dt><dd>{t.noCredits}</dd>
@@ -792,11 +803,11 @@ export default function BusinessWorkspace() {
         {confirmation.kind === "image" ? <><dt>{operations.imageCount}</dt><dd>{confirmation.parameters.n ?? 1} · {confirmation.parameters.size}{confirmation.parameters.quality ? ` · ${confirmation.parameters.quality}` : ""}</dd></> : null}
         {confirmation.kind === "video" ? <><dt>{t.duration}</dt><dd>{confirmation.parameters.seconds === -1 ? d.automatic : `${confirmation.parameters.seconds}s`} · {confirmation.parameters.resolution} · {confirmation.parameters.aspect_ratio ?? (models.find(model => model.id === confirmation.parameters.model)?.dedicatedVideo?.aspectRatioFromSource ? dedicatedCopy.sourceAspect : "")}{confirmation.parameters.output_format ? ` · ${confirmation.parameters.output_format.toUpperCase()}` : ""}</dd></> : null}
       </dl>
-      <p className={styles.dialogPrompt}>{confirmation.editor?.prompt ?? confirmation.parameters.prompt}</p><p>{t.noQuote}</p>
+      <p className={styles.dialogPrompt}>{confirmation.editor?.prompt ?? confirmation.parameters.prompt}</p>
       {confirmation.parameters.prompt_extend && models.some(model => model.id === confirmation.parameters.model && (model.zImage?.promptExtendSurcharged || model.dedicatedVideo?.promptExtendSurcharged)) ? <p className={styles.warning}>{operations.promptRewriteSurcharge}</p> : null}
       {confirmation.parameters.model === "minimax-h3" || confirmation.parameters.model === "minimax-h3-max" ? <p className={styles.warning}>{confirmation.parameters.model === "minimax-h3" ? t.minimaxH3References : t.minimaxH3MaxReferences}</p> : null}
       <p className={styles.note}>{t.billingNotice}</p>
-      <div className={styles.dialogActions}><button className={styles.button} type="button" onClick={submitGeneration} disabled={submitting}>{submitting ? t.generating : t.confirm}</button><button className={styles.secondary} type="button" onClick={() => setConfirmation(null)} disabled={submitting}>{t.cancel}</button></div>
+      <div className={styles.dialogActions}><button className={styles.button} type="button" onClick={submitGeneration} disabled={submitting || previewedRequest !== confirmation.clientRequestId}>{submitting ? t.generating : t.confirm}</button><button className={styles.secondary} type="button" onClick={() => setConfirmation(null)} disabled={submitting}>{t.cancel}</button></div>
     </BusinessDialog> : null}
     {promptOnly ? <BusinessDialog title={resultsCopy.reuse} busy={false} onClose={() => setPromptOnly(null)}><p>{promptOnly.missing ? resultsCopy.reuseMissing : resultsCopy.reuseLegacy}</p><div className={styles.dialogActions}><button className={styles.button} type="button" onClick={() => restorePrompt(promptOnly.job, null)}>{resultsCopy.reuseTextOnly}</button><button className={styles.secondary} type="button" onClick={() => setPromptOnly(null)}>{t.cancel}</button></div></BusinessDialog> : null}
     {deleteOpen ? <BusinessDialog title={t.deleteTitle} busy={keySaving} onClose={() => setDeleteOpen(false)}><p>{t.deleteText}</p><div className={styles.dialogActions}><button className={styles.button} type="button" onClick={deleteKey} disabled={keySaving}>{keySaving ? t.saving : t.deleteKey}</button><button className={styles.secondary} type="button" onClick={() => setDeleteOpen(false)} disabled={keySaving}>{t.cancel}</button></div></BusinessDialog> : null}

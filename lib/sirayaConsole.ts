@@ -84,6 +84,18 @@ async function consoleGet(path: string, query: Record<string,string>, signal: Ab
   if(!data)throw new BillingError("invalid_response");
   return data;
 }
+/** List-price catalogue only. This endpoint does not return usage or account discounts. */
+export async function fetchConsoleModelPrices(signal: AbortSignal): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const result = await consoleGet("/models", { account_id: consoleConfig().accountId!, page: String(page), page_size: "100" }, signal);
+    if (!Array.isArray(result.data) || result.page !== page || typeof result.has_more !== "boolean" ||
+        result.data.length > 100 || (result.has_more && !result.data.length)) throw new BillingError("invalid_pagination");
+    rows.push(...result.data);
+    if (!result.has_more) return rows;
+  }
+  throw new BillingError("invalid_pagination");
+}
 export async function fetchConsoleAccounts(signal:AbortSignal) {
   const response=await consoleResponse("/accounts",{},signal);
   // Live API nests the accounts array under data.data; docs show data directly.

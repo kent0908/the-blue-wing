@@ -13,17 +13,19 @@ const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === '
 (async () => {
   const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
   try {
-    for (const locale of ['zh-Hant', 'en', 'ja']) {
+    for (const locale of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
       const c = load(path.join(repo, 'lib/i18n/businessResults.ts')).businessResultsCopy(locale);
       const s = load(path.join(repo, 'lib/i18n/businessStudio.ts')).businessStudioCopy(locale);
       const { businessCopy, businessError } = load(path.join(repo, 'lib/i18n/business.ts'));
       const t = businessCopy(locale);
+      const priceCopy = load(path.join(repo, 'lib/i18n/businessPricePreview.ts')).businessPricePreviewCopy(locale);
       const { work } = load(path.join(repo, 'lib/i18n/businessOperations.ts')).businessOperationsCopy(locale);
       const context = await browser.newContext({ viewport: { width: 1600, height: 1100 }, permissions: ['clipboard-read', 'clipboard-write'] });
       await context.addCookies([{ name: 'bw_lang', value: locale, url: base }]);
       const page = await context.newPage(); page.setDefaultNavigationTimeout(120000); const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       let posts = 0, polls = 0, exactReads = 0, showSecond = false, releaseAcceptance, signalAcceptance;
+      let quotes = 0;
       const acceptanceStarted = new Promise(resolve => { signalAcceptance = resolve; });
       let jobs = [fixture('3', 'image', 'completed', { images: [{url: '/home-films/worlds.jpg'}, {url: '/home-films/art.jpg'}] }), fixture('2', 'video', 'completed', { videoUrl: '/home-films/worlds.mp4' }), fixture('1', 'image', 'failed', {errorCode: 'generation_failed'})];
       await page.route('**/*', async route => {
@@ -34,6 +36,15 @@ const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === '
         if (p === '/api/business/access') return json({account:{id:uid,userId:7,companyName:'Blue Wing Creative',status:'approved'},keyConfigured:true,encryptionReady:true,adultVerified:true});
         if (p === '/api/business/credentials') return json({credential:{id:uid,label:'Test',last4:'test',updatedAt:'2026-11-05T00:00:00Z'}});
         if (p === '/api/business/models') return json(catalog);
+        if (p === '/api/business/price-preview') {
+          quotes++;
+          const body = route.request().postDataJSON();
+          assert.equal(body.model, 'gpt-image-2');
+          assert(!('prompt' in body) && !('references' in body) && !('apiKey' in body));
+          await new Promise(resolve => setTimeout(resolve, 350));
+          if (quotes === 2) return json({preview:{currency:'USD',reason:'unavailable',rates:[]}});
+          return json({preview:{currency:'USD',reason:'usage',rates:[{unit:'imageOutput',low:'30.0000000000',high:'30.0000000000'}]}});
+        }
         if (p === '/api/business/generations') {
           if (route.request().method() === 'POST') {
             posts++;
@@ -84,7 +95,23 @@ const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === '
       await stage.getByRole('button',{name:c.copy,exact:true}).click();
       assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'Campaign 3');
       await stage.getByRole('button',{name:c.reuse}).click();
+      await page.waitForFunction(() => document.querySelector('textarea')?.value === 'Campaign 3');
       assert.equal(await textarea.inputValue(),'Campaign 3'); assert.equal(posts,0,'Preview, copy and reuse must not generate');
+      for (const width of [320, 1600]) {
+        await page.setViewportSize({width,height: width === 320 ? 680 : 1100});
+        await page.getByRole('button',{name:t.generate,exact:false}).click();
+        const quote = dialog.getByRole('region',{name:priceCopy.title,exact:true});
+        await quote.getByText(priceCopy.loading, {exact:true}).waitFor();
+        assert.equal(await dialog.getByRole('button',{name:t.confirm,exact:true}).isEnabled(),false);
+        await quote.getByText(width === 320 ? priceCopy.usage : priceCopy.unavailable,{exact:true}).waitFor();
+        assert.equal(await dialog.getByRole('button',{name:t.confirm,exact:true}).isEnabled(),true);
+        assert.equal(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth),true);
+        await dialog.getByRole('button',{name:t.cancel,exact:true}).click();
+        assert.equal(posts,0,'Opening and cancelling the cost preview must not generate');
+      }
+      assert.equal(quotes,2);
+      console.log(`PASS ${locale}: cost preview blocks early submission, has no overflow at 320px, and cancels without a generation POST`);
+      if (process.env.PRICE_PREVIEW_ONLY) { await context.close(); continue; }
       await textarea.fill('A quiet campaign scene');
       await textarea.locator('xpath=ancestor::form').locator('button[type=submit]').click();
       await dialog.waitFor(); await dialog.getByRole('button').first().click();
