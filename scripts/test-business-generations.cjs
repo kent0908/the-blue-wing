@@ -350,12 +350,28 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    }
    assert.equal(uploads, wanSpicyModels.length);
  });
+ await test('Wan Prime Spicy saves the verified Mule CDN result from async status', async () => {
+   const model = 'wan3.0-video-prime-spicy';
+   const url = 'https://mule-router-assets.muleusercontent.com/results/fixture.mp4?signature=fixture';
+   const submit = await send(body(1, 'video', { model }));
+   assert.equal((await submit.json()).generation.status, 'processing');
+   pollVideo = { status: 'completed', output_url: url };
+   const result = (await (await get(jobs[0].id)).json()).generation;
+   assert.equal(result.status, 'completed');
+   assert.match(result.videoUrl, /^\/api\/business\/media\/[^/]+\/adult\//);
+   assert.deepEqual(sourceFetches, [url]);
+   assert.equal(providerCalls, 1);
+ });
  await test('the Wan CDN cannot be used by other models, images, spoofed hosts, HTTP or custom ports', async () => {
    const url = 'https://usercontent1.carrothub.ai/results/fixture.mp4';
    const requests = [
      ['video', 'wan3.0-video-pro', url],
      ['video', 'NSFW-SIRAYA-Seedance-2.5', url],
      ['image', 'NSFW-Dola-Seedream-5.0-pro', url],
+     ['video', 'wan3.0-video-pro', 'https://mule-router-assets.muleusercontent.com/a.mp4'],
+     ['image', 'Dola-Seedream-5.0-pro', 'https://mule-router-assets.muleusercontent.com/a.mp4'],
+     ['video', 'wan3.0-video-prime-spicy', 'https://mule-router-assets.muleusercontent.com.evil.invalid/a.mp4'],
+     ['video', 'wan3.0-video-prime-spicy', 'https://mule-router-assets.muleusercontent.com:8443/a.mp4'],
      ...[
        'http://usercontent1.carrothub.ai/a.mp4',
        'https://usercontent1.carrothub.ai.evil.invalid/a.mp4',

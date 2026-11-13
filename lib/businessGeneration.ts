@@ -301,10 +301,12 @@ function validSource(source: string, kind: "image" | "video", model?: string) {
     // https://platform.minimax.io/docs/guides/video-prompt
     // https://kling.ai/document-api/apiReference/model/textToVideo
     const exact = ["cdn.hailuoai.com", "filecdn.minimax.chat"].includes(url.hostname);
-    // SIRAYA task status returned this exact CDN for Wan 3.0 Spicy video output.
+    // These exact hosts were observed on successful SIRAYA task status responses.
     const wanSpicy = kind === "video" && isBusinessWan3SpicyModel(model) && url.hostname === "usercontent1.carrothub.ai";
+    const wanPrimeSpicy = kind === "video" && model === "wan3.0-video-prime-spicy" &&
+      url.hostname === "mule-router-assets.muleusercontent.com";
     const vendor = ["volces.com", "amazonaws.com", "googleusercontent.com", "googleapis.com", "siraya.ai", "openaiusercontent.com", "blob.core.windows.net", "aliyuncs.com", "klingai.com"].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`));
-    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor || wanSpicy);
+    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor || wanSpicy || wanPrimeSpicy);
   } catch { return false; }
 }
 
