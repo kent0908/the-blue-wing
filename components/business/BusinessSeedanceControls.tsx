@@ -2,9 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
-import type { BusinessSeedanceCapability, BusinessSeedanceMode, SeedanceReferenceType } from "@/lib/businessSeedance";
+import { seedanceReferenceLimits, type BusinessSeedanceCapability, type BusinessSeedanceMode, type SeedanceReferenceType } from "@/lib/businessSeedance";
 import { useLocale } from "@/lib/i18n/client";
-import { businessSeedanceCopy, type BusinessSeedanceCopy } from "@/lib/i18n/businessSeedance";
+import { businessSeedanceCopy, seedanceReferenceMessage, type BusinessSeedanceCopy } from "@/lib/i18n/businessSeedance";
 import type { BusinessAsset, BusinessProviderAsset } from "./types";
 import styles from "./BusinessSeedance.module.css";
 
@@ -62,9 +62,15 @@ export default function BusinessSeedanceControls(props: Props) {
   providerAssets.forEach(asset => { counts[asset.type]++; });
   const selectedCount = assetIds.length + nativeAssets.length + providerAssets.length;
   const frameMode = mode === "image-to-video" || mode === "first-last-frame";
-  const referenceLimit = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : capability.references.total;
-  const blocked = (type: SeedanceReferenceType) => mode === "text-to-video" || selectedCount >= referenceLimit || counts[type] >= capability.references[type] || (frameMode && type !== "image");
-  const blockedReason = (type: SeedanceReferenceType) => mode === "text-to-video" ? t.textReferences : frameMode && type !== "image" ? t.imageOnly : t.capReached;
+  const limits = seedanceReferenceLimits(capability, mode);
+  const referenceLimit = limits.total;
+  const blocked = (type: SeedanceReferenceType) => selectedCount >= referenceLimit || counts[type] >= limits[type];
+  const blockedReason = (type: SeedanceReferenceType) => {
+    if (mode === "text-to-video") return t.textReferences;
+    if (frameMode && type !== "image") return t.imageOnly;
+    const issue = counts[type] >= limits[type] ? `${type}Limit` as const : "totalLimit";
+    return seedanceReferenceMessage(t, issue, limits);
+  };
   const chips = [
     ...nativeAssets.map(asset => ({ key: `business:${asset.uploadId}`, type: "image" as const, name: asset.name, remove: () => props.onNativeRemove?.(asset.uploadId!), source: t.localAsset })),
     ...assetIds.map(assetId => ({ key: `local:${assetId}`, type: "image" as const, name: assets.find(asset => asset.id === assetId)?.name || interpolate(t.assetUnnamed, { id: assetId }), remove: () => onLocalSelection(assetId), source: t.localAsset })),
@@ -111,9 +117,9 @@ export default function BusinessSeedanceControls(props: Props) {
 
     <div className={styles.referenceHeader}>
       <div><span className={styles.eyebrow}>{t.references}</span><p className={styles.total}><strong>{selectedCount}</strong><span>/ {referenceLimit}</span></p></div>
-      <dl className={styles.counts}>{(["image", "video", "audio"] as const).map(type => <div key={type}><dt><MediaIcon type={type} />{t[type]}</dt><dd>{counts[type]}<span>/ {capability.references[type]}</span></dd></div>)}</dl>
+      <dl className={styles.counts}>{(["image", "video", "audio"] as const).map(type => <div key={type}><dt><MediaIcon type={type} />{t[type]}</dt><dd>{counts[type]}<span>/ {limits[type]}</span></dd></div>)}</dl>
     </div>
-    <p className={styles.quiet}>{interpolate(t.referenceLimit, capability.references)}</p>
+    {referenceLimit > 0 && <p className={styles.quiet}>{frameMode ? seedanceReferenceMessage(t, "imageLimit", limits) : interpolate(t.referenceLimit, limits)}</p>}
     {capability.version === "2.0" && <p className={audioOnlyReferences ? styles.notice : styles.quiet}>{t.audioOnlyNotice}</p>}
     {mode === "text-to-video" && <p className={styles.notice}>{t.textReferences}</p>}
 
@@ -160,7 +166,7 @@ export default function BusinessSeedanceControls(props: Props) {
           {loaded && !catalog.length && <p className={styles.empty}>{t.noProviderAssets}</p>}
           {!!catalog.length && <div className={styles.providerList}>{catalog.map(asset => {
             const chosen = providerAssets.some(selected => selected.id === asset.id), disabled = !chosen && (asset.status !== "active" || blocked(asset.type));
-            return <button type="button" className={styles.providerAsset} key={asset.id} aria-pressed={chosen} disabled={disabled} title={disabled ? blockedReason(asset.type) : asset.name} onClick={() => onProviderSelection(asset)}>
+            return <button type="button" className={styles.providerAsset} key={asset.id} aria-pressed={chosen} disabled={disabled} title={disabled ? asset.status !== "active" ? t.notActive : blockedReason(asset.type) : asset.name} onClick={() => onProviderSelection(asset)}>
               <span className={styles.providerIcon}><MediaIcon type={asset.type} /></span><span className={styles.providerName}>{asset.name}<small>{t[asset.type]} · {t.active}</small></span><span className={styles.selectionMark} aria-hidden="true">{chosen ? "✓" : "+"}</span>
             </button>;
           })}</div>}

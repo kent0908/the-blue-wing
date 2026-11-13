@@ -30,8 +30,8 @@ import { buildBusinessZImagePayload } from "@/lib/businessZImage";
 import { businessDedicatedVideoCopy } from "@/lib/i18n/businessDedicatedVideo";
 import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
 import { businessWorkflowsCopy } from "@/lib/i18n/businessWorkflows";
-import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type BusinessSeedanceMode } from "@/lib/businessSeedance";
-import { businessSeedanceCopy } from "@/lib/i18n/businessSeedance";
+import { buildBusinessSeedancePayload, seedanceReferenceIssue, seedanceReferenceLimits, type BusinessSeedanceMode } from "@/lib/businessSeedance";
+import { businessSeedanceCopy, seedanceReferenceMessage } from "@/lib/i18n/businessSeedance";
 import { businessStudioCopy } from "@/lib/i18n/businessStudio";
 import { businessStudioHref, parseBusinessStudioLocation, selectBusinessModel, type BusinessStudioTab } from "@/lib/businessStudio";
 import styles from "./Business.module.css";
@@ -327,16 +327,18 @@ export default function BusinessWorkspace() {
   const chooseKind = (value: BusinessKind) => { resetSelection(); setApiKey(""); navigate(value, "", "create"); };
   const chooseModel = (value: string) => { const model = models.find(item => item.id === value); if (!model) return; resetSelection(); setSeconds(model.defaultSeconds ?? Math.min(model.maxSeconds ?? 5, Math.max(model.minSeconds ?? 2, 5))); navigate(model.modality, model.id, "create"); };
   const chooseVideoMode = (value: BusinessSeedanceMode) => {
-    const count = assetIds.length + imageBusinessAssets.length + providerAssets.length;
-    if ((value === "text-to-video" && count > 0) || ((value === "image-to-video" || value === "first-last-frame") && (count > (value === "image-to-video" ? 1 : 2) || providerAssets.some(asset => asset.type !== "image")))) {
-      setError(d.referenceLimitError); return;
+    const capability = selected?.seedance;
+    if (capability) {
+      const refs = [...[...assetIds, ...imageBusinessAssets].map(() => ({ type: "image" as const })), ...providerAssets];
+      const issue = seedanceReferenceIssue(capability, value, refs, true);
+      if (issue) { setError(seedanceReferenceMessage(d, issue, seedanceReferenceLimits(capability, value))); return; }
     }
     setVideoMode(value); setConfirmation(null); setError("");
     if (value === "video-edit" || value === "video-extend") setSeconds(-1);
     else if (seconds === -1 && !providerAssets.some(asset => asset.type === "video")) setSeconds(selected?.defaultSeconds ?? 5);
   };
-  const toggleLocalReference = (id: number) => { const exists = assetIds.includes(id); const key = `local:${id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setAssetIds(current => exists ? current.filter(value => value !== id) : [...current, id]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
-  const toggleProviderReference = (asset: BusinessProviderAsset) => { const exists = providerAssets.some(value => value.id === asset.id); const key = `provider:${asset.id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setProviderAssets(current => exists ? current.filter(value => value.id !== asset.id) : [...current, asset]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); };
+  const toggleLocalReference = (id: number) => { const exists = assetIds.includes(id); const key = `local:${id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setAssetIds(current => exists ? current.filter(value => value !== id) : [...current, id]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); setError(""); };
+  const toggleProviderReference = (asset: BusinessProviderAsset) => { const exists = providerAssets.some(value => value.id === asset.id); const key = `provider:${asset.id}`; if (!exists && videoMode === "freestyle") setVideoMode("subject-reference"); setProviderAssets(current => exists ? current.filter(value => value.id !== asset.id) : [...current, asset]); setReferenceOrder(current => exists ? current.filter(value => value !== key) : [...current, key]); setConfirmation(null); setError(""); };
   const chooseDedicatedOptions = (value: BusinessDedicatedVideoOptions) => {
     if (value.mode !== dedicatedOptions.mode) {
       const capability = selected?.dedicatedVideo;
@@ -387,11 +389,13 @@ export default function BusinessWorkspace() {
     if (kind === "video" && selected.seedance) {
       if (asset.status !== "active") return;
       const next = providerAssets.some(value => value.id === asset.id) ? providerAssets.filter(value => value.id !== asset.id) : [...providerAssets, asset];
-      const counts = { image: assetIds.length + imageBusinessAssets.length, video: 0, audio: 0 }; next.forEach(reference => { counts[reference.type]++; });
-      const frameMode = videoMode === "image-to-video" || videoMode === "first-last-frame";
-      const limit = videoMode === "image-to-video" ? 1 : videoMode === "first-last-frame" ? 2 : selected.seedance.references.total;
-      if (assetIds.length + imageBusinessAssets.length + next.length > limit || (frameMode && (counts.video > 0 || counts.audio > 0)) || Object.entries(counts).some(([type, count]) => count > selected.seedance!.references[type as "image" | "video" | "audio"])) { setError(d.referenceLimitError); return; }
-      if (next.length > providerAssets.length && (videoMode === "freestyle" || videoMode === "text-to-video")) setVideoMode("subject-reference");
+      if (next.length > providerAssets.length) {
+        const nextMode = videoMode === "freestyle" || videoMode === "text-to-video" ? "subject-reference" : videoMode;
+        const refs = [...[...assetIds, ...imageBusinessAssets].map(() => ({ type: "image" as const })), ...next];
+        const issue = seedanceReferenceIssue(selected.seedance, nextMode, refs, true);
+        if (issue) { setError(seedanceReferenceMessage(d, issue, seedanceReferenceLimits(selected.seedance, nextMode))); return; }
+        setVideoMode(nextMode);
+      }
       toggleProviderReference(asset); chooseTab("create");
     } else if ((kind === "image" || kind === "video" && selected.dedicatedVideo) && asset.type === "image" && asset.uploadId && asset.storageReady) {
       const next = imageBusinessAssets.some(value => value.uploadId === asset.uploadId) ? imageBusinessAssets.filter(value => value.uploadId !== asset.uploadId) : [...imageBusinessAssets, asset];
@@ -423,11 +427,17 @@ export default function BusinessWorkspace() {
     if (navigationPending || !selected?.supportsReferences) return null;
     const existing = candidate.localId ? assetIds.includes(candidate.localId) : selected.seedance && candidate.key.startsWith("provider:") ? providerAssets.some(asset => asset.id === candidate.asset?.id) : imageBusinessAssets.some(asset => asset.uploadId === candidate.asset?.uploadId);
     if (!existing) {
-      const count = assetIds.length + imageBusinessAssets.length + (selected.seedance ? providerAssets.filter(asset => asset.type === "image").length : 0);
       const useMulti = selected.seedance && (videoMode === "freestyle" || videoMode === "text-to-video") || selected.dedicatedVideo?.family === "wan3.0" && (dedicatedOptions.mode === "freestyle" || dedicatedOptions.mode === "text-to-video");
-      const mode = useMulti ? "subject-reference" : selected.seedance ? videoMode : dedicatedOptions.mode === "freestyle" ? selected.dedicatedVideo?.capability : dedicatedOptions.mode;
-      const limit = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : selected.seedance?.references.image ?? selected.maxReferenceImages ?? 0;
-      if (count >= limit || selected.seedance && assetIds.length + imageBusinessAssets.length + providerAssets.length >= selected.seedance.references.total) { setError(mentionCopy.limit); return null; }
+      if (selected.seedance) {
+        const mode = useMulti ? "subject-reference" : videoMode;
+        const images = Array.from({ length: assetIds.length + imageBusinessAssets.length + 1 }, () => ({ type: "image" as const }));
+        const issue = seedanceReferenceIssue(selected.seedance, mode, [...images, ...providerAssets], true);
+        if (issue) { setError(seedanceReferenceMessage(d, issue, seedanceReferenceLimits(selected.seedance, mode))); return null; }
+      } else {
+        const mode = useMulti ? "subject-reference" : dedicatedOptions.mode === "freestyle" ? selected.dedicatedVideo?.capability : dedicatedOptions.mode;
+        const limit = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : selected.maxReferenceImages ?? 0;
+        if (assetIds.length + imageBusinessAssets.length >= limit) { setError(mentionCopy.limit); return null; }
+      }
       if (candidate.localId) {
         if (selected.dedicatedVideo) {
           if (!candidate.personalAsset || !addWanPersonalReference(candidate.personalAsset)) return null;
@@ -456,7 +466,7 @@ export default function BusinessWorkspace() {
     const wan3 = selected.dedicatedVideo?.family === "wan3.0";
     const wanPersonal = selected.dedicatedVideo?.supportsPersonalReferences === true;
     if (prompt.length > (selected.promptMaxChars ?? 12000)) { setError(wan3 ? dedicatedCopy.wan3PromptLimit : klingText.promptLimit); return; }
-    if (assetIds.length + (kind === "image" || selected.dedicatedVideo || selected.seedance ? imageBusinessAssets.length : 0) > (selected.seedance?.references.image ?? selected.maxReferenceImages ?? 4)) { setError(d.referenceLimitError); return; }
+    if (!selected.seedance && assetIds.length + (kind === "image" || selected.dedicatedVideo ? imageBusinessAssets.length : 0) > (selected.maxReferenceImages ?? 4)) { setError(d.referenceLimitError); return; }
     if (selected.nsfw && !access?.adultVerified) { setError(t.ageRequired); return; }
     if (/\b(?:sk|csk)-[A-Za-z0-9_-]{16,}/.test(prompt)) { setError(t.keyWarning); return; }
     const selectedReferences: MentionReference[] = [
@@ -465,6 +475,10 @@ export default function BusinessWorkspace() {
       ...providerAssets.map(asset => ({ key: `provider:${asset.id}`, name: asset.name, type: asset.type })),
     ];
     const references = selected.seedance || wanPersonal ? orderMentionReferences(selectedReferences, referenceOrder) : selectedReferences;
+    if (kind === "video" && selected.seedance) {
+      const issue = seedanceReferenceIssue(selected.seedance, videoMode, references);
+      if (issue) { setError(seedanceReferenceMessage(d, issue, seedanceReferenceLimits(selected.seedance, videoMode))); return; }
+    }
     let resolvedPrompt: string;
     try { resolvedPrompt = resolveMentionPrompt(prompt.trim(), mentionBindings.current, references, wan3 ? (_type, index) => `Image ${index}` : undefined); }
     catch { setError(mentionCopy.missing); return; }
@@ -508,14 +522,12 @@ export default function BusinessWorkspace() {
     if (kind === "text") parameters.max_tokens = 1024;
     if (selected.supportsReferences && assetIds.length) parameters.assetIds = [...assetIds];
     if (kind === "video" && selected.seedance) {
-      try { assertBusinessSeedanceReferences(selected.seedance, videoMode, [...[...assetIds, ...imageBusinessAssets].map(() => ({ type: "image" as const })), ...providerAssets]); }
-      catch { setError(d.referenceLimitError); return; }
       parameters.mode = videoMode;
       parameters.seconds = seconds === -1 || providerAssets.some(asset => asset.type === "video") || videoMode === "video-edit" || videoMode === "video-extend" ? -1 : parameters.seconds;
       if (selected.seedance.version === "2.5" && ["image-to-video", "first-last-frame", "video-edit", "video-extend"].includes(videoMode)) parameters.aspect_ratio = "adaptive";
       if (providerAssets.length) parameters.providerAssets = providerAssets.map(({ id, type }) => ({ id, type }));
       if (imageBusinessAssets.length) parameters.businessAssetIds = imageBusinessAssets.map(asset => asset.uploadId!);
-      if (assetIds.length || imageBusinessAssets.length || providerAssets.length) parameters.referenceOrder = [...referenceOrder];
+      if (references.length) parameters.referenceOrder = references.map(reference => reference.key);
       if (selected.seedance.version === "2.5") parameters.output_format = outputFormat;
       if (seed.trim()) { const value = Number(seed); if (!Number.isSafeInteger(value) || value < -1 || value > 2147483647) { setError(t.invalidRequest); return; } parameters.seed = value; }
       try {
@@ -523,7 +535,7 @@ export default function BusinessWorkspace() {
         // paid confirmation. Placeholder URLs never read or transmit media.
         const adapterParameters = { ...parameters };
         delete adapterParameters.businessAssetIds;
-        buildBusinessSeedancePayload(adapterParameters, [...[...assetIds, ...imageBusinessAssets].map(() => ({ type: "image" as const })), ...providerAssets].map((reference, index) => ({ type: reference.type, url: `owned-reference-${index}` })));
+        buildBusinessSeedancePayload(adapterParameters, references.map((reference, index) => ({ type: reference.type, url: `owned-reference-${index}` })));
       } catch { setError(t.invalidRequest); return; }
     }
     if (kind === "video" && selected.dedicatedVideo) {

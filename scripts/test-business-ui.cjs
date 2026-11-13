@@ -39,7 +39,7 @@ const mentionsModule = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessMentions.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(mentionsModule, mentionsModule.exports);
 const seedanceModule = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessSeedance.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(seedanceModule, seedanceModule.exports);
-const { getSeedanceCapability, assertBusinessSeedanceReferences, buildBusinessSeedancePayload } = seedanceModule.exports;
+const { getSeedanceCapability, seedanceReferenceIssue, seedanceReferenceLimits, buildBusinessSeedancePayload } = seedanceModule.exports;
 const dedicatedModule = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync('lib/businessDedicatedVideo.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(dedicatedModule, dedicatedModule.exports);
 const { getBusinessDedicatedVideoCapability, buildBusinessDedicatedVideoPayload } = dedicatedModule.exports;
@@ -57,7 +57,7 @@ function makeContext() {
     prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
     mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, resolveMentionPrompt: mentionsModule.exports.resolveMentionPrompt, orderMentionReferences: mentionsModule.exports.orderMentionReferences, promptLimit: 12000,
     resultsCopy: { submitted: 'sent' }, historyVersion: { current: 0 }, setSelectedJobId: noop, workspacePreview: { current: null }, requestAnimationFrame: callback => callback(),
-    videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', assertBusinessSeedanceReferences, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload, buildBusinessWan3Payload,
+    videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', seedanceReferenceIssue, seedanceReferenceLimits, seedanceReferenceMessage: (_copy,issue,limits)=>`${issue}:${limits.total}/${limits.image}`, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload, buildBusinessWan3Payload,
     dedicatedOptions: {mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
     dedicatedCopy: { wan3PromptLimit: 'wan3-prompt-limit' },
     access: { adultVerified: false }, t: { ageRequired: 'age', keyWarning: 'key', uncertain: 'unknown', error: 'error', unavailable: 'offline', submittingNotice: 'sent', keyFormat: 'format', keySaved: 'saved', invalidRequest: 'invalid' }, klingText: { promptLimit: 'long', referenceLimit: 'refs' }, d: { referenceLimitError: 'seedance-refs' },
@@ -242,16 +242,17 @@ function reviewWan3(context) {
     c.outputFormat='mov'; c.assetIds=Array.from({length:9},(_,i)=>i+1); c.referenceOrder=c.assetIds.map(id=>`local:${id}`); c.requestConfirmation(event);
     assert.ok(c.confirmation); assert.equal(c.confirmation.parameters.assetIds.length,9); assert.equal(c.confirmation.parameters.output_format,undefined,'2.0 does not inherit the 2.5-only output format');
   }
-  for(const [name,configure]of [
-    ['thirty-one image references',c=>{c.assetIds=Array.from({length:31},(_,i)=>i+1);}],
-    ['fifty-one total references',c=>{c.providerAssets=[...Array.from({length:30},(_,i)=>({id:`image-${i}`,type:'image'})),...Array.from({length:10},(_,i)=>({id:`video-${i}`,type:'video'})),...Array.from({length:11},(_,i)=>({id:`audio-${i}`,type:'audio'}))];}],
-    ['mixed sources exceeding thirty images',c=>{c.assetIds=Array.from({length:30},(_,i)=>i+1);c.providerAssets=[{id:'extra-image',type:'image'}];}],
-    ['first-last with one image',c=>{c.videoMode='first-last-frame';c.assetIds=[1];}],
-    ['editing without a video',c=>{c.videoMode='video-edit';c.assetIds=[1];}],
-    ['invalid seed',c=>{c.seed='1.5';}],
+  for(const [name,message,configure]of [
+    ['thirty-one image references','imageLimit:50/30',c=>{c.assetIds=Array.from({length:31},(_,i)=>i+1);}],
+    ['fifty-one total references','totalLimit:50/30',c=>{c.providerAssets=[...Array.from({length:30},(_,i)=>({id:`image-${i}`,type:'image'})),...Array.from({length:10},(_,i)=>({id:`video-${i}`,type:'video'})),...Array.from({length:11},(_,i)=>({id:`audio-${i}`,type:'audio'}))];}],
+    ['mixed sources exceeding thirty images','imageLimit:50/30',c=>{c.assetIds=Array.from({length:30},(_,i)=>i+1);c.providerAssets=[{id:'extra-image',type:'image'}];}],
+    ['first-last with one image','framePairRequired:2/2',c=>{c.videoMode='first-last-frame';c.assetIds=[1];}],
+    ['editing without a video','videoRequired:50/30',c=>{c.videoMode='video-edit';c.assetIds=[1];}],
+    ['invalid seed','invalid',c=>{c.seed='1.5';}],
   ]) {
     const result=seedanceContext(); configure(result.context); result.context.requestConfirmation(event);
     assert.equal(result.context.confirmation,null,`${name} cannot open paid confirmation`); assert.equal(result.uuids(),0,`${name} cannot allocate a request UUID`); assert.equal(result.calls.length,0);
+    assert.equal(result.context.error,message,name);
   }
   {
     const result=seedanceContext('SIRAYA-Seedance-2.0'); const c=result.context;

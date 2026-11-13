@@ -20,6 +20,7 @@ export interface BusinessSeedanceCapability {
 }
 const MODES: readonly BusinessSeedanceMode[] = ["freestyle", "text-to-video", "image-to-video", "first-last-frame", "subject-reference", "video-edit", "video-extend"];
 const ASPECT_RATIOS = ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] as const;
+export const SEEDANCE_25_REFERENCE_LIMITS = { total: 50, image: 30, video: 10, audio: 10 } as const;
 
 /** Exact recognized aliases only: a guessed model ID never inherits a paid capability. */
 export function getSeedanceCapability(modelId: string | null | undefined): BusinessSeedanceCapability | undefined {
@@ -31,7 +32,7 @@ export function getSeedanceCapability(modelId: string | null | undefined): Busin
     resolutions: latest ? ["480p", "720p", "1080p"] : /-(?:fast|mini)$/.test(id) ? ["480p", "720p"] : ["480p", "720p", "1080p", "4k"],
     minSeconds: 4, maxSeconds: latest ? 30 : 15, defaultSeconds: 5, autoDuration: true,
     aspectRatios: ASPECT_RATIOS,
-    references: latest ? { total: 50, image: 30, video: 10, audio: 10 } : { total: 15, image: 9, video: 3, audio: 3 },
+    references: latest ? SEEDANCE_25_REFERENCE_LIMITS : { total: 15, image: 9, video: 3, audio: 3 },
     modes: MODES, outputFormats: latest ? ["mp4", "mov"] : [],
   };
 }
@@ -41,22 +42,41 @@ export class BusinessSeedanceParameterError extends Error {
 }
 function bad(): never { throw new BusinessSeedanceParameterError(); }
 export interface ResolvedBusinessSeedanceReference { type: SeedanceReferenceType; url: string }
+export type SeedanceReferenceIssue = "totalLimit" | "imageLimit" | "videoLimit" | "audioLimit" | "textReferences" | "imageOnly" |
+  "firstFrameRequired" | "framePairRequired" | "referenceRequired" | "audioOnlyNotice" | "videoRequired" | "referenceLimitError";
+
+export function seedanceReferenceLimits(caps: BusinessSeedanceCapability, mode: BusinessSeedanceMode) {
+  const frames = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : null;
+  return frames === null ? caps.references : { total: frames, image: frames, video: 0, audio: 0 };
+}
+
+/** Incomplete selections are valid while editing, but must be complete before submission. */
+export function seedanceReferenceIssue(caps: BusinessSeedanceCapability, mode: BusinessSeedanceMode, refs: readonly { type: SeedanceReferenceType }[], editing = false): SeedanceReferenceIssue | null {
+  if (!caps.modes.includes(mode)) return "referenceLimitError";
+  const counts = { image: 0, video: 0, audio: 0 };
+  for (const reference of refs) {
+    if (!reference || !["image", "video", "audio"].includes(reference.type)) return "referenceLimitError";
+    counts[reference.type]++;
+  }
+  if (mode === "text-to-video" && refs.length) return "textReferences";
+  if ((mode === "image-to-video" || mode === "first-last-frame") && (counts.video || counts.audio)) return "imageOnly";
+  const limits = seedanceReferenceLimits(caps, mode);
+  if (refs.length > limits.total) return "totalLimit";
+  if (counts.image > limits.image) return "imageLimit";
+  if (counts.video > limits.video) return "videoLimit";
+  if (counts.audio > limits.audio) return "audioLimit";
+  if (editing) return null;
+  if (mode === "image-to-video" && counts.image !== 1) return "firstFrameRequired";
+  if (mode === "first-last-frame" && counts.image !== 2) return "framePairRequired";
+  if (mode === "subject-reference" && !refs.length) return "referenceRequired";
+  if ((mode === "subject-reference" || mode === "freestyle") && refs.length && caps.version === "2.0" && !counts.image && !counts.video) return "audioOnlyNotice";
+  if ((mode === "video-edit" || mode === "video-extend") && !counts.video) return "videoRequired";
+  return null;
+}
 
 /** Pure count/type/mode validation, before reading private image bytes or reserving a job. */
 export function assertBusinessSeedanceReferences(caps: BusinessSeedanceCapability, mode: BusinessSeedanceMode, refs: readonly { type: SeedanceReferenceType }[]): void {
-  if (!caps.modes.includes(mode) || refs.length > caps.references.total) bad();
-  const counts = { image: 0, video: 0, audio: 0 };
-  for (const reference of refs) {
-    if (!reference || !["image", "video", "audio"].includes(reference.type)) bad();
-    counts[reference.type]++;
-  }
-  if (Object.entries(counts).some(([type, count]) => count > caps.references[type as SeedanceReferenceType])) bad();
-  if (mode === "text-to-video" && refs.length) bad();
-  if (mode === "image-to-video" && (refs.length !== 1 || counts.image !== 1)) bad();
-  if (mode === "first-last-frame" && (refs.length !== 2 || counts.image !== 2)) bad();
-  if (mode === "subject-reference" && !refs.length) bad();
-  if ((mode === "subject-reference" || mode === "freestyle") && refs.length && caps.version === "2.0" && !counts.image && !counts.video) bad();
-  if ((mode === "video-edit" || mode === "video-extend") && !counts.video) bad();
+  if (seedanceReferenceIssue(caps, mode, refs)) bad();
 }
 
 /** Client fields are explicitly rebuilt; arbitrary URLs, callbacks and extra_body never pass through. */

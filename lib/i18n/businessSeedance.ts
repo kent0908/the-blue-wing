@@ -1,7 +1,10 @@
 import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
+import type { SeedanceReferenceIssue } from "../businessSeedance";
 
 const zh = {
+  totalLimit: "此模式最多可使用 {total} 個參考素材。", imageLimit: "此模式最多可使用 {image} 張參考圖片。", videoLimit: "此模式最多可使用 {video} 段參考影片。", audioLimit: "此模式最多可使用 {audio} 段參考音訊。",
+  firstFrameRequired: "請選擇一張圖片作為首幀。", framePairRequired: "請依序選擇兩張圖片，分別作為首幀與尾幀。", referenceRequired: "請先加入至少一個參考素材。", videoRequired: "影片編輯或延伸需要至少一段參考影片。",
   referenceGuide: "素材規格與人物參照", localRequirements: "一般參考圖：PNG、JPEG、WebP 或 GIF，寬高各 300–6,000 px、寬高比 0.4–2.5，檔案小於 30 MB。", providerMediaRequirements: "參考影片與音訊各自的累計時長：Seedance 2.0 最多 15 秒；2.5 最多 30 秒。SIRAYA 仍會檢查原檔規格與可用性。", faceNotice: "含真人臉部的圖片或影片，請在商務素材庫上傳，待 SIRAYA 素材處理完成後選取；不必離開商務工作室。", providerDocs: "SIRAYA 參數文件", assetDocs: "人物素材接入說明",
   mode: "創作方式", freestyle: "自由創作", textToVideo: "文字成片", imageToVideo: "首幀成片", firstLastFrame: "首尾幀", subjectReference: "多素材參照", videoEdit: "影片編輯", videoExtend: "影片延伸",
   freestyleInfo: "從文字開始，也能加入圖片、影片與音訊，一起構成畫面。", textToVideoInfo: "只用文字描述鏡頭與故事；這個方式不帶入參考素材。", imageToVideoInfo: "選擇一張圖片作為第一幀，描述接下來發生的動作。", firstLastFrameInfo: "依序選擇兩張圖片：第一張是首幀，第二張是尾幀。", subjectReferenceInfo: "依選取順序加入素材，並在描述中交代各素材的用途與關係。", videoEditInfo: "先選擇參考影片，再清楚描述要修改的部分。編輯意圖會加入送出的提示詞。", videoExtendInfo: "先選擇參考影片，描述鏡頭之後的動作與故事。延伸意圖會加入送出的提示詞。",
@@ -11,6 +14,8 @@ const zh = {
 };
 export type BusinessSeedanceCopy = { [K in keyof typeof zh]: string };
 const en: BusinessSeedanceCopy = {
+  totalLimit: "This mode allows up to {total} references in total.", imageLimit: "This mode allows up to {image} reference images.", videoLimit: "This mode allows up to {video} reference videos.", audioLimit: "This mode allows up to {audio} audio references.",
+  firstFrameRequired: "Choose one image as the first frame.", framePairRequired: "Choose two images in order: first frame, then last frame.", referenceRequired: "Add at least one reference to continue.", videoRequired: "Add at least one reference video to edit or extend it.",
   referenceGuide: "Media requirements & faces", localRequirements: "Ordinary image references: PNG, JPEG, WebP or GIF; 300–6,000 px on each side, aspect ratio 0.4–2.5 and file size below 30 MB.", providerMediaRequirements: "Video and audio each have an aggregate reference-duration limit of 15 seconds for Seedance 2.0 and 30 seconds for 2.5. SIRAYA also validates the original files and their availability.", faceNotice: "Upload images or video containing real human faces in the business asset library and select them after SIRAYA finishes processing. You can stay in this workspace.", providerDocs: "SIRAYA parameter reference", assetDocs: "Human-face asset guide",
   mode: "Creative mode", freestyle: "Freestyle", textToVideo: "Text to video", imageToVideo: "First frame", firstLastFrame: "First & last frames", subjectReference: "Multi-reference", videoEdit: "Video edit", videoExtend: "Video extension",
   freestyleInfo: "Begin with text, or combine images, video and audio to shape the scene.", textToVideoInfo: "Describe the shots and story using text only. References are not used in this mode.", imageToVideoInfo: "Choose one image as the first frame, then describe the action that follows.", firstLastFrameInfo: "Choose two images in order: the first is the opening frame and the second is the ending frame.", subjectReferenceInfo: "Select references in order and explain the role and relationship of each in your description.", videoEditInfo: "Select a reference video, then describe exactly what should change. Editing intent is added to the submitted prompt.", videoExtendInfo: "Select a reference video and describe the action and story that follow. Extension intent is added to the submitted prompt.",
@@ -19,6 +24,8 @@ const en: BusinessSeedanceCopy = {
   format: "Output format", movNotice: "MOV is available as an original download. Some browsers cannot preview it; download it and open it in a compatible player.", seed: "Random seed (optional)", seedPlaceholder: "Leave blank for the model to choose", seedNotice: "Use an integer from -1 to 2,147,483,647. The same seed does not guarantee identical provider output.", automatic: "Automatic duration", fixed: "Fixed duration", autoDurationNotice: "Video references require automatic duration. Final length and charges depend on SIRAYA's processed result.", adaptiveNotice: "This mode adapts the aspect ratio to the reference frames.", modeChangeNotice: "Compatible references stay selected. Remove any extras before switching.",
 };
 const ja: BusinessSeedanceCopy = {
+  totalLimit: "このモードの参考素材は合計{total}点までです。", imageLimit: "このモードの参考画像は{image}枚までです。", videoLimit: "このモードの参考映像は{video}本までです。", audioLimit: "このモードの参考音声は{audio}点までです。",
+  firstFrameRequired: "開始フレームに使う画像を1枚選択してください。", framePairRequired: "開始フレーム、終了フレームの順に画像を2枚選択してください。", referenceRequired: "参考素材を1点以上追加してください。", videoRequired: "映像を編集・延長するには参考映像を1本以上追加してください。",
   referenceGuide: "素材仕様と人物参照", localRequirements: "一般の参考画像：PNG・JPEG・WebP・GIF、縦横それぞれ 300〜6,000 px、縦横比 0.4〜2.5、ファイル容量は 30 MB 未満。", providerMediaRequirements: "参考映像と音声それぞれの合計時間は Seedance 2.0 が15秒、2.5 が30秒までです。原本の仕様と利用可否は SIRAYA でも確認します。", faceNotice: "実在する人物の顔を含む画像や映像は、ビジネス素材庫でアップロードし、SIRAYA の処理完了後に選択してください。この制作室から移動する必要はありません。", providerDocs: "SIRAYA パラメータ仕様", assetDocs: "人物素材の接続ガイド",
   mode: "制作モード", freestyle: "自由制作", textToVideo: "テキストから映像", imageToVideo: "開始フレーム", firstLastFrame: "開始・終了フレーム", subjectReference: "複数素材の参照", videoEdit: "映像編集", videoExtend: "映像の延長",
   freestyleInfo: "テキストから始め、画像・映像・音声を組み合わせて場面をつくれます。", textToVideoInfo: "テキストだけでショットや物語を描写します。このモードでは参考素材を使用しません。", imageToVideoInfo: "画像を1枚選び、開始フレームの後に起こる動きを描写してください。", firstLastFrameInfo: "画像を順番に2枚選択します。1枚目が開始、2枚目が終了フレームです。", subjectReferenceInfo: "素材を順番に選び、それぞれの役割や関係を文章で指定してください。", videoEditInfo: "参考映像を選び、変更する部分を具体的に描写してください。編集の意図を送信するプロンプトに追加します。", videoExtendInfo: "参考映像を選び、続く動きや物語を描写してください。延長の意図を送信するプロンプトに追加します。",
@@ -28,3 +35,7 @@ const ja: BusinessSeedanceCopy = {
 };
 const COPY: Record<Locale, BusinessSeedanceCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessSeedanceCopy(locale: Locale): BusinessSeedanceCopy { return COPY[locale]; }
+
+export function seedanceReferenceMessage(copy: BusinessSeedanceCopy, issue: SeedanceReferenceIssue, limits: Record<"total" | "image" | "video" | "audio", number>): string {
+  return copy[issue].replace(/\{(total|image|video|audio)\}/g, (_, key: keyof typeof limits) => String(limits[key]));
+}

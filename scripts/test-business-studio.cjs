@@ -99,13 +99,15 @@ assert.ok(consumerTree.some(node => node.type === consumerSupport), 'Normal stud
 // The handlers below run their real function bodies with observed React setters.
 // A network call is a test failure, so changing a model/tab cannot spend money.
 const { source: workspaceSource, handlers } = actualHandlers('components/business/BusinessWorkspace.tsx', ['resetSelection', 'navigate', 'setTab', 'chooseTab', 'chooseKind', 'chooseModel', 'requestConfirmation', 'chooseVideoMode', 'toggleLocalReference', 'toggleProviderReference', 'chooseDedicatedOptions', 'dedicatedImageLimit', 'addWanPersonalReference', 'removeDedicatedReference', 'toggleWanPersonalReference', 'selectManagedAsset']);
+const seedance = load('lib/businessSeedance.ts');
+const { businessSeedanceCopy, seedanceReferenceMessage } = load('lib/i18n/businessSeedance.ts');
 function context() {
   const pushes = [];
   const state = {
     mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, promptLimit: 12000,
     resolveMentionPrompt: load('lib/businessMentions.ts').resolveMentionPrompt,
     orderMentionReferences: load('lib/businessMentions.ts').orderMentionReferences,
-    kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video' },
+    kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video', seedance: seedance.getSeedanceCapability('SIRAYA-Seedance-2.5') },
     size: 'old-size', resolution: '4k', assetIds: [71, 72], audio: true, seconds: 30,
     videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123', imageCount:3, imageQuality:'high', imageNegative:'old', imageBusinessAssets:[{id:'old-b',uploadId:'fixture-old-upload'}], selectionContext:{current:'video:previous-model'},
     restoredContext:{current:null}, apiKey: 'fixture-unsaved-value', prompt: 'A paper garden opens.', error: 'old-error', notice: 'old-notice',
@@ -113,7 +115,7 @@ function context() {
     uncertain: true, unresolvedRequest: { current: 'fixture-original-request' }, navigationPending: false,
     dedicatedOptions:{mode:'first-last-frame',watermark:true,seed:'77',negativePrompt:'old-negative',promptExtend:true},
     DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS:{mode:'freestyle',watermark:false,seed:'',negativePrompt:'',promptExtend:false},
-    d:{referenceLimitError:'reference-limit'},
+    d:businessSeedanceCopy('zh-Hant'), seedanceReferenceIssue:seedance.seedanceReferenceIssue, seedanceReferenceLimits:seedance.seedanceReferenceLimits, seedanceReferenceMessage,
     models: [
       { id: 'fixture-image', modality: 'image', displayName: 'Image' },
       { id: 'minimax-h3', modality: 'video', displayName: 'H3', minSeconds: 4, maxSeconds: 15, defaultSeconds: 6 },
@@ -223,6 +225,7 @@ for (const [method, value] of [['chooseModel', 'minimax-h3'], ['chooseKind', 'im
   assert.equal(state.providerAssets.length,0); assert.deepEqual(Array.from(state.referenceOrder),['local:72','local:71']);
   state.chooseVideoMode('text-to-video');
   assert.equal(state.videoMode,'first-last-frame','An incompatible mode is rejected instead of silently losing the reference images');
+  assert.equal(state.error,state.d.textReferences);
   state.chooseVideoMode('video-edit');
   assert.equal(state.seconds,-1,'Edit mode starts with provider-determined duration');
   assert.deepEqual(Array.from(state.assetIds),[72,71]); assert.deepEqual(Array.from(state.providerAssets),[]); assert.deepEqual(Array.from(state.referenceOrder),['local:72','local:71']);
@@ -244,6 +247,7 @@ for (const [method, value] of [['chooseModel', 'minimax-h3'], ['chooseKind', 'im
   state.unresolvedRequest.current = null;
   state.confirmation = null;
   state.assetIds = [];
+  state.selected = { id: 'fixture-old-video' };
   state.navigationPending = true;
   state.crypto.randomUUID = () => `fixture-transition-request-${++uuids}`;
   state.requestConfirmation({ preventDefault() {} });
@@ -414,7 +418,7 @@ assert.ok(JobToasts(), 'Consumer job notifications continue working in the norma
   assert.equal(state.confirmation,null,'Selecting a source invalidates stale paid confirmation');
   state.selectManagedAsset({id:'upload:second',uploadId:'second',type:'image',status:'active',storageReady:true});
   assert.equal(state.imageBusinessAssets.length,1,'Single-frame mode cannot acquire a second source');
-  assert.equal(state.error,'reference-limit');
+  assert.equal(state.error,state.d.referenceLimitError);
   state.selectManagedAsset({id:'registered:first',uploadId:'first',type:'image',status:'active',storageReady:true});
   assert.equal(state.imageBusinessAssets.length,0,'The same upload can be deselected after a provider ID appears');
   state.selectManagedAsset({id:'upload:unready',uploadId:'unready',type:'image',status:'processing',storageReady:false});

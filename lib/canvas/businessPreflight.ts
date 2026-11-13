@@ -58,7 +58,8 @@ export function assertBusinessCanvasPreflight(graph: CanvasGraph, order: string[
     const cjkLimit = model.dedicatedVideo?.cjkPromptMaxChars;
     if (cjkLimit && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) && prompt.length > cjkLimit) bad(copy.invalidSettings);
     const images = inputs.image?.kind === "image" ? inputs.image : undefined, count = images?.keys.length ?? 0;
-    if (images && (images.originals > 16 || images.generated > 16 || new Set(images.keys).size !== count)) bad();
+    const sourceImageLimit = model.seedance?.references.image ?? 16;
+    if (images && (images.originals > sourceImageLimit || images.generated > sourceImageLimit || new Set(images.keys).size !== count)) bad();
     if (count && !model.supportsReferences) bad();
     if (node.type === "image") {
       if (count > (model.maxReferenceImages ?? 0)) bad();

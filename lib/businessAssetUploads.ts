@@ -7,6 +7,7 @@ import { BusinessError, getBusinessCredential } from "./business";
 import { SITE_URL } from "./seo/site";
 import { BusinessProviderAssetSubmitError, getBusinessProviderAsset, registerBusinessProviderAsset, type BusinessProviderAsset, type BusinessProviderAssetType } from "./businessProviderAssets";
 import { isAdultVerified, type AdultGateUser } from "./adultGate";
+import { SEEDANCE_25_REFERENCE_LIMITS } from "./businessSeedance";
 
 const MiB = 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -263,10 +264,11 @@ export async function refreshBusinessUploadAsset(userId: number | string, accoun
 }
 
 /** Generic image models receive only server-created HTTPS grants, never asset:// IDs. */
-export async function resolveBusinessUploadSources(userId: number | string, accountId: string, credentialId: string, uploadIds: string[], nsfw: boolean, constraints?: BusinessImageSourceConstraints): Promise<{ type: "image"; url: string }[]> {
+export async function resolveBusinessUploadSources(userId: number | string, accountId: string, credentialId: string, uploadIds: string[], nsfw: boolean, constraints?: BusinessImageSourceConstraints, maxImages = 16): Promise<{ type: "image"; url: string }[]> {
   userId = safeUserId(userId, "invalid_reference");
   if (!UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" ||
-    !Array.isArray(uploadIds) || uploadIds.length > 16 || uploadIds.some(id => typeof id !== "string" || !UUID.test(id)) || new Set(uploadIds).size !== uploadIds.length) fail("invalid_reference");
+    !Number.isSafeInteger(maxImages) || maxImages < 1 || maxImages > SEEDANCE_25_REFERENCE_LIMITS.image ||
+    !Array.isArray(uploadIds) || uploadIds.length > maxImages || uploadIds.some(id => typeof id !== "string" || !UUID.test(id)) || new Set(uploadIds).size !== uploadIds.length) fail("invalid_reference");
   if(constraints&&(!Number.isSafeInteger(constraints.minSide)||constraints.minSide<1||constraints.minSide>6000||!Number.isSafeInteger(constraints.maxBytes)||constraints.maxBytes<1||constraints.maxBytes>=30*MiB||!Array.isArray(constraints.mimeTypes)||!constraints.mimeTypes.length||constraints.mimeTypes.some(type=>!BUSINESS_UPLOAD_TYPES[type]||BUSINESS_UPLOAD_TYPES[type].type!=="image")))fail("invalid_reference");
   if (!uploadIds.length) return [];
   const { rows } = await sql.query<UploadRow & AdultGateUser>(`select t.*,u.birth_date,u.adult_confirmed_at from business_asset_uploads t

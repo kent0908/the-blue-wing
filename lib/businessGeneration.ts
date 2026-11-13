@@ -4,7 +4,7 @@ import { sql } from "./db";
 import { assetPathPrefix, blobConfigured, toPublicAsset, type AssetRow } from "./assets";
 import { assetsToDataUrls } from "./assetData";
 import { BusinessError, getBusinessCredential, type BusinessAccount } from "./business";
-import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, type BusinessSeedanceCapability, type BusinessSeedanceMode } from "./businessSeedance";
+import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, getSeedanceCapability, type BusinessSeedanceCapability, type BusinessSeedanceMode } from "./businessSeedance";
 import { assertBusinessImageParameters, getBusinessImageCapability, type BusinessImageControl } from "./businessImageCapabilities";
 import { buildBusinessModelCatalog } from "./businessModelCatalog";
 import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
@@ -114,13 +114,14 @@ function validateSubmission(value: unknown) {
   if (parameters.negative_prompt !== undefined && (typeof parameters.negative_prompt !== "string" || parameters.negative_prompt.length > 4000)) fail();
   if (parameters.seed !== undefined && (typeof parameters.seed !== "number" || !Number.isSafeInteger(parameters.seed) || parameters.seed < -1 || parameters.seed > 2147483647)) fail();
   if (parameters.assetIds !== undefined && (!Array.isArray(parameters.assetIds) || parameters.assetIds.length > (kind === "video" ? 50 : 16) || parameters.assetIds.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) || new Set(parameters.assetIds).size !== parameters.assetIds.length)) fail();
+  const sourceImageLimit = kind === "video" ? getSeedanceCapability(parameters.model)?.references.image ?? 16 : 16;
   if (parameters.businessAssetIds !== undefined) {
-    if (!Array.isArray(parameters.businessAssetIds) || parameters.businessAssetIds.length > 16 || parameters.businessAssetIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
+    if (!Array.isArray(parameters.businessAssetIds) || parameters.businessAssetIds.length > sourceImageLimit || parameters.businessAssetIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
       new Set(parameters.businessAssetIds.map(id => id.toLowerCase())).size !== parameters.businessAssetIds.length) fail("invalid_reference");
     parameters.businessAssetIds = parameters.businessAssetIds.map(id => id.toLowerCase());
   }
   if (parameters.referenceGenerationIds !== undefined) {
-    if (!Array.isArray(parameters.referenceGenerationIds) || parameters.referenceGenerationIds.length > 16 || parameters.referenceGenerationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
+    if (!Array.isArray(parameters.referenceGenerationIds) || parameters.referenceGenerationIds.length > sourceImageLimit || parameters.referenceGenerationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
       new Set(parameters.referenceGenerationIds.map(id => id.toLowerCase())).size !== parameters.referenceGenerationIds.length) fail("invalid_reference");
     parameters.referenceGenerationIds = parameters.referenceGenerationIds.map(id => id.toLowerCase());
   }
@@ -189,8 +190,9 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     } catch { fail(); }
     const local = assetIds?.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, assetIds, model.nsfw) : [];
     const constraints = { minSide: 300, maxBytes: 30 * 1024 * 1024 - 1, mimeTypes: ["image/png", "image/jpeg", "image/webp"] };
-    const originals = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, constraints) : [];
-    const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, { ...constraints, minAspectRatio: 0.4, maxAspectRatio: 2.5 }) : [];
+    const sourceImageLimit = model.seedance.references.image;
+    const originals = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, constraints, sourceImageLimit) : [];
+    const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, { ...constraints, minAspectRatio: 0.4, maxAspectRatio: 2.5 }, sourceImageLimit) : [];
     const registered = providerAssets.length ? await resolveBusinessProviderAssets(providerAssets, { apiKey: credential.apiKey }) : [];
     if (local.length !== (assetIds?.length ?? 0) || originals.length !== ownUploads.length || generated.length !== generatedIds.length || registered.length !== providerAssets.length) fail("invalid_reference");
     const resolved = new Map([...local, ...originals, ...generated, ...registered].map((ref, index) => [keys[index], ref]));

@@ -6,6 +6,7 @@ import { sql } from "./db";
 import { isAdultVerified, type AdultGateUser } from "./adultGate";
 import { BusinessError } from "./businessTypes";
 import { SITE_URL } from "./seo/site";
+import { SEEDANCE_25_REFERENCE_LIMITS } from "./businessSeedance";
 
 export const BUSINESS_GENERATED_REFERENCE_TTL_SECONDS = 3600;
 export const BUSINESS_GENERATED_REFERENCE_MAX_IMAGES = 16;
@@ -158,10 +159,12 @@ async function verifiedImage(row: SourceRow, constraints: BusinessGeneratedImage
 export async function resolveBusinessGeneratedImageSources(
   userId: number | string, accountId: string, credentialId: string, generationIds: string[], nsfw: boolean,
   constraints: BusinessGeneratedImageConstraints = DEFAULT_CONSTRAINTS,
+  maxImages = BUSINESS_GENERATED_REFERENCE_MAX_IMAGES,
 ): Promise<{ type: "image"; url: string }[]> {
   const ownerId = safeUserId(userId);
   if (!UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" || !constraintsValid(constraints) ||
-    !Array.isArray(generationIds) || generationIds.length > BUSINESS_GENERATED_REFERENCE_MAX_IMAGES || generationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
+    !Number.isSafeInteger(maxImages) || maxImages < 1 || maxImages > SEEDANCE_25_REFERENCE_LIMITS.image ||
+    !Array.isArray(generationIds) || generationIds.length > maxImages || generationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
     new Set(generationIds.map(id => id.toLowerCase())).size !== generationIds.length) invalid();
   if (!generationIds.length) return [];
   const ids = generationIds.map(id => id.toLowerCase());

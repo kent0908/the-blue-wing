@@ -122,7 +122,8 @@ await test('whole-run preflight blocks an unsupported downstream video before it
 });
 await test('preflight validates source counts and exact Seedance modes before a run starts',async()=>{
  assert.equal(preflight(originalGraph(2,video,'first-last-frame')),undefined);assert.equal(preflight(originalGraph(1,video,'image-to-video')),undefined);
- for(const graph of[originalGraph(1,video,'first-last-frame'),originalGraph(2,video,'image-to-video'),originalGraph(1,video,'text-to-video'),originalGraph(1,video,'video-edit'),originalGraph(1,video,'video-extend'),originalGraph(1,video,'unreviewed-mode'),originalGraph(17,video,'subject-reference')])assert.throws(()=>preflight(graph),{message:businessWorkflowsCopy('zh-Hant').invalidReference});
+ assert.equal(preflight(originalGraph(30)),undefined);
+ for(const graph of[originalGraph(1,video,'first-last-frame'),originalGraph(2,video,'image-to-video'),originalGraph(1,video,'text-to-video'),originalGraph(1,video,'video-edit'),originalGraph(1,video,'video-extend'),originalGraph(1,video,'unreviewed-mode'),originalGraph(31)])assert.throws(()=>preflight(graph),{message:businessWorkflowsCopy('zh-Hant').invalidReference});
  const v20={...video,id:'SIRAYA-Seedance-2.0',seedance:getSeedanceCapability('SIRAYA-Seedance-2.0')};assert.equal(preflight(originalGraph(9,v20),undefined,[image,v20]),undefined);assert.throws(()=>preflight(originalGraph(10,v20),undefined,[image,v20]),{message:businessWorkflowsCopy('zh-Hant').invalidReference});
  const cappedImage={...image,maxReferenceImages:2};assert.equal(preflight(originalGraph(2,cappedImage),undefined,[cappedImage]),undefined);assert.throws(()=>preflight(originalGraph(3,cappedImage),undefined,[cappedImage]),{message:businessWorkflowsCopy('zh-Hant').invalidReference});
 });
