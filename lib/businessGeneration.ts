@@ -8,11 +8,11 @@ import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, getSeed
 import { assertBusinessImageParameters, getBusinessImageCapability, type BusinessImageControl } from "./businessImageCapabilities";
 import { buildBusinessModelCatalog } from "./businessModelCatalog";
 import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
-import { buildBusinessWan3Payload, isBusinessWan3SpicyModel } from "./businessWan3";
+import { buildBusinessWan3Payload, getBusinessWan3Capability, isBusinessWan3SpicyModel, WAN3_MAX_REFERENCE_SECONDS } from "./businessWan3";
 import { buildBusinessZImagePayload, type BusinessZImageCapability } from "./businessZImage";
 import { getBusinessProviderAsset, resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
-import { resolveBusinessUploadSources, reusableBusinessUploads } from "./businessAssetUploads";
+import { resolveBusinessUploadSources, resolveBusinessWanVideoSources, reusableBusinessUploads } from "./businessAssetUploads";
 import { resolveBusinessGeneratedImageSources, reusableBusinessGeneratedImageIds } from "./businessGeneratedReferences";
 import { snapshotBusinessGeneration, type BusinessGenerationReuseSnapshot } from "./businessGenerationReuse";
 import { validateGeneration } from "./generationValidation";
@@ -102,7 +102,7 @@ function validateSubmission(value: unknown) {
   const kind = value.kind as BusinessKind;
   const parameters = { ...value.parameters };
   const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "referenceGenerationIds", "background", "output_format", "output_compression", "moderation", "prompt_extend"] :
-    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "businessAssetIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
+    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "businessAssetIds", "businessVideoIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
     ["model", "prompt", "max_tokens", "temperature"];
   if (Object.keys(parameters).some(key => !allowed.includes(key)) || typeof parameters.model !== "string" ||
     !/^[a-zA-Z0-9._:-]{1,150}$/.test(parameters.model) || typeof parameters.prompt !== "string" ||
@@ -119,6 +119,16 @@ function validateSubmission(value: unknown) {
     if (!Array.isArray(parameters.businessAssetIds) || parameters.businessAssetIds.length > sourceImageLimit || parameters.businessAssetIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
       new Set(parameters.businessAssetIds.map(id => id.toLowerCase())).size !== parameters.businessAssetIds.length) fail("invalid_reference");
     parameters.businessAssetIds = parameters.businessAssetIds.map(id => id.toLowerCase());
+  }
+  if (parameters.businessVideoIds !== undefined) {
+    const capability = getBusinessWan3Capability(parameters.model);
+    if (!capability || !Array.isArray(parameters.businessVideoIds) ||
+        parameters.businessVideoIds.length > capability.maxReferenceVideos ||
+        parameters.businessVideoIds.some(id => typeof id !== "string" || !UUID.test(id))) fail("invalid_reference");
+    const ids = parameters.businessVideoIds.map(id => (id as string).toLowerCase());
+    const combined = [...(parameters.businessAssetIds as string[] | undefined ?? []), ...ids];
+    if (new Set(combined).size !== combined.length) fail("invalid_reference");
+    parameters.businessVideoIds = ids;
   }
   if (parameters.referenceGenerationIds !== undefined) {
     if (!Array.isArray(parameters.referenceGenerationIds) || parameters.referenceGenerationIds.length > sourceImageLimit || parameters.referenceGenerationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
@@ -139,6 +149,7 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
   const payload = { ...parameters };
   const assetIds = payload.assetIds as number[] | undefined;
   const ownUploads = (parameters.businessAssetIds ?? []) as string[];
+  const ownClips = (parameters.businessVideoIds ?? []) as string[];
   const generatedIds = (parameters.referenceGenerationIds ?? []) as string[];
   // Workflow IDs are server-only routing data, never native provider fields.
   const adapterParameters = { ...parameters }; delete adapterParameters.referenceGenerationIds;
@@ -207,20 +218,29 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
       (!supportsPersonalReferences && assetIds !== undefined) ||
       (!acceptsReferenceOrder && parameters.referenceOrder !== undefined)) fail();
     const localIds = assetIds ?? [];
-    const keys = [...localIds.map(id => `local:${id}`), ...ownUploads.map(id => `business:${id}`), ...generatedIds.map(id => `generated:${id}`)];
+    const clipKeys = new Set(ownClips.map(id => `business:${id}`));
+    const keys = [...localIds.map(id => `local:${id}`), ...ownUploads.map(id => `business:${id}`), ...clipKeys, ...generatedIds.map(id => `generated:${id}`)];
     const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
     if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
     delete adapterParameters.assetIds;
     delete adapterParameters.referenceOrder;
+    delete adapterParameters.businessVideoIds;
     const buildPayload = family === "wan3.0" ? buildBusinessWan3Payload : buildBusinessDedicatedVideoPayload;
-    const types = referenceOrder.map((_, index) => ({ type: "image" as const, url: `https://owned.invalid/reference-${index}.png` }));
+    const types = referenceOrder.map((key, index) => ({
+      type: clipKeys.has(key) ? "video" as const : "image" as const,
+      url: `https://owned.invalid/reference-${index}`,
+    }));
     try { buildPayload(adapterParameters, types); } catch { fail(); }
     const local = localIds.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, localIds, model.nsfw, "wan") : [];
     const refs = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, referenceImageRules) : [];
+    const clips = ownClips.length ? await resolveBusinessWanVideoSources(userId, accountId, credential.id, ownClips, model.nsfw) : [];
     const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, referenceImageRules) : [];
-    const resolved = [...local, ...refs, ...generated];
+    const resolved = [...local, ...refs, ...clips, ...generated];
     if (local.length !== localIds.length || refs.length !== ownUploads.length || generated.length !== generatedIds.length ||
-      resolved.some(ref => ref.type !== "image")) fail("invalid_reference");
+      clips.length !== ownClips.length || [...local, ...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
+    const inputSeconds = clips.reduce((sum, clip) => sum + clip.duration, 0);
+    const outputSeconds = Number(parameters.seconds ?? model.defaultSeconds ?? 5);
+    if (inputSeconds > WAN3_MAX_REFERENCE_SECONDS || (outputSeconds !== -1 && inputSeconds + outputSeconds > 30)) fail("wan_video_duration");
     const byKey = new Map(keys.map((key, index) => [key, resolved[index]]));
     try { return buildPayload(adapterParameters, referenceOrder.map(key => byKey.get(key)!)); } catch { fail(); }
   }
@@ -303,10 +323,10 @@ function validSource(source: string, kind: "image" | "video", model?: string) {
     const exact = ["cdn.hailuoai.com", "filecdn.minimax.chat"].includes(url.hostname);
     // These exact hosts were observed on successful SIRAYA task status responses.
     const wanSpicy = kind === "video" && isBusinessWan3SpicyModel(model) && url.hostname === "usercontent1.carrothub.ai";
-    const wanPrimeSpicy = kind === "video" && model === "wan3.0-video-prime-spicy" &&
+    const wanPrime = kind === "video" && (model === "wan3.0-video-prime" || model === "wan3.0-video-prime-spicy") &&
       url.hostname === "mule-router-assets.muleusercontent.com";
     const vendor = ["volces.com", "amazonaws.com", "googleusercontent.com", "googleapis.com", "siraya.ai", "openaiusercontent.com", "blob.core.windows.net", "aliyuncs.com", "klingai.com"].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`));
-    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor || wanSpicy || wanPrimeSpicy);
+    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor || wanSpicy || wanPrime);
   } catch { return false; }
 }
 
@@ -524,7 +544,7 @@ export async function getBusinessGenerationReuse(user: UserRow, account: Busines
   const provider = references.filter(reference => reference.key.startsWith("provider:"));
   const [local, uploads, credential] = await Promise.all([
     localIds.length ? sql.query<AssetRow>("select id,user_id,url,pathname,content_type,size,filename,created_at from assets where user_id=$1 and id=any($2::bigint[])", [user.id, localIds]).then(({ rows }) => rows) : [],
-    reusableBusinessUploads(user.id, account.id, uploadIds),
+    reusableBusinessUploads(user.id, account.id, uploadIds, references.some(reference => reference.key.startsWith("business:") && reference.type === "video")),
     (provider.length || generatedIds.length) ? getBusinessCredential(user.id, account.id) : null,
   ]);
   const localByKey = new Map(local.filter(asset => asset.pathname.startsWith(assetPathPrefix(user.id)) &&
@@ -551,11 +571,11 @@ export async function getBusinessGenerationReuse(user: UserRow, account: Busines
     reusableBusinessGeneratedImageIds(user.id, account.id, credential.id, generatedIds, row.nsfw), verifyProviderAssets(credential.apiKey),
   ]) : [[]];
   const generatedSet = new Set(generated);
-  const restored = references.map(({ key }) => {
+  const restored = references.map(({ key, type }) => {
     const localAsset = localByKey.get(key);
     if (localAsset) return { key, source: "local" as const, id: localAsset.id, asset: localAsset };
     const upload = uploadsByKey.get(key);
-    if (upload) return { key, source: "upload" as const, asset: { id: upload.id, uploadId: upload.uploadId, name: upload.name, type: upload.type, status: upload.status, storageReady: upload.storageReady } };
+    if (upload?.type === type) return { key, source: "upload" as const, asset: { id: upload.id, uploadId: upload.uploadId, name: upload.name, type: upload.type, status: upload.status, storageReady: upload.storageReady } };
     const registered = providerByKey.get(key);
     if (registered) return { key, source: "provider" as const, asset: registered };
     const generatedId = key.startsWith("generated:") ? key.slice("generated:".length) : "";

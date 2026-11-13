@@ -175,7 +175,7 @@ export function estimateBusinessPrice(settings: BusinessPriceSettings, rules: Pr
     ? { basis: first.basis, ...range(totals.flatMap(cost => cost!.amounts)) } : undefined;
   const rates = Array.from(ranges, ([unit, prices]) => ({ unit, ...range(prices) }));
   const reason = total ? undefined : rates.length === 0 ? "unavailable"
-    : settings.kind === "video" && (!positiveInt(settings.seconds) || settings.videoInput) ? "duration"
+    : settings.kind === "video" && !positiveInt(settings.seconds) ? "duration"
     : settings.kind === "video" || settings.rewrite ? "settings" : "usage";
   return { currency: "USD", total, rates, reason };
 }

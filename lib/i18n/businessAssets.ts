@@ -7,6 +7,7 @@ const zh = {
   limits: "一次最多 6 個：圖片小於 30 MB、影片 50 MB、音訊 15 MB。",
   imageLimits: "一次最多 6 張，每張小於 30 MB。",
   formats: "圖片 PNG／JPEG／WebP／GIF；影片 MP4／MOV；音訊 MP3／WAV。",
+  converting: "正在把 GIF 轉成 MP4…", wanFormats: "圖片、MP4、MOV 或動態 GIF。GIF 會轉成 MP4，影片每個最多 50 MB。", wanOriginalRequired: "請上傳影片或圖片原檔再選取。", wanVideoInvalid: "影片須為 MP4／MOV，每段 1–15 秒、至少 16 fps、各邊 240–4,096 px，長寬比不超過 8:1。", wanGifUnsupported: "這個瀏覽器無法轉換 GIF。可改用支援 H.264 編碼的瀏覽器，或上傳 MP4。",
   imageFormats: "支援 PNG、JPEG、WebP、GIF。",
   noGeneration: "素材私密保存。上傳不會送出生成，儲存費用以供應商帳單為準。",
   consent: "我有權使用這些素材及其中的人物肖像。",
@@ -16,7 +17,7 @@ const zh = {
   empty: "還沒有素材", noResults: "找不到符合條件的素材", count: "顯示 {count} 個素材", select: "選取", selected: "已選取",
   readyOnly: "登錄完成後才能作為影片參照。", nativeRequired: "請上傳原圖後再選取。", pendingTitle: "待確認的上傳", recover: "查詢狀態",
   uncertain: "上傳結果待確認。請先查詢下方紀錄。", privateReady: "原檔已保存",
-  storageOnly: "原檔可用於圖片參照，影片參照仍需完成登錄。",
+  storageOnly: "原檔可用於支援此格式的模型。Seedance 影片參照需另行登錄。",
   providerNotice: "素材登錄須使用已開通素材功能的 SIRAYA Root Account 金鑰。影片參照以 SIRAYA 審核結果為準。",
   keyNeeded: "請先連接 SIRAYA 金鑰。", keyLink: "連接金鑰", storageUnavailable: "上傳服務尚未開通，請聯絡管理員。",
   serviceUnavailable: "無法讀取 SIRAYA 素材。請確認帳號已開通素材功能。",
@@ -33,6 +34,7 @@ const en: BusinessAssetsCopy = {
   limits: "Up to 6 files: images under 30 MB, video up to 50 MB, audio up to 15 MB.",
   imageLimits: "Up to 6 images, under 30 MB each.",
   formats: "Images: PNG, JPEG, WebP, GIF. Video: MP4, MOV. Audio: MP3, WAV.",
+  converting: "Converting GIF to MP4…", wanFormats: "Upload images, MP4, MOV or animated GIF. GIFs convert to MP4. Videos are limited to 50 MB each.", wanOriginalRequired: "Upload the original file to select it.", wanVideoInvalid: "Use a 1–15 second MP4 or MOV at 16 fps or higher, 240–4,096 px per side, and at most an 8:1 aspect ratio.", wanGifUnsupported: "This browser cannot convert GIF. Use a browser with H.264 encoding or upload MP4.",
   imageFormats: "PNG, JPEG, WebP or GIF.",
   noGeneration: "Assets are stored privately. Uploads do not start generation. Storage fees follow your provider invoice.",
   consent: "I have permission to use these files and any depicted likenesses.",
@@ -42,7 +44,7 @@ const en: BusinessAssetsCopy = {
   empty: "No assets yet", noResults: "No matching assets", count: "{count} assets shown", select: "Select", selected: "Selected",
   readyOnly: "Registration must finish before use as a video reference.", nativeRequired: "Upload the original image to select it.", pendingTitle: "Unconfirmed uploads", recover: "Check status",
   uncertain: "Upload unconfirmed. Check its record below first.", privateReady: "Original saved",
-  storageOnly: "The original is ready for image references. Video references require registration.",
+  storageOnly: "The original is ready for compatible models. Seedance video references require registration.",
   providerNotice: "Registration requires a SIRAYA Root Account key with asset access. SIRAYA reviews assets for video references.",
   keyNeeded: "Connect your SIRAYA key first.", keyLink: "Connect key", storageUnavailable: "Uploads are not configured. Contact an administrator.",
   serviceUnavailable: "Could not load SIRAYA assets. Check that your account has asset access.",
@@ -58,6 +60,7 @@ const ja: BusinessAssetsCopy = {
   limits: "最大6件。画像は30 MB未満、映像は50 MB、音声は15 MBまで。",
   imageLimits: "画像は最大6枚、1枚あたり30 MB未満。",
   formats: "画像：PNG・JPEG・WebP・GIF。映像：MP4・MOV。音声：MP3・WAV。",
+  converting: "GIF を MP4 に変換中…", wanFormats: "画像、MP4、MOV、アニメーション GIF に対応。GIF は MP4 に変換し、動画は1本50 MBまでです。", wanOriginalRequired: "元のファイルをアップロードして選択してください。", wanVideoInvalid: "1〜15秒の MP4／MOV、16 fps 以上、各辺240〜4,096 px、縦横比は最大8:1です。", wanGifUnsupported: "このブラウザーは GIF を変換できません。H.264 対応ブラウザーか MP4 をご利用ください。",
   imageFormats: "PNG・JPEG・WebP・GIFに対応。",
   noGeneration: "素材は非公開です。アップロードで生成は開始されません。保存料金は提供元の請求書をご確認ください。",
   consent: "素材と写っている人物の肖像を使う権利があります。",
@@ -67,7 +70,7 @@ const ja: BusinessAssetsCopy = {
   empty: "素材はまだありません", noResults: "条件に合う素材がありません", count: "{count}件を表示", select: "選択", selected: "選択済み",
   readyOnly: "映像の参照に使うには登録完了が必要です。", nativeRequired: "元画像をアップロードしてから選択してください。", pendingTitle: "確認待ちのアップロード", recover: "状態を確認",
   uncertain: "結果を確認できません。下の記録を先に確認してください。", privateReady: "原本を保存済み",
-  storageOnly: "画像の参照には使えます。映像の参照は登録後に使えます。",
+  storageOnly: "対応モデルで元ファイルを使用できます。Seedance の映像参照には登録が必要です。",
   providerNotice: "登録には素材機能が有効な SIRAYA Root Account のキーが必要です。映像参照用の素材は SIRAYA が審査します。",
   keyNeeded: "先に SIRAYA キーを接続してください。", keyLink: "キーを接続", storageUnavailable: "アップロードが未設定です。管理者にお問い合わせください。",
   serviceUnavailable: "SIRAYA 素材を読み込めません。素材機能が有効かご確認ください。",
@@ -80,6 +83,8 @@ const ja: BusinessAssetsCopy = {
 const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessAssetsCopy(locale: Locale): BusinessAssetsCopy { return COPY[locale]; }
 export function businessAssetsError(t: BusinessAssetsCopy, code?: string): string {
+  if (code === "wan_video_invalid") return t.wanVideoInvalid;
+  if (code === "wan_gif_unsupported") return t.wanGifUnsupported;
   if (code === "business_asset_upload_uncertain") return t.uncertain;
   if (code === "business_asset_storage_unavailable") return t.storageUnavailable;
   if (code === "business_asset_upload_too_large") return t.tooLarge;

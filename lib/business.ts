@@ -34,6 +34,8 @@ interface CredentialRow {
 }
 
 const MESSAGES: Record<string, readonly [string, string, string]> = {
+  wan_video_invalid: ["參照影片須為 MP4／MOV、1–15 秒、至少 16 fps。", "Reference videos must be 1–15 second MP4 or MOV files at 16 fps or higher.", "参照動画は1〜15秒の MP4／MOV、16 fps 以上が必要です。"],
+  wan_video_duration: ["參照影片合計最多 15 秒，與輸出影片合計最多 30 秒。", "Video references may total up to 15 seconds and up to 30 seconds combined with the output.", "参照動画は合計15秒、出力との合計は30秒までです。"],
   workflow_invalid_graph: ["畫布格式不正確，請檢查節點與素材。", "The canvas is invalid. Check its nodes and sources.", "画布の形式が不正です。ノードと素材を確認してください。"],
   workflow_invalid_name: ["工作流名稱須為 1–120 字。", "Workflow names must contain 1–120 characters.", "ワークフロー名は1〜120文字で入力してください。"],
   workflow_not_found: ["找不到這張商務畫布，或你沒有存取權限。", "This business canvas was not found or is inaccessible.", "このビジネス画布が見つからないか、アクセスできません。"],

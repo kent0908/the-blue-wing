@@ -15,7 +15,7 @@ models.push(...['gpt-image-2','gpt-image-2.5-flare','gpt-image-2.5-sunburst','ge
 models.push(...['claude-opus-5.5','gpt-6.1','uncensored-gpt-6','qwen3.8-max','kimi-k3','deepseek-v4-flash'].map(id=>[id,'text']));
 models.push(...['kling-tts','qwen3-asr-flash','gemini-embedding-2','wan2.7-t2v','wan2.7-i2v','wan2.7-r2v','wan2.7-videoedit','happyhorse-1.1-t2v','happyhorse-1.1-i2v','happyhorse-1.1-r2v'].map(id=>[id,'tool']));
 const wanSpicyModels = ['wan3.0-video-spicy', 'wan3.0-video-pro-spicy', 'wan3.0-video-prime-spicy', 'wan3.0-video-prime-pro-spicy'];
-models.push(['wan3.0-video-pro','video'], ...wanSpicyModels.map(id => [id,'video']));
+models.push(['wan3.0-video-prime','video'],['wan3.0-video-pro','video'], ...wanSpicyModels.map(id => [id,'video']));
 models.push(['wan2.2-i2v-spicy','video'],['wan2.7-i2v-spicy','video']);
 models.push(['z-image-spicy','image'],['z-image-spicy-pro','image']);
 models.push(['gemini-nano-banana-2.1', 'image']);
@@ -84,7 +84,7 @@ const mocks={
  '@vercel/blob':{put:async(pathname,_bytes,opts)=>{assert.equal(opts.access,'private');uploads++;if(failStorage)throw Error('Private storage outage');return {pathname}}},
  './business':{BusinessError,businessJson,businessErrorResponse,requireBusiness:async()=>approval?{user:user(),account}:{error:businessJson({error:{code:'business_not_approved'}},403)},assertBusinessOrigin:req=>{if(req.headers.get('origin')!==req.nextUrl.origin)throw new BusinessError('invalid_origin',403)},readBusinessJson:async req=>req.json(),getBusinessCredential:async(_user,_account,id)=>!approval||revoked?null:{id:id??activeCredential,apiKey:credentials.get(id??activeCredential)}},
  './rateCard':{listRates:async()=>{throw Error('C retail catalog must never govern BYOK')}},
- './businessAssetUploads':{reusableBusinessUploads:async(userId,accountId,ids)=>{assert.equal(userId,7);assert.equal(accountId,account.id);return ids.filter(id=>businessUploads.includes(id)).map(id=>({id,uploadId:id,name:'Original upload',type:'image',status:'active',storageReady:true}));},resolveBusinessUploadSources:async(userId,accountId,credentialId,ids,nsfw)=>{businessUploadCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/provider-assets/source/opaque-${id}`}));}},
+ './businessAssetUploads':{reusableBusinessUploads:async(userId,accountId,ids)=>{assert.equal(userId,7);assert.equal(accountId,account.id);return ids.filter(id=>businessUploads.includes(id)).map(id=>({id,uploadId:id,name:'Original upload',type:id===uuid(451)?'video':'image',status:'active',storageReady:true}));},resolveBusinessWanVideoSources:async(userId,accountId,credentialId,ids,nsfw)=>{assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'video',duration:8,url:'https://fixture.invalid/api/business/provider-assets/source/opaque-'+id+'.mp4'}));},resolveBusinessUploadSources:async(userId,accountId,credentialId,ids,nsfw)=>{businessUploadCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/provider-assets/source/opaque-${id}`}));}},
  './businessGeneratedReferences':{reusableBusinessGeneratedImageIds:async(userId,accountId,credentialId,ids,nsfw)=>{assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');return ids.filter(id=>generatedSources.includes(id));},resolveBusinessGeneratedImageSources:async(userId,accountId,credentialId,ids,nsfw)=>{generatedReferenceCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!generatedSources.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/generated-references/opaque-${id}`}));}},
  './siraya':{SirayaApiError,createImage:(payload,options)=>provider('image',payload,options),createBusinessImage:(payload,options)=>{exactImageCalls++;return provider('image',payload,options)},createVideo:(payload,options)=>provider('video',payload,options),createBusinessVideo:(payload,options)=>provider('video',payload,options),createChatCompletion:(payload,options)=>provider('text',payload,options),listModels:async options=>{lookupCalls++;seenKeys.push(options.apiKey);if(catalogFailure)throw Error('private upstream error');return {data:models.filter(([id])=>!removedModels.includes(id)).map(([id])=>({id}))}},getVideoStatus:async(id,options)=>{lookupCalls++;assert.equal(id,'provider-owned-job');seenKeys.push(options.apiKey);if(pollVideo instanceof Error)throw pollVideo;return pollVideo}},
 };
@@ -350,17 +350,38 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    }
    assert.equal(uploads, wanSpicyModels.length);
  });
- await test('Wan Prime Spicy saves the verified Mule CDN result from async status', async () => {
+ await test('Wan Prime Spicy sends mixed owned references and saves the verified Mule CDN result', async () => {
    const model = 'wan3.0-video-prime-spicy';
    const url = 'https://mule-router-assets.muleusercontent.com/results/fixture.mp4?signature=fixture';
-   const submit = await send(body(1, 'video', { model }));
+   businessUploads = [uuid(450), uuid(451)];
+   const imageKey = `business:${uuid(450)}`, videoKey = `business:${uuid(451)}`;
+   const request = body(1, 'video', { model, prompt:'Use Video 1 for motion and Image 1 for style', seconds:10,
+     mode:'subject-reference', businessAssetIds:[uuid(450)], businessVideoIds:[uuid(451)], referenceOrder:[videoKey,imageKey] });
+   request.editor = {prompt:'Use @clip for motion and @art for style', mentions:{clip:videoKey,art:imageKey}};
+   const submit = await send(request);
    assert.equal((await submit.json()).generation.status, 'processing');
+   assert.equal(lastPayload.reference_images.length,1);
+   assert.equal(lastPayload.reference_videos.length,1);
+   assert.match(lastPayload.reference_videos[0],/\.mp4$/);
+   assert.equal(lastPayload.businessVideoIds,undefined);
+   const settings = (await (await reuse.GET(new NextRequest('https://fixture.invalid/api/business/generations/'+jobs[0].id+'/reuse'),{params:Promise.resolve({id:jobs[0].id})})).json()).reuse;
+   assert.deepEqual(settings.references.map(item=>item.asset.type),['video','image']);
+   assert.equal(settings.editor.prompt,request.editor.prompt);
    pollVideo = { status: 'completed', output_url: url };
    const result = (await (await get(jobs[0].id)).json()).generation;
    assert.equal(result.status, 'completed');
    assert.match(result.videoUrl, /^\/api\/business\/media\/[^/]+\/adult\//);
    assert.deepEqual(sourceFetches, [url]);
    assert.equal(providerCalls, 1);
+ });
+ await test('Wan rejects mismatched clip modes and duration before any provider dispatch', async () => {
+   businessUploads = [uuid(451)];
+   for(const [index,extra] of [{mode:'first-last-frame'},{seconds:25},{businessVideoIds:[uuid(452)]}].entries()){
+     const response=await send(body(index+1,'video',{model:'wan3.0-video-prime',mode:'subject-reference',businessVideoIds:[uuid(451)],...extra}));
+     assert.equal(response.status,400);
+   }
+   assert.equal(providerCalls,0);
+   assert.equal(jobs.length,0);
  });
  await test('the Wan CDN cannot be used by other models, images, spoofed hosts, HTTP or custom ports', async () => {
    const url = 'https://usercontent1.carrothub.ai/results/fixture.mp4';

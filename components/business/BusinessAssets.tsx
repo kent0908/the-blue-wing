@@ -9,7 +9,7 @@ import type { BusinessProviderAsset } from "./types";
 import styles from "./BusinessAssets.module.css";
 
 export type BusinessAssetRecord = BusinessProviderAsset & { uploadId?: string; storageReady?: boolean; providerReady?: boolean };
-interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; onChanged?: () => void }
+interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; wanReferences?: boolean; onChanged?: () => void }
 interface UploadRecord { id: string; uploadId: string; name: string; type: "image" | "video" | "audio"; status: string; storageReady: boolean; asset?: BusinessAssetRecord; errorCode?: string }
 interface UploadConfig { directUpload: boolean; types: Record<string, { type: string; maxBytes: number; ext: string }>; uploads?: UploadRecord[] }
 type Filters = { type: string; status: string; name: string };
@@ -23,7 +23,7 @@ const typedFile=(file:File)=>{
   return mime[ext]?new File([file],file.name,{type:mime[ext]}):file;
 };
 
-export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,onChanged}:Props){
+export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,wanReferences=false,onChanged}:Props){
   const t=businessAssetsCopy(useLocale());
   const [config,setConfig]=useState<UploadConfig|null>(null);
   const [catalog,setCatalog]=useState<BusinessAssetRecord[]>([]);
@@ -33,7 +33,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   const [files,setFiles]=useState<File[]>([]);
   const [consent,setConsent]=useState(false);
   const [progress,setProgress]=useState(0);
-  const [stage,setStage]=useState<"uploading"|"registering">("uploading");
+  const [stage,setStage]=useState<"uploading"|"registering"|"converting">("uploading");
   const [fileName,setFileName]=useState("");
   const [error,setError]=useState("");
   const [catalogError,setCatalogError]=useState("");
@@ -103,6 +103,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     const normalized=values.map(typedFile);
     if(normalized.some(file=>!config?.types[file.type]||file.size<=0||file.size>config.types[file.type].maxBytes)){setError("business_asset_upload_invalid");return;}
     if(imageOnly&&normalized.some(file=>!file.type.startsWith("image/"))){setError("business_asset_upload_invalid");return;}
+    if(wanReferences&&normalized.some(file=>!["image/png","image/jpeg","image/webp","image/gif","video/mp4","video/quicktime"].includes(file.type))){setError("business_asset_upload_invalid");return;}
     setFiles(normalized);setConsent(false);setError("");setNotice("");
   }
   function rememberUpload(value:UploadRecord){setUploads(previous=>[value,...previous.filter(item=>item.id!==value.id)].slice(0,60));}
@@ -118,17 +119,30 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     let started=0;
     let interrupted=false;
     try{
-      for(const file of files){
+      for(const original of files){
         if(!alive.current)break;
-        setFileName(file.name);setProgress(0);setStage("uploading");
-        const clientRequestId=fileRequests.current.get(file)??crypto.randomUUID();
-        fileRequests.current.set(file,clientRequestId);
+        setFileName(original.name);setProgress(0);setStage("uploading");
+        let file=original;
+        if(wanReferences&&file.type==="image/gif"){
+          setStage("converting");
+          file=await (await import("@/lib/wanGifToMp4")).wanGifToMp4(file);
+        }
+        const wanVideo=wanReferences&&file.type.startsWith("video/");
+        if(wanVideo){
+          try{await (await import("@/lib/wanReferenceVideo")).inspectWanReferenceVideo(file);}
+          catch{throw new Error("wan_video_invalid");}
+          if(file.size>config.types[file.type].maxBytes)throw new Error("business_asset_upload_too_large");
+        }
+        if(!alive.current)break;
+        setStage("uploading");
+        const clientRequestId=fileRequests.current.get(original)??crypto.randomUUID();
+        fileRequests.current.set(original,clientRequestId);
         const initialized=await apiUpload({action:"initialize",clientRequestId,name:file.name.slice(0,120),contentType:file.type,size:file.size});
         started++;
         if(alive.current)rememberUpload(initialized.upload);
         await upload(initialized.pathname,file,{access:"private",handleUploadUrl:"/api/business/provider-assets/upload",contentType:file.type,multipart:file.size>8*1024*1024,clientPayload:JSON.stringify({uploadId:initialized.upload.id}),onUploadProgress:event=>{if(alive.current)setProgress(event.percentage);}});
         if(alive.current)setStage("registering");
-        const completed=await apiUpload({action:"complete",uploadId:initialized.upload.id});
+        const completed=await apiUpload({action:"complete",uploadId:initialized.upload.id,...(wanReferences?{wanOriginal:true}:{})});
         if(!alive.current)break;
         rememberUpload(completed.upload);
         if(["created","unknown","registering"].includes(completed.upload.status)){setError("business_asset_upload_uncertain");interrupted=true;break;}
@@ -147,7 +161,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   }
   async function recoverUpload(item:UploadRecord){
     if(refreshingId)return;setRefreshingId(item.id);setError("");setNotice("");
-    try{const value=await apiUpload({action:"complete",uploadId:item.id});rememberUpload(value.upload);if(["created","unknown","registering"].includes(value.upload.status))setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");else{setNotice(t.uploadFinished);void loadCatalog(1,committed.current);}onChanged?.();}
+    try{const value=await apiUpload({action:"complete",uploadId:item.id,...(wanReferences&&item.type!=="audio"?{wanOriginal:true}:{})});rememberUpload(value.upload);if(["created","unknown","registering"].includes(value.upload.status))setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");else{setNotice(t.uploadFinished);void loadCatalog(1,committed.current);}onChanged?.();}
     catch(error){setError(error instanceof Error?error.message:"business_asset_upload_uncertain");}
     finally{setRefreshingId("");}
   }
@@ -167,15 +181,15 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     const original=uploads.find(item=>item.asset?.id===asset.id);
     return {...asset,providerReady:asset.status==="active",...(original?{uploadId:original.id,storageReady:original.storageReady}:{})};
   }),...uploads.filter(item=>item.storageReady&&(!item.asset||!known.has(item.asset.id))).map(item=>({id:`upload:${item.id}`,name:item.name,type:item.type,status:item.status,uploadId:item.id,storageReady:true,providerReady:false}))]
-    .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||imageOnly&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
+    .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(!wanReferences||asset.type!=="audio")&&(status==="all"||asset.status===status||(imageOnly||wanReferences)&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
   const statusText=(value:string)=>value==="active"?t.active:value==="processing"||value==="registering"?t.processing:value==="created"?t.created:value==="unknown"?t.unknown:t.failed;
-  const accept=Object.keys(config?.types??{}).filter(mime=>!imageOnly||mime.startsWith("image/")).join(",");
+  const accept=Object.keys(config?.types??{}).filter(mime=>(!imageOnly||mime.startsWith("image/"))&&(!wanReferences||!mime.startsWith("audio/"))).join(",");
   const pendingUploads=uploads.filter(item=>["created","registering","unknown"].includes(item.status));
 
   return <section className={`${styles.assets} ${compact?styles.compact:""}`} aria-label={t.title}>
     <div className={styles.uploadPanel} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();queueFiles(Array.from(event.dataTransfer.files));}}>
       <div className={styles.uploadToolbar}>
-        <div><strong>{t.upload}</strong><p className={styles.note}>{imageOnly?t.imageLimits:t.limits}</p></div>
+        <div><strong>{t.upload}</strong><p className={styles.note}>{wanReferences?t.wanFormats:imageOnly?t.imageLimits:t.limits}</p></div>
         <input ref={input} type="file" hidden multiple accept={accept} disabled={uploading||!config?.directUpload} onChange={event=>{queueFiles(Array.from(event.target.files??[]));event.target.value="";}}/>
         <button type="button" className={files.length?styles.small:styles.primary} disabled={uploading||!config?.directUpload} onClick={()=>input.current?.click()}>{!config&&!configError?t.loading:files.length?t.replaceFiles:t.choose}</button>
       </div>
@@ -195,23 +209,23 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     {notice&&<p className={styles.success} role="status">{notice}</p>}
     {!!pendingUploads.length&&<details className={styles.recent}><summary>{t.pendingTitle} · {pendingUploads.length}</summary><ul>{pendingUploads.map(item=><li key={item.id}><span>{item.name}<small>{statusText(item.status)}</small></span><button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>void recoverUpload(item)}>{refreshingId===item.id?t.loading:t.recover}</button></li>)}</ul></details>}
     <div className={styles.libraryHeader}>
-      <div className={styles.types} role="group" aria-label={t.source}>{(imageOnly?["image"]:["all","image","video","audio"]).map(value=><button type="button" key={value} aria-pressed={type===value} onClick={()=>{setType(value);void loadCatalog(1,{type:value,status,name:query});}}>{t[value as "all"|"image"|"video"|"audio"]}</button>)}</div>
+      <div className={styles.types} role="group" aria-label={t.source}>{(imageOnly?["image"]:wanReferences?["all","image","video"]:["all","image","video","audio"]).map(value=><button type="button" key={value} aria-pressed={type===value} onClick={()=>{setType(value);void loadCatalog(1,{type:value,status,name:query});}}>{t[value as "all"|"image"|"video"|"audio"]}</button>)}</div>
       <button type="button" className={styles.textButton} disabled={loading||uploading||!!refreshingId} onClick={()=>{void loadConfig();void loadCatalog();}}>{loading?t.loading:t.refresh}</button>
     </div>
     <form className={styles.searchRow} role="search" aria-label={t.search} onSubmit={event=>{event.preventDefault();void loadCatalog(1,{type,status,name:query});}}><input type="search" maxLength={120} aria-label={t.search} placeholder={t.search} value={query} onChange={event=>setQuery(event.target.value)}/><button type="submit" className={styles.small} disabled={loading}>{t.searchButton}</button><select aria-label={t.status} value={status} onChange={event=>{setStatus(event.target.value);void loadCatalog(1,{type,status:event.target.value,name:query});}}><option value="all">{t.allStatus}</option><option value="active">{t.active}</option><option value="processing">{t.processing}</option><option value="failed">{t.failed}</option></select></form>
     {catalogError&&<p className={styles.error} role="alert">{businessAssetsError(t,catalogError)}{catalogError==="credential_required"&&<> <a href="/business?tab=key">{t.keyLink} ↗</a></>}</p>}
     {!material.length&&!loading&&!catalogError?<div className={styles.empty}><h3>{appliedQuery||status!=="all"||type!=="all"&&!imageOnly?t.noResults:t.empty}</h3></div>:<div className={styles.grid} aria-busy={loading}>{material.map(asset=>{
       const selected=selectedIds.includes(asset.id)||!!asset.uploadId&&selectedIds.includes(asset.uploadId);
-      const available=imageOnly?asset.type==="image"&&!!asset.uploadId&&!!asset.storageReady:!!asset.providerReady;
+      const available=imageOnly||wanReferences?!!asset.uploadId&&!!asset.storageReady:!!asset.providerReady;
       const disabled=!selected&&(!available||canSelect?.(asset)===false);
-      const disabledReason=imageOnly&&!asset.uploadId?t.nativeRequired:!available?t.readyOnly:t.capacity;
+      const disabledReason=wanReferences&&!asset.uploadId?t.wanOriginalRequired:imageOnly&&!asset.uploadId?t.nativeRequired:!available?t.readyOnly:t.capacity;
       return <article className={styles.card} key={asset.id} data-selected={selected}>
         <div className={styles.thumbnail}>{asset.type==="image"&&asset.uploadId&&asset.storageReady?<Image src={`/api/business/provider-assets/uploads/${asset.uploadId}/preview`} alt="" width={640} height={420} loading="lazy" unoptimized/>:<AssetIcon type={asset.type}/>}<span className={styles.mediaType}>{t[asset.type]}</span></div>
-        <div className={styles.cardBody}><h3 title={asset.name}>{asset.name}</h3><p className={styles.assetStatus} data-status={asset.storageReady&&imageOnly?"active":asset.status}>{asset.storageReady&&imageOnly?t.privateReady:statusText(asset.status)}</p><small>{asset.uploadId?t.native:t.provider}</small>
+        <div className={styles.cardBody}><h3 title={asset.name}>{asset.name}</h3><p className={styles.assetStatus} data-status={asset.storageReady&&(imageOnly||wanReferences)?"active":asset.status}>{asset.storageReady&&(imageOnly||wanReferences)?t.privateReady:statusText(asset.status)}</p><small>{asset.uploadId?t.native:t.provider}</small>
         {onSelect&&<button type="button" className={styles.selectButton} disabled={disabled} aria-pressed={selected} title={disabled?disabledReason:asset.name} onClick={()=>onSelect(asset)}>{selected?t.selected:imageOnly&&asset.storageReady?t.original:t.select}<span aria-hidden="true">{selected?"✓":"＋"}</span></button>}
         {!asset.id.startsWith("upload:")&&asset.status!=="active"&&<button type="button" className={styles.textButton} disabled={!!refreshingId||uploading} onClick={()=>void refreshAsset(asset)}>{refreshingId===asset.id?t.loading:t.refreshOne}</button>}
         {onSelect&&disabled&&<p className={styles.disabledReason}>{disabledReason}</p>}
-        {asset.storageReady&&!asset.providerReady&&!imageOnly&&<p className={styles.disabledReason}>{t.storageOnly}</p>}
+        {asset.storageReady&&!asset.providerReady&&!imageOnly&&!wanReferences&&<p className={styles.disabledReason}>{t.storageOnly}</p>}
         </div>
       </article>;
     })}</div>}

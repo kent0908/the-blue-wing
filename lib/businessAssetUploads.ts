@@ -8,6 +8,8 @@ import { SITE_URL } from "./seo/site";
 import { BusinessProviderAssetSubmitError, getBusinessProviderAsset, registerBusinessProviderAsset, type BusinessProviderAsset, type BusinessProviderAssetType } from "./businessProviderAssets";
 import { isAdultVerified, type AdultGateUser } from "./adultGate";
 import { SEEDANCE_25_REFERENCE_LIMITS } from "./businessSeedance";
+import { WAN3_MAX_REFERENCE_VIDEOS } from "./businessWan3";
+import { inspectWanReferenceVideo } from "./wanReferenceVideo";
 
 const MiB = 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -62,12 +64,12 @@ function validStoredPath(row: UploadRow): boolean {
   return row.pathname === `business-assets/${row.account_id}/${row.id}/source.${BUSINESS_UPLOAD_TYPES[row.content_type]?.ext}`;
 }
 /** History restores private metadata only. Submit revalidates the actual stored bytes. */
-export async function reusableBusinessUploads(userId: number | string, accountId: string, ids: string[]) {
+export async function reusableBusinessUploads(userId: number | string, accountId: string, ids: string[], includeVideo = false) {
   if (!ids.length) return [];
   const { rows } = await sql.query<UploadRow>(`select t.* from business_asset_uploads t join business_accounts a on a.id=t.account_id and a.user_id=t.user_id
     where t.user_id=$1 and t.account_id=$2 and t.id=any($3::uuid[]) and a.status='approved' and t.blob_etag is not null`,
     [safeUserId(userId), accountId, ids]);
-  return rows.filter(row => validStoredPath(row) && row.media_type === "image").map(publicBusinessUpload);
+  return rows.filter(row => validStoredPath(row) && (row.media_type === "image" || includeVideo && row.media_type === "video")).map(publicBusinessUpload);
 }
 async function ownedUpload(userId: number | string, accountId: string, id: string): Promise<UploadRow> {
   userId = safeUserId(userId);
@@ -134,7 +136,7 @@ function sourceKey(): Buffer {
     return createHmac("sha256", key).update("tbw:business:asset-upload-source:key:v1").digest();
   } finally { key.fill(0); }
 }
-function sourceUrl(row: UploadRow, credentialId = row.credential_id, adult = false): string {
+function sourceUrl(row: UploadRow, credentialId = row.credential_id, adult = false, videoExtension = false): string {
   const iat = Math.floor(Date.now() / 1000);
   const grant: SourceGrant = { v: 1, id: row.id, uid: safeUserId(row.user_id), aid: row.account_id, cid: credentialId, adult, iat, exp: iat + TTL };
   const key = sourceKey(), iv = randomBytes(12), bytes = Buffer.from(JSON.stringify(grant));
@@ -142,7 +144,8 @@ function sourceUrl(row: UploadRow, credentialId = row.credential_id, adult = fal
     const cipher = createCipheriv("aes-256-gcm", key, iv); cipher.setAAD(AAD);
     const ciphertext = Buffer.concat([cipher.update(bytes), cipher.final()]);
     const token = Buffer.concat([Buffer.from([1]), iv, cipher.getAuthTag(), ciphertext]).toString("base64url");
-    return new URL(`/api/business/provider-assets/source/${token}`, SITE_URL).toString();
+    const suffix = videoExtension ? `.${BUSINESS_UPLOAD_TYPES[row.content_type].ext}` : "";
+    return new URL(`/api/business/provider-assets/source/${token}${suffix}`, SITE_URL).toString();
   } finally { key.fill(0); bytes.fill(0); }
 }
 function unsealSource(token: string): SourceGrant {
@@ -178,7 +181,7 @@ function sniffMedia(bytes: Buffer, mime: string): boolean {
 }
 
 export interface BusinessImageSourceConstraints { minSide: number; maxBytes: number; mimeTypes: readonly string[]; minAspectRatio?: number; maxAspectRatio?: number; opaquePng?: boolean }
-async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSourceConstraints): Promise<string> {
+async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSourceConstraints, video?: { duration?: number }): Promise<string> {
   if (!validStoredPath(row)) fail();
   if(constraints&&(!constraints.mimeTypes.includes(row.content_type)||Number(row.expected_bytes)>constraints.maxBytes))fail("invalid_reference");
   let metadata: Awaited<ReturnType<typeof head>>;
@@ -199,10 +202,10 @@ async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSou
       chunks.push(next.value);
       // For video/audio, type and Blob size are checked here. The provider
       // processes the full codec/duration before returning an active asset.
-      if (row.media_type !== "image" && bytes >= 64) break;
+      if (row.media_type !== "image" && !video && bytes >= 64) break;
     }
     const prefix = Buffer.concat(chunks);
-    if (!sniffMedia(prefix, row.content_type)) fail();
+    if (!video && !sniffMedia(prefix, row.content_type)) fail();
     if (row.media_type === "image") {
       if (bytes !== Number(row.expected_bytes)) fail();
       const info = await sharp(prefix, { animated: false, limitInputPixels: 36_000_000 }).metadata();
@@ -218,22 +221,36 @@ async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSou
       // before registering or granting the private source to a paid model.
       await sharp(prefix, { animated: false, limitInputPixels: 36_000_000 }).stats();
     }
+    if (video) {
+      if (bytes !== Number(row.expected_bytes)) fail("wan_video_invalid");
+      const data = new Uint8Array(prefix.buffer as ArrayBuffer, prefix.byteOffset, prefix.byteLength);
+      video.duration = await inspectWanReferenceVideo(new Blob([data], { type: row.content_type }));
+    }
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
   return metadata.etag;
 }
 
 /** A completed Blob upload is verified before any provider registration POST. */
-export async function completeBusinessUpload(userId: number | string, accountId: string, id: string) {
+export async function completeBusinessUpload(userId: number | string, accountId: string, id: string, wanOriginal = false) {
   userId = safeUserId(userId);
   const row = await ownedUpload(userId, accountId, id);
   const credential = await currentCredential(userId, accountId);
   if (row.credential_id !== credential.id) fail("credential_changed", 409);
   if (row.status !== "created") return { upload: publicBusinessUpload(row) };
+  if (wanOriginal && (row.media_type === "audio" || row.content_type === "image/gif")) fail();
+  const wanVideo = wanOriginal && row.media_type === "video";
   if (new Date(row.expires_at).getTime() <= Date.now()) fail("business_asset_upload_expired", 409);
   let etag: string;
-  try { etag = await verifyStoredUpload(row); } catch (error) {
+  try { etag = await verifyStoredUpload(row, undefined, wanVideo ? {} : undefined); } catch (error) {
     if (error instanceof BusinessError) throw error;
-    fail("business_asset_upload_invalid");
+    fail(wanVideo ? "wan_video_invalid" : "business_asset_upload_invalid");
+  }
+  if (wanOriginal) {
+    const saved = await sql.query<UploadRow>(`update business_asset_uploads t set status='active',blob_etag=$4,updated_at=now()
+      where t.id=$1 and t.user_id=$2 and t.account_id=$3 and t.status='created' and t.expires_at>now()
+      and exists(select 1 from business_accounts a join business_credentials c on c.account_id=a.id and c.user_id=a.user_id
+        where a.id=t.account_id and a.user_id=t.user_id and a.status='approved' and c.id=t.credential_id and c.is_active and c.revoked_at is null) returning t.*`, [id,userId,accountId,etag]);
+    return { upload: publicBusinessUpload(saved.rows[0] ?? await ownedUpload(userId, accountId, id)) };
   }
   const grant = sourceUrl(row); // Check encryption before claiming the one provider submission.
   const claimed = await sql.query<UploadRow>(`update business_asset_uploads t set status='registering',blob_etag=$4,updated_at=now()
@@ -287,8 +304,9 @@ export async function resolveBusinessUploadSources(userId: number | string, acco
 }
 
 /** Cookie-free fetch for SIRAYA only. The opaque short-lived grant is never sent to the browser. */
-export async function businessUploadSourceResponse(token: string, signal?: AbortSignal): Promise<Response> {
-  const grant = unsealSource(token);
+export async function businessUploadSourceResponse(path: string, signal?: AbortSignal): Promise<Response> {
+  const suffix = /\.(mp4|mov)$/.exec(path);
+  const grant = unsealSource(suffix ? path.slice(0, -suffix[0].length) : path);
   const {rows}=await sql.query<UploadRow & AdultGateUser>(`select t.*,u.birth_date,u.adult_confirmed_at from business_asset_uploads t
     join business_accounts a on a.id=t.account_id and a.user_id=t.user_id
     join business_credentials c on c.id=$4 and c.account_id=t.account_id and c.user_id=t.user_id
@@ -297,7 +315,37 @@ export async function businessUploadSourceResponse(token: string, signal?: Abort
     and t.blob_etag is not null limit 1`,[grant.id,grant.uid,grant.aid,grant.cid]);
   const row=rows[0];
   if(!row||!validStoredPath(row)||!row.blob_etag||!BUSINESS_UPLOAD_TYPES[row.content_type]||Number(row.expected_bytes)>BUSINESS_UPLOAD_TYPES[row.content_type].maxBytes||grant.adult&&!isAdultVerified(row))sourceMissing();
+  if (suffix && (row.media_type !== "video" || BUSINESS_UPLOAD_TYPES[row.content_type].ext !== suffix[1])) sourceMissing();
   return storedBusinessAssetResponse(row,signal);
+}
+
+/** Resolve only the caller's verified MP4/MOV uploads, in selection order. */
+export async function resolveBusinessWanVideoSources(userId: number | string, accountId: string, credentialId: string, ids: string[], nsfw: boolean) {
+  userId = safeUserId(userId, "invalid_reference");
+  if (ids.length > WAN3_MAX_REFERENCE_VIDEOS || ids.some(id => !UUID.test(id)) || new Set(ids).size !== ids.length) fail("invalid_reference");
+  if (!ids.length) return [];
+  const { rows } = await sql.query<UploadRow & AdultGateUser>(`select t.*,u.birth_date,u.adult_confirmed_at from business_asset_uploads t
+    join business_accounts a on a.id=t.account_id and a.user_id=t.user_id
+    join business_credentials c on c.account_id=t.account_id and c.user_id=t.user_id
+    join users u on u.id=t.user_id where t.user_id=$1 and t.account_id=$2 and t.id=any($3::uuid[])
+    and a.status='approved' and c.id=$4 and c.is_active and c.revoked_at is null and u.status='active' and u.email_verified`,
+    [userId, accountId, ids, credentialId]);
+  const byId = new Map(rows.map(row => [row.id, row]));
+  const sources: { type: "video"; url: string; duration: number }[] = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (!row || row.media_type !== "video" || !validStoredPath(row) || !row.blob_etag ||
+        !["video/mp4", "video/quicktime"].includes(row.content_type) ||
+        Number(row.expected_bytes) > BUSINESS_UPLOAD_TYPES[row.content_type].maxBytes ||
+        (nsfw && !isAdultVerified(row))) fail("invalid_reference");
+    const video: { duration?: number } = {};
+    try {
+      if (await verifyStoredUpload(row, undefined, video) !== row.blob_etag) fail("invalid_reference");
+    } catch { fail("wan_video_invalid"); }
+    if (video.duration === undefined) fail("wan_video_invalid");
+    sources.push({ type: "video", duration: video.duration, url: sourceUrl(row, credentialId, nsfw, true) });
+  }
+  return sources;
 }
 
 export async function businessUploadPreviewResponse(userId:number|string,accountId:string,id:string,signal?:AbortSignal):Promise<Response>{

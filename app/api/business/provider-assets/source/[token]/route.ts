@@ -11,3 +11,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ token: 
     return businessNoStore(await businessUploadSourceResponse(token, req.signal));
   } catch (error) { return businessErrorResponse(req, error); }
 }
+export async function HEAD(req: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const response = await GET(req, context);
+  await response.body?.cancel().catch(() => {});
+  return new Response(null, { status: response.status, headers: response.headers });
+}

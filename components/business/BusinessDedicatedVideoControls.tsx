@@ -31,6 +31,7 @@ interface ReferenceItem {
   name: string;
   src?: string;
   source: "personal" | "business";
+  type?: "image" | "video" | "audio";
 }
 interface Props {
   capability: BusinessDedicatedVideoCapability;
@@ -125,6 +126,8 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
   const mode = value.mode === "freestyle" ? capability.capability : value.mode;
   const maximum = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : capability.maxReferenceImages;
   const selectedCount = referenceItems?.length ?? referenceCount;
+  const videoCount = referenceItems?.filter(item => item.type === "video").length ?? 0;
+  const imageCount = selectedCount - videoCount;
   const switchToReference = wan3 && mode === "text-to-video" && capability.modes.includes("subject-reference");
   const showPersonal = personalLibrary && (wan3 || wan22 || wan27) && (maximum > 0 || switchToReference);
   const personalLimit = switchToReference ? capability.maxReferenceImages : maximum;
@@ -139,17 +142,20 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
     {modes.length > 1 ? <label className={styles.field} htmlFor={`${id}-mode`}>
       {t.mode}
       <select id={`${id}-mode`} value={mode} onChange={event => update({ mode: event.target.value as BusinessDedicatedVideoMode })} aria-describedby={`${id}-mode-info`}>
-        {modes.map(option => <option key={option} value={option}>{t[MODE_KEYS[option]!]}</option>)}
+        {modes.map(option => <option key={option} value={option}>{wan3 && option === "subject-reference" ? t.wanMixedMode : t[MODE_KEYS[option]!]}</option>)}
       </select>
     </label> : <p className={styles.mode}>{t[MODE_KEYS[mode]!]}</p>}
     <p id={`${id}-mode-info`} className={styles.note}>{description}</p>
     {capability.aspectRatioFromSource ? <p className={styles.note}>{t.sourceRatio}</p> : null}
     {maximum > 0 || showPersonal ? <div className={styles.references}>
-      {maximum > 0 ? <span className={styles.count} role="status">{interpolate(t.selected, { count: selectedCount, max: maximum })}</span> : null}
-      {referenceItems?.length ? <ol className={styles.referenceOrder} aria-label={t.imageOrder}>{referenceItems.map((item, index) => {
+      {maximum > 0 ? <span className={styles.count} role="status">{interpolate(t.selected, { count: imageCount, max: maximum })}
+        {wan3 && mode === "subject-reference" ? ` · ${interpolate(t.wanVideoCount, { count: videoCount, max: capability.maxReferenceVideos })}` : ""}</span> : null}
+      {referenceItems?.length ? <ol className={styles.referenceOrder} aria-label={wan3 ? t.wanMixedMode : t.imageOrder}>{referenceItems.map((item, index) => {
+        const ordinal = referenceItems.slice(0, index + 1).filter(other => (other.type ?? "image") === (item.type ?? "image")).length;
         const label = mode === "image-to-video" || mode === "first-last-frame" && index === 0
           ? t.openingFrame
-          : mode === "first-last-frame" && index === 1 ? t.closingFrame : interpolate(t.referenceNumber, { index: index + 1 });
+          : mode === "first-last-frame" && index === 1 ? t.closingFrame
+          : wan3 ? `${item.type === "video" ? "Video" : "Image"} ${ordinal}` : interpolate(t.referenceNumber, { index: index + 1 });
         return <li key={item.key} className={styles.referenceItem}>
           {item.src ? <Image src={item.src} alt="" width={48} height={48} unoptimized /> : null}
           <div className={styles.referenceIdentity}><strong>{label}</strong><span>{item.name}</span><small>{item.source === "personal" ? t.personalSource : t.businessSource}</small></div>
@@ -162,13 +168,13 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
           </div>
         </li>;
       })}</ol> : null}
-      {showPersonal ? <PersonalImagePicker library={personalLibrary} copy={t} capacity={selectedCount >= personalLimit}
+      {showPersonal ? <PersonalImagePicker library={personalLibrary} copy={t} capacity={imageCount >= personalLimit}
         acceptedTypes={capability.referenceImageRules?.mimeTypes ?? FALLBACK_IMAGE_TYPES} maxBytes={capability.referenceImageRules?.maxBytes ?? 20 * 1024 * 1024}
         switchToReference={switchToReference} disabled={disabled} /> : null}
-      {maximum > 0 ? <>
+      {maximum > 0 || wan3 ? <>
         {onOpenAssets ? <button type="button" onClick={onOpenAssets}>{t.openAssets}</button> : null}
-        {selectedCount > maximum ? <p role="alert" className={styles.warning}>{t.referenceLimit}</p> : null}
-        <p className={styles.note}>{t.assetsNote}</p>
+        {imageCount > maximum ? <p role="alert" className={styles.warning}>{t.referenceLimit}</p> : null}
+        <p className={styles.note}>{wan3 ? t.wanVideoRules : t.assetsNote}</p>
         {wan3 || wan22 ? <p className={styles.note}>{t.wan3ImageRules}</p> : !wan27 ? <p className={styles.note}>{t.happyRules}</p> : null}
         {!wan27 && mode === "subject-reference" ? <p className={styles.note}>{wan3 ? t.wan3ReferenceInfo : t.happyReferenceInfo}</p> : null}
       </> : null}

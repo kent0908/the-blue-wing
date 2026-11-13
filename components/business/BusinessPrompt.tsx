@@ -28,6 +28,7 @@ interface Props {
   assets: BusinessAsset[];
   mode: "none" | "local" | "image" | "seedance" | "native" | "native-with-personal";
   personalMaxBytes?: number;
+  includeVideo?: boolean;
   selectedKeys?: ReadonlySet<string>;
   onPick: (candidate: MentionCandidate) => string | null;
 }
@@ -58,14 +59,14 @@ async function loadList<T>(url: string, key: string, signal: AbortSignal): Promi
 
 function listCandidates(
   mode: Props["mode"], local: BusinessAsset[], uploads: Upload[], reviewed: BusinessAssetRecord[],
-  selectedKeys?: ReadonlySet<string>, personalMaxBytes?: number,
+  selectedKeys?: ReadonlySet<string>, personalMaxBytes?: number, includeVideo?: boolean,
 ) {
   const candidates = new Map<string, MentionCandidate>();
   const seenProvider = new Set<string>();
 
   if (mode !== "local") {
     for (const upload of uploads) {
-      if (upload.type !== "image") continue;
+      if (upload.type !== "image" && !(includeVideo && upload.type === "video")) continue;
       const approved = mode === "seedance" && upload.asset?.status === "active" ? upload.asset : undefined;
       if (!upload.storageReady && !approved) continue;
       const uploadKey = `business:${upload.id}`;
@@ -74,9 +75,9 @@ function listCandidates(
       if (approved) seenProvider.add(approved.id);
       candidates.set(key, {
         key, name: upload.name,
-        src: upload.storageReady ? `/api/business/provider-assets/uploads/${upload.id}/preview` : undefined,
+        src: upload.storageReady && upload.type === "image" ? `/api/business/provider-assets/uploads/${upload.id}/preview` : undefined,
         asset: {
-          ...(upload.asset ?? { id: `upload:${upload.id}`, type: "image", name: upload.name, status: upload.status }),
+          ...(upload.asset ?? { id: `upload:${upload.id}`, type: upload.type as "image" | "video", name: upload.name, status: upload.status }),
           uploadId: upload.id, storageReady: upload.storageReady,
         },
       });
@@ -129,7 +130,7 @@ function Thumbnail({ src }: { src?: string }) {
 
 export default function BusinessPrompt(props: Props) {
   const locale = useLocale();
-  const t = businessMentionsCopy(locale);
+  const t = businessMentionsCopy(locale, props.includeVideo);
   const id = useId();
   const listId = `${id}-list`;
   const field = useRef<HTMLDivElement>(null);
@@ -184,7 +185,7 @@ export default function BusinessPrompt(props: Props) {
   }, [opened, manual]);
 
   const query = mention?.query.trim().normalize("NFKC").toLocaleLowerCase(locale) ?? "";
-  const candidates = opened ? listCandidates(mode, local ?? props.assets, uploads, reviewed, props.selectedKeys, props.personalMaxBytes) : [];
+  const candidates = opened ? listCandidates(mode, local ?? props.assets, uploads, reviewed, props.selectedKeys, props.personalMaxBytes, props.includeVideo) : [];
   const matches = query ? candidates.filter(candidate => candidate.name.normalize("NFKC").toLocaleLowerCase(locale).includes(query)) : candidates;
   const activeIndex = matches.findIndex(candidate => candidate.key === activeKey);
   const activeId = activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined;
@@ -313,7 +314,7 @@ export default function BusinessPrompt(props: Props) {
             <Thumbnail key={candidate.src} src={candidate.src} />
             <span className={picker.identity}>
               <span className={picker.name} title={candidate.name}>{candidate.name}</span>
-              <small>{candidate.localId ? t.personal : candidate.key.startsWith("provider:") ? t.reviewed : t.business}</small>
+              <small>{candidate.asset?.type === "video" ? t.video : candidate.localId ? t.personal : candidate.key.startsWith("provider:") ? t.reviewed : t.business}</small>
             </span>
             {props.selectedKeys?.has(candidate.key)
               ? <span className={picker.selected}><span aria-hidden="true">✓</span>{t.selected}</span>

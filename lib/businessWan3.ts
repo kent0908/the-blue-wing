@@ -1,9 +1,7 @@
 /** SIRAYA's Wan 3.0 endpoint contract, separate from the legacy Wan adapter.
  * https://docs.siraya.ai/docs/api-reference/generative-model-api/text-to-video/wan/
  *
- * This module performs no network I/O. Pass only image URLs produced by an
- * account-scoped server resolver. Client-supplied URLs, document and media
- * modes have no ownership-checked route in this adapter.
+ * Only pass URLs from the account-scoped image and video resolvers.
  */
 const MODELS = {
   "wan3.0-video": { label: "Wan 3.0", pro: false },
@@ -21,6 +19,8 @@ type Wan3Id = keyof typeof MODELS;
 export type BusinessWan3Mode = typeof WAN3_MODES[number];
 const RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"];
 const MAX_IMAGES = 10;
+export const WAN3_MAX_REFERENCE_VIDEOS = 5;
+export const WAN3_MAX_REFERENCE_SECONDS = 15;
 const MAX_PROMPT = 2000;
 const COMMON_KEYS = new Set(["model", "prompt", "seconds", "resolution", "aspect_ratio", "seed", "generate_audio", "prompt_extend", "mode", "businessAssetIds", "referenceGenerationIds"]);
 
@@ -40,7 +40,7 @@ export function getBusinessWan3Capability(model: string | null | undefined) {
     resolutions: pro ? ["1080p", "2k", "4k"] : ["480p", "720p", "1080p"], defaultResolution: "1080p",
     minSeconds: 2, maxSeconds: 30, defaultSeconds: 5, sourceDuration: false, autoDuration: true,
     aspectRatios: [...RATIOS], aspectRatioFromSource: false,
-    maxReferenceImages: MAX_IMAGES, maxReferenceVideos: 0, maxReferenceAudio: 0,
+    maxReferenceImages: MAX_IMAGES, maxReferenceVideos: WAN3_MAX_REFERENCE_VIDEOS, maxReferenceAudio: 0,
     acceptsReferenceOrder: true, supportsPersonalReferences: true,
     supportsAudio: true, modes: [...WAN3_MODES], promptMaxChars: MAX_PROMPT,
     // Use the intersection with the app's inspected image formats.
@@ -52,7 +52,7 @@ export function getBusinessWan3Capability(model: string | null | undefined) {
 }
 
 export type BusinessWan3Capability = NonNullable<ReturnType<typeof getBusinessWan3Capability>>;
-interface RefType { type: string; voiceUrl?: string }
+interface RefType { type: string; voiceUrl?: string; duration?: number }
 interface ResolvedReference extends RefType { url: string }
 
 export class BusinessWan3ParameterError extends Error {
@@ -61,14 +61,15 @@ export class BusinessWan3ParameterError extends Error {
 }
 function bad(): never { throw new BusinessWan3ParameterError(); }
 
-/** Reject unsupported reference shapes before reading any stored image. */
 export function assertBusinessWan3References(mode: unknown, refs: readonly RefType[]): void {
-  if (!Array.isArray(refs) || refs.length > MAX_IMAGES) bad();
-  for (const ref of refs) if (!ref || ref.type !== "image" || ref.voiceUrl !== undefined) bad();
+  if (!Array.isArray(refs) || refs.length > MAX_IMAGES + WAN3_MAX_REFERENCE_VIDEOS) bad();
+  for (const ref of refs) if (!ref || !["image", "video"].includes(ref.type) || ref.voiceUrl !== undefined) bad();
+  const videos = refs.filter(ref => ref.type === "video").length;
+  if (videos > WAN3_MAX_REFERENCE_VIDEOS || refs.length - videos > MAX_IMAGES) bad();
   const effective = mode === undefined || mode === "freestyle" ? (refs.length ? "subject-reference" : "text-to-video") : mode;
   if (effective === "text-to-video" && refs.length === 0) return;
-  if (effective === "image-to-video" && refs.length === 1) return;
-  if (effective === "first-last-frame" && refs.length === 2) return;
+  if (effective === "image-to-video" && refs.length === 1 && videos === 0) return;
+  if (effective === "first-last-frame" && refs.length === 2 && videos === 0) return;
   if (effective === "subject-reference" && refs.length > 0) return;
   bad();
 }
@@ -98,6 +99,10 @@ export function buildBusinessWan3Payload(parameters: Record<string, unknown>, re
   const seconds = parameters.seconds === undefined ? caps.defaultSeconds : parameters.seconds;
   if (typeof seconds !== "number" || !Number.isSafeInteger(seconds) ||
     (seconds !== -1 && (seconds < caps.minSeconds || seconds > caps.maxSeconds))) bad();
+  const clips = refs.filter(ref => ref.type === "video" && ref.duration !== undefined);
+  if (clips.some(({ duration }) => !Number.isFinite(duration) || duration! < 1 || duration! > WAN3_MAX_REFERENCE_SECONDS)) bad();
+  const inputSeconds = clips.reduce((sum, clip) => sum + clip.duration!, 0);
+  if (inputSeconds > WAN3_MAX_REFERENCE_SECONDS || (seconds !== -1 && inputSeconds + seconds > 30)) bad();
   const resolution = parameters.resolution === undefined ? caps.defaultResolution : parameters.resolution;
   if (typeof resolution !== "string" || !caps.resolutions.includes(resolution)) bad();
   const isFrameMode = mode === "image-to-video" || mode === "first-last-frame";
@@ -119,7 +124,10 @@ export function buildBusinessWan3Payload(parameters: Record<string, unknown>, re
     payload.first_frame = refs[0].url;
     if (mode === "first-last-frame") payload.last_frame = refs[1].url;
   } else if (refs.length) {
-    payload.reference_images = refs.map(ref => ref.url);
+    const images = refs.filter(ref => ref.type === "image");
+    const videos = refs.filter(ref => ref.type === "video");
+    if (images.length) payload.reference_images = images.map(ref => ref.url);
+    if (videos.length) payload.reference_videos = videos.map(ref => ref.url);
   }
   return payload;
 }

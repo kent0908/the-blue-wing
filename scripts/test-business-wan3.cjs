@@ -83,7 +83,17 @@ for (const mode of ["freestyle", "subject-reference", undefined]) {
 reject(base, [...ten, first]);
 reject(base, new Array(1));
 reject(null);
-for (const type of ["audio", "video", "document"]) assert.throws(() => validateRefs("subject-reference", [{ type }]), expectedError);
+for (const type of ["audio", "document"]) assert.throws(() => validateRefs("subject-reference", [{ type }]), expectedError);
+const clip = { type: "video", url: "https://owned.invalid/a.mp4", duration: 5 };
+const clipTwo = { ...clip, url: "https://owned.invalid/b.mov", duration: 8 };
+const mixed = build({ ...base, model: "wan3.0-video-prime-spicy", mode: "subject-reference", seconds: 10 }, [clipTwo, last, clip, first]);
+assert.deepEqual(mixed.reference_images, [last.url, first.url]);
+assert.deepEqual(mixed.reference_videos, [clipTwo.url, clip.url]);
+reject({ ...base, mode: "image-to-video" }, [clip]);
+reject({ ...base, mode: "first-last-frame" }, [first, clip]);
+reject({ ...base, seconds: 18 }, [clip, clipTwo]);
+reject(base, [clipTwo, clipTwo]);
+reject(base, Array.from({ length: 6 }, () => ({ type: "video", url: clip.url })));
 reject(base, [{ ...first, voiceUrl: "https://owned.invalid/voice.wav" }]);
 for (const url of ["", "asset://id", "data:image/png;base64,abc", "http://owned.invalid/a", "https://name:pw@owned.invalid/a", first.url + "#frag", " " + first.url]) reject(base, [{ ...first, url }]);
 for (const key of ["first_frame", "last_frame", "reference_images", "reference_videos", "reference_audios", "file", "link", "assetIds", "providerAssets", "referenceOrder", "frame_images", "input_references", "watermark", "negative_prompt", "audio_setting", "extra_body", "callbackUrl", "async", "duration"]) {
