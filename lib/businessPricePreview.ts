@@ -141,7 +141,7 @@ function costsForRule(rule: PriceRule, settings: BusinessPriceSettings) {
   const table = seedance25Dimensions[settings.resolution?.toLowerCase() ?? ""];
   const fixed = table?.[settings.aspect ?? ""];
   const dimensions = fixed ? [fixed] : table && settings.aspect === "adaptive" ? Object.values(table) : [];
-  if (settings.kind === "video" && /^(?:nsfw-)?siraya-seedance-2\.5$/i.test(settings.model) &&
+  if (settings.kind === "video" && /^(?:siraya-|nsfw-(?:siraya-)?)seedance-2\.5$/i.test(settings.model) &&
       !settings.videoInput && dimensions.length && positiveInt(settings.seconds)) {
     const outputs = lines.filter(row => row.unit === "output");
     const output = outputs[0];

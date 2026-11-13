@@ -40,7 +40,8 @@ assert.equal(price({ kind: 'image', count: 1 }, unrecognized).total, undefined);
 const adult = calc.priceRules({ currency: 'USD', rules: [{
   conditions: [], sale_prices_by_billing_unit: [{ billing_unit: { code: 'output_tokens' }, sale_price: '13.0', unit_scale: '1000000' }],
 }] }, 'console');
-const privateId = 'NSFW-SIRAYA-Seedance-2.5';
+const privateId = 'NSFW-Seedance-2.5';
+assert.equal(price({model:'NSFW-SIRAYA-Seedance-2.5'}, adult).total.low, '5.0544000000');
 let allowed = true, adultVerified = true, consoleReads = 0;
 class BusinessError extends Error { constructor(code, status) { super(code); this.status = status; } }
 const route = load('app/api/business/price-preview/route.ts', {
