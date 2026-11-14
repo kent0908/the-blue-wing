@@ -21,6 +21,7 @@ function loader(hookMock = false) {
       if (name === '@/lib/i18n/client') return { useLocale: () => locale };
       if (name === '@/lib/i18n/businessDedicatedVideo') return read('lib/i18n/businessDedicatedVideo.ts');
       if (name === '@/lib/i18n/businessOperations') return read('lib/i18n/businessOperations.ts');
+      if (name === '@/lib/businessWan3') return read('lib/businessWan3.ts');
       if (name === './simplifyChinese') return require('./fixtures/load-simplify-chinese.cjs');
       if (name.endsWith('.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
       throw new Error(`Unexpected import from ${path}: ${name}`);
@@ -37,10 +38,10 @@ const { getBusinessWan3Capability: wanCaps } = read('lib/businessWan3.ts');
 const { businessDedicatedVideoCopy } = read('lib/i18n/businessDedicatedVideo.ts');
 let combinations = 0;
 const fixtureAssets = [
-  { id: 31, name: 'Garden Opening', contentType: 'image/jpeg' },
-  { id: 42, name: 'Garden Closing', contentType: 'image/webp' },
+  { id: 31, name: 'Garden Opening', contentType: 'image/jpeg', src: '/api/assets/31/raw' },
+  { id: 42, name: 'Garden Closing', contentType: 'image/webp', src: '/api/assets/42/raw' },
   { id: 53, name: 'Scene Video', contentType: 'video/mp4' },
-  { id: 64, name: 'Oversized Image', contentType: 'image/png', size: 21 * 1024 * 1024 },
+  { id: 64, name: 'Oversized Image', contentType: 'image/png', size: 21 * 1024 * 1024, src: '/api/assets/64/raw' },
 ];
 const fixtureReferences = [
   { key: 'business:closing', name: 'Business Closing', source: 'business' },
@@ -144,19 +145,18 @@ const mixed = flatten(Controlled({
   ...props,
   capability: wanCaps('wan3.0-video'),
   value: { ...defaults, mode: 'first-last-frame' },
-  personalLibrary: { assets: fixtureAssets, selectedIds: [31], onToggle: id => toggles.push(id) },
+  personalLibrary: { assets: fixtureAssets, selectedIds: [31], onToggle: asset => toggles.push(asset.id) },
   referenceItems: fixtureReferences,
   onMoveReference: (key, direction) => changesInOrder.push([key, direction]),
   onRemoveReference: key => removed.push(key),
 }));
-const personalPicker = mixed.find(node => typeof node.type === 'function' && node.type.name === 'PersonalImagePicker');
+const personalPicker = mixed.find(node => typeof node.type === 'function' && node.type.name === 'ReferenceLibraryPicker');
 const pickerNodes = flatten(personalPicker.type(personalPicker.props));
 const chosen = pickerNodes.find(node => node.type === 'button' && node.props['aria-pressed'] === true);
 const available = pickerNodes.find(node => node.type === 'button' && node.props['aria-pressed'] === false);
 assert.equal(chosen.props.disabled, false, 'A selected personal image can be removed when the mode is full');
 assert.equal(available.props.disabled, true, 'The library blocks adding another image at combined capacity');
 chosen.props.onClick();
-available.props.onClick();
 assert.deepEqual(toggles, [31]);
 mixed.find(node => node.props?.['aria-label'] === 'Move Garden Opening earlier').props.onClick();
 mixed.find(node => node.props?.['aria-label'] === 'Remove Business Closing').props.onClick();

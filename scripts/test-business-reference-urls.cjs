@@ -43,7 +43,9 @@ const blob = { get: async (pathname, options) => {
     }, cancel() { cancelled++; } }),
   };
 } };
-const references = load('lib/businessReferenceUrls.ts', { 'server-only': {}, '@vercel/blob': blob, './db': source,
+const wan = load('lib/businessWan3.ts');
+const wanVideo = load('lib/wanReferenceVideo.ts', { './businessWan3': wan });
+const references = load('lib/businessReferenceUrls.ts', { 'server-only': {}, '@vercel/blob': blob, './db': source, './businessWan3': wan, './wanReferenceVideo': wanVideo,
   './assets': { assetPathPrefix: id => `assets/${id}/` }, './adultGate': adult, './businessTypes': { BusinessError }, './seo/site': { SITE_URL: 'https://thebluewing.studio' } });
 const route = load('app/api/business/references/[token]/route.ts', { '@/lib/businessReferenceUrls': references, '@/lib/businessTypes': { BusinessError } });
 const create = (ids = [1], nsfw = false, user = 7, account = accountId, credential = credentialId, profile) => references.createBusinessReferenceUrls(user, account, credential, ids, nsfw, profile);
@@ -70,6 +72,27 @@ async function denied(token, status = 404, noLookup = false) {
 }
 (async () => {
   fixture = await sharp({ create: { width: 300, height: 300, channels: 3, background: '#246899' } }).png().toBuffer();
+  if (process.env.WAN_VIDEO_FIXTURE) await test('owned personal MP4 receives a cookie-free grant with a real measured duration', async () => {
+    const input = fs.readFileSync(process.env.WAN_VIDEO_FIXTURE);
+    assets[0] = { ...assets[0], pathname: 'assets/7/clip.mp4', content_type: 'video/mp4', size: input.length };
+    blobBytes = input; blobSize = input.length; blobLength = String(input.length); blobType = 'video/mp4';
+    await assert.rejects(() => create([1], true, 7, accountId, credentialId, 'wan'), error => error.code === 'invalid_reference');
+    const [video] = await create([1], true, 7, accountId, credentialId, 'wan-video');
+    assert.equal(video.type, 'video');
+    assert.equal(video.duration, 5);
+    const token = tokenOf(video);
+    assert.match(token, /\.mp4$/);
+    const response = await fetchToken(token);
+    assert.equal(response.headers.get('content-type'), blobType);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), input);
+    const head = await route.HEAD(new NextRequest(video.url, { method: 'HEAD' }), { params: Promise.resolve({ token }) });
+    assert.equal(head.status, 200);
+    assert.equal(head.body, null);
+    assert.equal(head.headers.get('content-length'), String(input.length));
+    await denied(token.replace(/\.mp4$/, '.mov'));
+    authorization.revoked_at = new Date().toISOString();
+    await denied(token);
+  });
   await test('server-fixed origin, opaque randomized grants, current approval, one batch ownership query and ordered roles', async () => {
     assets = [2, 1].map(id => ({ ...assets[0], id: String(id) }));
     const first = await create([1, 2]);

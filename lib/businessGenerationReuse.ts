@@ -41,6 +41,7 @@ export function snapshotBusinessGeneration(parameters: Record<string, unknown>, 
   }
   const references: BusinessGenerationReuseSnapshot["references"] = [
     ...((parameters.assetIds ?? []) as number[]).map(id => ({ key: `local:${id}`, type: "image" as const })),
+    ...((parameters.personalVideoIds ?? []) as number[]).map(id => ({ key: `local:${id}`, type: "video" as const })),
     ...((parameters.businessAssetIds ?? []) as string[]).map(id => ({ key: `business:${id}`, type: "image" as const })),
     ...((parameters.businessVideoIds ?? []) as string[]).map(id => ({ key: `business:${id}`, type: "video" as const })),
     ...((parameters.referenceGenerationIds ?? []) as string[]).map(id => ({ key: `generated:${id}`, type: "image" as const })),

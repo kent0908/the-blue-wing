@@ -8,7 +8,7 @@ import { assertBusinessSeedanceReferences, buildBusinessSeedancePayload, getSeed
 import { assertBusinessImageParameters, getBusinessImageCapability, type BusinessImageControl } from "./businessImageCapabilities";
 import { buildBusinessModelCatalog } from "./businessModelCatalog";
 import { buildBusinessDedicatedVideoPayload, type BusinessDedicatedVideoCapability } from "./businessDedicatedVideo";
-import { buildBusinessWan3Payload, getBusinessWan3Capability, isBusinessWan3SpicyModel, WAN3_MAX_REFERENCE_SECONDS } from "./businessWan3";
+import { buildBusinessWan3Payload, getBusinessWan3Capability, isBusinessWan3SpicyModel, WAN3_MAX_REFERENCE_SECONDS, wan3ReferenceVideoExtension } from "./businessWan3";
 import { buildBusinessZImagePayload, type BusinessZImageCapability } from "./businessZImage";
 import { getBusinessProviderAsset, resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
@@ -102,7 +102,7 @@ function validateSubmission(value: unknown) {
   const kind = value.kind as BusinessKind;
   const parameters = { ...value.parameters };
   const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "referenceGenerationIds", "background", "output_format", "output_compression", "moderation", "prompt_extend"] :
-    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "businessAssetIds", "businessVideoIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
+    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "personalVideoIds", "businessAssetIds", "businessVideoIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
     ["model", "prompt", "max_tokens", "temperature"];
   if (Object.keys(parameters).some(key => !allowed.includes(key)) || typeof parameters.model !== "string" ||
     !/^[a-zA-Z0-9._:-]{1,150}$/.test(parameters.model) || typeof parameters.prompt !== "string" ||
@@ -129,6 +129,15 @@ function validateSubmission(value: unknown) {
     const combined = [...(parameters.businessAssetIds as string[] | undefined ?? []), ...ids];
     if (new Set(combined).size !== combined.length) fail("invalid_reference");
     parameters.businessVideoIds = ids;
+  }
+  if (parameters.personalVideoIds !== undefined) {
+    const capability = getBusinessWan3Capability(parameters.model);
+    const imageIds = (parameters.assetIds ?? []) as number[];
+    const businessClips = (parameters.businessVideoIds ?? []) as string[];
+    const ids = parameters.personalVideoIds;
+    if (!capability || !Array.isArray(ids) || ids.length + businessClips.length > capability.maxReferenceVideos ||
+      ids.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1 || imageIds.includes(id)) ||
+      new Set(ids).size !== ids.length) fail("invalid_reference");
   }
   if (parameters.referenceGenerationIds !== undefined) {
     if (!Array.isArray(parameters.referenceGenerationIds) || parameters.referenceGenerationIds.length > sourceImageLimit || parameters.referenceGenerationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
@@ -218,12 +227,14 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
       (!supportsPersonalReferences && assetIds !== undefined) ||
       (!acceptsReferenceOrder && parameters.referenceOrder !== undefined)) fail();
     const localIds = assetIds ?? [];
-    const clipKeys = new Set(ownClips.map(id => `business:${id}`));
+    const personalClips = (parameters.personalVideoIds ?? []) as number[];
+    const clipKeys = new Set([...personalClips.map(id => `local:${id}`), ...ownClips.map(id => `business:${id}`)]);
     const keys = [...localIds.map(id => `local:${id}`), ...ownUploads.map(id => `business:${id}`), ...clipKeys, ...generatedIds.map(id => `generated:${id}`)];
     const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
     if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
     delete adapterParameters.assetIds;
     delete adapterParameters.referenceOrder;
+    delete adapterParameters.personalVideoIds;
     delete adapterParameters.businessVideoIds;
     const buildPayload = family === "wan3.0" ? buildBusinessWan3Payload : buildBusinessDedicatedVideoPayload;
     const types = referenceOrder.map((key, index) => ({
@@ -233,11 +244,14 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     try { buildPayload(adapterParameters, types); } catch { fail(); }
     const local = localIds.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, localIds, model.nsfw, "wan") : [];
     const refs = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, referenceImageRules) : [];
-    const clips = ownClips.length ? await resolveBusinessWanVideoSources(userId, accountId, credential.id, ownClips, model.nsfw) : [];
+    const clips = [
+      ...(personalClips.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, personalClips, model.nsfw, "wan-video") : []),
+      ...(ownClips.length ? await resolveBusinessWanVideoSources(userId, accountId, credential.id, ownClips, model.nsfw) : []),
+    ];
     const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, referenceImageRules) : [];
     const resolved = [...local, ...refs, ...clips, ...generated];
     if (local.length !== localIds.length || refs.length !== ownUploads.length || generated.length !== generatedIds.length ||
-      clips.length !== ownClips.length || [...local, ...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
+      clips.length !== personalClips.length + ownClips.length || [...local, ...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
     const inputSeconds = clips.reduce((sum, clip) => sum + clip.duration, 0);
     const outputSeconds = Number(parameters.seconds ?? model.defaultSeconds ?? 5);
     if (inputSeconds > WAN3_MAX_REFERENCE_SECONDS || (outputSeconds !== -1 && inputSeconds + outputSeconds > 30)) fail("wan_video_duration");
@@ -548,7 +562,7 @@ export async function getBusinessGenerationReuse(user: UserRow, account: Busines
     (provider.length || generatedIds.length) ? getBusinessCredential(user.id, account.id) : null,
   ]);
   const localByKey = new Map(local.filter(asset => asset.pathname.startsWith(assetPathPrefix(user.id)) &&
-    ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(asset.content_type)).map(asset => [`local:${asset.id}`, toPublicAsset(asset)]));
+    (["image/png", "image/jpeg", "image/webp", "image/gif"].includes(asset.content_type) || !!wan3ReferenceVideoExtension(asset.content_type))).map(asset => [`local:${asset.id}`, toPublicAsset(asset)]));
   const uploadsByKey = new Map(uploads.map(asset => [`business:${asset.uploadId}`, asset]));
   const providerByKey = new Map<string, Awaited<ReturnType<typeof getBusinessProviderAsset>>>();
   async function verifyProviderAssets(apiKey: string) {
@@ -573,7 +587,8 @@ export async function getBusinessGenerationReuse(user: UserRow, account: Busines
   const generatedSet = new Set(generated);
   const restored = references.map(({ key, type }) => {
     const localAsset = localByKey.get(key);
-    if (localAsset) return { key, source: "local" as const, id: localAsset.id, asset: localAsset };
+    if (localAsset && type === (wan3ReferenceVideoExtension(localAsset.contentType) ? "video" : "image"))
+      return { key, source: "local" as const, id: localAsset.id, asset: localAsset };
     const upload = uploadsByKey.get(key);
     if (upload?.type === type) return { key, source: "upload" as const, asset: { id: upload.id, uploadId: upload.uploadId, name: upload.name, type: upload.type, status: upload.status, storageReady: upload.storageReady } };
     const registered = providerByKey.get(key);

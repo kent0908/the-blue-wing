@@ -26,7 +26,7 @@ import { allocateMention, orderMentionReferences, resolveMentionPrompt, type Men
 import { businessMentionsCopy } from "@/lib/i18n/businessMentions";
 import BusinessDedicatedVideoControls, { BusinessWan3DurationSelect, DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS, type BusinessDedicatedVideoOptions } from "./BusinessDedicatedVideoControls";
 import { buildBusinessDedicatedVideoPayload } from "@/lib/businessDedicatedVideo";
-import { buildBusinessWan3Payload } from "@/lib/businessWan3";
+import { buildBusinessWan3Payload, WAN3_REFERENCE_VIDEO_MAX_BYTES, wan3ReferenceVideoExtension } from "@/lib/businessWan3";
 import { buildBusinessZImagePayload } from "@/lib/businessZImage";
 import { businessDedicatedVideoCopy } from "@/lib/i18n/businessDedicatedVideo";
 import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
@@ -97,6 +97,10 @@ export default function BusinessWorkspace() {
   const [personalAssetsStatus, setPersonalAssetsStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const personalAssetsRequest = useRef<AbortController | null>(null);
   const [assetIds, setAssetIds] = useState<number[]>([]);
+  const [personalVideoIds, setPersonalVideoIds] = useState<number[]>([]);
+  const [personalVideos, setPersonalVideos] = useState<BusinessAsset[]>([]);
+  const [businessVideos, setBusinessVideos] = useState<BusinessAssetRecord[]>([]);
+  const [videoLibraryStatus, setVideoLibraryStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [videoMode, setVideoMode] = useState<BusinessSeedanceMode>("freestyle");
   const [providerAssets, setProviderAssets] = useState<BusinessProviderAsset[]>([]);
   const [referenceOrder, setReferenceOrder] = useState<string[]>([]);
@@ -129,6 +133,7 @@ export default function BusinessWorkspace() {
   const selectionContext = useRef<string | null>(null);
   const selectedModels = models.filter(model => model.modality === kind);
   const selected = selectBusinessModel(models, kind, modelId);
+  const showWanVideos = tab === "create" && selected?.dedicatedVideo?.family === "wan3.0";
   const promptLimit = selected?.dedicatedVideo?.cjkPromptMaxChars && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) ? selected.dedicatedVideo.cjkPromptMaxChars : selected?.promptMaxChars ?? 12000;
   const approved = access?.account?.status === "approved";
   const receiptStorageKey = approved && access?.account ? `bw:business-receipt:${access.account.id}` : "";
@@ -256,6 +261,22 @@ export default function BusinessWorkspace() {
     const controller = new AbortController();
     personalAssetsRequest.current = controller;
     setPersonalAssetsStatus("loading");
+    if (showWanVideos) {
+      setVideoLibraryStatus("loading");
+      void Promise.allSettled([
+        fetch("/api/assets?media=wan-video", { cache: "no-store", signal: controller.signal }).then(response => response.ok ? response.json() : Promise.reject()),
+        fetch("/api/business/provider-assets/upload", { cache: "no-store", signal: controller.signal }).then(response => response.ok ? response.json() : Promise.reject()),
+      ]).then(([personal, business]) => {
+        if (controller.signal.aborted) return;
+        const hasPersonal = personal.status === "fulfilled" && Array.isArray(personal.value?.assets);
+        const hasBusiness = business.status === "fulfilled" && Array.isArray(business.value?.uploads);
+        if (hasPersonal) setPersonalVideos(personal.value.assets);
+        if (hasBusiness) setBusinessVideos((business.value.uploads as (BusinessAssetRecord & { id: string })[])
+          .filter(upload => upload.storageReady && upload.type === "video")
+          .map(upload => ({ ...upload, id: `upload:${upload.id}`, uploadId: upload.id })));
+        setVideoLibraryStatus(hasPersonal && hasBusiness ? "ready" : "unavailable");
+      });
+    }
     try {
       const response = await fetch("/api/assets", { cache: "no-store", signal: controller.signal });
       const data = response.ok ? await response.json() : null;
@@ -266,7 +287,7 @@ export default function BusinessWorkspace() {
     } catch {
       if (!controller.signal.aborted) setPersonalAssetsStatus("unavailable");
     }
-  }, []);
+  }, [showWanVideos]);
   useEffect(() => {
     if (!approved) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- load the signed-in user's image library
@@ -322,7 +343,7 @@ export default function BusinessWorkspace() {
     } catch { setError(t.unavailable); }
     finally { keyLock.current = false; setKeySaving(false); }
   };
-  const resetSelection = useCallback(() => { setSize(""); setResolution(""); setAssetIds([]); setAudio(false); setApiKey(""); setVideoMode("freestyle"); setProviderAssets([]); setReferenceOrder([]); setOutputFormat("mp4"); setSeed(""); setImageCount(1); setImageQuality(""); setImageNegative(""); setImagePromptExtend(false); setImageBusinessAssets([]); setDedicatedOptions({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS }); setConfirmation(null); }, [setConfirmation, setApiKey]);
+  const resetSelection = useCallback(() => { setSize(""); setResolution(""); setAssetIds([]); setPersonalVideoIds([]); setAudio(false); setApiKey(""); setVideoMode("freestyle"); setProviderAssets([]); setReferenceOrder([]); setOutputFormat("mp4"); setSeed(""); setImageCount(1); setImageQuality(""); setImageNegative(""); setImagePromptExtend(false); setImageBusinessAssets([]); setDedicatedOptions({ ...DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS }); setConfirmation(null); }, [setConfirmation, setApiKey]);
   const navigate = (nextKind: BusinessKind, nextModel: string, nextTab: BusinessStudioTab) => startTransition(() => router.push(businessStudioHref({ kind: nextKind, modelId: nextModel, tab: nextTab }), { scroll: false }));
   const setTab = (value: BusinessStudioTab) => navigate(kind, modelId || selected?.id || "", value);
   const chooseTab = (value: BusinessStudioTab) => { setConfirmation(null); setApiKey(""); setError(""); setNotice(""); setTab(value); };
@@ -347,7 +368,7 @@ export default function BusinessWorkspace() {
       if (capability?.supportsPersonalReferences) {
         const mode = value.mode === "freestyle" ? capability.capability : value.mode;
         if (assetIds.length + imageBusinessAssets.filter(asset => asset.type === "image").length > dedicatedImageLimit(mode, capability.maxReferenceImages) ||
-            (mode !== "subject-reference" && imageBusinessAssets.some(asset => asset.type === "video"))) {
+            (mode !== "subject-reference" && (personalVideoIds.length || imageBusinessAssets.some(asset => asset.type === "video")))) {
           setError(d.referenceLimitError); return;
         }
       } else {
@@ -359,35 +380,44 @@ export default function BusinessWorkspace() {
   };
   const addWanPersonalReference = (asset: BusinessAsset): boolean => {
     const capability = selected?.dedicatedVideo;
-    if (!capability?.supportsPersonalReferences || !Number.isSafeInteger(asset.id) || asset.id < 1 ||
-      !["image/png", "image/jpeg", "image/webp"].includes(asset.contentType ?? "image/png") ||
-      (asset.size !== undefined && Number(asset.size) > (capability.referenceImageRules?.maxBytes ?? 20 * 1024 * 1024))) return false;
-    if (assetIds.includes(asset.id)) return true;
+    if (!capability?.supportsPersonalReferences || !Number.isSafeInteger(asset.id) || asset.id < 1) return false;
+    const video = !!wan3ReferenceVideoExtension(asset.contentType);
+    const ids = video ? personalVideoIds : assetIds;
+    const maxBytes = video ? WAN3_REFERENCE_VIDEO_MAX_BYTES : capability.referenceImageRules?.maxBytes ?? 20 * 1024 * 1024;
+    if ((video ? capability.family !== "wan3.0" : !["image/png", "image/jpeg", "image/webp"].includes(asset.contentType ?? "image/png")) ||
+      (asset.size !== undefined && Number(asset.size) > maxBytes)) return false;
+    if (ids.includes(asset.id)) return true;
     const effectiveMode = dedicatedOptions.mode === "freestyle" ? capability.capability : dedicatedOptions.mode;
     const nextMode = effectiveMode === "text-to-video" && capability.modes.includes("subject-reference") ? "subject-reference" : effectiveMode;
-    if (assetIds.length + imageBusinessAssets.filter(asset => asset.type === "image").length >= dedicatedImageLimit(nextMode, capability.maxReferenceImages)) {
+    const total = ids.length + imageBusinessAssets.filter(asset => asset.type === (video ? "video" : "image")).length;
+    const limit = video ? (nextMode === "subject-reference" ? capability.maxReferenceVideos : 0) : dedicatedImageLimit(nextMode, capability.maxReferenceImages);
+    if (total >= limit) {
       setError(d.referenceLimitError); return false;
     }
     const key = `local:${asset.id}`;
-    setAssets(current => current.some(item => item.id === asset.id) ? current : [...current, asset]);
-    setAssetIds(current => current.includes(asset.id) ? current : [...current, asset.id]);
+    const rememberAsset = video ? setPersonalVideos : setAssets;
+    const selectAsset = video ? setPersonalVideoIds : setAssetIds;
+    rememberAsset(current => current.some(item => item.id === asset.id) ? current : [...current, asset]);
+    selectAsset(current => current.includes(asset.id) ? current : [...current, asset.id]);
     setReferenceOrder(current => current.includes(key) ? current : [...current, key]);
     if (nextMode !== effectiveMode) setDedicatedOptions(current => ({ ...current, mode: nextMode }));
     setConfirmation(null); setError("");
     return true;
   };
   const removeDedicatedReference = (key: string) => {
-    if (key.startsWith("local:")) setAssetIds(current => current.filter(id => `local:${id}` !== key));
+    if (key.startsWith("local:")) {
+      setAssetIds(current => current.filter(id => `local:${id}` !== key));
+      setPersonalVideoIds(current => current.filter(id => `local:${id}` !== key));
+    }
     if (key.startsWith("business:")) setImageBusinessAssets(current => current.filter(asset => `business:${asset.uploadId}` !== key));
     setReferenceOrder(current => current.filter(value => value !== key));
     setConfirmation(null); setError("");
   };
-  const toggleWanPersonalReference = (id: number) => {
-    if (assetIds.includes(id)) { removeDedicatedReference(`local:${id}`); return; }
-    const asset = assets.find(item => item.id === id);
-    if (asset) addWanPersonalReference(asset);
+  const toggleWanPersonalReference = (asset: BusinessAsset) => {
+    if (assetIds.includes(asset.id) || personalVideoIds.includes(asset.id)) { removeDedicatedReference(`local:${asset.id}`); return; }
+    addWanPersonalReference(asset);
   };
-  const selectManagedAsset = (asset: BusinessAssetRecord) => {
+  const selectManagedAsset = (asset: BusinessAssetRecord, returnToCreate = true) => {
     if (!selected) return;
     if (kind === "video" && selected.seedance) {
       if (asset.status !== "active") return;
@@ -408,7 +438,7 @@ export default function BusinessWorkspace() {
       const limit = selected.dedicatedVideo ? dedicatedImageLimit(mode, selected.dedicatedVideo.maxReferenceImages) : selected.maxReferenceImages ?? 4;
       const videoCount = next.filter(item => item.type === "video").length;
       if (next.length - videoCount + assetIds.length > limit ||
-          videoCount > (mode === "subject-reference" ? selected.dedicatedVideo?.maxReferenceVideos ?? 0 : 0)) {
+          videoCount + personalVideoIds.length > (mode === "subject-reference" ? selected.dedicatedVideo?.maxReferenceVideos ?? 0 : 0)) {
         setError(d.referenceLimitError); return;
       }
       if (useMulti && next.length > imageBusinessAssets.length) setDedicatedOptions(current => ({ ...current, mode: "subject-reference" }));
@@ -417,7 +447,8 @@ export default function BusinessWorkspace() {
         const adding = next.length > imageBusinessAssets.length;
         setReferenceOrder(current => adding ? [...current.filter(value => value !== key), key] : current.filter(value => value !== key));
       }
-      setImageBusinessAssets(next); setConfirmation(null); chooseTab("create");
+      setImageBusinessAssets(next); setConfirmation(null); setError("");
+      if (returnToCreate) chooseTab("create");
     }
   };
   useEffect(() => {
@@ -433,7 +464,7 @@ export default function BusinessWorkspace() {
   }, [kind, modelId, selected?.id, tab, resetSelection]);
   function pickMention(candidate: MentionCandidate): string | null {
     if (navigationPending || !selected?.supportsReferences) return null;
-    const existing = candidate.localId ? assetIds.includes(candidate.localId) : selected.seedance && candidate.key.startsWith("provider:") ? providerAssets.some(asset => asset.id === candidate.asset?.id) : imageBusinessAssets.some(asset => asset.uploadId === candidate.asset?.uploadId);
+    const existing = selectedReferenceKeys.has(candidate.key);
     if (!existing) {
       const useMulti = selected.seedance && (videoMode === "freestyle" || videoMode === "text-to-video") || selected.dedicatedVideo?.family === "wan3.0" && (dedicatedOptions.mode === "freestyle" || dedicatedOptions.mode === "text-to-video");
       if (selected.seedance) {
@@ -444,9 +475,9 @@ export default function BusinessWorkspace() {
       } else {
         const mode = useMulti ? "subject-reference" : dedicatedOptions.mode === "freestyle" ? selected.dedicatedVideo?.capability : dedicatedOptions.mode;
         const limit = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : selected.maxReferenceImages ?? 0;
-        if (candidate.asset?.type === "video") {
+        if (candidate.type === "video") {
           const max = mode === "subject-reference" ? selected.dedicatedVideo?.maxReferenceVideos ?? 0 : 0;
-          if (imageBusinessAssets.filter(asset => asset.type === "video").length >= max) { setError(d.referenceLimitError); return null; }
+          if (personalVideoIds.length + imageBusinessAssets.filter(asset => asset.type === "video").length >= max) { setError(d.referenceLimitError); return null; }
         } else if (assetIds.length + imageBusinessAssets.filter(asset => asset.type === "image").length >= limit) { setError(mentionCopy.limit); return null; }
       }
       if (candidate.localId) {
@@ -467,7 +498,7 @@ export default function BusinessWorkspace() {
         else if (!candidate.localId) setDedicatedOptions(current => ({ ...current, mode: "subject-reference" }));
       }
     }
-    const tag = allocateMention({ key: candidate.key, name: candidate.name, type: candidate.asset?.type ?? "image" }, mentionBindings.current);
+    const tag = allocateMention({ key: candidate.key, name: candidate.name, type: candidate.type ?? "image" }, mentionBindings.current);
     mentionBindings.current[tag] = candidate.key;
     setConfirmation(null); setError("");
     return tag;
@@ -482,6 +513,7 @@ export default function BusinessWorkspace() {
     if (/\b(?:sk|csk)-[A-Za-z0-9_-]{16,}/.test(prompt)) { setError(t.keyWarning); return; }
     const selectedReferences: MentionReference[] = [
       ...assetIds.map(id => ({ key: `local:${id}`, name: "", type: "image" as const })),
+      ...personalVideoIds.map(id => ({ key: `local:${id}`, name: "", type: "video" as const })),
       ...imageBusinessAssets.map(asset => ({ key: `business:${asset.uploadId}`, name: asset.name, type: asset.type })),
       ...providerAssets.map(asset => ({ key: `provider:${asset.id}`, name: asset.name, type: asset.type })),
     ];
@@ -561,6 +593,7 @@ export default function BusinessWorkspace() {
       const clips = imageBusinessAssets.filter(asset => asset.type === "video");
       if (uploads.length) parameters.businessAssetIds = uploads.map(asset => asset.uploadId!);
       if (clips.length) parameters.businessVideoIds = clips.map(asset => asset.uploadId!);
+      if (wan3 && personalVideoIds.length) parameters.personalVideoIds = [...personalVideoIds];
       if (wanPersonal && references.length) parameters.referenceOrder = references.map(reference => reference.key);
       if (dedicatedOptions.seed.trim()) { const value = Number(dedicatedOptions.seed); if (!Number.isSafeInteger(value)) { setError(t.invalidRequest); return; } parameters.seed = value; }
       if (wan3 || wan22 || selected.dedicatedVideo.family === "wan2.7") parameters.prompt_extend = dedicatedOptions.promptExtend;
@@ -572,6 +605,7 @@ export default function BusinessWorkspace() {
         delete adapterParameters.assetIds;
         delete adapterParameters.referenceOrder;
         delete adapterParameters.businessVideoIds;
+        delete adapterParameters.personalVideoIds;
         if (wan3) buildBusinessWan3Payload(adapterParameters, placeholders);
         else buildBusinessDedicatedVideoPayload(adapterParameters, placeholders.map(item => ({ ...item, type: "image" as const })));
       }
@@ -635,6 +669,7 @@ export default function BusinessWorkspace() {
   const referenceLimit = selected?.seedance?.references.image ?? selected?.maxReferenceImages ?? 4;
   const selectedReferenceKeys = new Set([
     ...assetIds.map(id => `local:${id}`),
+    ...personalVideoIds.map(id => `local:${id}`),
     ...imageBusinessAssets.map(asset => `business:${asset.uploadId}`),
     ...providerAssets.map(asset => `provider:${asset.id}`),
   ]);
@@ -642,6 +677,7 @@ export default function BusinessWorkspace() {
   const personalMaxBytes = selected?.dedicatedVideo?.referenceImageRules?.maxBytes ?? 20 * 1024 * 1024;
   const dedicatedReferenceItems = wanPersonal ? orderMentionReferences([
     ...assetIds.map(id => ({ key: `local:${id}`, name: assets.find(asset => asset.id === id)?.name ?? t.references, src: `/api/assets/${id}/raw`, source: "personal" as const })),
+    ...personalVideoIds.map(id => ({ key: `local:${id}`, name: personalVideos.find(asset => asset.id === id)?.name ?? t.references, type: "video" as const, source: "personal" as const })),
     ...imageBusinessAssets.flatMap(asset => asset.uploadId ? [{ key: `business:${asset.uploadId}`, name: asset.name, type: asset.type, src: asset.type === "image" ? `/api/business/provider-assets/uploads/${asset.uploadId}/preview` : undefined, source: "business" as const }] : []),
   ], referenceOrder) : [];
   const moveDedicatedReference = (key: string, direction: -1 | 1) => {
@@ -653,6 +689,7 @@ export default function BusinessWorkspace() {
   };
   const confirmationReferences = confirmation ? orderMentionReferences([
     ...(confirmation.parameters.assetIds ?? []).map(id => ({ key: `local:${id}`, name: assets.find(asset => asset.id === id)?.name ?? t.references, type: "image" as const })),
+    ...(confirmation.parameters.personalVideoIds ?? []).map(id => ({ key: `local:${id}`, name: personalVideos.find(asset => asset.id === id)?.name ?? t.references, type: "video" as const })),
     ...(confirmation.parameters.businessAssetIds ?? []).map(id => ({ key: `business:${id}`, name: imageBusinessAssets.find(asset => asset.uploadId === id)?.name ?? t.references, type: "image" as const })),
     ...(confirmation.parameters.businessVideoIds ?? []).map(id => ({ key: `business:${id}`, name: imageBusinessAssets.find(asset => asset.uploadId === id)?.name ?? t.references, type: "video" as const })),
     ...(confirmation.parameters.providerAssets ?? []).map(({ id, type }) => ({ key: `provider:${id}`, name: providerAssets.find(asset => asset.id === id)?.name ?? t.references, type })),
@@ -673,8 +710,12 @@ export default function BusinessWorkspace() {
     if (setup && p) {
       mentionBindings.current = setup.editor?.mentions ?? {};
       const restoredLocal = setup.references.flatMap(reference => reference.source === "local" && reference.asset ? [reference.asset] : []);
-      if (restoredLocal.length) setAssets(current => [...new Map([...current, ...restoredLocal].map(asset => [asset.id, asset])).values()]);
-      setAssetIds(setup.references.flatMap(reference => reference.source === "local" ? [reference.id] : []));
+      const restoredVideos = restoredLocal.filter(asset => !!wan3ReferenceVideoExtension(asset.contentType));
+      if (restoredVideos.length) setPersonalVideos(current => [...new Map([...current, ...restoredVideos].map(asset => [asset.id, asset])).values()]);
+      if (restoredLocal.length) setAssets(current => [...new Map([...current, ...restoredLocal.filter(asset => !wan3ReferenceVideoExtension(asset.contentType))].map(asset => [asset.id, asset])).values()]);
+      const restoredVideoIds = restoredVideos.map(asset => asset.id);
+      setPersonalVideoIds(restoredVideoIds);
+      setAssetIds(setup.references.flatMap(reference => reference.source === "local" && !restoredVideoIds.includes(reference.id) ? [reference.id] : []));
       setProviderAssets(setup.references.flatMap(reference => reference.source === "provider" ? [reference.asset] : []));
       setImageBusinessAssets(setup.references.flatMap(reference => reference.source === "upload" ? [reference.asset] : []));
       if (model.seedance || model.dedicatedVideo?.supportsPersonalReferences) setReferenceOrder(setup.references.map(reference => reference.key));
@@ -756,7 +797,7 @@ export default function BusinessWorkspace() {
             <label className={styles.field}>{t.model}<select required value={selected?.id ?? ""} onChange={e => chooseModel(e.target.value)} disabled={modelsLoading || !selectedModels.length}>{!selected && <option value="" disabled>{modelId ? s.modelUnavailable : t.emptyModels}</option>}{selectedModels.map(model => <option key={model.id} value={model.id}>{model.displayName}{model.nsfw ? ` · ${t.nsfw}` : ""}</option>)}</select></label>
             {!modelsLoading && modelId && !selected && <p className={styles.warning} role="alert">{s.modelUnavailable}</p>}
             {selected?.nsfw ? <span className={styles.sensitive}>{t.nsfw}</span> : null}
-            <BusinessPrompt value={prompt} onChange={setPrompt} maxLength={promptLimit} label={t.prompt} placeholder={t.promptPlaceholder} note={t.keyWarning} assets={assets} mode={!selected?.supportsReferences ? "none" : selected.seedance ? "seedance" : wanPersonal ? "native-with-personal" : selected.dedicatedVideo ? "native" : kind === "image" ? "image" : "local"} personalMaxBytes={wanPersonal ? personalMaxBytes : undefined} includeVideo={selected?.dedicatedVideo?.family === "wan3.0"} onPick={pickMention} selectedKeys={selectedReferenceKeys} />
+            <BusinessPrompt value={prompt} onChange={setPrompt} maxLength={promptLimit} label={t.prompt} placeholder={t.promptPlaceholder} note={t.keyWarning} assets={assets} mode={!selected?.supportsReferences ? "none" : selected.seedance ? "seedance" : wanPersonal ? "native-with-personal" : selected.dedicatedVideo ? "native" : kind === "image" ? "image" : "local"} personalMaxBytes={wanPersonal ? personalMaxBytes : undefined} includeVideo={showWanVideos && dedicatedMode !== "image-to-video" && dedicatedMode !== "first-last-frame"} onPick={pickMention} selectedKeys={selectedReferenceKeys} />
             <div className={styles.settings}>{kind === "image" && selected?.zImage ? <>
               <label className={styles.field}>{operations.imageWidth}<input type="number" inputMode="numeric" min={selected.zImage.minDimension} max={selected.zImage.maxDimension} step={1} value={zWidth} required onChange={e => setSize(`${e.target.value}x${zHeight}`)} /></label>
               <label className={styles.field}>{operations.imageHeight}<input type="number" inputMode="numeric" min={selected.zImage.minDimension} max={selected.zImage.maxDimension} step={1} value={zHeight} required onChange={e => setSize(`${zWidth}x${e.target.value}`)} /></label>
@@ -786,6 +827,11 @@ export default function BusinessWorkspace() {
                 referenceCount={imageBusinessAssets.length}
                 onOpenAssets={() => chooseTab("assets")}
                 personalLibrary={wanPersonal ? { assets, selectedIds: assetIds, onToggle: toggleWanPersonalReference, loading: personalAssetsStatus === "loading", unavailable: personalAssetsStatus === "unavailable", onRetry: () => void loadPersonalAssets() } : undefined}
+                videoLibrary={showWanVideos ? {
+                  personal: personalVideos, business: businessVideos, selected: selectedReferenceKeys,
+                  loading: videoLibraryStatus === "loading", unavailable: videoLibraryStatus === "unavailable",
+                  onTogglePersonal: toggleWanPersonalReference, onToggleBusiness: asset => selectManagedAsset(asset, false),
+                } : undefined}
                 referenceItems={wanPersonal ? dedicatedReferenceItems : undefined}
                 onRemoveReference={wanPersonal ? removeDedicatedReference : undefined}
                 onMoveReference={wanPersonal ? moveDedicatedReference : undefined}

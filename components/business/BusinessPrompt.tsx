@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import Image from "next/image";
 import { useLocale } from "@/lib/i18n/client";
 import { businessMentionsCopy } from "@/lib/i18n/businessMentions";
+import { WAN3_REFERENCE_VIDEO_MAX_BYTES, wan3ReferenceVideoExtension } from "@/lib/businessWan3";
 import type { BusinessAsset } from "./types";
 import type { BusinessAssetRecord } from "./BusinessAssets";
 import styles from "./Business.module.css";
@@ -12,6 +13,7 @@ import picker from "./BusinessPrompt.module.css";
 export interface MentionCandidate {
   key: string;
   name: string;
+  type?: "image" | "video";
   src?: string;
   localId?: number;
   personalAsset?: BusinessAsset;
@@ -74,7 +76,7 @@ function listCandidates(
       const key = useProvider ? `provider:${approved.id}` : uploadKey;
       if (approved) seenProvider.add(approved.id);
       candidates.set(key, {
-        key, name: upload.name,
+        key, name: upload.name, type: upload.type === "video" ? "video" : "image",
         src: upload.storageReady && upload.type === "image" ? `/api/business/provider-assets/uploads/${upload.id}/preview` : undefined,
         asset: {
           ...(upload.asset ?? { id: `upload:${upload.id}`, type: upload.type as "image" | "video", name: upload.name, status: upload.status }),
@@ -92,10 +94,12 @@ function listCandidates(
   }
   if (mode !== "native") {
     for (const asset of local) {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(asset.contentType ?? "image/png") ||
-        (personalMaxBytes !== undefined && asset.size !== undefined && Number(asset.size) > personalMaxBytes)) continue;
+      const video = includeVideo && !!wan3ReferenceVideoExtension(asset.contentType);
+      const maxBytes = video ? WAN3_REFERENCE_VIDEO_MAX_BYTES : personalMaxBytes;
+      if ((!video && !["image/png", "image/jpeg", "image/webp"].includes(asset.contentType ?? "image/png")) ||
+        (maxBytes !== undefined && asset.size !== undefined && Number(asset.size) > maxBytes)) continue;
       const key = `local:${asset.id}`;
-      candidates.set(key, { key, localId: asset.id, name: asset.name, src: `/api/assets/${asset.id}/raw`, personalAsset: asset });
+      candidates.set(key, { key, localId: asset.id, name: asset.name, type: video ? "video" : "image", src: video ? undefined : asset.src, personalAsset: asset });
     }
   }
   return [...candidates.values()];
@@ -119,12 +123,12 @@ function PictureIcon() {
   </svg>;
 }
 
-function Thumbnail({ src }: { src?: string }) {
+function Thumbnail({ src, video }: { src?: string; video?: boolean }) {
   const [failed, setFailed] = useState(false);
   return <span className={picker.thumbnail}>
     {src && !failed
       ? <Image src={src} alt="" width={48} height={48} unoptimized loading="lazy" onError={() => setFailed(true)} />
-      : <PictureIcon />}
+      : video ? <span aria-hidden="true">▶</span> : <PictureIcon />}
   </span>;
 }
 
@@ -139,6 +143,7 @@ export default function BusinessPrompt(props: Props) {
   const composing = useRef(false);
   const [mention, setMention] = useState<Mention | null>(null);
   const [local, setLocal] = useState<BusinessAsset[] | null>(null);
+  const [localVideos, setLocalVideos] = useState<BusinessAsset[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [reviewed, setReviewed] = useState<BusinessAssetRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -164,12 +169,13 @@ export default function BusinessPrompt(props: Props) {
     }
     const requests = [
       mode !== "native" && load<BusinessAsset>("/api/assets", "assets", setLocal),
+      mode !== "native" && props.includeVideo && load<BusinessAsset>("/api/assets?media=wan-video", "assets", setLocalVideos),
       mode !== "local" && load<Upload>("/api/business/provider-assets/upload", "uploads", setUploads),
       mode === "seedance" && load<BusinessAssetRecord>("/api/business/provider-assets?assetType=image&status=active&pageSize=100", "assets", setReviewed),
     ];
     void Promise.all(requests).then(() => { if (!signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [opened, mode, retry]);
+  }, [opened, mode, retry, props.includeVideo]);
 
   useEffect(() => {
     if (!opened) return;
@@ -185,7 +191,8 @@ export default function BusinessPrompt(props: Props) {
   }, [opened, manual]);
 
   const query = mention?.query.trim().normalize("NFKC").toLocaleLowerCase(locale) ?? "";
-  const candidates = opened ? listCandidates(mode, local ?? props.assets, uploads, reviewed, props.selectedKeys, props.personalMaxBytes, props.includeVideo) : [];
+  const images = local ?? props.assets;
+  const candidates = opened ? listCandidates(mode, props.includeVideo ? [...images, ...localVideos] : images, uploads, reviewed, props.selectedKeys, props.personalMaxBytes, props.includeVideo) : [];
   const matches = query ? candidates.filter(candidate => candidate.name.normalize("NFKC").toLocaleLowerCase(locale).includes(query)) : candidates;
   const activeIndex = matches.findIndex(candidate => candidate.key === activeKey);
   const activeId = activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined;
@@ -311,10 +318,10 @@ export default function BusinessPrompt(props: Props) {
           {matches.map((candidate, position) => <button type="button" role="option" tabIndex={-1}
             aria-selected={position === activeIndex} id={`${id}-option-${position}`} key={candidate.key}
             className={picker.option} onMouseDown={event => event.preventDefault()} onClick={() => choose(candidate)}>
-            <Thumbnail key={candidate.src} src={candidate.src} />
+            <Thumbnail key={candidate.src} src={candidate.src} video={candidate.type === "video"} />
             <span className={picker.identity}>
               <span className={picker.name} title={candidate.name}>{candidate.name}</span>
-              <small>{candidate.asset?.type === "video" ? t.video : candidate.localId ? t.personal : candidate.key.startsWith("provider:") ? t.reviewed : t.business}</small>
+              <small>{candidate.type === "video" ? `${t.video} · ` : ""}{candidate.localId ? t.personal : candidate.key.startsWith("provider:") ? t.reviewed : t.business}</small>
             </span>
             {props.selectedKeys?.has(candidate.key)
               ? <span className={picker.selected}><span aria-hidden="true">✓</span>{t.selected}</span>

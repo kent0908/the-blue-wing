@@ -21,6 +21,15 @@ const RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"];
 const MAX_IMAGES = 10;
 export const WAN3_MAX_REFERENCE_VIDEOS = 5;
 export const WAN3_MAX_REFERENCE_SECONDS = 15;
+export const WAN3_REFERENCE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+export const WAN3_REFERENCE_VIDEO_EXTENSIONS: Readonly<Record<string, string>> = Object.freeze({
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+});
+
+export function wan3ReferenceVideoExtension(mime: string | undefined): string | undefined {
+  return mime && Object.hasOwn(WAN3_REFERENCE_VIDEO_EXTENSIONS, mime) ? WAN3_REFERENCE_VIDEO_EXTENSIONS[mime] : undefined;
+}
 const MAX_PROMPT = 2000;
 const COMMON_KEYS = new Set(["model", "prompt", "seconds", "resolution", "aspect_ratio", "seed", "generate_audio", "prompt_extend", "mode", "businessAssetIds", "referenceGenerationIds"]);
 

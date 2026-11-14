@@ -19,11 +19,14 @@ export async function GET(req: NextRequest) {
   const r = await requireUser(req);
   if ("error" in r) return r.error;
   // Existing image pickers keep their image-only response. The full library opts in.
-  const allMedia = req.nextUrl.searchParams.get("media") === "all";
+  const media = req.nextUrl.searchParams.get("media");
+  const allMedia = media === "all";
+  const wanVideo = media === "wan-video";
   const { rows } = await sql<AssetRow>`
     select id, user_id, url, pathname, content_type, size, filename, created_at
     from assets where user_id = ${r.user.id}
-      and (${allMedia} or content_type like 'image/%')
+      and (${allMedia} or (${wanVideo} and content_type in ('video/mp4','video/quicktime'))
+        or (not ${wanVideo} and content_type like 'image/%'))
     order by created_at desc
     limit 300
   `;

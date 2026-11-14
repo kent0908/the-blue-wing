@@ -74,11 +74,11 @@ const mocks={
    assert.equal(accountId,account.id);
    assert.equal(credentialId,activeCredential);
    assert.equal(typeof nsfw,'boolean');
-   assert.ok(profile===undefined || profile==='wan');
-   const types=['image/png','image/jpeg','image/webp',...(profile==='wan'?[]:['image/gif'])];
-   const maxBytes=profile==='wan'?20*1024*1024:30*1024*1024-1;
+   assert.ok(profile===undefined || profile==='wan' || profile==='wan-video');
+   const types=profile==='wan-video'?['video/mp4','video/quicktime']:['image/png','image/jpeg','image/webp',...(profile==='wan'?[]:['image/gif'])];
+   const maxBytes=profile==='wan-video'?50*1024*1024:profile==='wan'?20*1024*1024:30*1024*1024-1;
    if(ids.some(id=>!assetRows.some(row=>row.id===id&&row.user_id===userId&&types.includes(row.content_type)&&row.size<=maxBytes)))throw new BusinessError('invalid_reference');
-   return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/references/opaque-${id}`,role:'reference_image'}));
+   return ids.map(id=>profile==='wan-video'?{type:'video',duration:5,url:`https://fixture.invalid/api/business/references/opaque-${id}.mp4`}:{type:'image',url:`https://fixture.invalid/api/business/references/opaque-${id}`,role:'reference_image'});
  }},
  './businessProviderAssets':{getBusinessProviderAsset:async(id,{apiKey})=>{assert.equal(apiKey,credentials.get(activeCredential));const asset=registeredAssets.find(asset=>asset.id===id&&asset.apiKey===apiKey);if(!asset)throw Error('private provider failure');return {id,type:asset.type,name:'Registered character',status:asset.status};},resolveBusinessProviderAssets:async(refs,credential)=>{providerReferenceCalls++;assert.equal(credential.apiKey,credentials.get(activeCredential));if(refs.some(ref=>!registeredAssets.some(asset=>asset.id===ref.id&&asset.type===ref.type&&asset.status==='active'&&asset.apiKey===credential.apiKey)))throw new BusinessError('invalid_reference');return refs.map(ref=>({type:ref.type,url:`asset://${ref.id}`,role:`reference_${ref.type}`}));}},
  '@vercel/blob':{put:async(pathname,_bytes,opts)=>{assert.equal(opts.access,'private');uploads++;if(failStorage)throw Error('Private storage outage');return {pathname}}},
@@ -674,6 +674,24 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    const {reuse:snapshot}=await(await getReuse(jobs[0].id)).json();
    assert.deepEqual(snapshot.references.map(ref=>ref.key),referenceOrder);
    assert.equal(snapshot.references[1].asset.src,'/api/assets/7/raw');
+   assert.deepEqual(snapshot.editor,editor);
+ });
+ await test('Wan 3.0 mixes a personal video with business media and restores it without exposing the grant', async () => {
+   assetRows=[{id:7,user_id:7,content_type:'video/mp4',size:1024,filename:'Studio motion.mp4'}];
+   businessUploads=[uuid(451),uuid(902)];
+   const model='wan3.0-video-prime-spicy', referenceOrder=[`business:${businessUploads[0]}`,'local:7',`business:${businessUploads[1]}`];
+   const parameters={model,mode:'subject-reference',personalVideoIds:[7],businessVideoIds:[businessUploads[0]],businessAssetIds:[businessUploads[1]],referenceOrder,prompt:'Keep Image 1 and follow Video 2.'};
+   assert.equal((await send(body(1,'video',{...parameters,assetIds:[7]}))).status,400);
+   assert.equal((await send(body(2,'video',{...parameters,seconds:18}))).status,400);
+   assert.equal((await send(body(3,'video',{...parameters,personalVideoIds:[99],referenceOrder:undefined}))).status,400);
+   assert.equal(providerCalls,0);
+   const editor={prompt:'Keep Image 1 and follow @motion.',mentions:{motion:'local:7'}};
+   assert.equal((await send({...body(4,'video',parameters),editor})).status,201);
+   assert.deepEqual(lastPayload.reference_videos,[`https://fixture.invalid/api/business/provider-assets/source/opaque-${businessUploads[0]}.mp4`,'https://fixture.invalid/api/business/references/opaque-7.mp4']);
+   assert.equal(lastPayload.personalVideoIds,undefined);
+   const {reuse:snapshot}=await(await getReuse(jobs[0].id)).json();
+   assert.deepEqual(snapshot.references.map(ref=>ref.key),referenceOrder);
+   assert.equal(snapshot.references[1].asset.contentType,'video/mp4');
    assert.deepEqual(snapshot.editor,editor);
  });
  await test('Wan 2.2 and 2.7 keyframes preserve personal and business source order on the wire', async () => {

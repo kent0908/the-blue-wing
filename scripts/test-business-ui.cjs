@@ -54,7 +54,7 @@ function makeContext() {
     crypto: { randomUUID: () => `fixture-request-${++sequence}` },
     submitLock: { current: false }, keyLock: { current: false }, unresolvedRequest: { current: null }, uncertain: false, navigationPending: false,
     selected: { id: 'kling-3.0-turbo', supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: ['720p', '1080p'], secondsOptions: [5, 10], defaultSeconds: 5, resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1'], supportsReferences: true, maxReferenceImages: 1, promptMaxChars: 2500, nsfw: false },
-    prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [],
+    prompt: 'A blue feather moves through a paper theatre.', kind: 'video', seconds: 7, resolution: '720p', size: '', aspect: '21:9', audio: false, assetIds: [], personalVideoIds: [],
     mentionBindings: { current: {} }, mentionCopy: { missing: 'missing-reference' }, resolveMentionPrompt: mentionsModule.exports.resolveMentionPrompt, orderMentionReferences: mentionsModule.exports.orderMentionReferences, promptLimit: 12000,
     resultsCopy: { submitted: 'sent' }, historyVersion: { current: 0 }, setSelectedJobId: noop, workspacePreview: { current: null }, requestAnimationFrame: callback => callback(),
     videoMode: 'freestyle', providerAssets: [], referenceOrder: [], outputFormat: 'mp4', seed: '', imageBusinessAssets:[], imageCount:1, imageQuality:'', imageNegative:'', seedanceReferenceIssue, seedanceReferenceLimits, seedanceReferenceMessage: (_copy,issue,limits)=>`${issue}:${limits.total}/${limits.image}`, buildBusinessSeedancePayload, buildBusinessDedicatedVideoPayload, buildBusinessWan3Payload,

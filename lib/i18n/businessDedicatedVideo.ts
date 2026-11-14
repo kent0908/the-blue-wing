@@ -3,6 +3,9 @@ import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   personalLibrary: "我的素材庫", personalSource: "個人素材", businessSource: "商務素材", searchPersonal: "搜尋圖片名稱",
+  libraryFilter: "素材類型", libraryAll: "全部", libraryImages: "圖片", libraryVideos: "影片", searchMedia: "搜尋圖片或影片名稱",
+  noVideos: "目前沒有可用的 MP4／MOV。可以從下方上傳影片或動態 GIF。", noMedia: "找不到符合的素材。", libraryPartial: "部分素材暫時無法讀取，請重新讀取。",
+  personalMixedSwitch: "選取素材後會切換至圖片／影片參照。", videoCapacity: "已達影片參照上限。",
   personalLoading: "正在讀取我的素材庫…", personalUnavailable: "目前無法讀取我的素材庫。", refreshPersonal: "重新讀取素材",
   personalEmpty: "我的素材庫目前沒有可用的圖片。", personalNoResults: "找不到符合的圖片。", managePersonal: "管理我的素材庫",
   personalSwitchMode: "選擇圖片後會切換至圖片參照。", referenceCapacity: "已達此模式的圖片上限。", personalTooLarge: "檔案超過大小上限",
@@ -19,6 +22,9 @@ const zh = {
 export type BusinessDedicatedVideoCopy = { [K in keyof typeof zh]: string };
 const en: BusinessDedicatedVideoCopy = {
   personalLibrary: "My assets", personalSource: "Personal asset", businessSource: "Business asset", searchPersonal: "Search image names",
+  libraryFilter: "Asset type", libraryAll: "All", libraryImages: "Images", libraryVideos: "Videos", searchMedia: "Search image or video names",
+  noVideos: "No MP4 or MOV files yet. Upload a video or animated GIF below.", noMedia: "No matching assets.", libraryPartial: "Some assets could not be loaded. Reload to try again.",
+  personalMixedSwitch: "Choosing an asset switches to Image / video references.", videoCapacity: "The video reference limit has been reached.",
   personalLoading: "Loading your assets…", personalUnavailable: "Your assets could not be loaded.", refreshPersonal: "Reload assets",
   personalEmpty: "Your library has no eligible images.", personalNoResults: "No images match your search.", managePersonal: "Manage my assets",
   personalSwitchMode: "Choosing an image switches to Image references.", referenceCapacity: "This mode's image limit has been reached.", personalTooLarge: "File exceeds the size limit",
@@ -34,6 +40,9 @@ const en: BusinessDedicatedVideoCopy = {
 };
 const ja: BusinessDedicatedVideoCopy = {
   personalLibrary: "マイ素材庫", personalSource: "個人素材", businessSource: "ビジネス素材", searchPersonal: "画像名で検索",
+  libraryFilter: "素材の種類", libraryAll: "すべて", libraryImages: "画像", libraryVideos: "動画", searchMedia: "画像・動画の名前で検索",
+  noVideos: "使用できるMP4・MOVがありません。下から動画またはアニメーションGIFをアップロードできます。", noMedia: "一致する素材がありません。", libraryPartial: "一部の素材を読み込めませんでした。再読み込みしてください。",
+  personalMixedSwitch: "素材を選ぶと画像／動画参照に切り替わります。", videoCapacity: "参照動画の上限に達しました。",
   personalLoading: "マイ素材庫を読み込み中…", personalUnavailable: "マイ素材庫を読み込めませんでした。", refreshPersonal: "素材を再読み込み",
   personalEmpty: "マイ素材庫に利用できる画像がありません。", personalNoResults: "一致する画像がありません。", managePersonal: "マイ素材庫を管理",
   personalSwitchMode: "画像を選ぶと参考画像モードに切り替わります。", referenceCapacity: "このモードの画像数の上限に達しました。", personalTooLarge: "ファイルサイズの上限を超えています",

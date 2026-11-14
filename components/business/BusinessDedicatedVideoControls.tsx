@@ -7,7 +7,9 @@ import type { BusinessDedicatedVideoCapability, BusinessDedicatedVideoMode } fro
 import { useLocale } from "@/lib/i18n/client";
 import { businessDedicatedVideoCopy, type BusinessDedicatedVideoCopy } from "@/lib/i18n/businessDedicatedVideo";
 import { businessOperationsCopy } from "@/lib/i18n/businessOperations";
+import type { BusinessAssetRecord } from "./BusinessAssets";
 import type { BusinessAsset } from "./types";
+import { WAN3_REFERENCE_VIDEO_MAX_BYTES, wan3ReferenceVideoExtension } from "@/lib/businessWan3";
 import styles from "./BusinessDedicatedVideo.module.css";
 
 export interface BusinessDedicatedVideoOptions {
@@ -21,10 +23,19 @@ export const DEFAULT_BUSINESS_DEDICATED_VIDEO_OPTIONS: BusinessDedicatedVideoOpt
 interface PersonalLibrary {
   assets: readonly BusinessAsset[];
   selectedIds: readonly number[];
-  onToggle: (id: number) => void;
+  onToggle: (asset: BusinessAsset) => void;
   loading?: boolean;
   unavailable?: boolean;
   onRetry?: () => void;
+}
+interface VideoLibrary {
+  personal: readonly BusinessAsset[];
+  business: readonly BusinessAssetRecord[];
+  selected: ReadonlySet<string>;
+  loading?: boolean;
+  unavailable?: boolean;
+  onTogglePersonal: (asset: BusinessAsset) => void;
+  onToggleBusiness: (asset: BusinessAssetRecord) => void;
 }
 interface ReferenceItem {
   key: string;
@@ -41,6 +52,7 @@ interface Props {
   disabled?: boolean;
   onOpenAssets?: () => void;
   personalLibrary?: PersonalLibrary;
+  videoLibrary?: VideoLibrary;
   referenceItems?: readonly ReferenceItem[];
   onRemoveReference?: (key: string) => void;
   onMoveReference?: (key: string, direction: -1 | 1) => void;
@@ -51,46 +63,78 @@ const MODE_KEYS: Partial<Record<BusinessDedicatedVideoMode, keyof BusinessDedica
 const interpolate = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (match, key: string) => String(values[key] ?? match));
 const FALLBACK_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-function PersonalImagePicker({ library, copy, capacity, acceptedTypes, maxBytes, switchToReference, disabled }: {
+function ReferenceLibraryPicker({ library, videos, copy, capacity, videoCapacity, acceptedTypes, maxBytes, switchToReference, disabled }: {
   library: PersonalLibrary;
+  videos?: VideoLibrary;
   copy: BusinessDedicatedVideoCopy;
   capacity: boolean;
+  videoCapacity: boolean;
   acceptedTypes: readonly string[];
   maxBytes: number;
   switchToReference: boolean;
   disabled: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "image" | "video">("all");
   const images = library.assets.filter(asset => acceptedTypes.includes(asset.contentType ?? "image/png"));
+  const rows = [
+    ...(videos ? videos.personal.filter(asset => wan3ReferenceVideoExtension(asset.contentType)).map(asset => ({
+      key: `local:${asset.id}`, name: asset.name, type: "video", origin: copy.personalSource, src: undefined,
+      chosen: videos.selected.has(`local:${asset.id}`), tooLarge: Number(asset.size) > WAN3_REFERENCE_VIDEO_MAX_BYTES,
+      toggle: () => videos.onTogglePersonal(asset),
+    })) : []),
+    ...(videos ? videos.business.filter(asset => asset.uploadId).map(asset => ({
+      key: `business:${asset.uploadId}`, name: asset.name, type: "video", origin: copy.businessSource, src: undefined,
+      chosen: videos.selected.has(`business:${asset.uploadId}`), tooLarge: false,
+      toggle: () => videos.onToggleBusiness(asset),
+    })) : []),
+    ...images.map(asset => ({
+      key: `local:${asset.id}`, name: asset.name, type: "image", origin: copy.personalSource, src: asset.src,
+      chosen: library.selectedIds.includes(asset.id), tooLarge: Number(asset.size) > maxBytes,
+      toggle: () => library.onToggle(asset),
+    })),
+  ];
   const term = query.trim().toLocaleLowerCase();
-  const visible = term ? images.filter(asset => asset.name.toLocaleLowerCase().includes(term)) : images;
+  const activeFilter = videos ? filter : "all";
+  const visible = rows.filter(asset => (activeFilter === "all" || asset.type === activeFilter) && asset.name.toLocaleLowerCase().includes(term));
+  const loading = (activeFilter !== "video" && library.loading) || (activeFilter !== "image" && videos?.loading);
+  const unavailable = (activeFilter !== "video" && library.unavailable) || (activeFilter !== "image" && videos?.unavailable);
 
   return <details className={styles.personal}>
     <summary>{copy.personalLibrary}</summary>
     <div className={styles.personalBody}>
-      {switchToReference ? <p className={styles.note}>{copy.personalSwitchMode}</p> : null}
-      {images.length > 0 ? <label className={styles.field}>{copy.searchPersonal}
+      {switchToReference ? <p className={styles.note}>{videos ? copy.personalMixedSwitch : copy.personalSwitchMode}</p> : null}
+      {videos ? <div className={styles.libraryFilters} role="group" aria-label={copy.libraryFilter}>
+        {(["all", "image", "video"] as const).map(type => <button type="button" key={type} aria-pressed={filter === type} onClick={() => setFilter(type)}>
+          {type === "all" ? copy.libraryAll : type === "image" ? copy.libraryImages : copy.libraryVideos}
+        </button>)}
+      </div> : null}
+      {rows.length > 0 || videos ? <label className={styles.field}>{videos ? copy.searchMedia : copy.searchPersonal}
         <input type="search" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") event.preventDefault(); }} />
       </label> : null}
-      {library.loading ? <p className={styles.note} role="status">{copy.personalLoading}</p> : null}
-      {library.unavailable ? <p className={styles.warning} role="alert">{copy.personalUnavailable}</p> : null}
-      {!library.loading && !library.unavailable && visible.length === 0 ? <p className={styles.note}>{images.length ? copy.personalNoResults : copy.personalEmpty}</p> : null}
+      {loading ? <p className={styles.note} role="status">{copy.personalLoading}</p> : null}
+      {unavailable ? <p className={styles.warning} role="alert">{videos ? copy.libraryPartial : copy.personalUnavailable}</p> : null}
+      {!loading && visible.length === 0 ? <p className={styles.note}>{activeFilter === "video" && !term && !rows.some(row => row.type === "video") ? copy.noVideos
+        : videos ? copy.noMedia : !unavailable ? rows.length ? copy.personalNoResults : copy.personalEmpty : null}</p> : null}
       {visible.length > 0 ? <div className={styles.personalGrid}>{visible.map(asset => {
-        const chosen = library.selectedIds.includes(asset.id);
-        const tooLarge = Number(asset.size) > maxBytes;
-        const locked = disabled || !chosen && (capacity || tooLarge);
-        const hint = tooLarge ? copy.personalTooLarge : !chosen && capacity ? copy.referenceCapacity : asset.name;
-        return <button type="button" key={asset.id} className={styles.personalAsset} aria-pressed={chosen} disabled={locked}
-          title={hint} onClick={() => { if (!locked) library.onToggle(asset.id); }}>
-          <Image src={`/api/assets/${asset.id}/raw`} alt="" width={160} height={96} unoptimized loading="lazy" />
+        const video = asset.type === "video";
+        const full = video ? videoCapacity : capacity;
+        const locked = disabled || !asset.chosen && (full || asset.tooLarge);
+        const hint = asset.tooLarge ? copy.personalTooLarge : !asset.chosen && full ? video ? copy.videoCapacity : copy.referenceCapacity : asset.name;
+        return <button type="button" key={asset.key} className={styles.personalAsset} aria-pressed={asset.chosen} disabled={locked}
+          title={hint} onClick={asset.toggle}>
+          {asset.src ? <Image src={asset.src} alt="" width={160} height={96} unoptimized loading="lazy" />
+            : <span className={styles.videoTile} aria-hidden="true">▶</span>}
           <span className={styles.assetName}>{asset.name}</span>
-          {tooLarge ? <small className={styles.sizeWarning}>{copy.personalTooLarge}</small> : null}
-          {chosen ? <span className={styles.assetCheck} aria-hidden="true">✓</span> : null}
+          {video ? <small>{asset.origin}</small> : null}
+          {asset.tooLarge ? <small className={styles.sizeWarning}>{copy.personalTooLarge}</small> : null}
+          {asset.chosen ? <span className={styles.assetCheck} aria-hidden="true">✓</span> : null}
         </button>;
       })}</div> : null}
-      {capacity ? <p className={styles.note}>{copy.referenceCapacity}</p> : null}
+      {activeFilter !== "video" && capacity ? <p className={styles.note}>{copy.referenceCapacity}</p> : null}
+      {activeFilter !== "image" && videos && videoCapacity ? <p className={styles.note}>{copy.videoCapacity}</p> : null}
       <div className={styles.libraryActions}>
-        {library.onRetry ? <button type="button" disabled={library.loading} onClick={library.onRetry}>{copy.refreshPersonal}</button> : null}
+        {library.onRetry ? <button type="button" disabled={library.loading || videos?.loading} onClick={library.onRetry}>{copy.refreshPersonal}</button> : null}
         <Link className={styles.docs} href="/assets" target="_blank" rel="noopener">{copy.managePersonal} ↗</Link>
       </div>
     </div>
@@ -115,7 +159,7 @@ export function BusinessWan3DurationSelect({ capability, seconds, disabled, onCh
  * private asset picker and resets references when the creation mode changes.
  * This first UI surface intentionally does not advertise edit/continuation.
  */
-export default function BusinessDedicatedVideoControls({ capability, value, onChange, referenceCount = 0, disabled = false, onOpenAssets, personalLibrary, referenceItems, onRemoveReference, onMoveReference }: Props) {
+export default function BusinessDedicatedVideoControls({ capability, value, onChange, referenceCount = 0, disabled = false, onOpenAssets, personalLibrary, videoLibrary, referenceItems, onRemoveReference, onMoveReference }: Props) {
   const locale = useLocale();
   const t = businessDedicatedVideoCopy(locale);
   const wan22 = capability.family === "wan2.2";
@@ -131,7 +175,8 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
   const switchToReference = wan3 && mode === "text-to-video" && capability.modes.includes("subject-reference");
   const showPersonal = personalLibrary && (wan3 || wan22 || wan27) && (maximum > 0 || switchToReference);
   const personalLimit = switchToReference ? capability.maxReferenceImages : maximum;
-  const description = mode === "first-last-frame" ? t.framesInfo : mode === "image-to-video" ? t.imageInfo : mode === "subject-reference" ? t.referenceInfo : t.textInfo;
+  const description = mode === "first-last-frame" ? t.framesInfo : mode === "image-to-video" ? t.imageInfo : mode === "subject-reference" ? wan3 ? t.wan3ReferenceInfo : t.referenceInfo : t.textInfo;
+  const showVideos = wan3 && (mode === "subject-reference" || switchToReference);
   const update = (patch: Partial<BusinessDedicatedVideoOptions>) => { if (!disabled) onChange({ ...value, ...patch }); };
   // An unsupported capability has no active controls. Keep it out of the
   // ordinary generation UI until its required source-video picker is wired.
@@ -150,7 +195,7 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
     {maximum > 0 || showPersonal ? <div className={styles.references}>
       {maximum > 0 ? <span className={styles.count} role="status">{interpolate(t.selected, { count: imageCount, max: maximum })}
         {wan3 && mode === "subject-reference" ? ` · ${interpolate(t.wanVideoCount, { count: videoCount, max: capability.maxReferenceVideos })}` : ""}</span> : null}
-      {referenceItems?.length ? <ol className={styles.referenceOrder} aria-label={wan3 ? t.wanMixedMode : t.imageOrder}>{referenceItems.map((item, index) => {
+      {referenceItems?.length ? <ol className={styles.referenceOrder} aria-label={wan3 && mode === "subject-reference" ? t.wanMixedMode : t.imageOrder}>{referenceItems.map((item, index) => {
         const ordinal = referenceItems.slice(0, index + 1).filter(other => (other.type ?? "image") === (item.type ?? "image")).length;
         const label = mode === "image-to-video" || mode === "first-last-frame" && index === 0
           ? t.openingFrame
@@ -168,7 +213,8 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
           </div>
         </li>;
       })}</ol> : null}
-      {showPersonal ? <PersonalImagePicker library={personalLibrary} copy={t} capacity={imageCount >= personalLimit}
+      {showPersonal ? <ReferenceLibraryPicker library={personalLibrary} videos={showVideos ? videoLibrary : undefined} copy={t} capacity={imageCount >= personalLimit}
+        videoCapacity={videoCount >= capability.maxReferenceVideos}
         acceptedTypes={capability.referenceImageRules?.mimeTypes ?? FALLBACK_IMAGE_TYPES} maxBytes={capability.referenceImageRules?.maxBytes ?? 20 * 1024 * 1024}
         switchToReference={switchToReference} disabled={disabled} /> : null}
       {maximum > 0 || wan3 ? <>
@@ -176,7 +222,7 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
         {imageCount > maximum ? <p role="alert" className={styles.warning}>{t.referenceLimit}</p> : null}
         <p className={styles.note}>{wan3 ? t.wanVideoRules : t.assetsNote}</p>
         {wan3 || wan22 ? <p className={styles.note}>{t.wan3ImageRules}</p> : !wan27 ? <p className={styles.note}>{t.happyRules}</p> : null}
-        {!wan27 && mode === "subject-reference" ? <p className={styles.note}>{wan3 ? t.wan3ReferenceInfo : t.happyReferenceInfo}</p> : null}
+        {!wan27 && !wan3 && mode === "subject-reference" ? <p className={styles.note}>{t.happyReferenceInfo}</p> : null}
       </> : null}
     </div> : null}
     <details className={styles.advanced}>
