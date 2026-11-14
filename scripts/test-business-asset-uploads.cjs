@@ -69,15 +69,34 @@ if (process.env.WAN_VIDEO_FIXTURE) await test('Wan stores and serves a real vide
   assert.equal(complete.status, 200);
   assert.equal((await complete.json()).upload.status, 'active');
   assert.equal(providerCalls, 0);
-  const sources = await helper.resolveBusinessWanVideoSources(7,account,credential,[init.upload.id],true);
+  const sources = await helper.resolveBusinessWanMediaSources(7,account,credential,[init.upload.id],true,'video');
   assert(sources[0].duration >= 1 && sources[0].duration <= 15);
   const token = new URL(sources[0].url).pathname.split('/').at(-1);
   assert(token.endsWith('.mp4'));
   const response = await helper.businessUploadSourceResponse(token);
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
-  await rejected(helper.resolveBusinessWanVideoSources(99,account,credential,[init.upload.id],false),'invalid_reference');
+  await rejected(helper.resolveBusinessWanMediaSources(99,account,credential,[init.upload.id],false,'video'),'invalid_reference');
   adult=false;
   await rejected(helper.businessUploadSourceResponse(token),'not_found');
+});
+if (process.env.WAN_AUDIO_DIR) await test('Wan stores and serves real WAV and MP3 without provider registration', async () => {
+  for (const [name, type] of [['neutral-sound.wav','audio/wav'], ['neutral-sound.mp3','audio/mpeg']]) {
+    reset();
+    const bytes = fs.readFileSync(path.join(process.env.WAN_AUDIO_DIR, name));
+    const init = await initialize(1, { name, contentType: type, size: bytes.length });
+    store(init, bytes, type);
+    const complete = await route.POST(request({action:'complete',uploadId:init.upload.id,wanOriginal:true}));
+    assert.equal(complete.status, 200);
+    assert.equal((await complete.json()).upload.status, 'active');
+    assert.equal(providerCalls, 0);
+    const [audio] = await helper.resolveBusinessWanMediaSources(7,account,credential,[init.upload.id],true,'audio');
+    assert.equal(audio.type,'audio');
+    assert.ok(audio.duration >= 2 && audio.duration < 2.2);
+    const token = new URL(audio.url).pathname.split('/').at(-1);
+    assert.ok(token.endsWith(name.slice(-4)));
+    const response = await helper.businessUploadSourceResponse(token);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()),bytes);
+  }
 });
 await test('complete verifies bytes then registers once under concurrent calls',async()=>{const init=await initialize();store(init);const results=await Promise.all([helper.completeBusinessUpload(7,account,init.upload.id),helper.completeBusinessUpload(7,account,init.upload.id)]);assert.equal(providerCalls,1);assert.ok(results.some(r=>r.upload.status==='processing'));await helper.completeBusinessUpload(7,account,init.upload.id);assert.equal(providerCalls,1);assert.equal(rows.get(init.upload.id).provider_asset_id,'asset-fixture-1');});
 await test('forged file types, mismatched metadata and missing files fail before registration',async()=>{for(const mode of['html','size','mime','missing']){reset();const init=await initialize();if(mode!=='missing')store(init,mode==='html'?Buffer.from('<html>bad</html>'):mode==='size'?Buffer.concat([png,Buffer.from('x')]):png,mode==='mime'?'text/html':'image/png');await rejected(helper.completeBusinessUpload(7,account,init.upload.id));assert.equal(providerCalls,0);}});

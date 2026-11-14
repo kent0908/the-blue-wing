@@ -4,7 +4,7 @@ import { getBusinessDedicatedVideoCapability, type BusinessDedicatedVideoCapabil
 import { getBusinessWan3Capability } from "./businessWan3";
 import { getBusinessAdditionalModel } from "./businessAdditionalModels";
 import { getBusinessZImageCapability } from "./businessZImage";
-import { videoConstraintFor, maxRefsForVideoModel } from "./videoModels";
+import { videoConstraintFor } from "./videoModels";
 import { getKlingVideoModel } from "./klingVideo";
 import { getMiniMaxVideoModel } from "./minimaxVideo";
 import { isRetiredGenerationModel } from "./generationPickerModels";
@@ -85,7 +85,7 @@ export function buildBusinessModelCatalog(raw: unknown) {
       const caps = videoConstraintFor(id.replace(/^NSFW-/i, ""));
       if (caps.resolutions.length) {
         const veo = /^veo/i.test(id);
-        models.push({ ...common, modality: "video", ...caps, supportsReferences: maxRefsForVideoModel(id) > 0, aspectRatios: veo ? ["16:9", "9:16"] : ["16:9", "9:16", "1:1"], supportsAudio: veo, defaultSeconds: veo ? 8 : 5, maxReferenceImages: 4, ...(veo ? { secondsOptions: [4, 6, 8] } : {}) }); continue;
+        models.push({ ...common, modality: "video", ...caps, supportsReferences: true, aspectRatios: veo ? ["16:9", "9:16"] : ["16:9", "9:16", "1:1"], supportsAudio: veo || /seedance-1\.5-pro/i.test(id), defaultSeconds: veo ? 8 : 5, maxReferenceImages: 1, ...(veo ? { secondsOptions: [4, 6, 8] } : {}) }); continue;
       }
     }
     if (kind === "text") { models.push({ ...common, modality: "text", supportsReferences: false }); continue; }

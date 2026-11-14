@@ -13,7 +13,7 @@ import picker from "./BusinessPrompt.module.css";
 export interface MentionCandidate {
   key: string;
   name: string;
-  type?: "image" | "video";
+  type?: "image" | "video" | "audio";
   src?: string;
   localId?: number;
   personalAsset?: BusinessAsset;
@@ -68,18 +68,18 @@ function listCandidates(
 
   if (mode !== "local") {
     for (const upload of uploads) {
-      if (upload.type !== "image" && !(includeVideo && upload.type === "video")) continue;
       const approved = mode === "seedance" && upload.asset?.status === "active" ? upload.asset : undefined;
+      if (upload.type !== "image" && !((includeVideo || approved) && (upload.type === "video" || upload.type === "audio"))) continue;
       if (!upload.storageReady && !approved) continue;
       const uploadKey = `business:${upload.id}`;
       const useProvider = approved && !selectedKeys?.has(uploadKey);
       const key = useProvider ? `provider:${approved.id}` : uploadKey;
       if (approved) seenProvider.add(approved.id);
       candidates.set(key, {
-        key, name: upload.name, type: upload.type === "video" ? "video" : "image",
+        key, name: upload.name, type: upload.type === "video" || upload.type === "audio" ? upload.type : "image",
         src: upload.storageReady && upload.type === "image" ? `/api/business/provider-assets/uploads/${upload.id}/preview` : undefined,
         asset: {
-          ...(upload.asset ?? { id: `upload:${upload.id}`, type: upload.type as "image" | "video", name: upload.name, status: upload.status }),
+          ...(upload.asset ?? { id: `upload:${upload.id}`, type: upload.type as "image" | "video" | "audio", name: upload.name, status: upload.status }),
           uploadId: upload.id, storageReady: upload.storageReady,
         },
       });
@@ -87,9 +87,9 @@ function listCandidates(
   }
   if (mode === "seedance") {
     for (const asset of reviewed) {
-      if (asset.type !== "image" || asset.status !== "active" || seenProvider.has(asset.id)) continue;
+      if (asset.status !== "active" || seenProvider.has(asset.id)) continue;
       const key = `provider:${asset.id}`;
-      candidates.set(key, { key, name: asset.name, asset });
+      candidates.set(key, { key, name: asset.name, type: asset.type, asset });
     }
   }
   if (mode !== "native") {
@@ -123,18 +123,18 @@ function PictureIcon() {
   </svg>;
 }
 
-function Thumbnail({ src, video }: { src?: string; video?: boolean }) {
+function Thumbnail({ src, type }: { src?: string; type?: MentionCandidate["type"] }) {
   const [failed, setFailed] = useState(false);
   return <span className={picker.thumbnail}>
     {src && !failed
       ? <Image src={src} alt="" width={48} height={48} unoptimized loading="lazy" onError={() => setFailed(true)} />
-      : video ? <span aria-hidden="true">▶</span> : <PictureIcon />}
+      : type === "video" || type === "audio" ? <span aria-hidden="true">{type === "video" ? "▶" : "♪"}</span> : <PictureIcon />}
   </span>;
 }
 
 export default function BusinessPrompt(props: Props) {
   const locale = useLocale();
-  const t = businessMentionsCopy(locale, props.includeVideo);
+  const t = businessMentionsCopy(locale, props.includeVideo || props.mode === "seedance");
   const id = useId();
   const listId = `${id}-list`;
   const field = useRef<HTMLDivElement>(null);
@@ -171,7 +171,7 @@ export default function BusinessPrompt(props: Props) {
       mode !== "native" && load<BusinessAsset>("/api/assets", "assets", setLocal),
       mode !== "native" && props.includeVideo && load<BusinessAsset>("/api/assets?media=wan-video", "assets", setLocalVideos),
       mode !== "local" && load<Upload>("/api/business/provider-assets/upload", "uploads", setUploads),
-      mode === "seedance" && load<BusinessAssetRecord>("/api/business/provider-assets?assetType=image&status=active&pageSize=100", "assets", setReviewed),
+      mode === "seedance" && load<BusinessAssetRecord>("/api/business/provider-assets?status=active&pageSize=100", "assets", setReviewed),
     ];
     void Promise.all(requests).then(() => { if (!signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -318,10 +318,10 @@ export default function BusinessPrompt(props: Props) {
           {matches.map((candidate, position) => <button type="button" role="option" tabIndex={-1}
             aria-selected={position === activeIndex} id={`${id}-option-${position}`} key={candidate.key}
             className={picker.option} onMouseDown={event => event.preventDefault()} onClick={() => choose(candidate)}>
-            <Thumbnail key={candidate.src} src={candidate.src} video={candidate.type === "video"} />
+            <Thumbnail key={candidate.src} src={candidate.src} type={candidate.type} />
             <span className={picker.identity}>
               <span className={picker.name} title={candidate.name}>{candidate.name}</span>
-              <small>{candidate.type === "video" ? `${t.video} · ` : ""}{candidate.localId ? t.personal : candidate.key.startsWith("provider:") ? t.reviewed : t.business}</small>
+              <small>{candidate.type && candidate.type !== "image" ? `${t[candidate.type]} · ` : ""}{candidate.localId ? t.personal : candidate.key.startsWith("provider:") ? t.reviewed : t.business}</small>
             </span>
             {props.selectedKeys?.has(candidate.key)
               ? <span className={picker.selected}><span aria-hidden="true">✓</span>{t.selected}</span>

@@ -83,7 +83,12 @@ for (const mode of ["freestyle", "subject-reference", undefined]) {
 reject(base, [...ten, first]);
 reject(base, new Array(1));
 reject(null);
-for (const type of ["audio", "document"]) assert.throws(() => validateRefs("subject-reference", [{ type }]), expectedError);
+assert.throws(() => validateRefs("subject-reference", [{ type: "document" }]), expectedError);
+const sound = { type: "audio", url: "https://owned.invalid/texture.wav", duration: 3 };
+assert.deepEqual(build({ ...base, mode: "subject-reference" }, [first, sound]).reference_audios, [sound.url]);
+reject({ ...base, mode: "image-to-video" }, [sound]);
+reject(base, [{ ...sound, duration: 16 }]);
+reject(base, Array.from({ length: 6 }, () => sound));
 const clip = { type: "video", url: "https://owned.invalid/a.mp4", duration: 5 };
 const clipTwo = { ...clip, url: "https://owned.invalid/b.mov", duration: 8 };
 const mixed = build({ ...base, model: "wan3.0-video-prime-spicy", mode: "subject-reference", seconds: 10 }, [clipTwo, last, clip, first]);

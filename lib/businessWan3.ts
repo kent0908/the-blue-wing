@@ -20,6 +20,7 @@ export type BusinessWan3Mode = typeof WAN3_MODES[number];
 const RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "adaptive"];
 const MAX_IMAGES = 10;
 export const WAN3_MAX_REFERENCE_VIDEOS = 5;
+export const WAN3_MAX_REFERENCE_AUDIO = 5;
 export const WAN3_MAX_REFERENCE_SECONDS = 15;
 export const WAN3_REFERENCE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const WAN3_REFERENCE_VIDEO_EXTENSIONS: Readonly<Record<string, string>> = Object.freeze({
@@ -49,7 +50,7 @@ export function getBusinessWan3Capability(model: string | null | undefined) {
     resolutions: pro ? ["1080p", "2k", "4k"] : ["480p", "720p", "1080p"], defaultResolution: "1080p",
     minSeconds: 2, maxSeconds: 30, defaultSeconds: 5, sourceDuration: false, autoDuration: true,
     aspectRatios: [...RATIOS], aspectRatioFromSource: false,
-    maxReferenceImages: MAX_IMAGES, maxReferenceVideos: WAN3_MAX_REFERENCE_VIDEOS, maxReferenceAudio: 0,
+    maxReferenceImages: MAX_IMAGES, maxReferenceVideos: WAN3_MAX_REFERENCE_VIDEOS, maxReferenceAudio: WAN3_MAX_REFERENCE_AUDIO,
     acceptsReferenceOrder: true, supportsPersonalReferences: true,
     supportsAudio: true, modes: [...WAN3_MODES], promptMaxChars: MAX_PROMPT,
     // Use the intersection with the app's inspected image formats.
@@ -71,14 +72,15 @@ export class BusinessWan3ParameterError extends Error {
 function bad(): never { throw new BusinessWan3ParameterError(); }
 
 export function assertBusinessWan3References(mode: unknown, refs: readonly RefType[]): void {
-  if (!Array.isArray(refs) || refs.length > MAX_IMAGES + WAN3_MAX_REFERENCE_VIDEOS) bad();
-  for (const ref of refs) if (!ref || !["image", "video"].includes(ref.type) || ref.voiceUrl !== undefined) bad();
+  if (!Array.isArray(refs) || refs.length > MAX_IMAGES + WAN3_MAX_REFERENCE_VIDEOS + WAN3_MAX_REFERENCE_AUDIO) bad();
+  for (const ref of refs) if (!ref || !["image", "video", "audio"].includes(ref.type) || ref.voiceUrl !== undefined) bad();
   const videos = refs.filter(ref => ref.type === "video").length;
-  if (videos > WAN3_MAX_REFERENCE_VIDEOS || refs.length - videos > MAX_IMAGES) bad();
+  const audios = refs.filter(ref => ref.type === "audio").length;
+  if (videos > WAN3_MAX_REFERENCE_VIDEOS || audios > WAN3_MAX_REFERENCE_AUDIO || refs.length - videos - audios > MAX_IMAGES) bad();
   const effective = mode === undefined || mode === "freestyle" ? (refs.length ? "subject-reference" : "text-to-video") : mode;
   if (effective === "text-to-video" && refs.length === 0) return;
-  if (effective === "image-to-video" && refs.length === 1 && videos === 0) return;
-  if (effective === "first-last-frame" && refs.length === 2 && videos === 0) return;
+  if (effective === "image-to-video" && refs.length === 1 && videos + audios === 0) return;
+  if (effective === "first-last-frame" && refs.length === 2 && videos + audios === 0) return;
   if (effective === "subject-reference" && refs.length > 0) return;
   bad();
 }
@@ -112,6 +114,9 @@ export function buildBusinessWan3Payload(parameters: Record<string, unknown>, re
   if (clips.some(({ duration }) => !Number.isFinite(duration) || duration! < 1 || duration! > WAN3_MAX_REFERENCE_SECONDS)) bad();
   const inputSeconds = clips.reduce((sum, clip) => sum + clip.duration!, 0);
   if (inputSeconds > WAN3_MAX_REFERENCE_SECONDS || (seconds !== -1 && inputSeconds + seconds > 30)) bad();
+  const audioDurations = refs.flatMap(ref => ref.type === "audio" && ref.duration !== undefined ? [ref.duration] : []);
+  if (audioDurations.some(duration => !Number.isFinite(duration) || duration < 1 || duration > WAN3_MAX_REFERENCE_SECONDS) ||
+      audioDurations.reduce((sum, duration) => sum + duration, 0) > WAN3_MAX_REFERENCE_SECONDS) bad();
   const resolution = parameters.resolution === undefined ? caps.defaultResolution : parameters.resolution;
   if (typeof resolution !== "string" || !caps.resolutions.includes(resolution)) bad();
   const isFrameMode = mode === "image-to-video" || mode === "first-last-frame";
@@ -135,8 +140,10 @@ export function buildBusinessWan3Payload(parameters: Record<string, unknown>, re
   } else if (refs.length) {
     const images = refs.filter(ref => ref.type === "image");
     const videos = refs.filter(ref => ref.type === "video");
+    const audios = refs.filter(ref => ref.type === "audio");
     if (images.length) payload.reference_images = images.map(ref => ref.url);
     if (videos.length) payload.reference_videos = videos.map(ref => ref.url);
+    if (audios.length) payload.reference_audios = audios.map(ref => ref.url);
   }
   return payload;
 }

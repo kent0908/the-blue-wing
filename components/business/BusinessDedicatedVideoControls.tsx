@@ -171,7 +171,8 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
   const maximum = mode === "text-to-video" ? 0 : mode === "image-to-video" ? 1 : mode === "first-last-frame" ? 2 : capability.maxReferenceImages;
   const selectedCount = referenceItems?.length ?? referenceCount;
   const videoCount = referenceItems?.filter(item => item.type === "video").length ?? 0;
-  const imageCount = selectedCount - videoCount;
+  const audioCount = referenceItems?.filter(item => item.type === "audio").length ?? 0;
+  const imageCount = selectedCount - videoCount - audioCount;
   const switchToReference = wan3 && mode === "text-to-video" && capability.modes.includes("subject-reference");
   const showPersonal = personalLibrary && (wan3 || wan22 || wan27) && (maximum > 0 || switchToReference);
   const personalLimit = switchToReference ? capability.maxReferenceImages : maximum;
@@ -194,13 +195,13 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
     {capability.aspectRatioFromSource ? <p className={styles.note}>{t.sourceRatio}</p> : null}
     {maximum > 0 || showPersonal ? <div className={styles.references}>
       {maximum > 0 ? <span className={styles.count} role="status">{interpolate(t.selected, { count: imageCount, max: maximum })}
-        {wan3 && mode === "subject-reference" ? ` · ${interpolate(t.wanVideoCount, { count: videoCount, max: capability.maxReferenceVideos })}` : ""}</span> : null}
+        {wan3 && mode === "subject-reference" ? ` · ${interpolate(t.wanVideoCount, { count: videoCount, max: capability.maxReferenceVideos })} · ${interpolate(t.wanAudioCount, { count: audioCount, max: capability.maxReferenceAudio })}` : ""}</span> : null}
       {referenceItems?.length ? <ol className={styles.referenceOrder} aria-label={wan3 && mode === "subject-reference" ? t.wanMixedMode : t.imageOrder}>{referenceItems.map((item, index) => {
         const ordinal = referenceItems.slice(0, index + 1).filter(other => (other.type ?? "image") === (item.type ?? "image")).length;
         const label = mode === "image-to-video" || mode === "first-last-frame" && index === 0
           ? t.openingFrame
           : mode === "first-last-frame" && index === 1 ? t.closingFrame
-          : wan3 ? `${item.type === "video" ? "Video" : "Image"} ${ordinal}` : interpolate(t.referenceNumber, { index: index + 1 });
+          : wan3 ? `${item.type === "audio" ? "Audio" : item.type === "video" ? "Video" : "Image"} ${ordinal}` : interpolate(t.referenceNumber, { index: index + 1 });
         return <li key={item.key} className={styles.referenceItem}>
           {item.src ? <Image src={item.src} alt="" width={48} height={48} unoptimized /> : null}
           <div className={styles.referenceIdentity}><strong>{label}</strong><span>{item.name}</span><small>{item.source === "personal" ? t.personalSource : t.businessSource}</small></div>
@@ -221,6 +222,7 @@ export default function BusinessDedicatedVideoControls({ capability, value, onCh
         {onOpenAssets ? <button type="button" onClick={onOpenAssets}>{t.openAssets}</button> : null}
         {imageCount > maximum ? <p role="alert" className={styles.warning}>{t.referenceLimit}</p> : null}
         <p className={styles.note}>{wan3 ? t.wanVideoRules : t.assetsNote}</p>
+        {showVideos ? <p className={styles.note}>{t.wanAudioRules}</p> : null}
         {wan3 || wan22 ? <p className={styles.note}>{t.wan3ImageRules}</p> : !wan27 ? <p className={styles.note}>{t.happyRules}</p> : null}
         {!wan27 && !wan3 && mode === "subject-reference" ? <p className={styles.note}>{t.happyReferenceInfo}</p> : null}
       </> : null}

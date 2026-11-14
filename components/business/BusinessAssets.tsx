@@ -9,7 +9,7 @@ import type { BusinessProviderAsset } from "./types";
 import styles from "./BusinessAssets.module.css";
 
 export type BusinessAssetRecord = BusinessProviderAsset & { uploadId?: string; storageReady?: boolean; providerReady?: boolean };
-interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; wanReferences?: boolean; onChanged?: () => void }
+interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; wanReferences?: boolean; seedanceReferences?: boolean; onChanged?: () => void }
 interface UploadRecord { id: string; uploadId: string; name: string; type: "image" | "video" | "audio"; status: string; storageReady: boolean; asset?: BusinessAssetRecord; errorCode?: string }
 interface UploadConfig { directUpload: boolean; types: Record<string, { type: string; maxBytes: number; ext: string }>; uploads?: UploadRecord[] }
 type Filters = { type: string; status: string; name: string };
@@ -17,13 +17,13 @@ const HEADERS={"Content-Type":"application/json"};
 const interpolate=(text:string,values:Record<string,string|number>)=>text.replace(/\{(\w+)\}/g,(match,key:string)=>String(values[key]??match));
 function AssetIcon({type}:{type:string}){return <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.2">{type==="image"?<><rect x="7" y="9" width="34" height="30" rx="1"/><circle cx="17" cy="18" r="3"/><path d="m9 35 10-11 7 6 6-10 7 15"/></>:type==="video"?<><rect x="7" y="11" width="34" height="26" rx="1"/><path d="m20 18 11 6-11 6Z"/></>:<><path d="M18 34V13l19-4v22M18 20l19-4"/><ellipse cx="12" cy="35" rx="6" ry="4"/><ellipse cx="31" cy="32" rx="6" ry="4"/></>}</svg>;}
 const typedFile=(file:File)=>{
-  if(file.type)return file;
+  if(file.type&&file.type!=="application/octet-stream"&&file.type!=="audio/mp3"&&file.type!=="audio/vnd.wave")return file;
   const ext=file.name.toLowerCase().split(".").pop()??"";
   const mime:Record<string,string>={png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp",gif:"image/gif",mp4:"video/mp4",mov:"video/quicktime",mp3:"audio/mpeg",wav:"audio/wav"};
   return mime[ext]?new File([file],file.name,{type:mime[ext]}):file;
 };
 
-export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,wanReferences=false,onChanged}:Props){
+export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,wanReferences=false,seedanceReferences=false,onChanged}:Props){
   const t=businessAssetsCopy(useLocale());
   const [config,setConfig]=useState<UploadConfig|null>(null);
   const [catalog,setCatalog]=useState<BusinessAssetRecord[]>([]);
@@ -103,7 +103,6 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     const normalized=values.map(typedFile);
     if(normalized.some(file=>!config?.types[file.type]||file.size<=0||file.size>config.types[file.type].maxBytes)){setError("business_asset_upload_invalid");return;}
     if(imageOnly&&normalized.some(file=>!file.type.startsWith("image/"))){setError("business_asset_upload_invalid");return;}
-    if(wanReferences&&normalized.some(file=>!["image/png","image/jpeg","image/webp","image/gif","video/mp4","video/quicktime"].includes(file.type))){setError("business_asset_upload_invalid");return;}
     setFiles(normalized);setConsent(false);setError("");setNotice("");
   }
   function rememberUpload(value:UploadRecord){setUploads(previous=>[value,...previous.filter(item=>item.id!==value.id)].slice(0,60));}
@@ -161,7 +160,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   }
   async function recoverUpload(item:UploadRecord){
     if(refreshingId)return;setRefreshingId(item.id);setError("");setNotice("");
-    try{const value=await apiUpload({action:"complete",uploadId:item.id,...(wanReferences&&item.type!=="audio"?{wanOriginal:true}:{})});rememberUpload(value.upload);if(["created","unknown","registering"].includes(value.upload.status))setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");else{setNotice(t.uploadFinished);void loadCatalog(1,committed.current);}onChanged?.();}
+    try{const value=await apiUpload({action:"complete",uploadId:item.id,...(wanReferences?{wanOriginal:true}:{})});rememberUpload(value.upload);if(["created","unknown","registering"].includes(value.upload.status))setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");else{setNotice(t.uploadFinished);void loadCatalog(1,committed.current);}onChanged?.();}
     catch(error){setError(error instanceof Error?error.message:"business_asset_upload_uncertain");}
     finally{setRefreshingId("");}
   }
@@ -181,9 +180,9 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     const original=uploads.find(item=>item.asset?.id===asset.id);
     return {...asset,providerReady:asset.status==="active",...(original?{uploadId:original.id,storageReady:original.storageReady}:{})};
   }),...uploads.filter(item=>item.storageReady&&(!item.asset||!known.has(item.asset.id))).map(item=>({id:`upload:${item.id}`,name:item.name,type:item.type,status:item.status,uploadId:item.id,storageReady:true,providerReady:false}))]
-    .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(!wanReferences||asset.type!=="audio")&&(status==="all"||asset.status===status||(imageOnly||wanReferences)&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
+    .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||(imageOnly||wanReferences)&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
   const statusText=(value:string)=>value==="active"?t.active:value==="processing"||value==="registering"?t.processing:value==="created"?t.created:value==="unknown"?t.unknown:t.failed;
-  const accept=Object.keys(config?.types??{}).filter(mime=>(!imageOnly||mime.startsWith("image/"))&&(!wanReferences||!mime.startsWith("audio/"))).join(",");
+  const accept=Object.keys(config?.types??{}).filter(mime=>!imageOnly||mime.startsWith("image/")).join(",");
   const pendingUploads=uploads.filter(item=>["created","registering","unknown"].includes(item.status));
 
   return <section className={`${styles.assets} ${compact?styles.compact:""}`} aria-label={t.title}>
@@ -203,20 +202,20 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
         <button type="button" className={styles.primary} disabled={uploading||!consent||!config?.directUpload} onClick={()=>void uploadFiles()}>{uploading?t[stage]:interpolate(t.uploadSelected,{n:files.length})}</button>
       </>}
       {uploading&&<div className={styles.uploadProgress} role="status"><span>{fileName}</span><progress aria-label={t.progress} max={100} value={stage==="registering"?100:progress}/></div>}
-      <details className={styles.help}><summary>{t.uploadHelp}</summary><p>{imageOnly?t.imageFormats:t.formats} {t.noGeneration}</p><p>{t.providerNotice}</p></details>
+      <details className={styles.help}><summary>{t.uploadHelp}</summary><p>{imageOnly?t.imageFormats:t.formats} {t.noGeneration}</p>{!wanReferences&&<p>{t.providerNotice}</p>}</details>
     </div>
     {error&&<p className={styles.error} role="alert">{error==="too_many_files"?t.tooMany:businessAssetsError(t,error)}{error==="credential_required"&&<> <a href="/business?tab=key">{t.keyLink} ↗</a></>}</p>}
     {notice&&<p className={styles.success} role="status">{notice}</p>}
     {!!pendingUploads.length&&<details className={styles.recent}><summary>{t.pendingTitle} · {pendingUploads.length}</summary><ul>{pendingUploads.map(item=><li key={item.id}><span>{item.name}<small>{statusText(item.status)}</small></span><button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>void recoverUpload(item)}>{refreshingId===item.id?t.loading:t.recover}</button></li>)}</ul></details>}
     <div className={styles.libraryHeader}>
-      <div className={styles.types} role="group" aria-label={t.source}>{(imageOnly?["image"]:wanReferences?["all","image","video"]:["all","image","video","audio"]).map(value=><button type="button" key={value} aria-pressed={type===value} onClick={()=>{setType(value);void loadCatalog(1,{type:value,status,name:query});}}>{t[value as "all"|"image"|"video"|"audio"]}</button>)}</div>
+      <div className={styles.types} role="group" aria-label={t.source}>{(imageOnly?["image"]:["all","image","video","audio"]).map(value=><button type="button" key={value} aria-pressed={type===value} onClick={()=>{setType(value);void loadCatalog(1,{type:value,status,name:query});}}>{t[value as "all"|"image"|"video"|"audio"]}</button>)}</div>
       <button type="button" className={styles.textButton} disabled={loading||uploading||!!refreshingId} onClick={()=>{void loadConfig();void loadCatalog();}}>{loading?t.loading:t.refresh}</button>
     </div>
     <form className={styles.searchRow} role="search" aria-label={t.search} onSubmit={event=>{event.preventDefault();void loadCatalog(1,{type,status,name:query});}}><input type="search" maxLength={120} aria-label={t.search} placeholder={t.search} value={query} onChange={event=>setQuery(event.target.value)}/><button type="submit" className={styles.small} disabled={loading}>{t.searchButton}</button><select aria-label={t.status} value={status} onChange={event=>{setStatus(event.target.value);void loadCatalog(1,{type,status:event.target.value,name:query});}}><option value="all">{t.allStatus}</option><option value="active">{t.active}</option><option value="processing">{t.processing}</option><option value="failed">{t.failed}</option></select></form>
     {catalogError&&<p className={styles.error} role="alert">{businessAssetsError(t,catalogError)}{catalogError==="credential_required"&&<> <a href="/business?tab=key">{t.keyLink} ↗</a></>}</p>}
     {!material.length&&!loading&&!catalogError?<div className={styles.empty}><h3>{appliedQuery||status!=="all"||type!=="all"&&!imageOnly?t.noResults:t.empty}</h3></div>:<div className={styles.grid} aria-busy={loading}>{material.map(asset=>{
       const selected=selectedIds.includes(asset.id)||!!asset.uploadId&&selectedIds.includes(asset.uploadId);
-      const available=imageOnly||wanReferences?!!asset.uploadId&&!!asset.storageReady:!!asset.providerReady;
+      const available=imageOnly||wanReferences?!!asset.uploadId&&!!asset.storageReady:!!asset.providerReady||seedanceReferences&&asset.type==="image"&&!!asset.storageReady;
       const disabled=!selected&&(!available||canSelect?.(asset)===false);
       const disabledReason=wanReferences&&!asset.uploadId?t.wanOriginalRequired:imageOnly&&!asset.uploadId?t.nativeRequired:!available?t.readyOnly:t.capacity;
       return <article className={styles.card} key={asset.id} data-selected={selected}>

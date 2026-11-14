@@ -13,7 +13,7 @@ export interface BusinessPriceSettings {
   rewrite: boolean;
 }
 
-export type BusinessPriceUnit = "second" | "image" | "request" | "input" | "output" | "imageInput" | "imageOutput" | "reasoning" | "cache";
+export type BusinessPriceUnit = "second" | "videoTotal" | "image" | "request" | "input" | "output" | "imageInput" | "imageOutput" | "audioInput" | "videoInput" | "reasoning" | "cache" | "cacheAudio" | "cacheImage" | "cacheVideo" | "cacheWrite" | "cacheWrite5m" | "cacheWrite60m";
 interface PriceLine { unit: BusinessPriceUnit; price: string; scale: number }
 export interface PriceRule {
   conditions: unknown[];
@@ -28,12 +28,14 @@ export interface BusinessPricePreview {
 }
 
 const units: Record<string, BusinessPriceUnit> = {
-  video_seconds: "second", image_generation: "image", request_count: "request", requests: "request",
+  video_seconds: "second", video_total_duration: "videoTotal", image_generation: "image", request_count: "request", requests: "request", request: "request",
   input_tokens: "input", output_tokens: "output", video_tokens: "output", output_video_tokens: "output",
   input_image_tokens: "imageInput", image_input_tokens: "imageInput", output_image_tokens: "imageOutput", image_output_tokens: "imageOutput",
-  reasoning_tokens: "reasoning", cache_read_tokens: "cache", cache_image_tokens: "cache", cache_write_tokens: "cache",
+  input_audio_tokens: "audioInput", input_video_tokens: "videoInput",
+  reasoning_tokens: "reasoning", cache_read_tokens: "cache", cache_image_tokens: "cacheImage", cache_audio_tokens: "cacheAudio", cache_video_tokens: "cacheVideo",
+  cache_write_tokens: "cacheWrite", "cache_write_tokens_(5_minutes)": "cacheWrite5m", "cache_write_tokens_(60_minutes)": "cacheWrite60m",
 };
-const tokenUnit = (unit: BusinessPriceUnit) => !["second", "image", "request"].includes(unit);
+const tokenUnit = (unit: BusinessPriceUnit) => !["second", "videoTotal", "image", "request"].includes(unit);
 const object = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 const keyOf = (value: string) => value.trim().toLowerCase().replace(/[ -]+/g, "_");
@@ -128,9 +130,12 @@ function costsForRule(rule: PriceRule, settings: BusinessPriceSettings) {
   if (!rule.complete || settings.rewrite) return;
   const { lines } = rule;
   const line = lines[0];
+  if (!line) return;
   const charge = (price: PriceLine, count: number) => toDecimal(price.price)! * BigInt(count) / BigInt(price.scale);
   const cost = (basis: NonNullable<BusinessPricePreview["total"]>["basis"], amount: bigint) => ({ basis, amounts: [amount] });
-  if (lines.length === 1 && line.unit === "second" && settings.kind === "video" && positiveInt(settings.seconds) && !settings.videoInput)
+  // Wan 3.0's output-seconds meter is distinct from the combined-duration meter.
+  const fixedWanOutput = /^wan3\.0-video(?:-(?:prime(?:-pro)?|pro))?(?:-spicy)?$/.test(settings.model) && line.unit === "second";
+  if (lines.length === 1 && (line.unit === "second" || line.unit === "videoTotal") && settings.kind === "video" && positiveInt(settings.seconds) && (!settings.videoInput || fixedWanOutput))
     return cost("seconds", charge(line, settings.seconds));
   if (lines.length === 1 && line.unit === "image" && settings.kind === "image" && positiveInt(settings.count) &&
       // Seedream Pro can add reference-image fees outside the displayed base rate.

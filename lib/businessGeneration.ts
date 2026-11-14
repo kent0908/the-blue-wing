@@ -12,7 +12,7 @@ import { buildBusinessWan3Payload, getBusinessWan3Capability, isBusinessWan3Spic
 import { buildBusinessZImagePayload, type BusinessZImageCapability } from "./businessZImage";
 import { getBusinessProviderAsset, resolveBusinessProviderAssets, type BusinessProviderAssetReference } from "./businessProviderAssets";
 import { createBusinessReferenceUrls } from "./businessReferenceUrls";
-import { resolveBusinessUploadSources, resolveBusinessWanVideoSources, reusableBusinessUploads } from "./businessAssetUploads";
+import { resolveBusinessUploadSources, resolveBusinessWanMediaSources, reusableBusinessUploads } from "./businessAssetUploads";
 import { resolveBusinessGeneratedImageSources, reusableBusinessGeneratedImageIds } from "./businessGeneratedReferences";
 import { snapshotBusinessGeneration, type BusinessGenerationReuseSnapshot } from "./businessGenerationReuse";
 import { validateGeneration } from "./generationValidation";
@@ -102,7 +102,7 @@ function validateSubmission(value: unknown) {
   const kind = value.kind as BusinessKind;
   const parameters = { ...value.parameters };
   const allowed = kind === "image" ? ["model", "prompt", "size", "n", "quality", "negative_prompt", "seed", "assetIds", "businessAssetIds", "referenceGenerationIds", "background", "output_format", "output_compression", "moderation", "prompt_extend"] :
-    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "personalVideoIds", "businessAssetIds", "businessVideoIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
+    kind === "video" ? ["model", "prompt", "seconds", "resolution", "aspect_ratio", "generate_audio", "negative_prompt", "seed", "watermark", "prompt_extend", "assetIds", "personalVideoIds", "businessAssetIds", "businessVideoIds", "businessAudioIds", "referenceGenerationIds", "mode", "providerAssets", "output_format", "referenceOrder"] :
     ["model", "prompt", "max_tokens", "temperature"];
   if (Object.keys(parameters).some(key => !allowed.includes(key)) || typeof parameters.model !== "string" ||
     !/^[a-zA-Z0-9._:-]{1,150}$/.test(parameters.model) || typeof parameters.prompt !== "string" ||
@@ -138,6 +138,16 @@ function validateSubmission(value: unknown) {
     if (!capability || !Array.isArray(ids) || ids.length + businessClips.length > capability.maxReferenceVideos ||
       ids.some(id => typeof id !== "number" || !Number.isSafeInteger(id) || id < 1 || imageIds.includes(id)) ||
       new Set(ids).size !== ids.length) fail("invalid_reference");
+  }
+  if (parameters.businessAudioIds !== undefined) {
+    const capability = getBusinessWan3Capability(parameters.model);
+    const ids = parameters.businessAudioIds;
+    if (!capability || !Array.isArray(ids) || ids.length > capability.maxReferenceAudio ||
+      ids.some(id => typeof id !== "string" || !UUID.test(id))) fail("invalid_reference");
+    const normalized = ids.map(id => (id as string).toLowerCase());
+    const all = [...(parameters.businessAssetIds as string[] ?? []), ...(parameters.businessVideoIds as string[] ?? []), ...normalized];
+    if (new Set(all).size !== all.length) fail("invalid_reference");
+    parameters.businessAudioIds = normalized;
   }
   if (parameters.referenceGenerationIds !== undefined) {
     if (!Array.isArray(parameters.referenceGenerationIds) || parameters.referenceGenerationIds.length > sourceImageLimit || parameters.referenceGenerationIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
@@ -228,17 +238,20 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
       (!acceptsReferenceOrder && parameters.referenceOrder !== undefined)) fail();
     const localIds = assetIds ?? [];
     const personalClips = (parameters.personalVideoIds ?? []) as number[];
+    const audioIds = (parameters.businessAudioIds ?? []) as string[];
     const clipKeys = new Set([...personalClips.map(id => `local:${id}`), ...ownClips.map(id => `business:${id}`)]);
-    const keys = [...localIds.map(id => `local:${id}`), ...ownUploads.map(id => `business:${id}`), ...clipKeys, ...generatedIds.map(id => `generated:${id}`)];
+    const audioKeys = new Set(audioIds.map(id => `business:${id}`));
+    const keys = [...localIds.map(id => `local:${id}`), ...ownUploads.map(id => `business:${id}`), ...clipKeys, ...audioKeys, ...generatedIds.map(id => `generated:${id}`)];
     const referenceOrder = (parameters.referenceOrder ?? keys) as string[];
     if (referenceOrder.length !== keys.length || referenceOrder.some(key => !keys.includes(key))) fail("invalid_reference");
     delete adapterParameters.assetIds;
     delete adapterParameters.referenceOrder;
     delete adapterParameters.personalVideoIds;
     delete adapterParameters.businessVideoIds;
+    delete adapterParameters.businessAudioIds;
     const buildPayload = family === "wan3.0" ? buildBusinessWan3Payload : buildBusinessDedicatedVideoPayload;
     const types = referenceOrder.map((key, index) => ({
-      type: clipKeys.has(key) ? "video" as const : "image" as const,
+      type: clipKeys.has(key) ? "video" as const : audioKeys.has(key) ? "audio" as const : "image" as const,
       url: `https://owned.invalid/reference-${index}`,
     }));
     try { buildPayload(adapterParameters, types); } catch { fail(); }
@@ -246,12 +259,14 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     const refs = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, referenceImageRules) : [];
     const clips = [
       ...(personalClips.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, personalClips, model.nsfw, "wan-video") : []),
-      ...(ownClips.length ? await resolveBusinessWanVideoSources(userId, accountId, credential.id, ownClips, model.nsfw) : []),
+      ...(ownClips.length ? await resolveBusinessWanMediaSources(userId, accountId, credential.id, ownClips, model.nsfw, "video") : []),
     ];
     const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, referenceImageRules) : [];
-    const resolved = [...local, ...refs, ...clips, ...generated];
+    const audios = audioIds.length ? await resolveBusinessWanMediaSources(userId, accountId, credential.id, audioIds, model.nsfw, "audio") : [];
+    if (audios.reduce((sum, clip) => sum + clip.duration, 0) > WAN3_MAX_REFERENCE_SECONDS) fail("wan_audio_invalid");
+    const resolved = [...local, ...refs, ...clips, ...audios, ...generated];
     if (local.length !== localIds.length || refs.length !== ownUploads.length || generated.length !== generatedIds.length ||
-      clips.length !== personalClips.length + ownClips.length || [...local, ...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
+      clips.length !== personalClips.length + ownClips.length || audios.length !== audioIds.length || [...local, ...refs, ...generated].some(ref => ref.type !== "image")) fail("invalid_reference");
     const inputSeconds = clips.reduce((sum, clip) => sum + clip.duration, 0);
     const outputSeconds = Number(parameters.seconds ?? model.defaultSeconds ?? 5);
     if (inputSeconds > WAN3_MAX_REFERENCE_SECONDS || (outputSeconds !== -1 && inputSeconds + outputSeconds > 30)) fail("wan_video_duration");
@@ -260,10 +275,12 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
   }
   // Seedance-only controls must never leak to another adapter or bypass its reviewed contract.
   if (generatedIds.length) fail("invalid_reference");
-  if (["mode", "providerAssets", "output_format", "referenceOrder", "businessAssetIds"].some(key => parameters[key] !== undefined)) fail();
+  if (["mode", "providerAssets", "output_format", "referenceOrder"].some(key => parameters[key] !== undefined)) fail();
   if (model.promptMaxChars && String(payload.prompt).length > model.promptMaxChars) fail();
-  if (assetIds && assetIds.length > (model.maxReferenceImages ?? 4)) fail("invalid_reference");
+  const imageCount = (assetIds?.length ?? 0) + ownUploads.length;
+  if (imageCount && (!model.supportsReferences || imageCount > (model.maxReferenceImages ?? 4))) fail("invalid_reference");
   delete payload.assetIds;
+  delete payload.businessAssetIds;
   if (kind === "video") {
     payload.seconds ??= model.defaultSeconds;
     payload.resolution ??= model.resolutions?.includes("720p") ? "720p" : model.resolutions?.[0];
@@ -293,6 +310,16 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     const refs = await assetsToDataUrls(userId, assetIds, model.maxReferenceImages ?? 4);
     if (refs.length !== assetIds.length) fail("invalid_reference");
     if (kind === "video") payload.input_references = refs.map(url => ({ type: "image", url }));
+  }
+  if (kind === "video" && ownUploads.length) {
+    const sources = await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, {
+      minSide: 1, maxBytes: 10 * 1024 * 1024, mimeTypes: ["image/png", "image/jpeg", "image/webp"],
+    });
+    payload.input_references = [...(payload.input_references as unknown[] ?? []), ...sources];
+  }
+  if (kind === "video" && /^(?:veo-3\.1-generate-001|(?:(?:NSFW|SIRAYA)-)*(?:ByteDance-)?Seedance-1\.(?:0|5)-pro(?:-fast)?)$/i.test(model.id) && Array.isArray(payload.input_references)) {
+    payload.frame_images = [{ frame_type: "first_frame", image_url: payload.input_references[0].url }];
+    delete payload.input_references;
   }
   if (kind === "video") payload.async = true;
   return payload;
@@ -344,7 +371,7 @@ function validSource(source: string, kind: "image" | "video", model?: string) {
   } catch { return false; }
 }
 
-async function persistBusinessMedia(source: string, row: BusinessGenerationRow, kind: "image" | "video") {
+async function persistBusinessMedia(source: string, row: BusinessGenerationRow, kind: "image" | "video", providerKey?: string) {
   if (!blobConfigured() || !validSource(source, kind, row.model)) fail("storage_unavailable", 503);
   let bytes: Buffer;
   let contentType: string;
@@ -354,7 +381,11 @@ async function persistBusinessMedia(source: string, row: BusinessGenerationRow, 
     if (data[2].length > maxBytes * 1.4) fail("storage_unavailable", 503);
     bytes = Buffer.from(data[2], "base64"); contentType = data[1];
   } else {
-    const response = await fetch(source, { signal: AbortSignal.timeout(120000), redirect: "error" });
+    const veoContent = kind === "video" && row.model === "veo-3.1-generate-001" && row.provider_task_id &&
+      source === veoContentUrl(row.provider_task_id);
+    if (veoContent && !providerKey) fail("storage_unavailable", 503);
+    const response = await fetch(source, { signal: AbortSignal.timeout(120000), redirect: "error",
+      ...(veoContent && { headers: { Authorization: `Bearer ${providerKey}` } }) });
     if (!response.ok || !response.body || Number(response.headers.get("content-length") ?? 0) > maxBytes) { await response.body?.cancel(); fail("storage_unavailable", 503); }
     contentType = response.headers.get("content-type")?.split(";")[0] ?? "";
     if (kind === "image" ? !["image/png", "image/jpeg", "image/webp"].includes(contentType) : !["video/mp4", "video/webm", "video/quicktime"].includes(contentType)) { await response.body.cancel(); fail("storage_unavailable", 503); }
@@ -366,6 +397,10 @@ async function persistBusinessMedia(source: string, row: BusinessGenerationRow, 
   const ext = contentType === "image/jpeg" ? "jpg" : contentType === "video/quicktime" ? "mov" : contentType.split("/")[1];
   const blob = await put(`business/${row.account_id}/${row.nsfw ? "adult" : "standard"}/${row.id}-${randomUUID()}.${ext}`, bytes, { access: "private", contentType, addRandomSuffix: false });
   return `/api/business/media/${blob.pathname.slice("business/".length)}`;
+}
+
+function veoContentUrl(taskId: string) {
+  return `https://llm.siraya.ai/v1/videos/${encodeURIComponent(taskId)}/content`;
 }
 
 async function updateGeneration(row: BusinessGenerationRow, status: BusinessGenerationStatus, output: BusinessOutput | null, errorCode: string | null, providerOutput?: BusinessOutput | null, taskId?: string | null) {
@@ -384,11 +419,11 @@ async function updateGeneration(row: BusinessGenerationRow, status: BusinessGene
   return result.rows[0];
 }
 
-async function finishMedia(row: BusinessGenerationRow, source: BusinessOutput) {
+async function finishMedia(row: BusinessGenerationRow, source: BusinessOutput, providerKey?: string) {
   try {
     const output: BusinessOutput = {};
     if (source.images) output.images = await Promise.all(source.images.map(async image => ({ url: await persistBusinessMedia(image.url, row, "image") })));
-    if (source.videoUrl) output.videoUrl = await persistBusinessMedia(source.videoUrl, row, "video");
+    if (source.videoUrl) output.videoUrl = await persistBusinessMedia(source.videoUrl, row, "video", providerKey);
     return await updateGeneration(row, "completed", output, null);
   } catch { return updateGeneration(row, "processing", null, "storage_unavailable"); }
 }
@@ -558,7 +593,7 @@ export async function getBusinessGenerationReuse(user: UserRow, account: Busines
   const provider = references.filter(reference => reference.key.startsWith("provider:"));
   const [local, uploads, credential] = await Promise.all([
     localIds.length ? sql.query<AssetRow>("select id,user_id,url,pathname,content_type,size,filename,created_at from assets where user_id=$1 and id=any($2::bigint[])", [user.id, localIds]).then(({ rows }) => rows) : [],
-    reusableBusinessUploads(user.id, account.id, uploadIds, references.some(reference => reference.key.startsWith("business:") && reference.type === "video")),
+    reusableBusinessUploads(user.id, account.id, uploadIds, references.some(reference => reference.key.startsWith("business:") && reference.type !== "image")),
     (provider.length || generatedIds.length) ? getBusinessCredential(user.id, account.id) : null,
   ]);
   const localByKey = new Map(local.filter(asset => asset.pathname.startsWith(assetPathPrefix(user.id)) &&
@@ -627,7 +662,11 @@ export async function getBusinessGeneration(user: UserRow, account: BusinessAcco
   const stale = ageSeconds >= STATUS_MAX_UNAVAILABLE_SECONDS;
   try {
     if (row.provider_output && !recovering) {
-      const saved = await finishMedia(row, row.provider_output);
+      const needsKey = row.model === "veo-3.1-generate-001" && row.provider_task_id &&
+        row.provider_output.videoUrl === veoContentUrl(row.provider_task_id);
+      const key = needsKey ? await getBusinessCredential(user.id, account.id, row.credential_id) : null;
+      if (needsKey && !key) return await updateGeneration(row, "failed", null, "credential_missing");
+      const saved = await finishMedia(row, row.provider_output, key?.apiKey);
       return saved.status === "processing" && stale ? await updateGeneration(saved, "unknown", null, "storage_unavailable") : saved;
     }
     if (row.kind !== "video" || !row.provider_task_id) {
@@ -649,13 +688,13 @@ export async function getBusinessGeneration(user: UserRow, account: BusinessAcco
     if (!record(result)) return stale && !recovering ? await updateGeneration(row, "unknown", null, "outcome_unknown") : row;
     const status = typeof result.status === "string" ? result.status.toLowerCase() : "";
     const completed = ["completed", "succeeded", "success"].includes(status);
-    const url = videoUrl(result, row.model);
+    const url = videoUrl(result, row.model) ?? (completed && row.model === "veo-3.1-generate-001" ? veoContentUrl(row.provider_task_id) : null);
     if (isProviderContentPolicy(result.error)) row = await updateGeneration(row, "failed", null, "provider_content_policy");
     else if (["failed", "cancelled", "canceled", "error"].includes(status)) row = await updateGeneration(row, "failed", null, "provider_failed");
     else if (url && (completed || !recovering)) {
       // Recover the same provider result if storing the video is interrupted.
       row = await updateGeneration(row, "processing", null, null, { videoUrl: url });
-      row = await finishMedia(row, { videoUrl: url });
+      row = await finishMedia(row, { videoUrl: url }, credential.apiKey);
     }
     else if (completed) row = await updateGeneration(row, "failed", null, "result_missing");
     else if (providerStillProcessing.has(status) && row.status === "unknown") row = await updateGeneration(row, "processing", null, null);

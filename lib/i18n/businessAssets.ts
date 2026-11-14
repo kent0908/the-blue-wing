@@ -2,12 +2,13 @@ import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
+  wanAudioInvalid: "參照音訊須為 MP3／WAV，每段 1–15 秒。",
   title: "素材庫", upload: "上傳素材", choose: "選擇檔案", replaceFiles: "換一批", queued: "待上傳",
   uploadSelected: "上傳 {n} 個檔案", uploading: "上傳中…", registering: "登錄中…", uploadHelp: "格式與上傳須知",
   limits: "一次最多 6 個：圖片小於 30 MB、影片 50 MB、音訊 15 MB。",
   imageLimits: "一次最多 6 張，每張小於 30 MB。",
   formats: "圖片 PNG／JPEG／WebP／GIF；影片 MP4／MOV；音訊 MP3／WAV。",
-  converting: "正在把 GIF 轉成 MP4…", wanFormats: "圖片、MP4、MOV 或動態 GIF。GIF 會轉成 MP4，影片每個最多 50 MB。", wanOriginalRequired: "請上傳影片或圖片原檔再選取。", wanVideoInvalid: "影片須為 MP4／MOV，每段 1–15 秒、至少 16 fps、各邊 240–4,096 px，長寬比不超過 8:1。", wanGifUnsupported: "這個瀏覽器無法轉換 GIF。可改用支援 H.264 編碼的瀏覽器，或上傳 MP4。",
+  converting: "正在把 GIF 轉成 MP4…", wanFormats: "支援圖片、MP4／MOV 及 MP3／WAV。動態 GIF 會轉成 MP4。影片每段最多 50 MB，音訊最多 15 MB。", wanOriginalRequired: "請上傳影片或圖片原檔再選取。", wanVideoInvalid: "影片須為 MP4／MOV，每段 1–15 秒、至少 16 fps、各邊 240–4,096 px，長寬比不超過 8:1。", wanGifUnsupported: "這個瀏覽器無法轉換 GIF。可改用支援 H.264 編碼的瀏覽器，或上傳 MP4。",
   imageFormats: "支援 PNG、JPEG、WebP、GIF。",
   noGeneration: "素材私密保存。上傳不會送出生成，儲存費用以供應商帳單為準。",
   consent: "我有權使用這些素材及其中的人物肖像。",
@@ -29,12 +30,13 @@ const zh = {
 };
 export type BusinessAssetsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessAssetsCopy = {
+  wanAudioInvalid: "Use an MP3 or WAV audio reference of 1–15 seconds.",
   title: "Asset library", upload: "Upload assets", choose: "Choose files", replaceFiles: "Replace files", queued: "Files to upload",
   uploadSelected: "Upload {n} selected", uploading: "Uploading…", registering: "Registering…", uploadHelp: "Formats and upload details",
   limits: "Up to 6 files: images under 30 MB, video up to 50 MB, audio up to 15 MB.",
   imageLimits: "Up to 6 images, under 30 MB each.",
   formats: "Images: PNG, JPEG, WebP, GIF. Video: MP4, MOV. Audio: MP3, WAV.",
-  converting: "Converting GIF to MP4…", wanFormats: "Upload images, MP4, MOV or animated GIF. GIFs convert to MP4. Videos are limited to 50 MB each.", wanOriginalRequired: "Upload the original file to select it.", wanVideoInvalid: "Use a 1–15 second MP4 or MOV at 16 fps or higher, 240–4,096 px per side, and at most an 8:1 aspect ratio.", wanGifUnsupported: "This browser cannot convert GIF. Use a browser with H.264 encoding or upload MP4.",
+  converting: "Converting GIF to MP4…", wanFormats: "Upload images, MP4/MOV or MP3/WAV. Animated GIFs convert to MP4. Each video can be up to 50 MB and each audio file up to 15 MB.", wanOriginalRequired: "Upload the original file to select it.", wanVideoInvalid: "Use a 1–15 second MP4 or MOV at 16 fps or higher, 240–4,096 px per side, and at most an 8:1 aspect ratio.", wanGifUnsupported: "This browser cannot convert GIF. Use a browser with H.264 encoding or upload MP4.",
   imageFormats: "PNG, JPEG, WebP or GIF.",
   noGeneration: "Assets are stored privately. Uploads do not start generation. Storage fees follow your provider invoice.",
   consent: "I have permission to use these files and any depicted likenesses.",
@@ -55,12 +57,13 @@ const en: BusinessAssetsCopy = {
   uploadFinished: "Original uploaded. Check its status in the library.", progress: "Upload progress", original: "Use original",
 };
 const ja: BusinessAssetsCopy = {
+  wanAudioInvalid: "音声参照は1〜15秒の MP3／WAV を使用してください。",
   title: "素材ライブラリ", upload: "素材をアップロード", choose: "ファイルを選択", replaceFiles: "ファイルを選び直す", queued: "アップロード待ち",
   uploadSelected: "{n}件をアップロード", uploading: "アップロード中…", registering: "登録中…", uploadHelp: "形式とアップロードの詳細",
   limits: "最大6件。画像は30 MB未満、映像は50 MB、音声は15 MBまで。",
   imageLimits: "画像は最大6枚、1枚あたり30 MB未満。",
   formats: "画像：PNG・JPEG・WebP・GIF。映像：MP4・MOV。音声：MP3・WAV。",
-  converting: "GIF を MP4 に変換中…", wanFormats: "画像、MP4、MOV、アニメーション GIF に対応。GIF は MP4 に変換し、動画は1本50 MBまでです。", wanOriginalRequired: "元のファイルをアップロードして選択してください。", wanVideoInvalid: "1〜15秒の MP4／MOV、16 fps 以上、各辺240〜4,096 px、縦横比は最大8:1です。", wanGifUnsupported: "このブラウザーは GIF を変換できません。H.264 対応ブラウザーか MP4 をご利用ください。",
+  converting: "GIF を MP4 に変換中…", wanFormats: "画像、MP4／MOV、MP3／WAV に対応。アニメーション GIF は MP4 に変換します。動画は1本50 MB、音声は15 MBまでです。", wanOriginalRequired: "元のファイルをアップロードして選択してください。", wanVideoInvalid: "1〜15秒の MP4／MOV、16 fps 以上、各辺240〜4,096 px、縦横比は最大8:1です。", wanGifUnsupported: "このブラウザーは GIF を変換できません。H.264 対応ブラウザーか MP4 をご利用ください。",
   imageFormats: "PNG・JPEG・WebP・GIFに対応。",
   noGeneration: "素材は非公開です。アップロードで生成は開始されません。保存料金は提供元の請求書をご確認ください。",
   consent: "素材と写っている人物の肖像を使う権利があります。",
@@ -84,6 +87,7 @@ const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, "zh-Hans": sim
 export function businessAssetsCopy(locale: Locale): BusinessAssetsCopy { return COPY[locale]; }
 export function businessAssetsError(t: BusinessAssetsCopy, code?: string): string {
   if (code === "wan_video_invalid") return t.wanVideoInvalid;
+  if (code === "wan_audio_invalid") return t.wanAudioInvalid;
   if (code === "wan_gif_unsupported") return t.wanGifUnsupported;
   if (code === "business_asset_upload_uncertain") return t.uncertain;
   if (code === "business_asset_storage_unavailable") return t.storageUnavailable;

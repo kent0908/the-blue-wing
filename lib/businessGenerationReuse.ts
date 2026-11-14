@@ -28,7 +28,7 @@ function verifiedEditor(value: unknown, prompt: unknown, references: BusinessGen
     ["__proto__", "constructor", "prototype"].includes(tag) || typeof key !== "string" || !keys.has(key))) return;
   const mentions = Object.fromEntries(bindings) as MentionBindings;
   const resolved = resolveMentionPrompt(editorPrompt, mentions, references.map(reference => ({ ...reference, name: "" })),
-    wan3 ? (type, index) => `${type === "video" ? "Video" : "Image"} ${index}` : undefined);
+    wan3 ? (type, index) => `${type[0].toUpperCase()}${type.slice(1)} ${index}` : undefined);
   return resolved === prompt ? { prompt: editorPrompt, mentions } : undefined;
 }
 
@@ -44,6 +44,7 @@ export function snapshotBusinessGeneration(parameters: Record<string, unknown>, 
     ...((parameters.personalVideoIds ?? []) as number[]).map(id => ({ key: `local:${id}`, type: "video" as const })),
     ...((parameters.businessAssetIds ?? []) as string[]).map(id => ({ key: `business:${id}`, type: "image" as const })),
     ...((parameters.businessVideoIds ?? []) as string[]).map(id => ({ key: `business:${id}`, type: "video" as const })),
+    ...((parameters.businessAudioIds ?? []) as string[]).map(id => ({ key: `business:${id}`, type: "audio" as const })),
     ...((parameters.referenceGenerationIds ?? []) as string[]).map(id => ({ key: `generated:${id}`, type: "image" as const })),
     ...((parameters.providerAssets ?? []) as { id: string; type: MentionReference["type"] }[]).map(asset => ({ key: `provider:${asset.id}`, type: asset.type })),
   ];

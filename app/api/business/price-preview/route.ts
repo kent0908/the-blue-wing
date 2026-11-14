@@ -29,16 +29,19 @@ export async function POST(req: NextRequest) {
     if (/(?:^|-)(?:nsfw|uncensored|spicy)(?:-|$)/i.test(settings.model) && !isAdultVerified(auth.user))
       throw new BusinessError("age_unverified", 403);
 
-    let rules = await sirayaPriceRules(settings.model, "public").catch(() => []);
-    if (!rules.length) {
+    const publicRules = await sirayaPriceRules(settings.model, "public").catch(() => []);
+    const preview = estimateBusinessPrice(settings, publicRules);
+    if (preview.reason === "unavailable") {
       // Private listings are only queried after confirming the customer's key
       // actually grants the exact variant. Never substitute the base model's price.
       const catalog = await availableBusinessModels(auth.user.id, auth.account.id).catch(() => null);
       const model = catalog?.models.find(model => model.id.toLowerCase() === settings.model.toLowerCase() && model.modality === settings.kind);
-      if (model && (!model.nsfw || isAdultVerified(auth.user)))
-        rules = await sirayaPriceRules(model.id, "console").catch(() => []);
+      if (model && (!model.nsfw || isAdultVerified(auth.user))) {
+        const rules = await sirayaPriceRules(model.id, "console").catch(() => []);
+        if (rules.length) return businessJson({ preview: estimateBusinessPrice(settings, rules) });
+      }
     }
-    return businessJson({ preview: estimateBusinessPrice(settings, rules) });
+    return businessJson({ preview });
   } catch (error) {
     return businessErrorResponse(req, error);
   }

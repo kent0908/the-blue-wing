@@ -108,7 +108,7 @@ function context() {
     resolveMentionPrompt: load('lib/businessMentions.ts').resolveMentionPrompt,
     orderMentionReferences: load('lib/businessMentions.ts').orderMentionReferences,
     kind: 'video', modelId: 'fixture-old-video', tab: 'create', selected: { id: 'fixture-old-video', seedance: seedance.getSeedanceCapability('SIRAYA-Seedance-2.5') },
-    size: 'old-size', resolution: '4k', assetIds: [71, 72], audio: true, seconds: 30,
+    size: 'old-size', resolution: '4k', assetIds: [71, 72], personalVideoIds: [], audio: true, seconds: 30,
     videoMode: 'video-edit', providerAssets: [{id:'old-video',type:'video'}], referenceOrder: ['local:71','provider:old-video','local:72'], outputFormat: 'mov', seed: '123', imageCount:3, imageQuality:'high', imageNegative:'old', imageBusinessAssets:[{id:'old-b',uploadId:'fixture-old-upload'}], selectionContext:{current:'video:previous-model'},
     restoredContext:{current:null}, apiKey: 'fixture-unsaved-value', prompt: 'A paper garden opens.', error: 'old-error', notice: 'old-notice',
     confirmation: { clientRequestId: 'fixture-stale-confirmation' }, submitLock: { current: false },
@@ -127,6 +127,7 @@ function context() {
     setSize: value => { state.size = value; },
     setResolution: value => { state.resolution = value; },
     setAssetIds: value => { state.assetIds = typeof value === 'function' ? value(state.assetIds) : value; },
+    setPersonalVideoIds: value => { state.personalVideoIds = value; },
     assets: [], setAssets: value => { state.assets = typeof value === 'function' ? value(state.assets) : value; },
     setVideoMode: value => { state.videoMode = value; },
     setProviderAssets: value => { state.providerAssets = typeof value === 'function' ? value(state.providerAssets) : value; },
@@ -435,7 +436,8 @@ assert.ok(JobToasts(), 'Consumer job notifications continue working in the norma
   const capability=load('lib/businessWan3.ts').getBusinessWan3Capability('wan3.0-video');
   state.selected={id:'wan3.0-video',supportsReferences:true,dedicatedVideo:capability};
   state.assets=[{id:15,name:'Opening.png',src:'/api/assets/15/raw',contentType:'image/png'}];
-  state.toggleWanPersonalReference(15);
+  state.wan3ReferenceVideoExtension=load('lib/businessWan3.ts').wan3ReferenceVideoExtension;
+  state.toggleWanPersonalReference(state.assets[0]);
   assert.equal(state.dedicatedOptions.mode,'subject-reference','Selecting from My Assets in the default mode switches to image references');
   assert.deepEqual(Array.from(state.referenceOrder),['local:15']);
   state.chooseDedicatedOptions({...state.dedicatedOptions,mode:'first-last-frame'});

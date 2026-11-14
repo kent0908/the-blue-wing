@@ -1,4 +1,4 @@
-import { BlobSource, Input, MP4, QTFF } from "mediabunny";
+import { BlobSource, Input, MP3, MP4, QTFF, WAVE } from "mediabunny";
 import { WAN3_MAX_REFERENCE_SECONDS } from "./businessWan3";
 
 /** Used in the browser and again on the original private Blob before submission. */
@@ -17,6 +17,19 @@ export async function inspectWanReferenceVideo(blob: Blob): Promise<number> {
         Math.max(width, height) / Math.min(width, height) > 8 || !(stats.averagePacketRate >= 16)) {
       throw new Error("wan_video_invalid");
     }
+    return duration;
+  } finally {
+    input.dispose();
+  }
+}
+
+export async function inspectWanReferenceAudio(blob: Blob): Promise<number> {
+  const input = new Input({ source: new BlobSource(blob), formats: [blob.type === "audio/mpeg" ? MP3 : WAVE] });
+  try {
+    const track = await input.getPrimaryAudioTrack();
+    const duration = await input.computeDuration(undefined, { skipLiveWait: true });
+    if (!track || !Number.isFinite(duration) || duration < 1 || duration > WAN3_MAX_REFERENCE_SECONDS)
+      throw new Error("wan_audio_invalid");
     return duration;
   } finally {
     input.dispose();

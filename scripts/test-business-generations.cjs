@@ -7,7 +7,7 @@ let sourceFetches=[],downloadRedirect=false,localReferenceCalls=0,providerRefere
 let generatedReferenceCalls=0,generatedSources=[];
 let exactImageCalls=0;
 const scheduledWork=[];
-const models=[['Dola-Seedream-5.0-pro','image'],['NSFW-Dola-Seedream-5.0-pro','image'],['SIRAYA-Seedance-2.5','video'],['NSFW-SIRAYA-Seedance-2.5','video'],['deepseek-v4.1-flash','text'],['veo-3.1-generate-001','video'],['happyhorse-1.0-t2v','video'],['unreviewed-video','video'],['kling-avatar-v2','text'],['embedding-v1','text'],['retired-image','image']];
+const models=[['Dola-Seedream-5.0-pro','image'],['NSFW-Dola-Seedream-5.0-pro','image'],['SIRAYA-Seedance-2.5','video'],['NSFW-SIRAYA-Seedance-2.5','video'],['deepseek-v4.1-flash','text'],['veo-3.1-generate-001','video'],['ByteDance-Seedance-1.5-pro','video'],['happyhorse-1.0-t2v','video'],['unreviewed-video','video'],['kling-avatar-v2','text'],['embedding-v1','text'],['retired-image','image']];
 models.push(...['SIRAYA-Seedance-2.0','SIRAYA-Seedance-2.0-fast','SIRAYA-Seedance-2.0-mini','NSFW-SIRAYA-Seedance-2.0'].map(id=>[id,'video']));
 models.push(...['kling-2.5-turbo','kling-2.6','kling-3.0','kling-3.0-turbo','kling-3.0-omni','kling-o1'].map(id=>[id,'video']));
 models.push(['minimax-h3','video'],['minimax-h3-max','video'],['minimax-m3','text']);
@@ -84,13 +84,13 @@ const mocks={
  '@vercel/blob':{put:async(pathname,_bytes,opts)=>{assert.equal(opts.access,'private');uploads++;if(failStorage)throw Error('Private storage outage');return {pathname}}},
  './business':{BusinessError,businessJson,businessErrorResponse,requireBusiness:async()=>approval?{user:user(),account}:{error:businessJson({error:{code:'business_not_approved'}},403)},assertBusinessOrigin:req=>{if(req.headers.get('origin')!==req.nextUrl.origin)throw new BusinessError('invalid_origin',403)},readBusinessJson:async req=>req.json(),getBusinessCredential:async(_user,_account,id)=>!approval||revoked?null:{id:id??activeCredential,apiKey:credentials.get(id??activeCredential)}},
  './rateCard':{listRates:async()=>{throw Error('C retail catalog must never govern BYOK')}},
- './businessAssetUploads':{reusableBusinessUploads:async(userId,accountId,ids)=>{assert.equal(userId,7);assert.equal(accountId,account.id);return ids.filter(id=>businessUploads.includes(id)).map(id=>({id,uploadId:id,name:'Original upload',type:id===uuid(451)?'video':'image',status:'active',storageReady:true}));},resolveBusinessWanVideoSources:async(userId,accountId,credentialId,ids,nsfw)=>{assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'video',duration:8,url:'https://fixture.invalid/api/business/provider-assets/source/opaque-'+id+'.mp4'}));},resolveBusinessUploadSources:async(userId,accountId,credentialId,ids,nsfw)=>{businessUploadCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/provider-assets/source/opaque-${id}`}));}},
+ './businessAssetUploads':{reusableBusinessUploads:async(userId,accountId,ids)=>{assert.equal(userId,7);assert.equal(accountId,account.id);return ids.filter(id=>businessUploads.includes(id)).map(id=>({id,uploadId:id,name:'Original upload',type:id===uuid(451)?'video':id===uuid(452)?'audio':'image',status:'active',storageReady:true}));},resolveBusinessWanMediaSources:async(userId,accountId,credentialId,ids,nsfw,type)=>{assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type,duration:type==='audio'?3:8,url:'https://fixture.invalid/api/business/provider-assets/source/opaque-'+id+(type==='audio'?'.wav':'.mp4')}));},resolveBusinessUploadSources:async(userId,accountId,credentialId,ids,nsfw)=>{businessUploadCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!businessUploads.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/provider-assets/source/opaque-${id}`}));}},
  './businessGeneratedReferences':{reusableBusinessGeneratedImageIds:async(userId,accountId,credentialId,ids,nsfw)=>{assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');return ids.filter(id=>generatedSources.includes(id));},resolveBusinessGeneratedImageSources:async(userId,accountId,credentialId,ids,nsfw)=>{generatedReferenceCalls++;assert.equal(userId,7);assert.equal(accountId,account.id);assert.equal(credentialId,activeCredential);assert.equal(typeof nsfw,'boolean');if(ids.some(id=>!generatedSources.includes(id)))throw new BusinessError('invalid_reference');return ids.map(id=>({type:'image',url:`https://fixture.invalid/api/business/generated-references/opaque-${id}`}));}},
  './siraya':{SirayaApiError,createImage:(payload,options)=>provider('image',payload,options),createBusinessImage:(payload,options)=>{exactImageCalls++;return provider('image',payload,options)},createVideo:(payload,options)=>provider('video',payload,options),createBusinessVideo:(payload,options)=>provider('video',payload,options),createChatCompletion:(payload,options)=>provider('text',payload,options),listModels:async options=>{lookupCalls++;seenKeys.push(options.apiKey);if(catalogFailure)throw Error('private upstream error');return {data:models.filter(([id])=>!removedModels.includes(id)).map(([id])=>({id}))}},getVideoStatus:async(id,options)=>{lookupCalls++;assert.equal(id,'provider-owned-job');seenKeys.push(options.apiKey);if(pollVideo instanceof Error)throw pollVideo;return pollVideo}},
 };
 function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const mod={exports:{}};cache.set(file,mod);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;new Function('require','module','exports',code)(id=>{const canonical=id.startsWith('@/lib/')?'./'+id.slice(6):id;if(canonical in mocks)return mocks[canonical];if(id.startsWith('@/'))return load(path.resolve(id.slice(2))+'.ts');if(id.startsWith('.'))return load(path.resolve(path.dirname(file),id)+'.ts');return require(id)},mod,mod.exports);return mod.exports;}
 const routes=load('app/api/business/generations/route.ts'),single=load('app/api/business/generations/[id]/route.ts'),reuse=load('app/api/business/generations/[id]/reuse/route.ts'),catalog=load('app/api/business/models/route.ts');
-const originalFetch=global.fetch;global.fetch=async(url,init)=>{sourceFetches.push(url);assert.equal(init.redirect,'error');assert.equal(new Headers(init.headers).has('Authorization'),false);return downloadRedirect?new Response(null,{status:302,headers:{location:'http://127.0.0.1/private'}}):new Response(Buffer.from('fixture-video'),{headers:{'content-type':downloadMime}})};
+const originalFetch=global.fetch;global.fetch=async(url,init)=>{sourceFetches.push(url);assert.equal(init.redirect,'error');assert.equal(new Headers(init.headers).get('Authorization'),url==='https://llm.siraya.ai/v1/videos/provider-owned-job/content'?'Bearer sk-fixture-key-original':null);return downloadRedirect?new Response(null,{status:302,headers:{location:'http://127.0.0.1/private'}}):new Response(Buffer.from('fixture-video'),{headers:{'content-type':downloadMime}})};
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const body=(n=1,kind='video',parameters={})=>({clientRequestId:uuid(n),kind,parameters:{model:kind==='video'?'SIRAYA-Seedance-2.5':kind==='image'?'Dola-Seedream-5.0-pro':'deepseek-v4.1-flash',prompt:'A blue feather crosses a paper city',...parameters}});
 const request=(payload,origin='https://fixture.invalid')=>new NextRequest('https://fixture.invalid/api/business/generations',{method:'POST',headers:{'content-type':'application/json',origin},body:JSON.stringify(payload)});
@@ -338,6 +338,25 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
  await test('revoked pinned key blocks lookup and does not fall back',async()=>{await send();revoked=true;const response=await get(jobs[0].id);assert.equal((await response.json()).generation.errorCode,'credential_missing');assert.equal(lookupCalls,1)});
  await test('completed video is persisted privately and repeated reads do not call vendor',async()=>{await send();pollVideo={status:'succeeded',output_url:'https://example.volces.com/own.mp4'};let json=await (await get(jobs[0].id)).json();assert.equal(json.generation.status,'completed');assert.match(json.generation.videoUrl,/^\/api\/business\/media\//);await get(jobs[0].id);assert.equal(lookupCalls,2);assert.equal(uploads,1);assert.equal(providerCalls,1)});
  await test('completed-without-video is failure, no endless polling or extra paid call',async()=>{await send();pollVideo={status:'completed'};const response=await get(jobs[0].id);assert.equal((await response.json()).generation.errorCode,'result_missing');await get(jobs[0].id);assert.equal(lookupCalls,2);assert.equal(providerCalls,1)});
+ await test('Veo async completion fetches the exact owner-scoped content URL with its pinned key',async()=>{
+   assert.equal((await send(body(1,'video',{model:'veo-3.1-generate-001'}))).status,201);
+   pollVideo={status:'completed'};
+   const { generation }=await (await get(jobs[0].id)).json();
+   assert.equal(generation.status,'completed');
+   assert.match(generation.videoUrl,/^\/api\/business\/media\//);
+   assert.deepEqual(sourceFetches,['https://llm.siraya.ai/v1/videos/provider-owned-job/content']);
+   assert.equal(providerCalls,1);
+ });
+ await test('Veo and legacy Seedance take an owned picture in the first-frame field',async()=>{
+   businessUploads=[uuid(255)];
+   for(const [i,model] of ['veo-3.1-generate-001','ByteDance-Seedance-1.5-pro'].entries()){
+     const result=await send(body(i+1,'video',{model,businessAssetIds:businessUploads}));
+     assert.equal(result.status,201,model);
+     assert.equal(lastPayload.frame_images[0].frame_type,'first_frame');
+     assert.match(lastPayload.frame_images[0].image_url,/provider-assets\/source/);
+     assert.equal(lastPayload.input_references,undefined);
+   }
+ });
  await test('Wan 3.0 Spicy video accepts the exact signed CDN and skips an invalid earlier result URL', async () => {
    for (const [index, model] of wanSpicyModels.entries()) {
      const url = `https://usercontent1.carrothub.ai/results/${index}.mp4?signature=fixture`;
@@ -678,17 +697,19 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
  });
  await test('Wan 3.0 mixes a personal video with business media and restores it without exposing the grant', async () => {
    assetRows=[{id:7,user_id:7,content_type:'video/mp4',size:1024,filename:'Studio motion.mp4'}];
-   businessUploads=[uuid(451),uuid(902)];
-   const model='wan3.0-video-prime-spicy', referenceOrder=[`business:${businessUploads[0]}`,'local:7',`business:${businessUploads[1]}`];
-   const parameters={model,mode:'subject-reference',personalVideoIds:[7],businessVideoIds:[businessUploads[0]],businessAssetIds:[businessUploads[1]],referenceOrder,prompt:'Keep Image 1 and follow Video 2.'};
+   businessUploads=[uuid(451),uuid(902),uuid(452)];
+   const model='wan3.0-video-prime-spicy', referenceOrder=[`business:${businessUploads[0]}`,'local:7',`business:${businessUploads[1]}`,`business:${businessUploads[2]}`];
+   const parameters={model,mode:'subject-reference',personalVideoIds:[7],businessVideoIds:[businessUploads[0]],businessAssetIds:[businessUploads[1]],businessAudioIds:[businessUploads[2]],referenceOrder,prompt:'Keep Image 1 and follow Video 2 with Audio 1.'};
    assert.equal((await send(body(1,'video',{...parameters,assetIds:[7]}))).status,400);
    assert.equal((await send(body(2,'video',{...parameters,seconds:18}))).status,400);
    assert.equal((await send(body(3,'video',{...parameters,personalVideoIds:[99],referenceOrder:undefined}))).status,400);
    assert.equal(providerCalls,0);
-   const editor={prompt:'Keep Image 1 and follow @motion.',mentions:{motion:'local:7'}};
+   const editor={prompt:'Keep Image 1 and follow @motion with @sound.',mentions:{motion:'local:7',sound:`business:${businessUploads[2]}`}};
    assert.equal((await send({...body(4,'video',parameters),editor})).status,201);
    assert.deepEqual(lastPayload.reference_videos,[`https://fixture.invalid/api/business/provider-assets/source/opaque-${businessUploads[0]}.mp4`,'https://fixture.invalid/api/business/references/opaque-7.mp4']);
    assert.equal(lastPayload.personalVideoIds,undefined);
+   assert.equal(lastPayload.businessAudioIds,undefined);
+   assert.deepEqual(lastPayload.reference_audios,[`https://fixture.invalid/api/business/provider-assets/source/opaque-${businessUploads[2]}.wav`]);
    const {reuse:snapshot}=await(await getReuse(jobs[0].id)).json();
    assert.deepEqual(snapshot.references.map(ref=>ref.key),referenceOrder);
    assert.equal(snapshot.references[1].asset.contentType,'video/mp4');

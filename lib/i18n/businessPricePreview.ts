@@ -15,7 +15,7 @@ const zh = {
   settlement: "未計帳戶折扣；實扣以 SIRAYA 帳單為準。",
   noCharge: "查看預覽不會扣款。",
   basis: { seconds: "依設定秒數", images: "依設定張數", videoTokens: "依秒數、畫幅與解析度估算影片 Token（以 24 fps 計）", request: "依單次請求" },
-  units: { second: "每秒影片", image: "每張圖片", request: "每次請求", input: "每百萬輸入 Token", output: "每百萬輸出 Token", imageInput: "每百萬圖片輸入 Token", imageOutput: "每百萬圖片輸出 Token", reasoning: "每百萬推理 Token", cache: "每百萬快取 Token" },
+  units: { second: "每秒影片", image: "每張圖片", request: "每次請求", input: "每百萬輸入 Token", output: "每百萬輸出 Token", imageInput: "每百萬圖片輸入 Token", imageOutput: "每百萬圖片輸出 Token", reasoning: "每百萬推理 Token", cache: "每百萬快取讀取 Token", videoTotal: "每秒影片總長", audioInput: "每百萬音訊輸入 Token", videoInput: "每百萬影片輸入 Token", cacheAudio: "每百萬音訊快取 Token", cacheImage: "每百萬圖片快取 Token", cacheVideo: "每百萬影片快取 Token", cacheWrite: "每百萬快取寫入 Token", cacheWrite5m: "每百萬快取寫入 Token（5 分鐘）", cacheWrite60m: "每百萬快取寫入 Token（60 分鐘）" },
 };
 type Copy = typeof zh;
 const en: Copy = {
@@ -32,7 +32,7 @@ const en: Copy = {
   settlement: "Before account discounts. The SIRAYA bill shows the final charge.",
   noCharge: "Previewing is free.",
   basis: { seconds: "Based on the selected duration", images: "Based on the selected image count", videoTokens: "Video tokens estimated from duration, aspect ratio and resolution at 24 fps", request: "For one request" },
-  units: { second: "Per second of video", image: "Per image", request: "Per request", input: "Per 1M input tokens", output: "Per 1M output tokens", imageInput: "Per 1M image input tokens", imageOutput: "Per 1M image output tokens", reasoning: "Per 1M reasoning tokens", cache: "Per 1M cache tokens" },
+  units: { second: "Per second of video", image: "Per image", request: "Per request", input: "Per 1M input tokens", output: "Per 1M output tokens", imageInput: "Per 1M image input tokens", imageOutput: "Per 1M image output tokens", reasoning: "Per 1M reasoning tokens", cache: "Per 1M cache read tokens", videoTotal: "Per second of combined video", audioInput: "Per 1M audio input tokens", videoInput: "Per 1M video input tokens", cacheAudio: "Per 1M cached audio tokens", cacheImage: "Per 1M cached image tokens", cacheVideo: "Per 1M cached video tokens", cacheWrite: "Per 1M cache write tokens", cacheWrite5m: "Per 1M cache write tokens (5 min)", cacheWrite60m: "Per 1M cache write tokens (60 min)" },
 };
 const ja: Copy = {
   title: "料金プレビュー",
@@ -48,7 +48,7 @@ const ja: Copy = {
   settlement: "アカウント割引適用前の料金です。実際の請求額は SIRAYA でご確認ください。",
   noCharge: "プレビューに料金はかかりません。",
   basis: { seconds: "設定した秒数に基づく見積もり", images: "設定した枚数に基づく見積もり", videoTokens: "動画の長さ、画面比率、解像度をもとに、24 fps でトークン数を推定", request: "1 回のリクエスト" },
-  units: { second: "動画 1 秒あたり", image: "画像 1 枚あたり", request: "1 リクエストあたり", input: "入力 100 万トークンあたり", output: "出力 100 万トークンあたり", imageInput: "画像入力 100 万トークンあたり", imageOutput: "画像出力 100 万トークンあたり", reasoning: "推論 100 万トークンあたり", cache: "キャッシュ 100 万トークンあたり" },
+  units: { second: "動画 1 秒あたり", image: "画像 1 枚あたり", request: "1 リクエストあたり", input: "入力 100 万トークンあたり", output: "出力 100 万トークンあたり", imageInput: "画像入力 100 万トークンあたり", imageOutput: "画像出力 100 万トークンあたり", reasoning: "推論 100 万トークンあたり", cache: "キャッシュ読み取り 100 万トークンあたり", videoTotal: "映像の合計 1 秒あたり", audioInput: "音声入力 100 万トークンあたり", videoInput: "映像入力 100 万トークンあたり", cacheAudio: "音声キャッシュ 100 万トークンあたり", cacheImage: "画像キャッシュ 100 万トークンあたり", cacheVideo: "映像キャッシュ 100 万トークンあたり", cacheWrite: "キャッシュ書き込み 100 万トークンあたり", cacheWrite5m: "キャッシュ書き込み 100 万トークンあたり（5分）", cacheWrite60m: "キャッシュ書き込み 100 万トークンあたり（60分）" },
 };
 const copy: Record<Locale, Copy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export const businessPricePreviewCopy = (locale: Locale) => copy[locale];

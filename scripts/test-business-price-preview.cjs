@@ -24,6 +24,10 @@ assert.equal(edit.reason, 'duration'); assert.equal(edit.total, undefined); asse
 assert.equal(price({}, []).reason, 'unavailable');
 const wan = calc.priceRules({ pricing: [tier([], units('Video Seconds', '0.14', '1'))] }, 'public');
 assert.equal(price({ model: 'wan3.0-video-prime', seconds: 6 }, wan).total.low, '0.8400000000');
+assert.equal(price({ model: 'wan3.0-video-prime', seconds: 6, videoInput: true }, wan).total.low, '0.8400000000');
+const combined = calc.priceRules({ pricing: [tier([], units('Video Total Duration', '0.10', '1'))] }, 'public');
+assert.equal(price({ model: 'wan3.0-video-prime', seconds: 6, videoInput: true }, combined).total, undefined);
+assert.equal(price({ model: 'wan3.0-video-prime', seconds: 6, videoInput: true }, combined).rates[0].unit, 'videoTotal');
 assert.equal(price({ model: 'wan3.0-video-prime', seconds: 6, rewrite: true }, wan).total, undefined);
 const images = calc.priceRules({ pricing: [tier([], units('Image Generation', '0.035', '1'))] }, 'public');
 assert.equal(price({ kind: 'image', model: 'Dola-Seedream-5.0-lite', count: 2 }, images).total.low, '0.0700000000');
