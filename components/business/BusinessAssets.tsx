@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { upload } from "@vercel/blob/client";
+import BusinessAssetPreview from "./BusinessAssetPreview";
 import { useLocale } from "@/lib/i18n/client";
 import { businessAssetsCopy, businessAssetsError } from "@/lib/i18n/businessAssets";
 import type { BusinessProviderAsset } from "./types";
@@ -15,7 +15,6 @@ interface UploadConfig { directUpload: boolean; types: Record<string, { type: st
 type Filters = { type: string; status: string; name: string };
 const HEADERS={"Content-Type":"application/json"};
 const interpolate=(text:string,values:Record<string,string|number>)=>text.replace(/\{(\w+)\}/g,(match,key:string)=>String(values[key]??match));
-function AssetIcon({type}:{type:string}){return <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.2">{type==="image"?<><rect x="7" y="9" width="34" height="30" rx="1"/><circle cx="17" cy="18" r="3"/><path d="m9 35 10-11 7 6 6-10 7 15"/></>:type==="video"?<><rect x="7" y="11" width="34" height="26" rx="1"/><path d="m20 18 11 6-11 6Z"/></>:<><path d="M18 34V13l19-4v22M18 20l19-4"/><ellipse cx="12" cy="35" rx="6" ry="4"/><ellipse cx="31" cy="32" rx="6" ry="4"/></>}</svg>;}
 const typedFile=(file:File)=>{
   if(file.type&&file.type!=="application/octet-stream"&&file.type!=="audio/mp3"&&file.type!=="audio/vnd.wave")return file;
   const ext=file.name.toLowerCase().split(".").pop()??"";
@@ -219,7 +218,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
       const disabled=!selected&&(!available||canSelect?.(asset)===false);
       const disabledReason=wanReferences&&!asset.uploadId?t.wanOriginalRequired:imageOnly&&!asset.uploadId?t.nativeRequired:!available?t.readyOnly:t.capacity;
       return <article className={styles.card} key={asset.id} data-selected={selected}>
-        <div className={styles.thumbnail}>{asset.type==="image"&&asset.uploadId&&asset.storageReady?<Image src={`/api/business/provider-assets/uploads/${asset.uploadId}/preview`} alt="" width={640} height={420} loading="lazy" unoptimized/>:<AssetIcon type={asset.type}/>}<span className={styles.mediaType}>{t[asset.type]}</span></div>
+        <BusinessAssetPreview asset={asset} copy={t}/>
         <div className={styles.cardBody}><h3 title={asset.name}>{asset.name}</h3><p className={styles.assetStatus} data-status={asset.storageReady&&(imageOnly||wanReferences)?"active":asset.status}>{asset.storageReady&&(imageOnly||wanReferences)?t.privateReady:statusText(asset.status)}</p><small>{asset.uploadId?t.native:t.provider}</small>
         {onSelect&&<button type="button" className={styles.selectButton} disabled={disabled} aria-pressed={selected} title={disabled?disabledReason:asset.name} onClick={()=>onSelect(asset)}>{selected?t.selected:imageOnly&&asset.storageReady?t.original:t.select}<span aria-hidden="true">{selected?"✓":"＋"}</span></button>}
         {!asset.id.startsWith("upload:")&&asset.status!=="active"&&<button type="button" className={styles.textButton} disabled={!!refreshingId||uploading} onClick={()=>void refreshAsset(asset)}>{refreshingId===asset.id?t.loading:t.refreshOne}</button>}

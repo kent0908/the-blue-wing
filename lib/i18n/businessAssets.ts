@@ -2,6 +2,7 @@ import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
+  playPreview: "播放 {name}", closePreview: "關閉預覽", previewUnavailable: "暫時無法預覽",
   wanAudioInvalid: "參照音訊須為 MP3／WAV，每段 1–15 秒。",
   title: "素材庫", upload: "上傳素材", choose: "選擇檔案", replaceFiles: "換一批", queued: "待上傳",
   uploadSelected: "上傳 {n} 個檔案", uploading: "上傳中…", registering: "登錄中…", uploadHelp: "格式與上傳須知",
@@ -30,6 +31,7 @@ const zh = {
 };
 export type BusinessAssetsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessAssetsCopy = {
+  playPreview: "Play {name}", closePreview: "Close preview", previewUnavailable: "Preview unavailable",
   wanAudioInvalid: "Use an MP3 or WAV audio reference of 1–15 seconds.",
   title: "Asset library", upload: "Upload assets", choose: "Choose files", replaceFiles: "Replace files", queued: "Files to upload",
   uploadSelected: "Upload {n} selected", uploading: "Uploading…", registering: "Registering…", uploadHelp: "Formats and upload details",
@@ -57,6 +59,7 @@ const en: BusinessAssetsCopy = {
   uploadFinished: "Original uploaded. Check its status in the library.", progress: "Upload progress", original: "Use original",
 };
 const ja: BusinessAssetsCopy = {
+  playPreview: "{name} を再生", closePreview: "プレビューを閉じる", previewUnavailable: "プレビューできません",
   wanAudioInvalid: "音声参照は1〜15秒の MP3／WAV を使用してください。",
   title: "素材ライブラリ", upload: "素材をアップロード", choose: "ファイルを選択", replaceFiles: "ファイルを選び直す", queued: "アップロード待ち",
   uploadSelected: "{n}件をアップロード", uploading: "アップロード中…", registering: "登録中…", uploadHelp: "形式とアップロードの詳細",

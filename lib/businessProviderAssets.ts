@@ -1,10 +1,12 @@
 import "server-only";
 import { BusinessError } from "./businessTypes";
+import { businessPreviewResponse } from "./businessAssetPreview";
 import { SITE_URL } from "./seo/site";
 
-// Assets belong to the account behind this exact inference key. This module must
-// never use platform credentials or follow the signed download URLs in replies.
+// Assets belong to the account behind this exact inference key. Only the
+// private preview endpoint dereferences a validated, short-lived media URL.
 const ASSET_API = "https://console-api.siraya.ai/extapi/v1/assets";
+const ASSET_MEDIA_HOST = "ark-media-asset-ap-southeast-1.tos-ap-southeast-1.volces.com";
 const ASSET_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/;
 const TYPES = ["image", "video", "audio"] as const;
 const STATUSES = ["processing", "active", "failed"] as const;
@@ -130,6 +132,39 @@ export async function getBusinessProviderAsset(id: string, credentials: Credenti
   const asset = publicAsset(body.data);
   if (asset.id !== id) throw unavailable();
   return asset;
+}
+
+export async function businessProviderPreviewResponse(id: string, credentials: Credentials, range: string | undefined, signal: AbortSignal): Promise<Response> {
+  if (!validId(id)) throw new BusinessError("invalid_reference");
+  const { data } = await assetRequest(`/${encodeURIComponent(id)}`, credentials);
+  const asset = publicAsset(data);
+  const missing = () => new BusinessError("preview_unavailable", 404);
+  if (asset.id !== id || asset.status !== "active" || asset.type === "audio" ||
+      !record(data) || typeof data.url !== "string" || data.url.length > 8192) throw missing();
+  let url: URL;
+  try { url = new URL(data.url); } catch { throw missing(); }
+  if (url.origin !== `https://${ASSET_MEDIA_HOST}` || url.username || url.password || url.hash ||
+      !url.searchParams.get("X-Tos-Signature")) throw missing();
+
+  const response = await fetch(url, {
+    headers: { "Accept-Encoding": "identity", ...(range ? { Range: range } : {}) },
+    cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
+  }).catch(() => { throw missing(); });
+  if (response.status === 416) {
+    await response.body?.cancel();
+    throw new BusinessError("invalid_range", 416);
+  }
+  if ((response.status !== 200 && response.status !== 206) || !response.body ||
+      (response.status === 206) !== response.headers.has("content-range")) {
+    await response.body?.cancel();
+    throw missing();
+  }
+  return businessPreviewResponse({
+    stream: response.body, headers: response.headers, range, type: asset.type,
+    maxBytes: (asset.type === "image" ? 30 : 100) * 1024 * 1024,
+  });
 }
 
 /** The upload service creates this grant. Caller URLs are never forwarded. */

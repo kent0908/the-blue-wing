@@ -1,6 +1,7 @@
 import "server-only";
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { get, head } from "@vercel/blob";
+import { businessPreviewResponse } from "./businessAssetPreview";
 import sharp from "sharp";
 import { sql } from "./db";
 import { BusinessError, getBusinessCredential } from "./business";
@@ -349,11 +350,27 @@ export async function resolveBusinessWanMediaSources<T extends "video" | "audio"
   return sources;
 }
 
-export async function businessUploadPreviewResponse(userId:number|string,accountId:string,id:string,signal?:AbortSignal):Promise<Response>{
+export async function businessUploadPreviewResponse(userId:number|string,accountId:string,id:string,signal?:AbortSignal,range?:string):Promise<Response>{
   userId = safeUserId(userId);
   const row=await ownedUpload(userId,accountId,id);
-  if(!row.blob_etag||row.media_type!=="image")sourceMissing();
-  return storedBusinessAssetResponse(row,signal,true);
+  const spec = BUSINESS_UPLOAD_TYPES[row.content_type];
+  if (!row.blob_etag || row.media_type === "audio" || !spec || spec.type !== row.media_type) sourceMissing();
+  if (row.media_type === "image") return storedBusinessAssetResponse(row,signal,true);
+
+  const timeout = AbortSignal.timeout(120_000);
+  const blob = await get(row.pathname, {
+    access: "private", useCache: false,
+    abortSignal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    headers: { "Accept-Encoding": "identity", ...(range ? { Range: range } : {}) },
+  });
+  if (!blob || blob.statusCode !== 200 || blob.blob.pathname !== row.pathname || blob.blob.etag !== row.blob_etag) {
+    if (blob?.statusCode === 200) await blob.stream.cancel().catch(() => undefined);
+    sourceMissing();
+  }
+  return businessPreviewResponse({
+    stream: blob.stream, headers: blob.headers, type: "video", range, maxBytes: spec.maxBytes,
+    expectedBytes: Number(row.expected_bytes), expectedMime: row.content_type,
+  });
 }
 
 async function storedBusinessAssetResponse(row:UploadRow,signal?:AbortSignal,preview=false):Promise<Response>{

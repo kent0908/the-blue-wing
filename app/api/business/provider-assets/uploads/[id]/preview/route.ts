@@ -1,11 +1,16 @@
 import type { NextRequest } from "next/server";
 import { businessErrorResponse, businessNoStore, requireBusiness } from "@/lib/business";
 import { businessUploadPreviewResponse } from "@/lib/businessAssetUploads";
+import { businessPreviewRange } from "@/lib/businessAssetPreview";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 export async function GET(req:NextRequest,context:{params:Promise<{id:string}>}){
   const auth=await requireBusiness(req);
   if("error"in auth)return auth.error;
-  try{const{id}=await context.params;return businessNoStore(await businessUploadPreviewResponse(auth.user.id,auth.account.id,id,req.signal));}
+  try {
+    const { id } = await context.params;
+    const range = businessPreviewRange(req.headers.get("range"));
+    return businessNoStore(await businessUploadPreviewResponse(auth.user.id, auth.account.id, id, req.signal, range));
+  }
   catch(error){return businessErrorResponse(req,error);}
 }

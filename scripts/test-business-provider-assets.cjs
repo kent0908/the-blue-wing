@@ -34,7 +34,9 @@ function load(file) {
 const assets = load('lib/businessProviderAssets.ts');
 BusinessError = load('lib/businessTypes.ts').BusinessError;
 const route = load('app/api/business/provider-assets/route.ts');
+const previewRoute = load('app/api/business/provider-assets/[id]/preview/route.ts');
 const get = (query = '') => route.GET(new NextRequest('https://fixture.invalid/api/business/provider-assets' + query));
+const getPreview = headers => previewRoute.GET(new NextRequest('https://fixture.invalid/api/business/provider-assets/a-1/preview', { headers }), { params: Promise.resolve({ id: 'a-1' }) });
 const row = (id, type = 'image', status = 'active') => ({ assetId: id, type, status, name: id + '.png', url: 'https://signed.invalid/SECRET', assetUri: 'asset://' + id, groupId: 'private-group', extra: OWN_KEY });
 const listReply = (items, total = items.length) => json({ isSuccess: true, data: { items }, pagination: { page: 1, pageSize: 50, total, totalPages: 1 } });
 const singleReply = (id, type = 'image', status = 'active') => json({ isSuccess: true, data: row(id, type, status) });
@@ -121,6 +123,42 @@ const rejects = (fn, code = 'invalid_reference') => assert.rejects(fn, error => 
   await test('asset errors never echo raw provider rows or credential prose', async () => {
     reply = async () => json({ isSuccess: false, data: { apiKey: OWN_KEY, url: 'https://secret.invalid' } });
     await rejects(() => assets.resolveBusinessProviderAssets([{ id: 'a-1', type: 'image' }], { apiKey: OWN_KEY }), 'business_asset_unavailable');
+  });
+  await test('registered video streams only its authorized byte range without exposing credentials', async () => {
+    const host = 'ark-media-asset-ap-southeast-1.tos-ap-southeast-1.volces.com';
+    const signed = `https://${host}/123/movie.mp4?X-Tos-Signature=secret-fixture`;
+    const metadataFetch = global.fetch;
+    reply = async () => json({ isSuccess: true, data: { ...row('a-1', 'video'), url: signed } });
+    global.fetch = async (input, init) => {
+      if (new URL(input).hostname !== host) return metadataFetch(input, init);
+      assert.equal(String(input), signed);
+      assert.equal(init.redirect, 'error');
+      assert.equal(init.headers.Authorization, undefined);
+      assert.equal(init.headers.Range, 'bytes=2-4');
+      return new Response('ABC', { status: 206, headers: {
+        'content-type': 'video/mp4', 'content-range': 'bytes 2-4/8', 'content-length': '3',
+        'set-cookie': 'upstream=not-forwarded',
+      } });
+    };
+    const response = await getPreview({ Range: 'bytes=2-4' });
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get('content-range'), 'bytes 2-4/8');
+    assert.equal(response.headers.get('set-cookie'), null);
+    assert.match(response.headers.get('cache-control'), /no-store/);
+    assert.equal(await response.text(), 'ABC');
+  });
+  await test('preview rejects missing access, wrong IDs, invalid ranges and arbitrary upstream URLs', async () => {
+    approved = false; assert.equal((await getPreview()).status, 403);
+    approved = true; keyPresent = false; assert.equal((await getPreview()).status, 403);
+    keyPresent = true;
+    assert.equal((await getPreview({ Range: 'bytes=8-2' })).status, 416);
+    assert.equal((await getPreview({ Range: 'bytes=0-2,3-4' })).status, 416);
+    assert.equal(calls.length, 0);
+    for (const asset of [row('a-other'), row('a-1', 'audio'), row('a-1', 'image', 'processing'), row('a-1')]) {
+      reply = async () => json({ isSuccess: true, data: asset });
+      assert.equal((await getPreview()).status, 404);
+    }
+    assert.equal(calls.length, 4);
   });
   console.log(`business provider assets: ${total} passed; zero real network, database or paid generation calls.`);
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { global.fetch = originalFetch; });

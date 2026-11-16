@@ -39,7 +39,19 @@ const business={
 };
 const blob={
   head:async pathname=>{const item=blobs.get(pathname);if(!item)throw Error('missing');return{pathname,size:item.bytes.length,contentType:item.mime,etag:item.etag};},
-  get:async(pathname,options)=>{assert.equal(options.access,'private');assert.equal(options.useCache,false);const item=blobs.get(pathname);if(!item)return null;let offset=0;return{statusCode:200,headers:new Headers(),blob:{pathname,size:item.bytes.length,contentType:item.mime,etag:item.etag},stream:new ReadableStream({pull(controller){if(offset>=item.bytes.length){controller.close();return;}const next=item.bytes.subarray(offset,offset+65536);offset+=next.length;blobReads+=next.length;controller.enqueue(next);}})};},
+  get:async(pathname,options)=>{
+    assert.equal(options.access,'private');assert.equal(options.useCache,false);
+    const item=blobs.get(pathname);if(!item)return null;
+    const headers=new Headers({'content-type':item.mime,'content-length':String(item.bytes.length)});
+    let offset=0, stop=item.bytes.length;
+    if(options.headers?.Range==='bytes=0-63'){
+      stop=64;headers.set('content-range', `bytes 0-63/${item.bytes.length}`);headers.set('content-length','64');
+    }
+    return {statusCode:200,headers,blob:{pathname,size:stop,contentType:item.mime,etag:item.etag},stream:new ReadableStream({pull(controller){
+      if(offset>=stop){controller.close();return;}
+      const next=item.bytes.subarray(offset,Math.min(stop,offset+65536));offset+=next.length;blobReads+=next.length;controller.enqueue(next);
+    }})};
+  },
 };
 function load(file){const full=path.resolve(root,file);if(cache.has(full))return cache.get(full).exports;const module={exports:{}};cache.set(full,module);const code=ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const req=specifier=>{if(specifier==='server-only')return{};if(specifier==='@/lib/business'||specifier==='./business')return business;if(specifier==='@vercel/blob')return blob;if(specifier==='@vercel/blob/client')return{handleUpload:async options=>{const p=options.body.payload;return{clientToken:'fixture-scoped-token',options:await options.onBeforeGenerateToken(p.pathname,p.clientPayload)}}};if(specifier==='./db')return{sql};if(specifier.startsWith('@/'))return load(specifier.slice(2)+'.ts');if(specifier.startsWith('.'))return load(path.relative(root,path.resolve(path.dirname(full),specifier+'.ts')));return require(specifier);};new Function('require','module','exports',code)(req,module,module.exports);return module.exports;}
 BusinessError=load('lib/businessTypes.ts').BusinessError;
@@ -75,6 +87,11 @@ if (process.env.WAN_VIDEO_FIXTURE) await test('Wan stores and serves a real vide
   assert(token.endsWith('.mp4'));
   const response = await helper.businessUploadSourceResponse(token);
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), bytes);
+  const preview = await helper.businessUploadPreviewResponse(7,account,init.upload.id,undefined,'bytes=0-63');
+  assert.equal(preview.status,206);
+  assert.equal(preview.headers.get('content-range'),`bytes 0-63/${bytes.length}`);
+  assert.deepEqual(Buffer.from(await preview.arrayBuffer()),bytes.subarray(0,64));
+  await rejected(helper.businessUploadPreviewResponse(99,account,init.upload.id),'not_found');
   await rejected(helper.resolveBusinessWanMediaSources(99,account,credential,[init.upload.id],false,'video'),'invalid_reference');
   adult=false;
   await rejected(helper.businessUploadSourceResponse(token),'not_found');
