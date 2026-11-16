@@ -25,5 +25,5 @@
 .composerStage .media { height: clamp(160px, 28vh, 330px); min-height: 160px; }
 .composerStage .empty { min-height: 100px; padding: 16px; }
 .composerStage .recent { padding: 10px 16px; }
-.recent summary { cursor: pointer; font-size: 13px; min-height: 32px; line-height: 32px; }
-.recent .recentHeader { justify-content: flex-end; }
+.composerStage .recentHeader { flex-wrap: wrap; margin: 0; }
+.composerStage .rail { margin-top: 8px; }

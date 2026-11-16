@@ -56,6 +56,7 @@ function hooks() {
         return [state.value, value => { state.value = typeof value === "function" ? value(state.value) : value; }];
       },
       useRef: initial => next(() => ({ current: initial })),
+      useId: () => next(() => "fixture-id"),
       useCallback: fn => next(() => fn),
       useEffect: fn => next(() => effects.push(fn)),
     },

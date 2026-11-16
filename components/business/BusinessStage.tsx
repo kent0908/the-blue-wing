@@ -45,6 +45,8 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
   const c = businessResultsCopy(locale);
   const [imageIndex, setImageIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [showRecent, setShowRecent] = useState(false);
+  const recentId = useId();
   const [feedback, setFeedback] = useState("");
   const [recovering, setRecovering] = useState(false);
   const recovery = useRef<AbortController | null>(null);
@@ -126,11 +128,16 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
     {feedback && <p className={styles.notice} role="status">{feedback}</p>}
     {job?.videoUrl && /\.mov(?:\?|$)/i.test(job.videoUrl) && movNotice && <p className={styles.notice}>{movNotice}</p>}
     {job && <details className={styles.details}><summary>{c.details}</summary><p>{job.prompt}</p>{job.errorCode && !failure && <p className={styles.error}>{businessError(business, job.errorCode)}</p>}<BusinessGenerationReceipt job={job} onUpdated={onJobUpdated} />{(!failure || failure.providerTaskId || failure.providerRequestId) && <p>{c.studioRecord} · {job.id}</p>}</details>}
-    {!inDialog && recentJobs.length > 0 && <details className={styles.recent}>
-      <summary>{c.recent} · {Math.min(recentJobs.length, 12)}</summary>
-      <div className={styles.recentHeader}><button type="button" className={styles.button} onClick={onHistory}>{copy.viewHistory} ↗</button></div>
-      {onSelect && <div className={styles.rail}>{recentJobs.slice(0, 12).map(item => <ResultCard key={item.id} job={item} business={business} onClick={() => onSelect(item)} selected={item.id === job?.id} compact />)}</div>}
-    </details>}
+    {!inDialog && recentJobs.length > 0 && <div className={styles.recent}>
+      <div className={styles.recentHeader}>
+        {onSelect && <button type="button" className={styles.button} aria-expanded={showRecent} aria-controls={recentId}
+          onClick={() => setShowRecent(current => !current)}>{c.recent} · {Math.min(recentJobs.length, 12)}</button>}
+        <button type="button" className={styles.button} onClick={onHistory}>{copy.viewHistory} ↗</button>
+      </div>
+      {onSelect && <div id={recentId} hidden={!showRecent}>{showRecent &&
+        <div className={styles.rail}>{recentJobs.slice(0, 12).map(item => <ResultCard key={item.id} job={item} business={business}
+          onClick={() => onSelect(item)} selected={item.id === job?.id} compact />)}</div>}</div>}
+    </div>}
     {expanded && <ResultDialog title={title} closeLabel={c.close} onClose={() => setExpanded(false)}>{media(true)}{thumbnails}<div className={styles.actions}>{job?.images && job.images.length > 1 && <><button className={styles.button} type="button" disabled={imageIndex === 0} onClick={() => setImageIndex(index => index - 1)}>{c.previous}</button><button className={styles.button} type="button" disabled={imageIndex >= job.images.length - 1} onClick={() => setImageIndex(index => index + 1)}>{c.next}</button></>}{url && <a href={downloadUrl} target="_blank" rel="noreferrer" download>{business.download} ↓</a>}</div></ResultDialog>}
   </section>;
 }
