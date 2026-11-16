@@ -29,6 +29,12 @@ const zh = {
   expired: "上傳授權已過期，請重新選擇檔案。", missing: "找不到完整原檔，請確認上傳是否完成。", rejected: "SIRAYA 未接受登錄，請確認權限與檔案規格。",
   removeFile: "移除檔案", native: "商務原檔", provider: "SIRAYA 素材", capacity: "已達參照上限",
   uploadFinished: "原檔已上傳。可在素材列表查看狀態。", progress: "上傳進度", original: "使用原圖",
+  deleteUpload: "刪除上傳紀錄", deleteOriginal: "刪除原檔", deleteProvider: "刪除 SIRAYA 素材",
+  deleteUploadHelp: "工作室會刪除這筆紀錄和已收到的原檔。若 SIRAYA 已收到副本，副本仍會保留。",
+  deleteOriginalHelp: "原檔將永久刪除，使用它的草稿須重新選取素材。SIRAYA 副本會保留。",
+  deleteProviderHelp: "這會從你的 SIRAYA 帳號永久刪除素材。使用它的草稿須重新選取素材；商務原檔會保留。",
+  cancelDelete: "取消", confirmDelete: "確認刪除", deleting: "刪除中…", deleted: "已刪除。",
+  deleteBusy: "上傳仍在處理，請更新狀態後再試。", deleteMissing: "找不到素材，請重新整理列表。", deleteFailed: "無法確認刪除結果，請重新整理列表後再試。",
 };
 export type BusinessAssetsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessAssetsCopy = {
@@ -59,6 +65,12 @@ const en: BusinessAssetsCopy = {
   expired: "Upload authorization expired. Select the file again.", missing: "Original file not found. Check that uploading has finished.", rejected: "SIRAYA declined registration. Check your access and file specs.",
   removeFile: "Remove file", native: "Business original", provider: "SIRAYA asset", capacity: "Reference limit reached",
   uploadFinished: "Original uploaded. Check its status in the library.", progress: "Upload progress", original: "Use original",
+  deleteUpload: "Delete upload", deleteOriginal: "Delete original", deleteProvider: "Delete SIRAYA asset",
+  deleteUploadHelp: "This removes the upload record and any original received by the studio. Any copy already received by SIRAYA stays in your account.",
+  deleteOriginalHelp: "This permanently deletes the original. Drafts that use it need a new reference. Any SIRAYA copy stays in your account.",
+  deleteProviderHelp: "This permanently removes the asset from your SIRAYA account. Drafts that use it need a new reference. The studio keeps any original.",
+  cancelDelete: "Cancel", confirmDelete: "Confirm deletion", deleting: "Deleting…", deleted: "Deleted.",
+  deleteBusy: "The upload is still processing. Refresh its status and try again.", deleteMissing: "Asset not found. Refresh the library.", deleteFailed: "Could not confirm deletion. Refresh the library and try again.",
 };
 const ja: BusinessAssetsCopy = {
   originalImageFormats: "JPEG、PNG、WebP に対応しています。",
@@ -88,10 +100,19 @@ const ja: BusinessAssetsCopy = {
   expired: "アップロード権限が失効しました。ファイルを再選択してください。", missing: "原本が見つかりません。アップロードが完了したかご確認ください。", rejected: "SIRAYA が登録を受け付けませんでした。権限とファイル仕様をご確認ください。",
   removeFile: "ファイルを外す", native: "ビジネス原本", provider: "SIRAYA 素材", capacity: "参照素材が上限に達しました",
   uploadFinished: "原本をアップロードしました。素材一覧で状態を確認できます。", progress: "アップロードの進捗", original: "元画像を使う",
+  deleteUpload: "アップロード記録を削除", deleteOriginal: "元ファイルを削除", deleteProvider: "SIRAYA 素材を削除",
+  deleteUploadHelp: "記録と、スタジオが受け取った元ファイルを削除します。SIRAYA に送信済みのコピーは残ります。",
+  deleteOriginalHelp: "元ファイルを完全に削除します。この素材を使う下書きでは参照を選び直してください。SIRAYA 側のコピーは残ります。",
+  deleteProviderHelp: "SIRAYA アカウントから素材を完全に削除します。この素材を使う下書きでは参照を選び直してください。スタジオ内の元ファイルは残ります。",
+  cancelDelete: "キャンセル", confirmDelete: "削除する", deleting: "削除中…", deleted: "削除しました。",
+  deleteBusy: "アップロード処理中です。状態を更新してから再試行してください。", deleteMissing: "素材が見つかりません。一覧を更新してください。", deleteFailed: "削除を確認できませんでした。一覧を更新してから再試行してください。",
 };
 const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessAssetsCopy(locale: Locale): BusinessAssetsCopy { return COPY[locale]; }
 export function businessAssetsError(t: BusinessAssetsCopy, code?: string): string {
+  if (code === "business_asset_delete_busy") return t.deleteBusy;
+  if (code === "business_asset_delete_missing" || code === "not_found") return t.deleteMissing;
+  if (code === "business_asset_delete_failed") return t.deleteFailed;
   if (code === "wan_video_invalid") return t.wanVideoInvalid;
   if (code === "wan_audio_invalid") return t.wanAudioInvalid;
   if (code === "wan_gif_unsupported") return t.wanGifUnsupported;

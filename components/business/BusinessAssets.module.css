@@ -140,6 +140,24 @@ dialog.previewDialog h2 { overflow-wrap: anywhere; }
 .assetStatus[data-status=active] { color: var(--asset-accent); }
 .assetStatus:is([data-status=failed],[data-status=unknown]) { color: #edb4a3; }
 .cardBody > small { margin: 4px 0 8px; }
+.assetActions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.cardActions:not(:empty) { margin-top: 8px; }
+.deleteAsset {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #825d53;
+  border-radius: 4px;
+  background: transparent;
+  color: #ffc9bc;
+  font: inherit;
+  cursor: pointer;
+}
+.cardActions .deleteAsset { font-size: 12px; }
+.deleteAsset:hover:not(:disabled) { border-color: #d89989; background: #442d28; }
+.deleteAsset:disabled { opacity: .55; cursor: not-allowed; }
+dialog.deleteDialog { width: min(450px, calc(100vw - 24px)); margin: auto; }
+.deleteDialog .assetActions { justify-content: flex-end; margin-top: 18px; }
+.deleteName { font-weight: 600; overflow-wrap: anywhere; }
 .selectButton { width: 100%; justify-content: space-between; }
 .selectButton[aria-pressed=true] { color: #14251b; background: var(--asset-accent); border-color: var(--asset-accent); }
 .selectButton[aria-pressed=true]:hover:not(:disabled) { color: #14251b; background: #d2edde; }

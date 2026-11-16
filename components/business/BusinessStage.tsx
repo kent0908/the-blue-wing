@@ -13,11 +13,11 @@ import BusinessGenerationReceipt from "./BusinessGenerationReceipt";
 import { useLocale } from "@/lib/i18n/client";
 import styles from "./BusinessResults.module.css";
 
-export function ResultDialog({ title, closeLabel, onClose, children }: { title: string; closeLabel: string; onClose: () => void; children: ReactNode }) {
+export function ResultDialog({ title, closeLabel, onClose, children, fullMedia = false }: { title: string; closeLabel: string; onClose: () => void; children: ReactNode; fullMedia?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => { const node = dialog.current; node?.showModal(); return () => node?.close(); }, []);
-  return <dialog ref={dialog} className={styles.viewer} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); onClose(); }}>
+  return <dialog ref={dialog} className={`${styles.viewer} ${fullMedia ? styles.fullMediaViewer : ""}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); onClose(); }}>
     <div className={styles.viewerHead}><h2 id={titleId}>{title}</h2><button type="button" className={styles.button} onClick={onClose} autoFocus>{closeLabel} ×</button></div>{children}
   </dialog>;
 }
@@ -138,6 +138,15 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
         <div className={styles.rail}>{recentJobs.slice(0, 12).map(item => <ResultCard key={item.id} job={item} business={business}
           onClick={() => onSelect(item)} selected={item.id === job?.id} compact />)}</div>}</div>}
     </div>}
-    {expanded && <ResultDialog title={title} closeLabel={c.close} onClose={() => setExpanded(false)}>{media(true)}{thumbnails}<div className={styles.actions}>{job?.images && job.images.length > 1 && <><button className={styles.button} type="button" disabled={imageIndex === 0} onClick={() => setImageIndex(index => index - 1)}>{c.previous}</button><button className={styles.button} type="button" disabled={imageIndex >= job.images.length - 1} onClick={() => setImageIndex(index => index + 1)}>{c.next}</button></>}{url && <a href={downloadUrl} target="_blank" rel="noreferrer" download>{business.download} ↓</a>}</div></ResultDialog>}
+    {expanded && <ResultDialog fullMedia title={title} closeLabel={c.close} onClose={() => setExpanded(false)}>
+      {media(true)}{thumbnails}
+      <div className={styles.actions}>
+        {job?.images && job.images.length > 1 && <>
+          <button className={styles.button} type="button" disabled={imageIndex === 0} onClick={() => setImageIndex(index => index - 1)}>{c.previous}</button>
+          <button className={styles.button} type="button" disabled={imageIndex >= job.images.length - 1} onClick={() => setImageIndex(index => index + 1)}>{c.next}</button>
+        </>}
+        {url && <a href={downloadUrl} target="_blank" rel="noreferrer" download>{business.download} ↓</a>}
+      </div>
+    </ResultDialog>}
   </section>;
 }

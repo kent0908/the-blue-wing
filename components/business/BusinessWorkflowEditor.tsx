@@ -35,7 +35,9 @@ function NodeFields({ node, models, onChange, hidePrompt = false }: { node: Canv
     <p className={styles.hint}>{items.length} / 16 · {t.sourceLimit}</p>
     {items.length ? items.map(item => <div className={styles.source} key={item.uploadId}><span>{item.name}</span><button type="button" title={t.remove} aria-label={`${t.remove}: ${item.name}`} onClick={() => onChange({ businessItems: items.filter(source => source.uploadId !== item.uploadId), items: [] })}>×</button></div>) : <p>{t.none}</p>}
     {picking && <BusinessDialog title={t.references} onClose={() => setPicking(false)}>
-      <BusinessAssets imageOnly compact selectedIds={items.map(item => item.uploadId)} canSelect={asset => items.some(item => item.uploadId === asset.uploadId) || items.length < 16} onSelect={asset => {
+      <BusinessAssets imageOnly compact selectedIds={items.map(item => item.uploadId)} canSelect={asset => items.some(item => item.uploadId === asset.uploadId) || items.length < 16} onDeleted={({scope,id}) => {
+        if (scope === "upload" && items.some(item => item.uploadId === id)) onChange({ businessItems: items.filter(item => item.uploadId !== id), items: [] });
+      }} onSelect={asset => {
         if (!asset.uploadId || !asset.storageReady) return;
         const id = asset.uploadId;
         const next = items.some(item => item.uploadId === id) ? items.filter(item => item.uploadId !== id) : [...items, { uploadId: id, src: `/api/business/provider-assets/uploads/${id}/preview`, name: asset.name }];

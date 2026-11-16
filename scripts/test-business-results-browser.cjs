@@ -3,6 +3,7 @@
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const ts = require('typescript'), repo = path.resolve(__dirname, '..');
+const sharp = require('sharp');
 const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3105';
 if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw Error('Local test server required');
 const cache = new Map();
@@ -10,7 +11,35 @@ function load(file) { file = path.resolve(file); if (cache.has(file)) return cac
 const catalog = load(path.join(repo, 'lib/businessModelCatalog.ts')).buildBusinessModelCatalog({ data: [{ id: 'gpt-image-2' }, { id: 'SIRAYA-Seedance-2.5' }] });
 const uid = '11111111-1111-4111-8111-111111111111';
 const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === 'video' ? 'SIRAYA-Seedance-2.5' : 'gpt-image-2', status, prompt: `Campaign ${id}`, nsfw: false, createdAt: new Date(Date.UTC(2026, 10, 5, 12, Number(id) || 0)).toISOString(), ...extra });
+async function assertImageFits(img, [width, height]) {
+  await img.evaluate(image => image.decode());
+  const fit = await img.evaluate(image => {
+    const frame = image.parentElement.closest('[class*="_media"]');
+    const box = image.getBoundingClientRect();
+    const viewport = frame.getBoundingClientRect();
+    return {
+      dimensions: [image.naturalWidth, image.naturalHeight],
+      containment: getComputedStyle(image).objectFit,
+      imageHeight: box.height, frameHeight: viewport.height, imageWidth: box.width,
+      visible: box.top >= viewport.top - 1 && box.left >= viewport.left - 1 &&
+        box.bottom <= viewport.bottom + 1 && box.right <= viewport.right + 1 &&
+        box.top >= -1 && box.bottom <= innerHeight + 1,
+    };
+  });
+  assert.deepEqual(fit.dimensions, [width, height]);
+  assert.equal(fit.containment, 'contain');
+  assert.ok(fit.visible && fit.imageWidth > 0 && fit.imageHeight > 0, JSON.stringify(fit));
+  assert.ok(Math.abs(fit.imageHeight - fit.frameHeight) <= 1, JSON.stringify(fit));
+}
 (async () => {
+  const formats = [
+    ['/home-films/worlds.jpg', 2200, 700],
+    ['/home-films/art.jpg', 750, 2400],
+    ['/qa/business-preview-square.png', 1400, 1400],
+  ];
+  const previewImages = new Map(await Promise.all(formats.map(async ([url, width, height]) => [
+    url, await sharp({create:{width,height,channels:3,background:'#819ab6'}}).png().toBuffer(),
+  ])));
   const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
   try {
     for (const locale of ['zh-Hant', 'zh-Hans', 'en', 'ja']) {
@@ -20,22 +49,47 @@ const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === '
       const t = businessCopy(locale);
       const priceCopy = load(path.join(repo, 'lib/i18n/businessPricePreview.ts')).businessPricePreviewCopy(locale);
       const { work } = load(path.join(repo, 'lib/i18n/businessOperations.ts')).businessOperationsCopy(locale);
+      const assetCopy = load(path.join(repo, 'lib/i18n/businessAssets.ts')).businessAssetsCopy(locale);
       const context = await browser.newContext({ viewport: { width: 1600, height: 1100 }, permissions: ['clipboard-read', 'clipboard-write'] });
       await context.addCookies([{ name: 'bw_lang', value: locale, url: base }]);
       const page = await context.newPage(); page.setDefaultNavigationTimeout(120000); const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       let posts = 0, polls = 0, exactReads = 0, showSecond = false, releaseAcceptance, signalAcceptance;
       let quotes = 0;
+      const originalId = '00000000-0000-4000-8000-000000000021', pendingId = '00000000-0000-4000-8000-000000000022';
+      const providerId = 'asset-qa-neutral';
+      let uploads = [
+        {id:originalId,name:'fixture-portrait.png',type:'image',status:'active',storageReady:true},
+        {id:pendingId,name:'pending-upload.png',type:'image',status:'created',storageReady:false},
+      ];
+      let providerAssets = [{id:providerId,name:'registered-portrait.png',type:'image',status:'active'}];
+      const deletions=[];
       const acceptanceStarted = new Promise(resolve => { signalAcceptance = resolve; });
-      let jobs = [fixture('3', 'image', 'completed', { images: [{url: '/home-films/worlds.jpg'}, {url: '/home-films/art.jpg'}] }), fixture('2', 'video', 'completed', { videoUrl: '/home-films/worlds.mp4' }), fixture('1', 'image', 'failed', {errorCode: 'generation_failed'})];
+      let jobs = [fixture('3', 'image', 'completed', { images: formats.map(([url]) => ({url})) }), fixture('2', 'video', 'completed', { videoUrl: '/home-films/worlds.mp4' }), fixture('1', 'image', 'failed', {errorCode: 'generation_failed'})];
       await page.route('**/*', async route => {
         const url = new URL(route.request().url()), p = url.pathname;
         if (url.origin !== base) return route.abort();
+        if (previewImages.has(p)) return route.fulfill({contentType:'image/png',body:previewImages.get(p)});
         if (!p.startsWith('/api/')) return route.continue();
         const json = body => route.fulfill({json: body});
         if (p === '/api/business/access') return json({account:{id:uid,userId:7,companyName:'Blue Wing Creative',status:'approved'},keyConfigured:true,encryptionReady:true,adultVerified:true});
         if (p === '/api/business/credentials') return json({credential:{id:uid,label:'Test',last4:'test',updatedAt:'2026-11-05T00:00:00Z'}});
         if (p === '/api/business/models') return json(catalog);
+        if (p === '/api/business/provider-assets/upload') {
+          if (route.request().method() === 'DELETE') {
+            const {uploadId} = route.request().postDataJSON();
+            assert.ok(uploads.some(item=>item.id===uploadId));
+            deletions.push(uploadId);uploads=uploads.filter(item=>item.id!==uploadId);
+            return json({deleted:true});
+          }
+          return json({directUpload:true,types:{'image/png':{ext:'png',maxBytes:30000000,type:'image'}},uploads});
+        }
+        if (p === '/api/business/provider-assets') return json({assets:providerAssets,pagination:{page:1,totalPages:1}});
+        if (p === `/api/business/provider-assets/${providerId}` && route.request().method()==='DELETE') {
+          deletions.push(providerId);providerAssets=[];
+          return json({deleted:true});
+        }
+        if (p.endsWith('/preview')&&p.startsWith('/api/business/provider-assets/')) return route.fulfill({contentType:'image/png',body:previewImages.get('/home-films/art.jpg')});
         if (p === '/api/business/price-preview') {
           quotes++;
           const body = route.request().postDataJSON();
@@ -89,9 +143,21 @@ const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === '
       assert.equal(await stage.getByRole('button',{name:`${c.result} 2`,exact:true}).getAttribute('aria-pressed'),'true');
       await stage.getByRole('button',{name:c.expand,exact:true}).last().click();
       const dialog=page.getByRole('dialog'); await dialog.waitFor();
+      for (const viewport of [{width:1600,height:1100},{width:320,height:680},{width:844,height:390}]) {
+        await page.setViewportSize(viewport);
+        for (const [index, [url,width,height]] of formats.entries()) {
+          await dialog.getByRole('button',{name:`${c.result} ${index + 1}`,exact:true}).click();
+          const img = dialog.locator('img').first();
+          assert.equal(await img.getAttribute('src'),url);
+          await assertImageFits(img, [width, height]);
+        }
+        assert.ok(await dialog.getByRole('link',{name:new RegExp(t.download)}).isVisible());
+        assert.equal(await dialog.evaluate(node=>node.scrollHeight<=node.clientHeight+1),true);
+      }
       await dialog.getByRole('button',{name:c.previous,exact:true}).click();
-      assert.equal(await dialog.locator('img').first().getAttribute('src'),'/home-films/worlds.jpg');
+      assert.equal(await dialog.locator('img').first().getAttribute('src'),'/home-films/art.jpg');
       await page.keyboard.press('Escape'); await dialog.waitFor({state:'detached'});
+      await page.setViewportSize({width:1600,height:1100});
       await stage.getByRole('button',{name:c.copy,exact:true}).click();
       assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'Campaign 3');
       await stage.getByRole('button',{name:c.reuse}).click();
@@ -131,6 +197,7 @@ const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === '
       const cards=page.locator('button[aria-label^="'+c.result+' ·"]'); assert.equal(await cards.count(),1);
       await cards.first().click(); await dialog.waitFor();
       await dialog.getByRole('button',{name:`${c.result} 2`,exact:true}).click();
+      await assertImageFits(dialog.locator('img').first(),[750,2400]);
       await dialog.getByRole('button',{name:c.reuse}).click();
       await page.waitForURL(url=>!url.searchParams.has('tab'));
       assert.equal(await textarea.inputValue(),'Campaign 3'); assert.equal(posts,1);
@@ -162,8 +229,28 @@ const fixture = (id, kind, status, extra = {}) => ({ id, kind, model: kind === '
       assert.ok(exactReads>0,'Reload must recover the original request even if it was absent from the initial history');
       await textarea.fill('A distinct draft after failure');
       assert.equal(await submit.isEnabled(),true);
+      await page.goto(`${base}/business?tab=assets`);
+      await page.setViewportSize({width:320,height:680});
+      await page.getByText(assetCopy.pendingTitle,{exact:false}).click();
+      await page.getByRole('button',{name:assetCopy.deleteUpload,exact:true}).click();
+      await dialog.getByText('pending-upload.png',{exact:true}).waitFor();
+      await dialog.getByRole('button',{name:assetCopy.cancelDelete,exact:true}).click();
+      assert.deepEqual(deletions,[]);
+      await page.getByRole('button',{name:assetCopy.deleteUpload,exact:true}).click();
+      assert.equal(await dialog.evaluate(node=>node.getBoundingClientRect().width <= innerWidth),true);
+      await dialog.getByRole('button',{name:assetCopy.confirmDelete,exact:true}).click();
+      await page.getByText('pending-upload.png',{exact:true}).waitFor({state:'detached'});
+      assert.deepEqual(deletions,[pendingId]);
+      for (const [label,name,id] of [[assetCopy.deleteProvider,'registered-portrait.png',providerId],[assetCopy.deleteOriginal,'fixture-portrait.png',originalId]]) {
+        const card=page.locator('article').filter({hasText:name});
+        await card.getByRole('button',{name:label,exact:true}).click();
+        await dialog.getByText(name,{exact:true}).waitFor();
+        await dialog.getByRole('button',{name:assetCopy.confirmDelete,exact:true}).click();
+        await card.waitFor({state:'detached'});
+        assert.equal(deletions.at(-1),id);
+      }
       assert.deepEqual(errors,[]);
-      console.log(`PASS ${locale}: gallery, editor/navigation during acknowledgement, background completion, original receipt recovery after reload, failed-job release, and mobile`);
+      console.log(`PASS ${locale}: uncropped media across three sizes, gallery, async recovery, and mobile asset deletion`);
       await context.close();
     }
   } finally { await browser.close(); }

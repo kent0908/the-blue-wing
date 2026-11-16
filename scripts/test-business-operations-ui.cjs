@@ -79,6 +79,7 @@ function assetFixture({ completeStatus = "unknown", failInitialize = false } = {
     "@/lib/i18n/client": { useLocale: () => "en" },
     "@/lib/i18n/businessAssets": { businessAssetsCopy, businessAssetsError },
     "./BusinessAssetPreview": { __esModule: true, default: function FixturePreview() {} },
+    "./BusinessDialog": { __esModule: true, default: function FixtureDialog() {} },
   }, {
     crypto: { randomUUID: () => `client-${++uuid}` },
     fetch: async (url, init) => {

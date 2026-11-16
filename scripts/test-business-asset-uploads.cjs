@@ -5,14 +5,18 @@ const account='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',credential='bbbbbbbb-bbbb-4
 const ownKey='sk-fixture-owned-12345678901234',originalFetch=global.fetch;
 const oldEncryption=process.env.BYOK_ENCRYPTION_KEY,oldBlob=process.env.BLOB_READ_WRITE_TOKEN;
 let approved=true,revoked=false,adult=true,verified=true,currentCredential=credential,providerCalls=0,lastSource='',upstreamMode='',blobReads=0,authUserId=7;
-let png;
+let png, blobDeleteFailure=false, transactionRows=null;
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const clone=value=>value?JSON.parse(JSON.stringify(value)):value;
 function live(){return approved&&!revoked&&verified;}
 function matches(row,user,aid){return row&&Number(row.user_id)===user&&row.account_id===aid&&approved;}
 async function query(q,p=[]){
   q=q.replace(/\s+/g,' ').toLowerCase();
-  if(['begin','commit','rollback'].includes(q))return{rows:[]};
+  if(q==='begin'){transactionRows=new Map([...rows].map(([id,row])=>[id,clone(row)]));return{rows:[]};}
+  if(q==='commit'){transactionRows=null;return{rows:[]};}
+  if(q==='rollback'){if(transactionRows){rows.clear();for(const [id,row] of transactionRows)rows.set(id,row);}transactionRows=null;return{rows:[]};}
+  if(q.startsWith('delete from business_asset_uploads')){const row=rows.get(p[0]);if(!matches(row,p[1],p[2])||row.pathname!==p[3]||['registering','processing'].includes(row.status))return{rows:[]};rows.delete(p[0]);return{rows:[{id:p[0]}]};}
+  if(q.startsWith('update business_asset_uploads set provider_asset_id=null')){for(const row of rows.values())if(matches(row,p[0],p[1])&&row.credential_id===p[2]&&row.provider_asset_id===p[3]){row.provider_asset_id=null;row.status=row.blob_etag?'active':'failed';}return{rows:[]};}
   if(q.startsWith('select a.id from business_accounts'))return{rows:live()&&p[2]===currentCredential?[{id:account}]:[]};
   if(q.startsWith('select count(*)'))return{rows:[{count:String([...rows.values()].filter(row=>row.account_id===p[0]&&['created','registering','unknown'].includes(row.status)).length)}]};
   if(q.startsWith('insert into business_asset_uploads')){const row={id:p[0],account_id:p[1],user_id:p[2],credential_id:p[3],client_request_id:p[4],pathname:p[5],filename:p[6],content_type:p[7],media_type:p[8],expected_bytes:p[9],blob_etag:null,status:'created',provider_asset_id:null,error_code:null,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+86400000).toISOString()};rows.set(row.id,row);return{rows:[clone(row)]};}
@@ -38,6 +42,7 @@ const business={
   businessErrorResponse:(_req,error)=>json({error:{code:error.code??'unavailable',message:'Sanitized'}},error.status??503),
 };
 const blob={
+  del:async pathname=>{assert.match(pathname,/^business-assets\//);if(blobDeleteFailure)throw Error('unavailable');blobs.delete(pathname);},
   head:async pathname=>{const item=blobs.get(pathname);if(!item)throw Error('missing');return{pathname,size:item.bytes.length,contentType:item.mime,etag:item.etag};},
   get:async(pathname,options)=>{
     assert.equal(options.access,'private');assert.equal(options.useCache,false);
@@ -53,7 +58,7 @@ const blob={
     }})};
   },
 };
-function load(file){const full=path.resolve(root,file);if(cache.has(full))return cache.get(full).exports;const module={exports:{}};cache.set(full,module);const code=ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const req=specifier=>{if(specifier==='server-only')return{};if(specifier==='@/lib/business'||specifier==='./business')return business;if(specifier==='@vercel/blob')return blob;if(specifier==='@vercel/blob/client')return{handleUpload:async options=>{const p=options.body.payload;return{clientToken:'fixture-scoped-token',options:await options.onBeforeGenerateToken(p.pathname,p.clientPayload)}}};if(specifier==='./db')return{sql};if(specifier.startsWith('@/'))return load(specifier.slice(2)+'.ts');if(specifier.startsWith('.'))return load(path.relative(root,path.resolve(path.dirname(full),specifier+'.ts')));return require(specifier);};new Function('require','module','exports',code)(req,module,module.exports);return module.exports;}
+function load(file){const full=path.resolve(root,file);if(cache.has(full))return cache.get(full).exports;const fixtureModule={exports:{}};cache.set(full,fixtureModule);const code=ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const req=specifier=>{if(specifier==='server-only')return{};if(specifier==='@/lib/business'||specifier==='./business')return business;if(specifier==='@vercel/blob')return blob;if(specifier==='@vercel/blob/client')return{handleUpload:async options=>{const p=options.body.payload;return{clientToken:'fixture-scoped-token',options:await options.onBeforeGenerateToken(p.pathname,p.clientPayload)}}};if(specifier==='./db')return{sql};if(specifier.startsWith('@/'))return load(specifier.slice(2)+'.ts');if(specifier.startsWith('.'))return load(path.relative(root,path.resolve(path.dirname(full),specifier+'.ts')));return require(specifier);};new Function('require','module','exports',code)(req,fixtureModule,fixtureModule.exports);return fixtureModule.exports;}
 BusinessError=load('lib/businessTypes.ts').BusinessError;
 business.BusinessError=BusinessError;
 const helper=load('lib/businessAssetUploads.ts'),route=load('app/api/business/provider-assets/upload/route.ts'),single=load('app/api/business/provider-assets/[id]/route.ts');
@@ -154,6 +159,39 @@ await test('generic sources reject duplicates, foreign UUIDs, wrong types and mo
 await test('key rotation blocks unfinished upload finalization but preserves already issued nonrevoked grants',async()=>{const init=await initialize();store(init);await helper.completeBusinessUpload(7,account,init.upload.id);const token=new URL(lastSource).pathname.split('/').at(-1);currentCredential=rotated;const response=await helper.businessUploadSourceResponse(token);assert.equal(response.status,200);await response.arrayBuffer();const second=await initialize(2);store(second);currentCredential=credential;await rejected(helper.completeBusinessUpload(7,account,second.upload.id),'credential_changed');});
 await test('single provider refresh uses the current key and omits signed URLs',async()=>{const response=await single.GET(new NextRequest('https://fixture.invalid/api/business/provider-assets/a-1'),{params:Promise.resolve({id:'a-1'})});const body=await response.json();assert.equal(body.asset.status,'active');assert.ok(!JSON.stringify(body).includes('secret.invalid'));assert.ok(!JSON.stringify(body).includes(ownKey));});
 await test('upload routes require current business approval and same origin',async()=>{approved=false;assert.equal((await route.POST(request({action:'initialize'}))).status,403);approved=true;const cross=new NextRequest('https://fixture.invalid/api/business/provider-assets/upload',{method:'POST',headers:{origin:'https://evil.invalid','content-type':'application/json'},body:'{}'});assert.equal((await route.POST(cross)).status,403);assert.equal(providerCalls,0);});
+await test('deletion checks the origin and account, removes one pending upload, and leaves the provider copy alone',async()=>{
+  const [pending,other]=[await initialize(),await initialize(2)];
+  store(pending);
+  rows.get(pending.upload.id).provider_asset_id='asset-copy';
+  const remove=(origin='https://fixture.invalid')=>route.DELETE(new NextRequest('https://fixture.invalid/api/business/provider-assets/upload',{method:'DELETE',headers:{origin,'content-type':'application/json'},body:JSON.stringify({uploadId:pending.upload.id})}));
+  assert.equal((await remove('https://evil.invalid')).status,403);
+  authUserId=99;assert.equal((await remove()).status,404);
+  authUserId=7;assert.equal((await remove()).status,200);
+  assert.equal(rows.has(other.upload.id),true);
+  assert.equal(rows.has(pending.upload.id),false);
+  assert.equal(blobs.has(pending.pathname),false);
+  assert.equal(providerCalls,0);
+});
+await test('deleting an original in use by registration is blocked and a storage error preserves its record',async()=>{
+  const init=await initialize();store(init);rows.get(init.upload.id).status='processing';
+  await rejected(helper.deleteBusinessUpload(7,account,init.upload.id),'business_asset_delete_busy');
+  rows.get(init.upload.id).status='active';
+  blobDeleteFailure=true;
+  try{await rejected(helper.deleteBusinessUpload(7,account,init.upload.id),'business_asset_delete_failed');}finally{blobDeleteFailure=false;}
+  assert.equal(rows.has(init.upload.id),true);assert.equal(blobs.has(init.pathname),true);
+});
+await test('provider deletion requires HTTP 204 and retains the linked business original',async()=>{
+  const init=await initialize();store(init);await helper.completeBusinessUpload(7,account,init.upload.id);
+  const row=rows.get(init.upload.id);const id=row.provider_asset_id;
+  const sibling=await initialize(2);Object.assign(rows.get(sibling.upload.id),{provider_asset_id:id,credential_id:rotated});
+  let status=404;
+  global.fetch=async(url,init)=>{assert.equal(url,`https://console-api.siraya.ai/extapi/v1/assets/${id}`);assert.equal(init.headers.Authorization,'Bearer '+ownKey);assert.equal(init.method,'DELETE');assert.equal(init.redirect,'error');return new Response(null,{status});};
+  const remove=()=>single.DELETE(new NextRequest(`https://fixture.invalid/api/business/provider-assets/${id}`,{method:'DELETE',headers:{origin:'https://fixture.invalid'}}),{params:Promise.resolve({id})});
+  assert.equal((await remove()).status,404);assert.equal(row.provider_asset_id,id);
+  status=204;assert.equal((await remove()).status,200);
+  assert.equal(row.provider_asset_id,null);assert.equal(row.status,'active');assert.equal(blobs.has(init.pathname),true);
+  assert.equal(rows.get(sibling.upload.id).provider_asset_id,id);
+});
 await test('register helper cannot forward caller URLs, keys, query strings or arbitrary origins',async()=>{for(const url of['https://evil.invalid/file','https://thebluewing.studio/api/assets/1/raw','https://thebluewing.studio/api/business/provider-assets/source/'+('a'.repeat(90))+'?x=1'])await rejected(provider.registerBusinessProviderAsset({url,type:'image',name:'safe.png'},{apiKey:ownKey}),'invalid_reference');assert.equal(providerCalls,0);});
 console.log(`business asset uploads: ${total} passed; zero real provider, Blob, SQL or paid generation calls.`);
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>{global.fetch=originalFetch;if(oldEncryption===undefined)delete process.env.BYOK_ENCRYPTION_KEY;else process.env.BYOK_ENCRYPTION_KEY=oldEncryption;if(oldBlob===undefined)delete process.env.BLOB_READ_WRITE_TOKEN;else process.env.BLOB_READ_WRITE_TOKEN=oldBlob;});

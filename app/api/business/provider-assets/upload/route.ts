@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { assertBusinessOrigin, BusinessError, businessErrorResponse, businessJson, readBusinessJson, requireBusiness } from "@/lib/business";
-import { BUSINESS_UPLOAD_TYPES, businessDirectUploadReady, businessUploadTokenOptions, completeBusinessUpload, initializeBusinessUpload, listBusinessUploads } from "@/lib/businessAssetUploads";
+import { BUSINESS_UPLOAD_TYPES, businessDirectUploadReady, businessUploadTokenOptions, completeBusinessUpload, deleteBusinessUpload, initializeBusinessUpload, listBusinessUploads } from "@/lib/businessAssetUploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,18 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return auth.error;
   try { return businessJson({ directUpload: businessDirectUploadReady(), types: BUSINESS_UPLOAD_TYPES, uploads: await listBusinessUploads(auth.user.id, auth.account.id) }); }
   catch (error) { return businessErrorResponse(req, error); }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    assertBusinessOrigin(req);
+    const auth = await requireBusiness(req);
+    if ("error" in auth) return auth.error;
+    const body = await readBusinessJson(req);
+    if (Object.keys(body).length !== 1 || typeof body.uploadId !== "string") throw new BusinessError("business_asset_upload_invalid");
+    await deleteBusinessUpload(auth.user.id, auth.account.id, body.uploadId);
+    return businessJson({ deleted: true });
+  } catch (error) { return businessErrorResponse(req, error); }
 }
 
 /** Large bytes travel browser → private Blob, never through a Vercel function body. */

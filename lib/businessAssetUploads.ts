@@ -1,12 +1,12 @@
 import "server-only";
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { get, head } from "@vercel/blob";
+import { del, get, head } from "@vercel/blob";
 import { businessPreviewResponse } from "./businessAssetPreview";
 import sharp from "sharp";
 import { sql } from "./db";
 import { BusinessError, getBusinessCredential } from "./business";
 import { SITE_URL } from "./seo/site";
-import { BusinessProviderAssetSubmitError, getBusinessProviderAsset, registerBusinessProviderAsset, type BusinessProviderAsset, type BusinessProviderAssetType } from "./businessProviderAssets";
+import { BusinessProviderAssetSubmitError, deleteBusinessProviderAsset, getBusinessProviderAsset, registerBusinessProviderAsset, type BusinessProviderAsset, type BusinessProviderAssetType } from "./businessProviderAssets";
 import { isAdultVerified, type AdultGateUser } from "./adultGate";
 import { SEEDANCE_25_REFERENCE_LIMITS } from "./businessSeedance";
 import { WAN3_MAX_REFERENCE_AUDIO, WAN3_MAX_REFERENCE_VIDEOS } from "./businessWan3";
@@ -80,6 +80,37 @@ async function ownedUpload(userId: number | string, accountId: string, id: strin
   const row = rows[0];
   if (!row || !validStoredPath(row)) fail("not_found", 404);
   return row;
+}
+
+export async function deleteBusinessUpload(userId: number | string, accountId: string, id: string): Promise<void> {
+  const owner = safeUserId(userId);
+  const row = await ownedUpload(owner, accountId, id);
+  if (!businessDirectUploadReady()) fail("business_asset_storage_unavailable", 503);
+  const client = await sql.connect();
+  try {
+    await client.query("BEGIN");
+    const removed = await client.query(`delete from business_asset_uploads t using business_accounts a
+      where t.id=$1 and t.user_id=$2 and t.account_id=$3 and t.pathname=$4
+      and t.status not in ('registering','processing')
+      and a.id=t.account_id and a.user_id=t.user_id and a.status='approved' returning t.id`, [id, owner, accountId, row.pathname]);
+    if (!removed.rows.length) fail("business_asset_delete_busy", 409);
+    // Only a server-owned path is ever sent to Blob. This also removes any
+    // bytes received before the browser completed the upload record.
+    try { await del(row.pathname, { abortSignal: AbortSignal.timeout(15_000) }); }
+    catch { fail("business_asset_delete_failed", 503); }
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK").catch(() => {}); throw error; }
+  finally { client.release(); }
+}
+
+export async function deleteRegisteredBusinessAsset(userId: number | string, accountId: string, id: string): Promise<void> {
+  const owner = safeUserId(userId);
+  const credential = await currentCredential(owner, accountId);
+  await deleteBusinessProviderAsset(id, credential);
+  // The private Blob remains available under its original upload ID.
+  await sql.query(`update business_asset_uploads set provider_asset_id=null,
+    status=case when blob_etag is null then 'failed' else 'active' end, error_code=null, updated_at=now()
+    where user_id=$1 and account_id=$2 and credential_id=$3 and provider_asset_id=$4`, [owner, accountId, credential.id, id]);
 }
 
 /** Reserve an idempotent, server-owned private path. Client data never selects the Blob destination. */

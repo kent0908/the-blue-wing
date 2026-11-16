@@ -14,7 +14,7 @@ import BusinessPricePreview from "./BusinessPricePreview";
 import BusinessStudioNav from "./BusinessStudioNav";
 import BusinessStage from "./BusinessStage";
 import BusinessSeedanceControls from "./BusinessSeedanceControls";
-import BusinessAssets, { type BusinessAssetRecord } from "./BusinessAssets";
+import BusinessAssets, { type BusinessAssetDeletion, type BusinessAssetRecord } from "./BusinessAssets";
 import BusinessUsage from "./BusinessUsage";
 import BusinessModelCatalog from "./BusinessModelCatalog";
 import BusinessWorkflows from "./BusinessWorkflows";
@@ -414,6 +414,12 @@ export default function BusinessWorkspace() {
     if (key.startsWith("business:")) setImageBusinessAssets(current => current.filter(asset => `business:${asset.uploadId}` !== key));
     setReferenceOrder(current => current.filter(value => value !== key));
     setConfirmation(null); setError("");
+  };
+  const removeDeletedAsset = ({ scope, id }: BusinessAssetDeletion) => {
+    if (scope === "upload") { removeDedicatedReference(`business:${id}`); return; }
+    setProviderAssets(current => current.filter(asset => asset.id !== id));
+    setReferenceOrder(current => current.filter(key => key !== `provider:${id}`));
+    setConfirmation(null);
   };
   const toggleWanPersonalReference = (asset: BusinessAsset) => {
     if (assetIds.includes(asset.id) || personalVideoIds.includes(asset.id)) { removeDedicatedReference(`local:${asset.id}`); return; }
@@ -823,7 +829,7 @@ export default function BusinessWorkspace() {
       {access.account?.status !== "suspended" ? <form className={styles.form} onSubmit={apply}><label className={styles.field}>{t.company}<input required minLength={1} maxLength={120} value={company} onChange={e => setCompany(e.target.value)} placeholder={t.companyPlaceholder} autoComplete="organization" /></label><label className={styles.field}>{t.useCase}<textarea required minLength={10} maxLength={2000} value={useCase} onChange={e => setUseCase(e.target.value)} placeholder={t.useCasePlaceholder} /></label><div><button type="submit" className={styles.button} disabled={applying}>{applying ? t.applying : access.account ? t.reapply : t.apply}</button></div></form> : null}
     </section> : <>
       <section id={`business-panel-${tab}`} aria-label={tab === "create" ? t.createTab : tab === "key" ? t.keyTab : tab === "workflows" ? workflowsCopy.nav : tab === "assets" ? operations.assets : tab === "usage" ? operations.usage : tab === "models" ? operations.models : t.historyTab} className={tab === "create" ? studio.createLayout : tab === "workflows" ? workflowStyles.workspacePanel : tab === "key" ? `${studio.section} ${studio.keyPanel}` : studio.section}>
-        {tab === "workflows" ? <BusinessWorkflows models={models} /> : tab === "assets" ? <BusinessAssets wanReferences={selected?.dedicatedVideo?.family === "wan3.0"} seedanceReferences={!!selected?.seedance} imageOnly={!selected?.seedance && selected?.dedicatedVideo?.family !== "wan3.0" && !!selected?.supportsReferences} onSelect={selected?.supportsReferences ? selectManagedAsset : undefined} selectedIds={!selected?.seedance ? imageBusinessAssets.map(asset => asset.uploadId ?? asset.id) : [...providerAssets.map(asset => asset.id), ...imageBusinessAssets.map(asset => asset.uploadId ?? asset.id)]} /> : tab === "usage" ? <BusinessUsage /> : tab === "models" ? <BusinessModelCatalog models={models} unavailableModels={unavailableModels} upstreamTotal={upstreamTotal} loading={modelsLoading} onRefresh={() => void loadModels()} onChoose={chooseModel} /> : tab === "key" ? <><p className={styles.description}>{t.keyText}</p>{credential ? <div className={styles.keyCard}><div><strong>{credential.label}</strong><p>{t.configured} · {t.last4} •••• {credential.last4}</p><p>{dateLabel(credential.updatedAt)}</p></div><button className={styles.small} type="button" onClick={() => setDeleteOpen(true)} disabled={keySaving}>{t.deleteKey}</button></div> : <p className={styles.note}>{t.notConfigured}</p>}
+        {tab === "workflows" ? <BusinessWorkflows models={models} /> : tab === "assets" ? <BusinessAssets onDeleted={removeDeletedAsset} wanReferences={selected?.dedicatedVideo?.family === "wan3.0"} seedanceReferences={!!selected?.seedance} imageOnly={!selected?.seedance && selected?.dedicatedVideo?.family !== "wan3.0" && !!selected?.supportsReferences} onSelect={selected?.supportsReferences ? selectManagedAsset : undefined} selectedIds={!selected?.seedance ? imageBusinessAssets.map(asset => asset.uploadId ?? asset.id) : [...providerAssets.map(asset => asset.id), ...imageBusinessAssets.map(asset => asset.uploadId ?? asset.id)]} /> : tab === "usage" ? <BusinessUsage /> : tab === "models" ? <BusinessModelCatalog models={models} unavailableModels={unavailableModels} upstreamTotal={upstreamTotal} loading={modelsLoading} onRefresh={() => void loadModels()} onChoose={chooseModel} /> : tab === "key" ? <><p className={styles.description}>{t.keyText}</p>{credential ? <div className={styles.keyCard}><div><strong>{credential.label}</strong><p>{t.configured} · {t.last4} •••• {credential.last4}</p><p>{dateLabel(credential.updatedAt)}</p></div><button className={styles.small} type="button" onClick={() => setDeleteOpen(true)} disabled={keySaving}>{t.deleteKey}</button></div> : <p className={styles.note}>{t.notConfigured}</p>}
           {!access.encryptionReady ? <p className={styles.warning}>{t.encryptionUnavailable}</p> : null}<form className={styles.form} onSubmit={saveKey} autoComplete="off"><label className={styles.field}>{t.keyLabel}<input value={keyLabel} onChange={e => setKeyLabel(e.target.value)} maxLength={64} required autoComplete="off" /></label><label className={styles.field}>{t.apiKey}<input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} required placeholder={t.keyPlaceholder} maxLength={203} autoComplete="new-password" spellCheck={false} autoCapitalize="none" aria-describedby="business-key-privacy" /></label><p id="business-key-privacy" className={styles.note}>{t.writeOnly}</p><div><button type="submit" className={styles.button} disabled={keySaving || !access.encryptionReady || !apiKey.trim()}>{keySaving ? t.saving : credential ? t.replaceKey : t.saveKey}</button></div></form></> : tab === "create" ? <><div className={studio.preview} id="business-preview" tabIndex={-1} ref={workspacePreview}><BusinessStage composer movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} key={previewJob?.id ?? kind} job={previewJob} recentJobs={visibleJobs} onSelect={job => setSelectedJobId(job.id)} onReuse={reusePrompt} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={syncUpdatedJob} /></div>
         <div className={studio.editor}>
           {!access.keyConfigured ? <div className={styles.empty}><h2>{t.keyTab}</h2><p>{t.keyNeeded}</p><button className={styles.button} type="button" onClick={() => chooseTab("key")}>{t.keyTab}</button></div> : <form className={studio.editorForm} onSubmit={requestConfirmation}>
@@ -907,7 +913,7 @@ export default function BusinessWorkspace() {
         <button type="button" className={styles.small} disabled={referenceUploading} onClick={() => setReferencePickerOpen(false)}>{s.doneSelecting}</button>
       </div>
       {error && <p role="alert" className={styles.feedback}>{error}</p>}
-      <BusinessAssets compact wanReferences={!!wan3Capability} seedanceReferences={!!selected.seedance}
+      <BusinessAssets compact wanReferences={!!wan3Capability} seedanceReferences={!!selected.seedance} onDeleted={removeDeletedAsset}
         imageOnly={!selected.seedance && !wan3Capability} onUploading={setReferenceUploading}
         selectedIds={[...providerAssets.map(asset => asset.id), ...imageBusinessAssets.map(asset => asset.uploadId ?? asset.id)]}
         onSelect={asset => selectManagedAsset(asset, false)} onChanged={() => { if (showWanVideos) void loadPersonalAssets(); }} />

@@ -79,19 +79,27 @@ export class BusinessProviderAssetSubmitError extends BusinessError {
   constructor(readonly uncertain: boolean) { super(uncertain ? "business_asset_upload_uncertain" : "business_asset_upload_rejected", uncertain ? 502 : 400); }
 }
 
-async function assetRequest(path: string, credentials: Credentials, registration?: Record<string, string>): Promise<Record<string, unknown>> {
+async function assetRequest(path: string, credentials: Credentials, registration?: Record<string, string>, remove = false): Promise<Record<string, unknown>> {
   if (!credentials || typeof credentials.apiKey !== "string" || !/^sk-[A-Za-z0-9_-]{16,200}$/.test(credentials.apiKey)) {
     throw new BusinessError("credential_unavailable", 503);
   }
   let response: Response;
   try {
     response = await fetch(ASSET_API + path, {
-      method: registration ? "POST" : "GET", headers: { Authorization: `Bearer ${credentials.apiKey}`, Accept: "application/json", ...(registration ? { "Content-Type": "application/json" } : {}) },
+      method: remove ? "DELETE" : registration ? "POST" : "GET", headers: { Authorization: `Bearer ${credentials.apiKey}`, Accept: "application/json", ...(registration ? { "Content-Type": "application/json" } : {}) },
       ...(registration ? { body: JSON.stringify(registration) } : {}),
       cache: "no-store", redirect: "error", signal: AbortSignal.timeout(registration ? 60_000 : 15_000),
     });
   } catch {
+    if (remove) throw new BusinessError("business_asset_delete_failed", 502);
     throw registration ? new BusinessProviderAssetSubmitError(true) : unavailable();
+  }
+  if (remove) {
+    await response.body?.cancel().catch(() => undefined);
+    if (response.status === 204) return {};
+    if (response.status === 404) throw new BusinessError("business_asset_delete_missing", 404);
+    if (response.status === 401) throw new BusinessError("credential_unavailable", 503);
+    throw new BusinessError("business_asset_delete_failed", 502);
   }
   // Never return upstream prose, response bodies, request IDs, signed URLs or keys.
   if (!response.ok) {
@@ -132,6 +140,11 @@ export async function getBusinessProviderAsset(id: string, credentials: Credenti
   const asset = publicAsset(body.data);
   if (asset.id !== id) throw unavailable();
   return asset;
+}
+
+export async function deleteBusinessProviderAsset(id: string, credentials: Credentials): Promise<void> {
+  if (!validId(id)) throw new BusinessError("invalid_reference");
+  await assetRequest(`/${encodeURIComponent(id)}`, credentials, undefined, true);
 }
 
 export async function businessProviderPreviewResponse(id: string, credentials: Credentials, range: string | undefined, signal: AbortSignal): Promise<Response> {

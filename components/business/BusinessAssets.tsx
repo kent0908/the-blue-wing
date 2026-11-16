@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import BusinessAssetPreview from "./BusinessAssetPreview";
+import BusinessDialog from "./BusinessDialog";
 import { useLocale } from "@/lib/i18n/client";
 import { businessAssetsCopy, businessAssetsError } from "@/lib/i18n/businessAssets";
 import type { BusinessProviderAsset } from "./types";
 import styles from "./BusinessAssets.module.css";
 
 export type BusinessAssetRecord = BusinessProviderAsset & { uploadId?: string; storageReady?: boolean; providerReady?: boolean };
-interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; wanReferences?: boolean; seedanceReferences?: boolean; onChanged?: () => void; onUploading?: (uploading: boolean) => void }
+export type BusinessAssetDeletion = { scope: "upload" | "provider"; id: string; name: string; pending?: boolean };
+interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; wanReferences?: boolean; seedanceReferences?: boolean; onChanged?: () => void; onDeleted?: (target: BusinessAssetDeletion) => void; onUploading?: (uploading: boolean) => void }
 interface UploadRecord { id: string; uploadId: string; name: string; type: "image" | "video" | "audio"; status: string; storageReady: boolean; asset?: BusinessAssetRecord; errorCode?: string }
 interface UploadConfig { directUpload: boolean; types: Record<string, { type: string; maxBytes: number; ext: string }>; uploads?: UploadRecord[] }
 type Filters = { type: string; status: string; name: string };
@@ -22,7 +24,7 @@ const typedFile=(file:File)=>{
   return mime[ext]?new File([file],file.name,{type:mime[ext]}):file;
 };
 
-export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,wanReferences=false,seedanceReferences=false,onChanged,onUploading}:Props){
+export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,wanReferences=false,seedanceReferences=false,onChanged,onDeleted,onUploading}:Props){
   const t=businessAssetsCopy(useLocale());
   const originalOnly = imageOnly || wanReferences;
   const originalParameters = wanReferences ? { wanOriginal: true } : imageOnly ? { originalOnly: true } : {};
@@ -47,6 +49,10 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   const [page,setPage]=useState(0);
   const [totalPages,setTotalPages]=useState(0);
   const [refreshingId,setRefreshingId]=useState("");
+  const [deleteTarget,setDeleteTarget]=useState<BusinessAssetDeletion|null>(null);
+  const [deleting,setDeleting]=useState(false);
+  const [deleteError,setDeleteError]=useState("");
+  const deleteLock=useRef(false);
   const input=useRef<HTMLInputElement|null>(null);
   const activeRequest=useRef<AbortController|null>(null);
   const configRequest=useRef<AbortController|null>(null);
@@ -185,6 +191,32 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
       setUploads(previous=>previous.map(item=>item.asset?.id===asset.id?{...item,status:value.asset.status,asset:{...item.asset,...value.asset}}:item));onChanged?.();
     }catch{setError("business_asset_unavailable");}finally{setRefreshingId("");}
   }
+  function askDelete(target:BusinessAssetDeletion){
+    setDeleteError("");setDeleteTarget(target);
+  }
+  async function confirmDelete(){
+    if(!deleteTarget||deleteLock.current)return;
+    const target=deleteTarget;
+    const original=target.scope==="upload";
+    deleteLock.current=true;setDeleting(true);setDeleteError("");
+    try{
+      const response=await fetch(original?"/api/business/provider-assets/upload":`/api/business/provider-assets/${encodeURIComponent(target.id)}`,{
+        method:"DELETE",...(original?{headers:HEADERS,body:JSON.stringify({uploadId:target.id})}:{}),
+      });
+      const body=await response.json().catch(()=>null);
+      if(!response.ok||body?.deleted!==true){if(alive.current)setDeleteError(body?.error?.code??"business_asset_delete_failed");return;}
+      if(!alive.current)return;
+      if(original)setUploads(items=>items.filter(item=>item.id!==target.id));
+      else {
+        setCatalog(items=>items.filter(item=>item.id!==target.id));
+        setUploads(items=>items.map(item=>item.asset?.id===target.id?{...item,asset:undefined,status:item.storageReady?"active":"failed"}:item));
+      }
+      setDeleteTarget(null);setError("");setNotice(t.deleted);
+      onDeleted?.(target);onChanged?.();
+      void loadConfig();void loadCatalog();
+    }catch{if(alive.current)setDeleteError("business_asset_delete_failed");}
+    finally{deleteLock.current=false;if(alive.current)setDeleting(false);}
+  }
 
   const known=new Set(catalog.map(asset=>asset.id));
   const providerMaterials:BusinessAssetRecord[]=catalog.map(asset=>{
@@ -198,7 +230,8 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||(imageOnly||wanReferences)&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
   const statusText=(value:string)=>value==="active"?t.active:value==="processing"||value==="registering"?t.processing:value==="created"?t.created:value==="unknown"?t.unknown:t.failed;
   const accept=Object.keys(config?.types??{}).filter(mime=>!imageOnly||["image/jpeg","image/png","image/webp"].includes(mime)).join(",");
-  const pendingUploads=uploads.filter(item=>["created","registering","unknown"].includes(item.status));
+  const pendingUploads=uploads.filter(item=>["created","registering","unknown"].includes(item.status)||item.status==="failed"&&!item.storageReady);
+  const canDelete=!refreshingId&&!uploading&&!deleting;
 
   return <section className={`${styles.assets} ${compact?styles.compact:""}`} aria-label={t.title}>
     <div className={styles.uploadPanel} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();queueFiles(Array.from(event.dataTransfer.files));}}>
@@ -221,7 +254,13 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     </div>
     {error&&<p className={styles.error} role="alert">{error==="too_many_files"?t.tooMany:businessAssetsError(t,error)}{error==="credential_required"&&<> <a href="/business?tab=key">{t.keyLink} ↗</a></>}</p>}
     {notice&&<p className={styles.success} role="status">{notice}</p>}
-    {!!pendingUploads.length&&<details className={styles.recent}><summary>{t.pendingTitle} · {pendingUploads.length}</summary><ul>{pendingUploads.map(item=><li key={item.id}><span>{item.name}<small>{statusText(item.status)}</small></span><button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>void recoverUpload(item)}>{refreshingId===item.id?t.loading:t.recover}</button></li>)}</ul></details>}
+    {!!pendingUploads.length&&<details className={styles.recent}><summary>{t.pendingTitle} · {pendingUploads.length}</summary><ul>{pendingUploads.map(item=><li key={item.id}>
+      <span>{item.name}<small>{statusText(item.status)}</small></span>
+      <div className={styles.assetActions}>
+        {item.status!=="failed"&&<button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>void recoverUpload(item)}>{refreshingId===item.id?t.loading:t.recover}</button>}
+        {item.status!=="registering"&&<button type="button" className={styles.deleteAsset} disabled={!canDelete} onClick={()=>askDelete({scope:"upload",id:item.id,name:item.name,pending:true})}>{t.deleteUpload}</button>}
+      </div>
+    </li>)}</ul></details>}
     <div className={styles.libraryHeader}>
       <div className={styles.types} role="group" aria-label={t.source}>{(imageOnly?["image"]:["all","image","video","audio"]).map(value=><button type="button" key={value} aria-pressed={type===value} onClick={()=>{setType(value);void loadCatalog(1,{type:value,status,name:query});}}>{t[value as "all"|"image"|"video"|"audio"]}</button>)}</div>
       <button type="button" className={styles.textButton} disabled={loading||uploading||!!refreshingId} onClick={()=>{void loadConfig();void loadCatalog();}}>{loading?t.loading:t.refresh}</button>
@@ -240,9 +279,22 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
         {!asset.id.startsWith("upload:")&&asset.status!=="active"&&<button type="button" className={styles.textButton} disabled={!!refreshingId||uploading} onClick={()=>void refreshAsset(asset)}>{refreshingId===asset.id?t.loading:t.refreshOne}</button>}
         {onSelect&&disabled&&<p className={styles.disabledReason}>{disabledReason}</p>}
         {asset.storageReady&&!asset.providerReady&&!imageOnly&&!wanReferences&&<p className={styles.disabledReason}>{t.storageOnly}</p>}
+        <div className={`${styles.assetActions} ${styles.cardActions}`}>
+          {asset.uploadId&&asset.status!=="processing"&&asset.status!=="registering"&&<button type="button" className={styles.deleteAsset} disabled={!canDelete} onClick={()=>askDelete({scope:"upload",id:asset.uploadId!,name:asset.name})}>{t.deleteOriginal}</button>}
+          {!asset.id.startsWith("upload:")&&<button type="button" className={styles.deleteAsset} disabled={!canDelete} onClick={()=>askDelete({scope:"provider",id:asset.id,name:asset.name})}>{t.deleteProvider}</button>}
+        </div>
         </div>
       </article>;
     })}</div>}
     {(material.length>0||page<totalPages&&!catalogError)&&<div className={styles.footer}><p className={styles.note} role="status">{interpolate(t.count,{count:material.length})}</p>{page<totalPages&&!catalogError&&<button type="button" className={styles.small} disabled={loading} onClick={()=>void loadCatalog(page+1)}>{loading?t.loading:t.more}</button>}</div>}
+    {deleteTarget&&<BusinessDialog title={deleteTarget.pending?t.deleteUpload:deleteTarget.scope==="upload"?t.deleteOriginal:t.deleteProvider} className={styles.deleteDialog} busy={deleting} onClose={()=>setDeleteTarget(null)}>
+      <p className={styles.deleteName}>{deleteTarget.name}</p>
+      <p>{deleteTarget.pending?t.deleteUploadHelp:deleteTarget.scope==="upload"?t.deleteOriginalHelp:t.deleteProviderHelp}</p>
+      {deleteError&&<p className={styles.error} role="alert">{businessAssetsError(t,deleteError)}</p>}
+      <div className={styles.assetActions}>
+        <button type="button" className={styles.small} autoFocus disabled={deleting} onClick={()=>setDeleteTarget(null)}>{t.cancelDelete}</button>
+        <button type="button" className={styles.deleteAsset} disabled={deleting} onClick={()=>void confirmDelete()}>{deleting?t.deleting:t.confirmDelete}</button>
+      </div>
+    </BusinessDialog>}
   </section>;
 }
