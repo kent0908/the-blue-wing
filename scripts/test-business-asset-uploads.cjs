@@ -22,6 +22,7 @@ async function query(q,p=[]){
   if(q.startsWith('insert into business_asset_uploads')){const row={id:p[0],account_id:p[1],user_id:p[2],credential_id:p[3],client_request_id:p[4],pathname:p[5],filename:p[6],content_type:p[7],media_type:p[8],expected_bytes:p[9],blob_etag:null,status:'created',provider_asset_id:null,error_code:null,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+86400000).toISOString()};rows.set(row.id,row);return{rows:[clone(row)]};}
   if(q.includes('from business_asset_uploads where account_id=$1 and client_request_id=$2'))return{rows:[...rows.values()].filter(row=>row.account_id===p[0]&&row.client_request_id===p[1]).map(clone)};
   if(q.includes('from business_asset_uploads where user_id=$1 and account_id=$2 order by'))return{rows:[...rows.values()].filter(row=>Number(row.user_id)===p[0]&&row.account_id===p[1]).map(clone)};
+  if(q.includes('credential_id=$3 and provider_asset_id=$4')&&q.startsWith('select'))return{rows:[...rows.values()].filter(row=>matches(row,p[0],p[1])&&row.credential_id===p[2]&&row.provider_asset_id===p[3]&&row.media_type==='image'&&row.blob_etag).map(clone)};
   if(q.startsWith('update business_asset_uploads t set status=')){const row=rows.get(p[0]);if(!matches(row,p[1],p[2])||revoked||row.credential_id!==currentCredential||row.status!=='created')return{rows:[]};row.status=q.includes("status='active'")?'active':'registering';row.blob_etag=p[3];return{rows:[clone(row)]};}
   if(q.startsWith('update business_asset_uploads set status=$2')){const row=rows.get(p[0]);if(!row)return{rows:[]};row.status=p[1];if(q.includes('provider_asset_id=$3')){row.provider_asset_id=p[2];row.error_code=null;}else row.error_code=p[2];return{rows:[clone(row)]};}
   if(q.startsWith('update business_asset_uploads set status=$4')){for(const row of rows.values())if(Number(row.user_id)===p[0]&&row.account_id===p[1]&&row.provider_asset_id===p[2]&&row.credential_id===p[4])row.status=p[3];return{rows:[]};}
@@ -191,6 +192,19 @@ await test('provider deletion requires HTTP 204 and retains the linked business 
   status=204;assert.equal((await remove()).status,200);
   assert.equal(row.provider_asset_id,null);assert.equal(row.status,'active');assert.equal(blobs.has(init.pathname),true);
   assert.equal(rows.get(sibling.upload.id).provider_asset_id,id);
+});
+await test('Seedance rejects the same linked asset twice and previews only its owned original',async()=>{
+  const init=await initialize();
+  store(init);
+  const completed=await helper.completeBusinessUpload(7,account,init.upload.id);
+  const id=completed.upload.asset.id;
+  const readsBefore=blobReads;
+  await rejected(helper.resolveBusinessUploadSources(7,account,credential,[init.upload.id],false,undefined,16,[id]),'duplicate_seedance_reference');
+  assert.equal(blobReads,readsBefore);
+  assert.equal(await helper.businessRegisteredImagePreview(7,account,rotated,id,new AbortController().signal),null);
+  assert.equal(await helper.businessRegisteredImagePreview(8,account,credential,id,new AbortController().signal),null);
+  const preview=await helper.businessRegisteredImagePreview(7,account,credential,id,new AbortController().signal);
+  assert.equal((await preview.arrayBuffer()).byteLength,png.length);
 });
 await test('register helper cannot forward caller URLs, keys, query strings or arbitrary origins',async()=>{for(const url of['https://evil.invalid/file','https://thebluewing.studio/api/assets/1/raw','https://thebluewing.studio/api/business/provider-assets/source/'+('a'.repeat(90))+'?x=1'])await rejected(provider.registerBusinessProviderAsset({url,type:'image',name:'safe.png'},{apiKey:ownKey}),'invalid_reference');assert.equal(providerCalls,0);});
 console.log(`business asset uploads: ${total} passed; zero real provider, Blob, SQL or paid generation calls.`);

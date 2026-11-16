@@ -19,6 +19,7 @@ interface Props {
   onLocalSelection: (id: number) => void;
   providerAssets: BusinessProviderAsset[];
   onProviderSelection: (asset: BusinessProviderAsset) => void;
+  onProviderReplacement?: (asset: BusinessProviderAsset) => boolean;
   referenceOrder: string[];
   outputFormat: "mp4" | "mov";
   onOutputFormat: (value: "mp4" | "mov") => void;
@@ -76,9 +77,13 @@ export default function BusinessSeedanceControls(props: Props) {
     return seedanceReferenceMessage(t, issue, limits);
   };
   const chips = [
-    ...nativeAssets.map(asset => ({ key: `business:${asset.uploadId}`, type: "image" as const, name: asset.name, remove: () => props.onNativeRemove?.(asset.uploadId!), source: t.localAsset })),
-    ...assetIds.map(assetId => ({ key: `local:${assetId}`, type: "image" as const, name: assets.find(asset => asset.id === assetId)?.name || interpolate(t.assetUnnamed, { id: assetId }), remove: () => onLocalSelection(assetId), source: t.localAsset })),
-    ...providerAssets.map(asset => ({ key: `provider:${asset.id}`, type: asset.type, name: asset.name, remove: () => onProviderSelection(asset), source: t.providerAsset })),
+    ...nativeAssets.map(asset => ({ key: `business:${asset.uploadId}`, asset, localImageSrc: undefined, remove: () => props.onNativeRemove?.(asset.uploadId!), source: previewCopy.native })),
+    ...assetIds.map(assetId => ({
+      key: `local:${assetId}`,
+      asset: { id: String(assetId), type: "image" as const, name: assets.find(asset => asset.id === assetId)?.name || interpolate(t.assetUnnamed, { id: assetId }), status: "active" },
+      localImageSrc: `/api/assets/${assetId}/raw`, remove: () => onLocalSelection(assetId), source: t.localAsset,
+    })),
+    ...providerAssets.map(asset => ({ key: `provider:${asset.id}`, asset: { ...asset, providerReady: asset.status === "active" }, localImageSrc: undefined, remove: () => onProviderSelection(asset), source: t.providerAsset })),
   ].sort((a, b) => {
     const ai = referenceOrder.indexOf(a.key), bi = referenceOrder.indexOf(b.key);
     return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
@@ -131,9 +136,9 @@ export default function BusinessSeedanceControls(props: Props) {
       <p className={styles.quiet}>{t.selectionOrder}</p>
       <ol className={styles.chips}>{chips.map((chip, index) => <li key={chip.key}>
         <span className={styles.chipNumber}>{frameMode ? index ? t.lastFrame : t.firstFrame : String(index + 1).padStart(2, "0")}</span>
-        <span className={styles.chipIcon}><MediaIcon type={chip.type} /></span>
-        <span className={styles.chipName} title={chip.name}>{chip.name}<small>{chip.source}</small></span>
-        <button type="button" aria-label={`${t.remove} ${chip.name}`} onClick={chip.remove}>×</button>
+        <BusinessAssetPreview asset={chip.asset} copy={previewCopy} localImageSrc={chip.localImageSrc} compact />
+        <span className={styles.chipName} title={chip.asset.name}>{chip.asset.name}<small>{chip.source}</small></span>
+        <button type="button" className={styles.removeChip} aria-label={`${t.remove} ${chip.asset.name}`} onClick={chip.remove}>×</button>
       </li>)}</ol>
     </div>}
 
@@ -169,13 +174,15 @@ export default function BusinessSeedanceControls(props: Props) {
           {errorCode && <p className={styles.error} role="alert">{assetError}</p>}
           {loaded && !catalog.length && <p className={styles.empty}>{t.noProviderAssets}</p>}
           {!!catalog.length && <div className={styles.providerList}>{catalog.map(asset => {
-            const chosen = providerAssets.some(selected => selected.id === asset.id), disabled = !chosen && (asset.status !== "active" || blocked(asset.type));
+            const chosen = providerAssets.some(selected => selected.id === asset.id);
+            const linkedOriginal = nativeAssets.some(selected => selected.registeredAssetId === asset.id);
+            const disabled = !chosen && (asset.status !== "active" || (!linkedOriginal && blocked(asset.type)));
             return <div className={styles.providerAsset} key={asset.id} data-selected={chosen}>
               <BusinessAssetPreview asset={{ ...asset, providerReady: asset.status === "active" }} copy={previewCopy} compact />
               <button type="button" className={styles.providerSelect} aria-pressed={chosen} disabled={disabled}
                 aria-label={`${chosen ? t.remove : t.select} ${asset.name}`}
                 title={disabled ? asset.status !== "active" ? t.notActive : blockedReason(asset.type) : asset.name}
-                onClick={() => onProviderSelection(asset)}>
+                onClick={() => { if (!props.onProviderReplacement?.(asset)) onProviderSelection(asset); }}>
                 <span className={styles.providerName}>{asset.name}<small>{t[asset.type]} · {t.active}</small></span>
                 <span className={styles.selectionMark} aria-hidden="true">{chosen ? "✓" : "+"}</span>
               </button>

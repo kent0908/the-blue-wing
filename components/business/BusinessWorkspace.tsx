@@ -421,6 +421,22 @@ export default function BusinessWorkspace() {
     setReferenceOrder(current => current.filter(key => key !== `provider:${id}`));
     setConfirmation(null);
   };
+  const replaceLinkedSeedanceOriginal = (asset: BusinessProviderAsset) => {
+    if (!selected?.seedance || asset.status !== "active" || providerAssets.some(item => item.id === asset.id)) return false;
+    const original = imageBusinessAssets.find(item => item.uploadId && (item.registeredAssetId === asset.id || item.uploadId === asset.uploadId));
+    if (!original?.uploadId) return false;
+    const oldKey = `business:${original.uploadId}`;
+    const newKey = `provider:${asset.id}`;
+    setImageBusinessAssets(current => current.filter(item => item.uploadId !== original.uploadId));
+    setProviderAssets(current => [...current, asset]);
+    setReferenceOrder(current => current.map(key => key === oldKey ? newKey : key));
+    for (const tag of Object.keys(mentionBindings.current)) {
+      if (mentionBindings.current[tag] === oldKey) mentionBindings.current[tag] = newKey;
+    }
+    setConfirmation(null);
+    setError("");
+    return true;
+  };
   const toggleWanPersonalReference = (asset: BusinessAsset) => {
     if (assetIds.includes(asset.id) || personalVideoIds.includes(asset.id)) { removeDedicatedReference(`local:${asset.id}`); return; }
     addWanPersonalReference(asset);
@@ -428,7 +444,11 @@ export default function BusinessWorkspace() {
   const selectManagedAsset = (asset: BusinessAssetRecord, returnToCreate = true) => {
     if (!selected) return;
     if (kind === "video" && selected.seedance) {
-      if (asset.uploadId && imageBusinessAssets.some(item => item.uploadId === asset.uploadId)) {
+      if (asset.providerReady && replaceLinkedSeedanceOriginal(asset)) {
+        if (returnToCreate) chooseTab("create");
+        return;
+      }
+      if (!asset.providerReady && asset.uploadId && imageBusinessAssets.some(item => item.uploadId === asset.uploadId)) {
         removeDedicatedReference(`business:${asset.uploadId}`);
         if (returnToCreate) chooseTab("create");
         return;
@@ -493,7 +513,8 @@ export default function BusinessWorkspace() {
   }, [kind, modelId, selected?.id, tab, resetSelection]);
   function pickMention(candidate: MentionCandidate): string | null {
     if (navigationPending || !selected?.supportsReferences) return null;
-    const existing = selectedReferenceKeys.has(candidate.key);
+    const replaced = candidate.asset && candidate.key.startsWith("provider:") && replaceLinkedSeedanceOriginal(candidate.asset);
+    const existing = replaced || selectedReferenceKeys.has(candidate.key);
     if (!existing) {
       const useMulti = selected.seedance && (videoMode === "freestyle" || videoMode === "text-to-video") || selected.dedicatedVideo?.family === "wan3.0" && (dedicatedOptions.mode === "freestyle" || dedicatedOptions.mode === "text-to-video");
       if (selected.seedance) {
@@ -551,6 +572,10 @@ export default function BusinessWorkspace() {
     ];
     const references = selected.seedance || wanPersonal ? orderMentionReferences(selectedReferences, referenceOrder) : selectedReferences;
     if (kind === "video" && selected.seedance) {
+      if (imageBusinessAssets.some(original => original.uploadId && providerAssets.some(asset => asset.id === original.registeredAssetId || asset.uploadId === original.uploadId))) {
+        setError(t.duplicateSeedanceReference);
+        return;
+      }
       const issue = seedanceReferenceIssue(selected.seedance, videoMode, references);
       if (issue) { setError(seedanceReferenceMessage(d, issue, seedanceReferenceLimits(selected.seedance, videoMode))); return; }
     }
@@ -849,7 +874,7 @@ export default function BusinessWorkspace() {
               </div>}
               {kind === "video" && selectedReferenceKeys.size > 0 && <span className={studio.referenceCount}>{s.selectedReferences} · {selectedReferenceKeys.size}</span>}
             </div>}
-            <BusinessPrompt value={prompt} onChange={setPrompt} maxLength={promptLimit} label={t.prompt} placeholder={t.promptPlaceholder} note={t.keyWarning} assets={assets} mode={!selected?.supportsReferences ? "none" : selected.seedance ? "seedance" : wanPersonal ? "native-with-personal" : selected.dedicatedVideo ? "native" : "image"} personalMaxBytes={wanPersonal ? personalMaxBytes : undefined} includeVideo={showWanVideos && dedicatedMode !== "image-to-video" && dedicatedMode !== "first-last-frame"} onPick={pickMention} selectedKeys={selectedReferenceKeys} />
+            <BusinessPrompt value={prompt} onChange={setPrompt} maxLength={promptLimit} label={t.prompt} placeholder={t.promptPlaceholder} note={t.keyWarning} assets={assets} mode={!selected?.supportsReferences ? "none" : selected.seedance ? "seedance" : wanPersonal ? "native-with-personal" : selected.dedicatedVideo ? "native" : "image"} personalMaxBytes={wanPersonal ? personalMaxBytes : undefined} includeVideo={showWanVideos && dedicatedMode !== "image-to-video" && dedicatedMode !== "first-last-frame"} onPick={pickMention} selectedKeys={selectedReferenceKeys} selectedProviderAssets={providerAssets} />
             {!modelsLoading && !selectedModels.length && <button className={styles.small} type="button" onClick={loadModels}>{t.refresh}</button>}
             {!modelsLoading && modelId && !selected && <p className={styles.warning} role="alert">{s.modelUnavailable}</p>}
             <div className={studio.coreControls}>
@@ -876,7 +901,7 @@ export default function BusinessWorkspace() {
               <label className={styles.check}><input type="checkbox" checked={imagePromptExtend} onChange={e => setImagePromptExtend(e.target.checked)} aria-describedby={selected.zImage.promptExtendSurcharged ? "business-z-rewrite-cost" : undefined} />{operations.promptRewrite}</label>
               {selected.zImage.promptExtendSurcharged ? <p className={styles.note} id="business-z-rewrite-cost">{operations.promptRewriteSurcharge}</p> : null}
             </div> : null}
-            {selected?.seedance ? <BusinessSeedanceControls key={credential?.id ?? "current-key"} capability={selected.seedance} mode={videoMode} onMode={chooseVideoMode} assets={assets} assetIds={assetIds} onLocalSelection={toggleLocalReference} providerAssets={providerAssets} nativeAssets={imageBusinessAssets} onNativeRemove={id => { setImageBusinessAssets(current => current.filter(asset => asset.uploadId !== id)); setReferenceOrder(current => current.filter(key => key !== `business:${id}`)); setConfirmation(null); }} onProviderSelection={toggleProviderReference} referenceOrder={referenceOrder} outputFormat={outputFormat} onOutputFormat={setOutputFormat} seed={seed} onSeed={setSeed} onOpenAssets={() => { setError(""); setReferencePickerOpen(true); }} /> : null}
+            {selected?.seedance ? <BusinessSeedanceControls key={credential?.id ?? "current-key"} capability={selected.seedance} mode={videoMode} onMode={chooseVideoMode} assets={assets} assetIds={assetIds} onLocalSelection={toggleLocalReference} providerAssets={providerAssets} nativeAssets={imageBusinessAssets} onNativeRemove={id => { setImageBusinessAssets(current => current.filter(asset => asset.uploadId !== id)); setReferenceOrder(current => current.filter(key => key !== `business:${id}`)); setConfirmation(null); }} onProviderSelection={toggleProviderReference} onProviderReplacement={replaceLinkedSeedanceOriginal} referenceOrder={referenceOrder} outputFormat={outputFormat} onOutputFormat={setOutputFormat} seed={seed} onSeed={setSeed} onOpenAssets={() => { setError(""); setReferencePickerOpen(true); }} /> : null}
             {selected?.dedicatedVideo ? <>
               <BusinessDedicatedVideoControls
                 capability={selected.dedicatedVideo}

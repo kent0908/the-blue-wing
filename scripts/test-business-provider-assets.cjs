@@ -4,6 +4,7 @@ const root = path.resolve(__dirname, '..'), cache = new Map();
 const originalFetch = global.fetch;
 const OWN_KEY = 'sk-fixture-owned-key-1234567890';
 let calls = [], approved = true, keyPresent = true, active = 0, maxActive = 0, reply;
+let linkedPreview;
 class NextRequest extends Request { get nextUrl() { return new URL(this.url); } }
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'private,no-store' } });
 let BusinessError;
@@ -19,17 +20,18 @@ const business = {
 function load(file) {
   const full = path.resolve(root, file);
   if (cache.has(full)) return cache.get(full).exports;
-  const module = { exports: {} }; cache.set(full, module);
+  const fixtureModule = { exports: {} }; cache.set(full, fixtureModule);
   const source = ts.transpileModule(fs.readFileSync(full, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   function localRequire(specifier) {
     if (specifier === 'server-only') return {};
     if (specifier === '@/lib/business') return business;
+    if (specifier === '@/lib/businessAssetUploads') return { businessRegisteredImagePreview: (...args) => linkedPreview?.(...args) ?? null };
     if (specifier.startsWith('@/')) return load(specifier.slice(2) + '.ts');
     if (specifier.startsWith('.')) return load(path.relative(root, path.resolve(path.dirname(full), specifier + '.ts')));
     return require(specifier);
   }
-  new Function('require', 'module', 'exports', source)(localRequire, module, module.exports);
-  return module.exports;
+  new Function('require', 'module', 'exports', source)(localRequire, fixtureModule, fixtureModule.exports);
+  return fixtureModule.exports;
 }
 const assets = load('lib/businessProviderAssets.ts');
 BusinessError = load('lib/businessTypes.ts').BusinessError;
@@ -42,6 +44,7 @@ const listReply = (items, total = items.length) => json({ isSuccess: true, data:
 const singleReply = (id, type = 'image', status = 'active') => json({ isSuccess: true, data: row(id, type, status) });
 function reset() {
   calls = []; approved = keyPresent = true; active = maxActive = 0;
+  linkedPreview = undefined;
   reply = async url => url.pathname.endsWith('/assets') ? listReply([row('asset-own-1')]) : singleReply(url.pathname.split('/').at(-1));
   global.fetch = async (input, init) => {
     const url = new URL(input);
@@ -59,6 +62,15 @@ let total = 0;
 async function test(name, run) { reset(); await run(); total++; console.log('PASS ' + name); }
 const rejects = (fn, code = 'invalid_reference') => assert.rejects(fn, error => error instanceof BusinessError && error.code === code && !error.message.includes(OWN_KEY));
 (async () => {
+  await test('a missing upstream image preview falls back to the linked original under the current key', async () => {
+    linkedPreview = (userId, accountId, credentialId, assetId) => {
+      assert.deepEqual([userId, accountId, credentialId, assetId], [7, 'owned-account', 'owned-credential', 'a-1']);
+      return new Response('fixture-original', { headers: { 'Content-Type': 'image/png' } });
+    };
+    const response = await getPreview();
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'fixture-original');
+  });
   await test('approval is checked before metadata or provider access', async () => {
     approved = false; const response = await get(); assert.equal(response.status, 403); assert.match(response.headers.get('cache-control'), /no-store/); assert.equal(calls.length, 0);
   });

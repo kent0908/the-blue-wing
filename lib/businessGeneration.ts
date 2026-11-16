@@ -227,7 +227,7 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
     const local = assetIds?.length ? await createBusinessReferenceUrls(userId, accountId, credential.id, assetIds, model.nsfw) : [];
     const constraints = { minSide: 300, maxBytes: 30 * 1024 * 1024 - 1, mimeTypes: ["image/png", "image/jpeg", "image/webp"] };
     const sourceImageLimit = model.seedance.references.image;
-    const originals = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, constraints, sourceImageLimit) : [];
+    const originals = ownUploads.length ? await resolveBusinessUploadSources(userId, accountId, credential.id, ownUploads, model.nsfw, constraints, sourceImageLimit, providerAssets.map(asset => asset.id)) : [];
     const generated = generatedIds.length ? await resolveBusinessGeneratedImageSources(userId, accountId, credential.id, generatedIds, model.nsfw, { ...constraints, minAspectRatio: 0.4, maxAspectRatio: 2.5 }, sourceImageLimit) : [];
     const registered = providerAssets.length ? await resolveBusinessProviderAssets(providerAssets, { apiKey: credential.apiKey }) : [];
     if (local.length !== (assetIds?.length ?? 0) || originals.length !== ownUploads.length || generated.length !== generatedIds.length || registered.length !== providerAssets.length) fail("invalid_reference");
@@ -658,7 +658,7 @@ export async function getBusinessGenerationReuse(user: UserRow, account: Busines
     if (localAsset && type === (wan3ReferenceVideoExtension(localAsset.contentType) ? "video" : "image"))
       return { key, source: "local" as const, id: localAsset.id, asset: localAsset };
     const upload = uploadsByKey.get(key);
-    if (upload?.type === type) return { key, source: "upload" as const, asset: { id: upload.id, uploadId: upload.uploadId, name: upload.name, type: upload.type, status: upload.status, storageReady: upload.storageReady } };
+    if (upload?.type === type) return { key, source: "upload" as const, asset: { id: upload.id, uploadId: upload.uploadId, name: upload.name, type: upload.type, status: upload.status, storageReady: upload.storageReady, registeredAssetId: upload.asset?.id } };
     const registered = providerByKey.get(key);
     if (registered) return { key, source: "provider" as const, asset: registered };
     const generatedId = key.startsWith("generated:") ? key.slice("generated:".length) : "";

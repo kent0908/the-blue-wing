@@ -313,8 +313,17 @@ export async function refreshBusinessUploadAsset(userId: number | string, accoun
   return asset;
 }
 
+export async function businessRegisteredImagePreview(userId: number | string, accountId: string, credentialId: string, assetId: string, signal: AbortSignal) {
+  const { rows } = await sql.query<UploadRow>(`select * from business_asset_uploads
+    where user_id=$1 and account_id=$2 and credential_id=$3 and provider_asset_id=$4
+      and media_type='image' and blob_etag is not null order by created_at desc limit 1`,
+    [safeUserId(userId), accountId, credentialId, assetId]);
+  const row = rows[0];
+  return row && validStoredPath(row) ? storedBusinessAssetResponse(row, signal, true) : null;
+}
+
 /** Generic image models receive only server-created HTTPS grants, never asset:// IDs. */
-export async function resolveBusinessUploadSources(userId: number | string, accountId: string, credentialId: string, uploadIds: string[], nsfw: boolean, constraints?: BusinessImageSourceConstraints, maxImages = 16): Promise<{ type: "image"; url: string }[]> {
+export async function resolveBusinessUploadSources(userId: number | string, accountId: string, credentialId: string, uploadIds: string[], nsfw: boolean, constraints?: BusinessImageSourceConstraints, maxImages = 16, registeredIds: readonly string[] = []): Promise<{ type: "image"; url: string }[]> {
   userId = safeUserId(userId, "invalid_reference");
   if (!UUID.test(accountId) || !UUID.test(credentialId) || typeof nsfw !== "boolean" ||
     !Number.isSafeInteger(maxImages) || maxImages < 1 || maxImages > SEEDANCE_25_REFERENCE_LIMITS.image ||
@@ -329,6 +338,7 @@ export async function resolveBusinessUploadSources(userId: number | string, acco
   const map=new Map(rows.map(row=>[row.id,row]));
   if(rows.length!==uploadIds.length||uploadIds.some(id=>{const row=map.get(id);return !row||!validStoredPath(row)||row.media_type!=="image"||!row.blob_etag||
     !BUSINESS_UPLOAD_TYPES[row.content_type]||Number(row.expected_bytes)>BUSINESS_UPLOAD_TYPES[row.content_type].maxBytes||nsfw&&!isAdultVerified(row);})){fail("invalid_reference");}
+  if (rows.some(row => row.provider_asset_id && registeredIds.includes(row.provider_asset_id))) fail("duplicate_seedance_reference");
   // Sequential reads keep memory to one image and verify the immutable source
   // bytes/ETag before the caller reserves any billable image generation.
   try{for(const id of uploadIds){const row=map.get(id)!;if(await verifyStoredUpload(row,constraints)!==row.blob_etag)fail("invalid_reference");}}

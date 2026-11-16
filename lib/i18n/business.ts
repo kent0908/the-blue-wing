@@ -3,6 +3,7 @@ import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
   invalidReference: "參考素材無法使用。請核對檔案規格及素材權限。",
+  duplicateSeedanceReference: "同一份素材已加入兩次。請移除商務原檔，保留 SIRAYA 素材，並確認提示詞的參考編號。",
   providerContentPolicy: "SIRAYA 因內容政策拒絕這筆請求或成品。",
   providerUnauthorized: "SIRAYA 拒絕這組金鑰的請求。請核對金鑰與模型權限。",
   providerQuota: "SIRAYA 回報額度不足或已達請求頻率上限。",
@@ -24,6 +25,7 @@ const zh = {
 export type BusinessCopy = { [K in keyof typeof zh]: string };
 const en: BusinessCopy = {
   invalidReference: "A reference could not be used. Check its format and your access.",
+  duplicateSeedanceReference: "The same reference was added twice. Remove the studio original, keep the SIRAYA asset, and check the reference numbers in your prompt.",
   providerContentPolicy: "SIRAYA blocked the request or output under its content policy.",
   providerUnauthorized: "SIRAYA rejected this key. Check the key and model permissions.",
   providerQuota: "SIRAYA reported insufficient balance or a request rate limit.",
@@ -44,6 +46,7 @@ const en: BusinessCopy = {
 };
 const ja: BusinessCopy = {
   invalidReference: "参照素材を使用できません。ファイル形式とアクセス権を確認してください。",
+  duplicateSeedanceReference: "同じ参照素材が二重に追加されています。元ファイルを外して SIRAYA 素材を残し、プロンプト内の参照番号を確認してください。",
   providerContentPolicy: "SIRAYA のコンテンツポリシーにより、リクエストまたは生成結果が拒否されました。",
   providerUnauthorized: "SIRAYA がキーを拒否しました。キーとモデルの利用権限を確認してください。",
   providerQuota: "SIRAYA から残高不足またはリクエスト頻度の上限が報告されました。",
@@ -75,6 +78,7 @@ export function businessError(copy: BusinessCopy, code?: string): string {
   if (code === "model_unavailable") return copy.modelUnavailable;
   if (code === "prompt_blocked") return copy.contentBlocked;
   if (code === "invalid_reference") return copy.invalidReference;
+  if (code === "duplicate_seedance_reference") return copy.duplicateSeedanceReference;
   if (code === "provider_content_policy") return copy.providerContentPolicy;
   if (code === "provider_unauthorized") return copy.providerUnauthorized;
   if (code === "provider_quota") return copy.providerQuota;

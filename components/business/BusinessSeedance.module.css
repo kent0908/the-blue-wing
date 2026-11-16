@@ -24,9 +24,8 @@
 .chips{display:grid;gap:7px;list-style:none;padding:2px;margin:0;min-width:0;max-height:300px;overflow:auto;scrollbar-color:#4a6350 #0c1610}
 .chips li{min-width:0;display:flex;gap:10px;align-items:center;padding:9px 10px;border:1px solid #365442;background:#15251b66}
 .chipNumber{font-family:Georgia,serif;font-size:12px;color:#9cbcaa;flex-shrink:0;max-width:95px;text-wrap:balance}
-.chipIcon{width:18px;flex-shrink:0;display:flex;color:#89aa95}.chipIcon svg{width:18px;height:18px}
 .chipName{font-size:12px;min-width:0;flex:1;overflow-wrap:anywhere;line-height:1.7}.chipName small{display:block;font-size:12px;color:#779a85}
-.chips button{border:0;background:transparent;color:#bad0bf;font-size:22px;line-height:1;width:34px;height:34px;flex-shrink:0;cursor:pointer}
+.removeChip{border:0;background:transparent;color:#bad0bf;font-size:22px;line-height:1;width:44px;height:44px;flex-shrink:0;cursor:pointer}
 .picker{border:1px solid #354b3c;border-radius:2px;min-width:0;margin:2px 0}
 .picker summary{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;padding:13px 14px;cursor:pointer;color:#c4d7c7;list-style:none;min-width:0}
 .picker summary::-webkit-details-marker{display:none}.picker[open] summary{border-bottom:1px solid #304737}
@@ -83,5 +82,5 @@
 .field{display:grid;gap:8px;font-size:12px;color:#b3cab9;min-width:0}
 .controls button:focus-visible,.picker summary:focus-visible,.controls a:focus-visible{outline:2px solid #cee6d1;outline-offset:3px}
 .field input:focus,.field select:focus,.searchRow input:focus{border-color:#b6d5be;box-shadow:0 0 0 2px #8bb99a22}
-@media(max-width:500px){.modeGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.counts{gap:13px}.referenceHeader{gap:14px}.pickerBody{padding:0 11px 13px}.picker summary{padding:12px}.localGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.outputSettings{grid-template-columns:1fr}.chipNumber{max-width:66px}.chipIcon{display:none}.chips li{gap:8px}.total strong{font-size:36px}.counts dd{font-size:16px}.searchRow input,.field input,.field select{font-size:16px}.tabs{gap:17px}}
+@media(max-width:500px){.modeGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.counts{gap:13px}.referenceHeader{gap:14px}.pickerBody{padding:0 11px 13px}.picker summary{padding:12px}.localGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.outputSettings{grid-template-columns:1fr}.chipNumber{max-width:66px}.chips li{gap:8px}.total strong{font-size:36px}.counts dd{font-size:16px}.searchRow input,.field input,.field select{font-size:16px}.tabs{gap:17px}}
 @media(prefers-reduced-motion:no-preference){.modeButton,.localAsset,.providerAsset{transition:background .16s,border-color .16s}}

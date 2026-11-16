@@ -14,7 +14,7 @@ export interface BusinessAsset { id: number; name: string; src: string; contentT
 export interface BusinessProviderAsset { id: string; name: string; type: "image" | "video" | "audio"; status: string }
 export interface BusinessImageControl { key: "quality" | "seed" | "negative_prompt"; kind: "select" | "number" | "text"; options?: string[]; min?: number; max?: number }
 export interface BusinessModel { imageControls?: BusinessImageControl[]; maxImageCount?: number; dedicatedVideo?: BusinessDedicatedVideoCapability; zImage?: BusinessZImageCapability }
-export interface BusinessProviderAsset { uploadId?: string; storageReady?: boolean }
+export interface BusinessProviderAsset { uploadId?: string; storageReady?: boolean; registeredAssetId?: string }
 export interface BusinessEditorPrompt { prompt: string; mentions: Record<string, string> }
 export interface BusinessReuseSetup {
   parameters: Record<string, string | number | boolean>;

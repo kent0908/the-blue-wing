@@ -15,6 +15,7 @@ export interface MentionCandidate {
   name: string;
   type?: "image" | "video" | "audio";
   src?: string;
+  fallbackSrc?: string;
   localId?: number;
   personalAsset?: BusinessAsset;
   asset?: BusinessAssetRecord;
@@ -32,6 +33,7 @@ interface Props {
   personalMaxBytes?: number;
   includeVideo?: boolean;
   selectedKeys?: ReadonlySet<string>;
+  selectedProviderAssets?: BusinessAssetRecord[];
   onPick: (candidate: MentionCandidate) => string | null;
 }
 
@@ -61,35 +63,36 @@ async function loadList<T>(url: string, key: string, signal: AbortSignal): Promi
 
 function listCandidates(
   mode: Props["mode"], local: BusinessAsset[], uploads: Upload[], reviewed: BusinessAssetRecord[],
-  selectedKeys?: ReadonlySet<string>, personalMaxBytes?: number, includeVideo?: boolean,
+  personalMaxBytes?: number, includeVideo?: boolean,
 ) {
   const candidates = new Map<string, MentionCandidate>();
-  const seenProvider = new Set<string>();
+  const activeProvider = new Map(reviewed.filter(asset => asset.status === "active").map(asset => [asset.id, asset]));
 
   if (mode !== "local") {
     for (const upload of uploads) {
-      const approved = mode === "seedance" && upload.asset?.status === "active" ? upload.asset : undefined;
+      const approved = mode === "seedance" && upload.asset ? activeProvider.get(upload.asset.id) : undefined;
       if (upload.type !== "image" && !((includeVideo || approved) && (upload.type === "video" || upload.type === "audio"))) continue;
       if (!upload.storageReady && !approved) continue;
-      const uploadKey = `business:${upload.id}`;
-      const useProvider = approved && !selectedKeys?.has(uploadKey);
-      const key = useProvider ? `provider:${approved.id}` : uploadKey;
-      if (approved) seenProvider.add(approved.id);
+      const key = approved ? `provider:${approved.id}` : `business:${upload.id}`;
+      const originalSrc = upload.storageReady && upload.type === "image" ? `/api/business/provider-assets/uploads/${encodeURIComponent(upload.id)}/preview` : undefined;
+      if (candidates.has(key)) continue;
       candidates.set(key, {
-        key, name: upload.name, type: upload.type === "video" || upload.type === "audio" ? upload.type : "image",
-        src: upload.storageReady && upload.type === "image" ? `/api/business/provider-assets/uploads/${upload.id}/preview` : undefined,
+        key, name: approved?.name ?? upload.name, type: upload.type === "video" || upload.type === "audio" ? upload.type : "image",
+        src: approved?.type === "image" ? `/api/business/provider-assets/${encodeURIComponent(approved.id)}/preview` : originalSrc,
+        fallbackSrc: approved ? originalSrc : undefined,
         asset: {
-          ...(upload.asset ?? { id: `upload:${upload.id}`, type: upload.type as "image" | "video" | "audio", name: upload.name, status: upload.status }),
-          uploadId: upload.id, storageReady: upload.storageReady,
+          ...(approved ?? { id: `upload:${upload.id}`, type: upload.type as "image" | "video" | "audio", name: upload.name, status: upload.status }),
+          uploadId: upload.id, storageReady: upload.storageReady, registeredAssetId: upload.asset?.id,
         },
       });
     }
   }
   if (mode === "seedance") {
-    for (const asset of reviewed) {
-      if (asset.status !== "active" || seenProvider.has(asset.id)) continue;
+    for (const asset of activeProvider.values()) {
       const key = `provider:${asset.id}`;
-      candidates.set(key, { key, name: asset.name, type: asset.type, asset });
+      if (candidates.has(key)) continue;
+      candidates.set(key, { key, name: asset.name, type: asset.type, asset,
+        src: asset.type === "image" ? `/api/business/provider-assets/${encodeURIComponent(asset.id)}/preview` : undefined });
     }
   }
   if (mode !== "native") {
@@ -123,11 +126,12 @@ function PictureIcon() {
   </svg>;
 }
 
-function Thumbnail({ src, type }: { src?: string; type?: MentionCandidate["type"] }) {
-  const [failed, setFailed] = useState(false);
+function Thumbnail({ src, fallbackSrc, type }: { src?: string; fallbackSrc?: string; type?: MentionCandidate["type"] }) {
+  const [attempt, setAttempt] = useState(0);
+  const image = attempt === 0 ? src : attempt === 1 ? fallbackSrc : undefined;
   return <span className={picker.thumbnail}>
-    {src && !failed
-      ? <Image src={src} alt="" width={48} height={48} unoptimized loading="lazy" onError={() => setFailed(true)} />
+    {image
+      ? <Image key={image} src={image} alt="" width={48} height={48} unoptimized loading="lazy" onError={() => setAttempt(current => current + 1)} />
       : type === "video" || type === "audio" ? <span aria-hidden="true">{type === "video" ? "▶" : "♪"}</span> : <PictureIcon />}
   </span>;
 }
@@ -192,7 +196,9 @@ export default function BusinessPrompt(props: Props) {
 
   const query = mention?.query.trim().normalize("NFKC").toLocaleLowerCase(locale) ?? "";
   const images = local ?? props.assets;
-  const candidates = opened ? listCandidates(mode, props.includeVideo ? [...images, ...localVideos] : images, uploads, reviewed, props.selectedKeys, props.personalMaxBytes, props.includeVideo) : [];
+  const providerAssets = [...(props.selectedProviderAssets ?? []), ...reviewed];
+  const availableUploads = mode === "seedance" && loading ? [] : uploads;
+  const candidates = opened ? listCandidates(mode, props.includeVideo ? [...images, ...localVideos] : images, availableUploads, providerAssets, props.personalMaxBytes, props.includeVideo) : [];
   const matches = query ? candidates.filter(candidate => candidate.name.normalize("NFKC").toLocaleLowerCase(locale).includes(query)) : candidates;
   const activeIndex = matches.findIndex(candidate => candidate.key === activeKey);
   const activeId = activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined;
@@ -318,7 +324,7 @@ export default function BusinessPrompt(props: Props) {
           {matches.map((candidate, position) => <button type="button" role="option" tabIndex={-1}
             aria-selected={position === activeIndex} id={`${id}-option-${position}`} key={candidate.key}
             className={picker.option} onMouseDown={event => event.preventDefault()} onClick={() => choose(candidate)}>
-            <Thumbnail key={candidate.src} src={candidate.src} type={candidate.type} />
+            <Thumbnail key={`${candidate.src}|${candidate.fallbackSrc}`} src={candidate.src} fallbackSrc={candidate.fallbackSrc} type={candidate.type} />
             <span className={picker.identity}>
               <span className={picker.name} title={candidate.name}>{candidate.name}</span>
               <small>{candidate.type && candidate.type !== "image" ? `${t[candidate.type]} · ` : ""}{candidate.localId ? t.personal : candidate.key.startsWith("provider:") ? t.reviewed : t.business}</small>

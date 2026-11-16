@@ -224,7 +224,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     return {...asset,providerReady:asset.status==="active",...(original?{uploadId:original.id,storageReady:original.storageReady}:{})};
   });
   const uploadedMaterials:BusinessAssetRecord[]=uploads.filter(item=>item.storageReady&&(!item.asset||!known.has(item.asset.id))).map(item=>({
-    id:`upload:${item.id}`,name:item.name,type:item.type,status:item.status,uploadId:item.id,storageReady:true,providerReady:false,
+    id:`upload:${item.id}`,name:item.name,type:item.type,status:item.status,uploadId:item.id,storageReady:true,providerReady:false,registeredAssetId:item.asset?.id,
   }));
   const material=(originalOnly ? [...uploadedMaterials,...providerMaterials] : [...providerMaterials,...uploadedMaterials])
     .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||(imageOnly||wanReferences)&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));

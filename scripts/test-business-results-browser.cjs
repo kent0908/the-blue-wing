@@ -51,6 +51,7 @@ async function assertImageFits(img, [width, height]) {
       const { work } = load(path.join(repo, 'lib/i18n/businessOperations.ts')).businessOperationsCopy(locale);
       const assetCopy = load(path.join(repo, 'lib/i18n/businessAssets.ts')).businessAssetsCopy(locale);
       const seedanceCopy = load(path.join(repo, 'lib/i18n/businessSeedance.ts')).businessSeedanceCopy(locale);
+      const mentionCopy = load(path.join(repo, 'lib/i18n/businessMentions.ts')).businessMentionsCopy(locale,true);
       const context = await browser.newContext({ viewport: { width: 1600, height: 1100 }, permissions: ['clipboard-read', 'clipboard-write'] });
       await context.addCookies([{ name: 'bw_lang', value: locale, url: base }]);
       const page = await context.newPage(); page.setDefaultNavigationTimeout(120000); const errors = [];
@@ -65,6 +66,8 @@ async function assertImageFits(img, [width, height]) {
         {id:pendingId,name:'pending-upload.png',type:'image',status:'created',storageReady:false},
       ];
       let providerAssets = [{id:providerId,name:'registered-portrait.png',type:'image',status:'active'}];
+      const linkedUploadId = '00000000-0000-4000-8000-000000000023';
+      let linkedUploadVisible = false;
       const deletions=[];
       const acceptanceStarted = new Promise(resolve => { signalAcceptance = resolve; });
       let jobs = [fixture('3', 'image', 'completed', { images: formats.map(([url]) => ({url})) }), fixture('2', 'video', 'completed', { videoUrl: '/home-films/worlds.mp4' }), fixture('1', 'image', 'failed', {errorCode: 'generation_failed'})];
@@ -84,7 +87,8 @@ async function assertImageFits(img, [width, height]) {
             deletions.push(uploadId);uploads=uploads.filter(item=>item.id!==uploadId);
             return json({deleted:true});
           }
-          return json({directUpload:true,types:{'image/png':{ext:'png',maxBytes:30000000,type:'image'}},uploads});
+          const linked = {id:linkedUploadId,name:'registered-portrait.png',type:'image',status:'processing',storageReady:true,asset:{...providerAssets[0],status:'processing'}};
+          return json({directUpload:true,types:{'image/png':{ext:'png',maxBytes:30000000,type:'image'}},uploads:linkedUploadVisible?[linked,...uploads]:uploads});
         }
         if (p === '/api/business/provider-assets') {
           const assets = url.searchParams.get('status') === 'active' ? [providerAssets[0], videoAsset] : providerAssets;
@@ -238,6 +242,7 @@ async function assertImageFits(img, [width, height]) {
       await textarea.fill('A distinct draft after failure');
       assert.equal(await submit.isEnabled(),true);
 
+      linkedUploadVisible = true;
       await page.goto(`${base}/business?kind=video&model=SIRAYA-Seedance-2.5`);
       const controls = page.getByRole('region', { name: 'Seedance 2.5', exact: true });
       await controls.locator('summary').filter({hasText:seedanceCopy.references}).first().click();
@@ -258,6 +263,21 @@ async function assertImageFits(img, [width, height]) {
       assert.equal(await selectButton.getAttribute('aria-pressed'),'false');
       await selectButton.click();
       assert.equal(await photoRow.locator('button[aria-pressed]').getAttribute('aria-pressed'),'true');
+      const selected = controls.locator('ol').filter({hasText:imageName});
+      const selectedThumbnail = selected.getByRole('button',{name:assetCopy.viewImage.replace('{name}',imageName),exact:true});
+      await selectedThumbnail.click();
+      await dialog.getByRole('img',{name:imageName,exact:true}).evaluate(image=>image.decode());
+      await dialog.getByRole('button',{name:assetCopy.closePreview,exact:true}).click();
+      await page.getByRole('button',{name:mentionCopy.add,exact:true}).click();
+      await page.getByRole('combobox',{name:mentionCopy.search,exact:true}).fill(imageName);
+      const mentionOption = page.getByRole('option',{name:new RegExp(imageName)});
+      await mentionOption.getByText(mentionCopy.reviewed,{exact:true}).waitFor();
+      assert.equal(await mentionOption.count(),1,'Active SIRAYA asset supersedes its still-processing studio upload');
+      const mentionImage = mentionOption.locator('img');
+      await mentionImage.evaluate(image=>image.decode());
+      assert.equal(new URL(await mentionImage.getAttribute('src'),base).pathname,`/api/business/provider-assets/${providerId}/preview`);
+      await mentionOption.click();
+      assert.equal(await selected.getByRole('listitem').count(),1,'Inserting an @ mention does not attach the same asset again');
       const playButton = controls.getByRole('button',{name:assetCopy.playPreview.replace('{name}',videoAsset.name),exact:true});
       const videoSelect = controls.getByRole('button',{name:`${seedanceCopy.select} ${videoAsset.name}`,exact:true});
       await playButton.scrollIntoViewIfNeeded();
@@ -273,6 +293,7 @@ async function assertImageFits(img, [width, height]) {
       assert.equal(await videoSelect.getAttribute('aria-pressed'),'false');
       assert.equal(posts,2,'Reference previews must not send a generation');
 
+      linkedUploadVisible = false;
       await page.goto(`${base}/business?tab=assets`);
       await page.setViewportSize({width:320,height:680});
       await page.getByText(assetCopy.pendingTitle,{exact:false}).click();

@@ -42,8 +42,8 @@ function firstFrame(event: SyntheticEvent<HTMLVideoElement>): string | null {
   }
 }
 
-export default function BusinessAssetPreview({ asset, copy, compact = false }: { asset: BusinessAssetRecord; copy: BusinessAssetsCopy; compact?: boolean }) {
-  const sources = previewSources(asset);
+export default function BusinessAssetPreview({ asset, copy, compact = false, localImageSrc }: { asset: BusinessAssetRecord; copy: BusinessAssetsCopy; compact?: boolean; localImageSrc?: string }) {
+  const sources = localImageSrc ? [localImageSrc] : previewSources(asset);
   return <AssetPreview key={sources.join("|")} asset={asset} sources={sources} copy={copy} compact={compact}/>;
 }
 
