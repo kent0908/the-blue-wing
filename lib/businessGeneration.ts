@@ -205,7 +205,10 @@ async function normalizedParameters(kind: BusinessKind, parameters: Record<strin
       refs.push(...resolved.map(ref => ref.url));
     }
     if (refs.length) payload.image = refs.length === 1 ? refs[0] : refs;
-    if (caps.family === "seedream") payload.sequential_image_generation = "disabled";
+    if (caps.supportsSequentialImageGeneration) payload.sequential_image_generation = "disabled";
+    // Seedream 5.0 Pro has a single-image contract. Keep n=1 in the
+    // workspace snapshot and quote, but leave it out of the upstream payload.
+    if (caps.family === "seedream" && !caps.supportsSequentialImageGeneration) delete payload.n;
     return payload;
   }
   if (kind === "video" && model.seedance) {

@@ -4,6 +4,7 @@ import { assertBusinessSeedanceReferences, type BusinessSeedanceMode } from "../
 import { assertBusinessDedicatedVideoReferences, type BusinessDedicatedVideoMode } from "../businessDedicatedVideo";
 import { buildBusinessWan3Payload } from "../businessWan3";
 import type { CanvasGraph, CanvasNode, PortType } from "./types";
+import { shotPrompt } from "./storyboard";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
@@ -23,13 +24,28 @@ export function assertBusinessCanvasPreflight(graph: CanvasGraph, order: string[
   const byId = new Map(graph.nodes.map(node => [node.id, node]));
   if (byId.size !== graph.nodes.length || new Set(order).size !== order.length || order.some(id => !byId.has(id))) bad();
   const positions = new Map(order.map((id, index) => [id, index])), facts = new Map<string, Fact>();
+  const completedFact = (node: CanvasNode): Fact | undefined => {
+    if (node.status !== "done" || !node.output) return;
+    const output = node.output;
+    if (output.kind === "text") return { kind: "text", text: output.text };
+    if (output.kind === "video") return { kind: "video" };
+    const originals = output.items.filter(item => item.businessAssetId && UUID.test(item.businessAssetId) && !item.businessGenerationId);
+    const generated = output.items.filter(item => item.businessGenerationId && UUID.test(item.businessGenerationId) && !item.businessAssetId);
+    if (!output.items.length || originals.length + generated.length !== output.items.length) return;
+    return {
+      kind: "image", originals: originals.length, generated: generated.length,
+      keys: output.items.map(item => item.businessAssetId ? `business:${item.businessAssetId.toLowerCase()}` : `generated:${item.businessGenerationId!.toLowerCase()}`),
+    };
+  };
   const inputFacts = (node: CanvasNode): Record<string, Fact | undefined> => {
     const inputs: Record<string, Fact | undefined> = {};
     for (const edge of graph.edges.filter(edge => edge.toNode === node.id)) {
       const from = byId.get(edge.fromNode), expected = INPUTS[node.type]?.[edge.toPort];
-      if (!from || !expected || edge.fromPort !== "out" || OUTPUTS[from.type] !== expected || inputs[edge.toPort] ||
-        !positions.has(from.id) || positions.get(from.id)! >= positions.get(node.id)! || !facts.has(from.id)) throw new Error(copy.invalidReference);
-      inputs[edge.toPort] = facts.get(from.id);
+      if (!from || !expected || edge.fromPort !== "out" || OUTPUTS[from.type] !== expected || inputs[edge.toPort]) throw new Error(copy.invalidReference);
+      const position = positions.get(from.id);
+      const fact = position === undefined ? completedFact(from) : position < positions.get(node.id)! ? facts.get(from.id) : undefined;
+      if (!fact || fact.kind !== expected) throw new Error(copy.invalidReference);
+      inputs[edge.toPort] = fact;
     }
     return inputs;
   };
@@ -52,7 +68,8 @@ export function assertBusinessCanvasPreflight(graph: CanvasGraph, order: string[
     }
     const model = models.find(model => model.id === node.data.model && model.modality === node.type);
     if (!model) throw new Error(copy.unavailableModel);
-    const prompt = (inputs.prompt?.kind === "text" ? inputs.prompt.text : "") || String(node.data.prompt ?? "");
+    const basePrompt = (inputs.prompt?.kind === "text" ? inputs.prompt.text : "") || String(node.data.prompt ?? "");
+    const prompt = node.type === "video" ? shotPrompt(basePrompt, node.data.shotNotes) : basePrompt;
     if (!prompt.trim()) bad(copy.missingPrompt);
     if (prompt.length > (model.promptMaxChars ?? 12000)) bad(copy.invalidSettings);
     const cjkLimit = model.dedicatedVideo?.cjkPromptMaxChars;

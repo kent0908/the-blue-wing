@@ -83,6 +83,8 @@ export default function BusinessWorkspace() {
   const [keyLabel, setKeyLabel] = useState("SIRAYA");
   const [keySaving, setKeySaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false);
+  const [referenceUploading, setReferenceUploading] = useState(false);
   const [models, setModels] = useState<BusinessModel[]>([]);
   const [unavailableModels, setUnavailableModels] = useState<BusinessUnavailableModel[]>([]);
   const [upstreamTotal, setUpstreamTotal] = useState(0);
@@ -422,7 +424,7 @@ export default function BusinessWorkspace() {
     if (kind === "video" && selected.seedance) {
       if (asset.uploadId && imageBusinessAssets.some(item => item.uploadId === asset.uploadId)) {
         removeDedicatedReference(`business:${asset.uploadId}`);
-        chooseTab("create");
+        if (returnToCreate) chooseTab("create");
         return;
       }
       if (!asset.providerReady) {
@@ -435,7 +437,7 @@ export default function BusinessWorkspace() {
         setVideoMode(nextMode);
         setImageBusinessAssets(current => [...current, asset]);
         setReferenceOrder(current => [...current, key]);
-        chooseTab("create");
+        if (returnToCreate) chooseTab("create");
         return;
       }
       if (asset.status !== "active") return;
@@ -447,7 +449,8 @@ export default function BusinessWorkspace() {
         if (issue) { setError(seedanceReferenceMessage(d, issue, seedanceReferenceLimits(selected.seedance, nextMode))); return; }
         setVideoMode(nextMode);
       }
-      toggleProviderReference(asset); chooseTab("create");
+      toggleProviderReference(asset);
+      if (returnToCreate) chooseTab("create");
     } else if ((kind === "image" || kind === "video" && selected.supportsReferences) && asset.uploadId && asset.storageReady) {
       if (asset.type !== "image" && selected.dedicatedVideo?.family !== "wan3.0") return;
       const next = imageBusinessAssets.some(value => value.uploadId === asset.uploadId) ? imageBusinessAssets.filter(value => value.uploadId !== asset.uploadId) : [...imageBusinessAssets, asset];
@@ -821,12 +824,30 @@ export default function BusinessWorkspace() {
     </section> : <>
       <section id={`business-panel-${tab}`} aria-label={tab === "create" ? t.createTab : tab === "key" ? t.keyTab : tab === "workflows" ? workflowsCopy.nav : tab === "assets" ? operations.assets : tab === "usage" ? operations.usage : tab === "models" ? operations.models : t.historyTab} className={tab === "create" ? studio.createLayout : tab === "workflows" ? workflowStyles.workspacePanel : tab === "key" ? `${studio.section} ${studio.keyPanel}` : studio.section}>
         {tab === "workflows" ? <BusinessWorkflows models={models} /> : tab === "assets" ? <BusinessAssets wanReferences={selected?.dedicatedVideo?.family === "wan3.0"} seedanceReferences={!!selected?.seedance} imageOnly={!selected?.seedance && selected?.dedicatedVideo?.family !== "wan3.0" && !!selected?.supportsReferences} onSelect={selected?.supportsReferences ? selectManagedAsset : undefined} selectedIds={!selected?.seedance ? imageBusinessAssets.map(asset => asset.uploadId ?? asset.id) : [...providerAssets.map(asset => asset.id), ...imageBusinessAssets.map(asset => asset.uploadId ?? asset.id)]} /> : tab === "usage" ? <BusinessUsage /> : tab === "models" ? <BusinessModelCatalog models={models} unavailableModels={unavailableModels} upstreamTotal={upstreamTotal} loading={modelsLoading} onRefresh={() => void loadModels()} onChoose={chooseModel} /> : tab === "key" ? <><p className={styles.description}>{t.keyText}</p>{credential ? <div className={styles.keyCard}><div><strong>{credential.label}</strong><p>{t.configured} · {t.last4} •••• {credential.last4}</p><p>{dateLabel(credential.updatedAt)}</p></div><button className={styles.small} type="button" onClick={() => setDeleteOpen(true)} disabled={keySaving}>{t.deleteKey}</button></div> : <p className={styles.note}>{t.notConfigured}</p>}
-          {!access.encryptionReady ? <p className={styles.warning}>{t.encryptionUnavailable}</p> : null}<form className={styles.form} onSubmit={saveKey} autoComplete="off"><label className={styles.field}>{t.keyLabel}<input value={keyLabel} onChange={e => setKeyLabel(e.target.value)} maxLength={64} required autoComplete="off" /></label><label className={styles.field}>{t.apiKey}<input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} required placeholder={t.keyPlaceholder} maxLength={203} autoComplete="new-password" spellCheck={false} autoCapitalize="none" aria-describedby="business-key-privacy" /></label><p id="business-key-privacy" className={styles.note}>{t.writeOnly}</p><div><button type="submit" className={styles.button} disabled={keySaving || !access.encryptionReady || !apiKey.trim()}>{keySaving ? t.saving : credential ? t.replaceKey : t.saveKey}</button></div></form></> : tab === "create" ? <><div className={studio.editor}>
-          {!access.keyConfigured ? <div className={styles.empty}><h2>{t.keyTab}</h2><p>{t.keyNeeded}</p><button className={styles.button} type="button" onClick={() => chooseTab("key")}>{t.keyTab}</button></div> : <><div className={studio.editorHeader}><h2>{s.parametersTitle}</h2>{!modelsLoading && !selectedModels.length && <button className={styles.small} type="button" onClick={loadModels}>{t.refresh}</button>}</div><form className={studio.editorForm} onSubmit={requestConfirmation}>
-            <label className={styles.field}>{t.model}<select required value={selected?.id ?? ""} onChange={e => chooseModel(e.target.value)} disabled={modelsLoading || !selectedModels.length}>{!selected && <option value="" disabled>{modelId ? s.modelUnavailable : t.emptyModels}</option>}{selectedModels.map(model => <option key={model.id} value={model.id}>{model.displayName}{model.nsfw ? ` · ${t.nsfw}` : ""}</option>)}</select></label>
-            {!modelsLoading && modelId && !selected && <p className={styles.warning} role="alert">{s.modelUnavailable}</p>}
-            {selected?.nsfw ? <span className={styles.sensitive}>{t.nsfw}</span> : null}
+          {!access.encryptionReady ? <p className={styles.warning}>{t.encryptionUnavailable}</p> : null}<form className={styles.form} onSubmit={saveKey} autoComplete="off"><label className={styles.field}>{t.keyLabel}<input value={keyLabel} onChange={e => setKeyLabel(e.target.value)} maxLength={64} required autoComplete="off" /></label><label className={styles.field}>{t.apiKey}<input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} required placeholder={t.keyPlaceholder} maxLength={203} autoComplete="new-password" spellCheck={false} autoCapitalize="none" aria-describedby="business-key-privacy" /></label><p id="business-key-privacy" className={styles.note}>{t.writeOnly}</p><div><button type="submit" className={styles.button} disabled={keySaving || !access.encryptionReady || !apiKey.trim()}>{keySaving ? t.saving : credential ? t.replaceKey : t.saveKey}</button></div></form></> : tab === "create" ? <><div className={studio.preview} id="business-preview" tabIndex={-1} ref={workspacePreview}><BusinessStage composer movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} key={previewJob?.id ?? kind} job={previewJob} recentJobs={visibleJobs} onSelect={job => setSelectedJobId(job.id)} onReuse={reusePrompt} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={syncUpdatedJob} /></div>
+        <div className={studio.editor}>
+          {!access.keyConfigured ? <div className={styles.empty}><h2>{t.keyTab}</h2><p>{t.keyNeeded}</p><button className={styles.button} type="button" onClick={() => chooseTab("key")}>{t.keyTab}</button></div> : <form className={studio.editorForm} onSubmit={requestConfirmation}>
+            {selected?.supportsReferences && <div className={studio.references}>
+              <button type="button" aria-haspopup="dialog" className={studio.addReference} onClick={() => { setError(""); setReferencePickerOpen(true); }}>
+                <span aria-hidden="true">＋</span><strong>{s.addReference}</strong><small>{s.uploadOrSelect}</small>
+              </button>
+              {(kind === "image" || !selected.seedance && !selected.dedicatedVideo) && <div className={studio.selectedReferences} aria-label={s.selectedReferences}>
+                {[
+                  ...assets.filter(asset => assetIds.includes(asset.id)).map(asset => ({ key: `local:${asset.id}`, src: asset.src, name: asset.name })),
+                  ...imageBusinessAssets.flatMap(asset => asset.uploadId ? [{ key: `business:${asset.uploadId}`, name: asset.name,
+                    src: `/api/business/provider-assets/uploads/${asset.uploadId}/preview` }] : []),
+                ].map(asset => <div className={studio.referenceTile} key={asset.key}>
+                  <Image src={asset.src} alt={asset.name} width={84} height={64} unoptimized />
+                  <button type="button" className={studio.removeReference} aria-label={`${t.removeReference} ${asset.name}`} onClick={() => removeDedicatedReference(asset.key)}>×</button>
+                </div>)}
+              </div>}
+              {kind === "video" && selectedReferenceKeys.size > 0 && <span className={studio.referenceCount}>{s.selectedReferences} · {selectedReferenceKeys.size}</span>}
+            </div>}
             <BusinessPrompt value={prompt} onChange={setPrompt} maxLength={promptLimit} label={t.prompt} placeholder={t.promptPlaceholder} note={t.keyWarning} assets={assets} mode={!selected?.supportsReferences ? "none" : selected.seedance ? "seedance" : wanPersonal ? "native-with-personal" : selected.dedicatedVideo ? "native" : "image"} personalMaxBytes={wanPersonal ? personalMaxBytes : undefined} includeVideo={showWanVideos && dedicatedMode !== "image-to-video" && dedicatedMode !== "first-last-frame"} onPick={pickMention} selectedKeys={selectedReferenceKeys} />
+            {!modelsLoading && !selectedModels.length && <button className={styles.small} type="button" onClick={loadModels}>{t.refresh}</button>}
+            {!modelsLoading && modelId && !selected && <p className={styles.warning} role="alert">{s.modelUnavailable}</p>}
+            <div className={studio.coreControls}>
+            <label className={styles.field}>{t.model}<select required value={selected?.id ?? ""} onChange={e => chooseModel(e.target.value)} disabled={modelsLoading || !selectedModels.length}>{!selected && <option value="" disabled>{modelId ? s.modelUnavailable : t.emptyModels}</option>}{selectedModels.map(model => <option key={model.id} value={model.id}>{model.displayName}{model.nsfw ? ` · ${t.nsfw}` : ""}</option>)}</select></label>
             <div className={styles.settings}>{kind === "image" && selected?.zImage ? <>
               <label className={styles.field}>{operations.imageWidth}<input type="number" inputMode="numeric" min={selected.zImage.minDimension} max={selected.zImage.maxDimension} step={1} value={zWidth} required onChange={e => setSize(`${e.target.value}x${zHeight}`)} /></label>
               <label className={styles.field}>{operations.imageHeight}<input type="number" inputMode="numeric" min={selected.zImage.minDimension} max={selected.zImage.maxDimension} step={1} value={zHeight} required onChange={e => setSize(`${zWidth}x${e.target.value}`)} /></label>
@@ -841,20 +862,22 @@ export default function BusinessWorkspace() {
                 {selected?.resolutions?.length ? <label className={styles.field}>{t.resolution}<select value={selectedResolution} onChange={e => setResolution(e.target.value)}>{selected.resolutions.map(value => <option key={value} value={value}>{value}</option>)}</select></label> : null}
                 {aspectOptions?.length ? <label className={styles.field}>{t.aspect}<select value={selected?.dedicatedVideo?.aspectRatioFromSource ? "source" : selectedAspect} disabled={seedanceAdaptive || selected?.dedicatedVideo?.aspectRatioFromSource} onChange={e => setAspect(e.target.value)}>{selected?.dedicatedVideo?.aspectRatioFromSource ? <option value="source">{dedicatedCopy.sourceAspect}</option> : aspectOptions.map(value => <option value={value} key={value}>{wan3Capability && value === "adaptive" ? dedicatedCopy.automaticAspect : value}</option>)}</select></label> : null}
               </> : null}
-            </div>{kind === "image" && selected ? <BusinessImageControls model={selected} count={imageCount} onCount={setImageCount} quality={imageQuality} onQuality={setImageQuality} seed={seed} onSeed={setSeed} negative={imageNegative} onNegative={setImageNegative} /> : null}{kind === "video" && selected?.supportsAudio ? <label className={styles.check}><input type="checkbox" checked={selected.nativeAudioOnly || (supportsAudioAtResolution && audio)} disabled={selected.nativeAudioOnly || !supportsAudioAtResolution} onChange={e => setAudio(e.target.checked)} />{t.audio}</label> : null}
+            </div></div>
+            {kind === "image" && selected ? <BusinessImageControls model={selected} count={imageCount} onCount={setImageCount} quality={imageQuality} onQuality={setImageQuality} seed={seed} onSeed={setSeed} negative={imageNegative} onNegative={setImageNegative} /> : null}
+            {kind === "video" && selected?.supportsAudio ? <label className={styles.check}><input type="checkbox" checked={selected.nativeAudioOnly || (supportsAudioAtResolution && audio)} disabled={selected.nativeAudioOnly || !supportsAudioAtResolution} onChange={e => setAudio(e.target.checked)} />{t.audio}</label> : null}
             {kind === "image" && selected?.zImage ? <div>
               <p className={styles.note}>{operations.textImageOnly}</p>
               <label className={styles.check}><input type="checkbox" checked={imagePromptExtend} onChange={e => setImagePromptExtend(e.target.checked)} aria-describedby={selected.zImage.promptExtendSurcharged ? "business-z-rewrite-cost" : undefined} />{operations.promptRewrite}</label>
               {selected.zImage.promptExtendSurcharged ? <p className={styles.note} id="business-z-rewrite-cost">{operations.promptRewriteSurcharge}</p> : null}
             </div> : null}
-            {selected?.seedance ? <BusinessSeedanceControls key={credential?.id ?? "current-key"} capability={selected.seedance} mode={videoMode} onMode={chooseVideoMode} assets={assets} assetIds={assetIds} onLocalSelection={toggleLocalReference} providerAssets={providerAssets} nativeAssets={imageBusinessAssets} onNativeRemove={id => { setImageBusinessAssets(current => current.filter(asset => asset.uploadId !== id)); setReferenceOrder(current => current.filter(key => key !== `business:${id}`)); setConfirmation(null); }} onProviderSelection={toggleProviderReference} referenceOrder={referenceOrder} outputFormat={outputFormat} onOutputFormat={setOutputFormat} seed={seed} onSeed={setSeed} onOpenAssets={() => chooseTab("assets")} /> : null}
+            {selected?.seedance ? <BusinessSeedanceControls key={credential?.id ?? "current-key"} capability={selected.seedance} mode={videoMode} onMode={chooseVideoMode} assets={assets} assetIds={assetIds} onLocalSelection={toggleLocalReference} providerAssets={providerAssets} nativeAssets={imageBusinessAssets} onNativeRemove={id => { setImageBusinessAssets(current => current.filter(asset => asset.uploadId !== id)); setReferenceOrder(current => current.filter(key => key !== `business:${id}`)); setConfirmation(null); }} onProviderSelection={toggleProviderReference} referenceOrder={referenceOrder} outputFormat={outputFormat} onOutputFormat={setOutputFormat} seed={seed} onSeed={setSeed} onOpenAssets={() => { setError(""); setReferencePickerOpen(true); }} /> : null}
             {selected?.dedicatedVideo ? <>
               <BusinessDedicatedVideoControls
                 capability={selected.dedicatedVideo}
                 value={dedicatedOptions}
                 onChange={chooseDedicatedOptions}
                 referenceCount={imageBusinessAssets.length}
-                onOpenAssets={() => chooseTab("assets")}
+                onOpenAssets={() => { setError(""); setReferencePickerOpen(true); }}
                 personalLibrary={wanPersonal ? { assets, selectedIds: assetIds, onToggle: toggleWanPersonalReference, loading: personalAssetsStatus === "loading", unavailable: personalAssetsStatus === "unavailable", onRetry: () => void loadPersonalAssets() } : undefined}
                 videoLibrary={showWanVideos ? {
                   personal: personalVideos, business: businessVideos, selected: selectedReferenceKeys,
@@ -868,14 +891,27 @@ export default function BusinessWorkspace() {
               {!wanPersonal && imageBusinessAssets.length > 0 ? <div className={styles.row}>{imageBusinessAssets.map((asset, index) => <button key={asset.id} type="button" className={styles.small} onClick={() => { setImageBusinessAssets(current => current.filter(value => value.id !== asset.id)); setConfirmation(null); }}><span>{index + 1}. {asset.name} ×</span></button>)}</div> : null}
             </> : null}
             {seedanceAdaptive ? <p className={styles.note}>{d.adaptiveNotice}</p> : null}
-            {kind === "image" && selected?.supportsReferences ? <div><button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button>{imageBusinessAssets.length > 0 && <div className={styles.row} style={{marginTop:12}}>{imageBusinessAssets.map(asset => <button key={asset.id} type="button" className={styles.small} onClick={() => setImageBusinessAssets(current => current.filter(value => value.id !== asset.id))}>{asset.name} ×</button>)}</div>}</div> : null}{kind === "video" && !selected?.seedance && !selected?.dedicatedVideo ? <div className={styles.row}>{imageBusinessAssets.map(asset => <button key={asset.id} type="button" className={styles.small} onClick={() => removeDedicatedReference(`business:${asset.uploadId}`)}>{asset.name} ×</button>)}</div> : null}{selected?.supportsReferences && !selected.seedance && !selected.dedicatedVideo ? <details className={styles.promptDetails}><summary>{t.references} · {assetIds.length + imageBusinessAssets.length} / {referenceLimit}</summary><p className={styles.note}>{t.referenceText.replace("{n}", String(referenceLimit))}</p>{assets.length ? <div className={styles.assetGrid}>{assets.slice(0, 100).map(asset => <button type="button" key={asset.id} className={styles.asset} aria-pressed={assetIds.includes(asset.id)} title={assetIds.includes(asset.id) ? t.removeReference : t.selectReference} disabled={!assetIds.includes(asset.id) && assetIds.length + imageBusinessAssets.length >= referenceLimit} onClick={() => setAssetIds(current => current.includes(asset.id) ? current.filter(id => id !== asset.id) : [...current, asset.id])}><Image src={asset.src} alt={asset.name} loading="lazy" width={200} height={100} unoptimized /><span>{asset.name}</span></button>)}</div> : <p className={styles.note}>{t.noAssets}</p>}<button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button></details> : null}
+            {selected?.supportsReferences && !selected.seedance && !selected.dedicatedVideo ? <details className={styles.promptDetails}><summary>{t.references} · {assetIds.length + imageBusinessAssets.length} / {referenceLimit}</summary><p className={styles.note}>{t.referenceText.replace("{n}", String(referenceLimit))}</p>{assets.length ? <div className={styles.assetGrid}>{assets.slice(0, 100).map(asset => <button type="button" key={asset.id} className={styles.asset} aria-pressed={assetIds.includes(asset.id)} title={assetIds.includes(asset.id) ? t.removeReference : t.selectReference} disabled={!assetIds.includes(asset.id) && assetIds.length + imageBusinessAssets.length >= referenceLimit} onClick={() => setAssetIds(current => current.includes(asset.id) ? current.filter(id => id !== asset.id) : [...current, asset.id])}><Image src={asset.src} alt={asset.name} loading="lazy" width={200} height={100} unoptimized /><span>{asset.name}</span></button>)}</div> : <p className={styles.note}>{t.noAssets}</p>}<button type="button" className={styles.small} onClick={() => chooseTab("assets")}>{operations.openAssets} ↗</button></details> : null}
             {selected?.id === "minimax-h3" || selected?.id === "minimax-h3-max" ? <p className={styles.warning}>{selected.id === "minimax-h3" ? t.minimaxH3References : t.minimaxH3MaxReferences}</p> : null}<div className={studio.reviewActions}><p className={styles.note}>{t.providerBilling} · {t.noCredits}</p><button type="submit" className={styles.button} disabled={submitting || navigationPending || uncertain || !selected || !prompt.trim() || (selected.nsfw && !access.adultVerified)}>{submitting ? t.generating : t.generate} <span aria-hidden="true">↗</span></button></div>
-          </form>{selected?.nsfw && !access.adultVerified ? <BusinessAdultDeclaration copy={t} onVerified={refreshAccess} /> : null}</>}
-        </div><div className={studio.preview} id="business-preview" tabIndex={-1} ref={workspacePreview}><BusinessStage movNotice={d.movNotice} copy={s} business={t} kind={kind} model={selected} key={previewJob?.id ?? kind} job={previewJob} recentJobs={visibleJobs} onSelect={job => setSelectedJobId(job.id)} onReuse={reusePrompt} onHistory={() => chooseTab("history")} onRefresh={() => void loadHistory(true)} refreshing={historyLoading} onJobUpdated={syncUpdatedJob} /></div></> : <BusinessCollection jobs={jobs} refreshing={historyLoading} onRefresh={() => void loadHistory(true)} onReuse={reusePrompt} onJobUpdated={syncUpdatedJob} />}
+          </form>}
+          {selected?.nsfw && !access.adultVerified ? <BusinessAdultDeclaration copy={t} onVerified={refreshAccess} /> : null}
+        </div></> : <BusinessCollection jobs={jobs} refreshing={historyLoading} onRefresh={() => void loadHistory(true)} onReuse={reusePrompt} onJobUpdated={syncUpdatedJob} />}
       </section>
       {uncertain ? <aside className={styles.warning} role="status">{t.uncertain}<div className={styles.row} style={{ marginTop: 12 }}><button type="button" className={styles.small} disabled={historyLoading} onClick={() => loadHistory(true)}>{historyLoading ? t.checking : t.checkOriginal}</button></div></aside> : null}
     </>}
     </div></div></div>
+    {referencePickerOpen && selected?.supportsReferences && tab === "create" && <BusinessDialog title={s.addReference}
+      className={studio.assetDialog} busy={referenceUploading} onClose={() => setReferencePickerOpen(false)}>
+      <div className={studio.assetDialogActions}>
+        <span role="status">{s.selectedReferences} · {selectedReferenceKeys.size}</span>
+        <button type="button" className={styles.small} disabled={referenceUploading} onClick={() => setReferencePickerOpen(false)}>{s.doneSelecting}</button>
+      </div>
+      {error && <p role="alert" className={styles.feedback}>{error}</p>}
+      <BusinessAssets compact wanReferences={!!wan3Capability} seedanceReferences={!!selected.seedance}
+        imageOnly={!selected.seedance && !wan3Capability} onUploading={setReferenceUploading}
+        selectedIds={[...providerAssets.map(asset => asset.id), ...imageBusinessAssets.map(asset => asset.uploadId ?? asset.id)]}
+        onSelect={asset => selectManagedAsset(asset, false)} onChanged={() => { if (showWanVideos) void loadPersonalAssets(); }} />
+    </BusinessDialog>}
     {confirmation ? <BusinessDialog title={t.confirmTitle} busy={submitting} onClose={() => setConfirmation(null)}>
       <p>{t.confirmText}</p>
       <BusinessPricePreview key={confirmation.clientRequestId} requestId={confirmation.clientRequestId} onSettled={setPreviewedRequest} locale={locale} settings={{

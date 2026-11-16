@@ -2,6 +2,7 @@ import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
+  originalImageFormats: "支援 JPEG、PNG 與 WebP。",
   playPreview: "播放 {name}", closePreview: "關閉預覽", previewUnavailable: "暫時無法預覽",
   wanAudioInvalid: "參照音訊須為 MP3／WAV，每段 1–15 秒。",
   title: "素材庫", upload: "上傳素材", choose: "選擇檔案", replaceFiles: "換一批", queued: "待上傳",
@@ -31,6 +32,7 @@ const zh = {
 };
 export type BusinessAssetsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessAssetsCopy = {
+  originalImageFormats: "JPEG, PNG, and WebP are supported.",
   playPreview: "Play {name}", closePreview: "Close preview", previewUnavailable: "Preview unavailable",
   wanAudioInvalid: "Use an MP3 or WAV audio reference of 1–15 seconds.",
   title: "Asset library", upload: "Upload assets", choose: "Choose files", replaceFiles: "Replace files", queued: "Files to upload",
@@ -59,6 +61,7 @@ const en: BusinessAssetsCopy = {
   uploadFinished: "Original uploaded. Check its status in the library.", progress: "Upload progress", original: "Use original",
 };
 const ja: BusinessAssetsCopy = {
+  originalImageFormats: "JPEG、PNG、WebP に対応しています。",
   playPreview: "{name} を再生", closePreview: "プレビューを閉じる", previewUnavailable: "プレビューできません",
   wanAudioInvalid: "音声参照は1〜15秒の MP3／WAV を使用してください。",
   title: "素材ライブラリ", upload: "素材をアップロード", choose: "ファイルを選択", replaceFiles: "ファイルを選び直す", queued: "アップロード待ち",

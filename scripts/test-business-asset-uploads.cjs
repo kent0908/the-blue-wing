@@ -67,6 +67,21 @@ let total=0;async function test(name,fn){reset();await fn();total++;console.log(
 const request=body=>new NextRequest('https://fixture.invalid/api/business/provider-assets/upload',{method:'POST',headers:{origin:'https://fixture.invalid','content-type':'application/json'},body:JSON.stringify(body)});
 (async()=>{
 png=await sharp({create:{width:640,height:640,channels:3,background:{r:23,g:110,b:205}}}).png().toBuffer();
+await test('an image original can upload, preview and resolve for generation without registering it as a provider asset', async () => {
+  const init = await initialize();
+  store(init);
+  const result = await route.POST(request({action:'complete', uploadId:init.upload.id, originalOnly:true}));
+  assert.equal(result.status, 200);
+  const body = await result.json();
+  assert.equal(body.upload.status, 'active');
+  assert.equal(body.upload.storageReady, true);
+  assert.equal(body.upload.asset, undefined);
+  assert.equal(providerCalls, 0);
+  const preview = await helper.businessUploadPreviewResponse('7', account, init.upload.id);
+  assert.equal((await preview.arrayBuffer()).byteLength, png.length);
+  const [source] = await helper.resolveBusinessUploadSources('7', account, credential, [init.upload.id], false);
+  assert.equal(source.type, 'image');
+});
 await test('init creates only business paths and retries the same UUID idempotently',async()=>{const a=await initialize(),b=await initialize();assert.equal(a.upload.id,b.upload.id);assert.equal(rows.size,1);assert.match(a.pathname,new RegExp('^business-assets/'+account+'/'));assert.equal(providerCalls,0);assert.ok(!JSON.stringify(a).includes(ownKey));await rejected(initialize(1,{name:'different.png'}),'business_asset_upload_conflict');});
 await test('PostgreSQL bigint session strings work through upload routes, preview and private image grants',async()=>{authUserId='7';const response=await route.POST(request({action:'initialize',clientRequestId:uuid(1),name:'blue.png',contentType:'image/png',size:png.length}));assert.equal(response.status,201);const init=await response.json();rows.get(init.upload.id).user_id='7';store(init);const token=await helper.businessUploadTokenOptions('7',account,init.pathname,JSON.stringify({uploadId:init.upload.id}));assert.deepEqual(token.allowedContentTypes,['image/png']);const complete=await route.POST(request({action:'complete',uploadId:init.upload.id}));assert.equal(complete.status,200);assert.equal((await complete.json()).upload.status,'processing');assert.equal((await helper.listBusinessUploads('7',account)).length,1);const preview=await helper.businessUploadPreviewResponse('7',account,init.upload.id);assert.equal((await preview.arrayBuffer()).byteLength,png.length);const refs=await helper.resolveBusinessUploadSources('7',account,credential,[init.upload.id],false);assert.equal(refs.length,1);const source=await helper.businessUploadSourceResponse(new URL(refs[0].url).pathname.split('/').at(-1));assert.equal((await source.arrayBuffer()).byteLength,png.length);});
 await test('noncanonical and unsafe bigint IDs fail before storage, registration or source minting',async()=>{for(const id of['0','07',' 7','7 ','7.0','7e0','9007199254740992',9007199254740992,{},null,Infinity,-1]){await rejected(helper.initializeBusinessUpload(id,account,{action:'initialize',clientRequestId:uuid(1),name:'blue.png',contentType:'image/png',size:png.length}));await rejected(helper.resolveBusinessUploadSources(id,account,credential,[],false),'invalid_reference');}assert.equal(rows.size,0);assert.equal(blobReads,0);assert.equal(providerCalls,0);});

@@ -20,7 +20,7 @@ const CanvasEditor = dynamic(() => import("@/components/canvas/CanvasEditor"), {
 interface Workflow { id: string; name: string; graph: CanvasGraph; version: string }
 interface Workspace { access: BusinessAccess; models: BusinessModel[]; workflow: Workflow }
 
-function NodeFields({ node, models, onChange }: { node: CanvasNode; models: BusinessModel[]; onChange: (patch: Record<string, unknown>) => void }) {
+function NodeFields({ node, models, onChange, hidePrompt = false }: { node: CanvasNode; models: BusinessModel[]; onChange: (patch: Record<string, unknown>) => void; hidePrompt?: boolean }) {
   const t = businessWorkflowsCopy(useLocale());
   const [picking, setPicking] = useState(false);
   const items = (node.data.businessItems ?? []) as BusinessCanvasImageItem[];
@@ -73,7 +73,7 @@ function NodeFields({ node, models, onChange }: { node: CanvasNode; models: Busi
       });
     }}><option value="" disabled>{t.model}</option>{choices.map(model => <option key={model.id} value={model.id}>{model.displayName}</option>)}</select>)}
     {!selected && <p role="alert">{t.unavailableModel}</p>}
-    {field(t.prompt, <textarea rows={4} maxLength={promptLimit} placeholder={t.promptHint} value={String(node.data.prompt ?? "")} onChange={event => onChange({ prompt: event.target.value })} />)}
+    {!hidePrompt && field(t.prompt, <textarea rows={4} maxLength={promptLimit} placeholder={t.promptHint} value={String(node.data.prompt ?? "")} onChange={event => onChange({ prompt: event.target.value })} />)}
     {node.type === "image" && selected?.sizes?.length ? field(t.size, <select value={String(node.data.size ?? selected.sizes[0])} onChange={event => onChange({ size: event.target.value })}>{selected.sizes.map(size => <option key={size}>{size}</option>)}</select>) : null}
     {node.type === "video" && selected && <>
       {field(t.seconds, selected.secondsOptions?.length ? <select value={Number(node.data.seconds ?? selected.defaultSeconds ?? selected.secondsOptions[0])} onChange={event => onChange({ seconds: Number(event.target.value) })}>{selected.secondsOptions.filter(value => value > 0).map(value => <option key={value} value={value}>{value}</option>)}</select> : <input type="number" min={selected.minSeconds ?? 2} max={selected.maxSeconds ?? 15} step="1" value={Number(node.data.seconds ?? selected.defaultSeconds ?? 5)} onChange={event => onChange({ seconds: Number(event.target.value) })} />)}
@@ -131,12 +131,14 @@ export default function BusinessWorkflowEditor({ id }: { id: string }) {
       const init = await initialize.json();
       if (!initialize.ok || !init.upload?.id || !init.pathname) throw new Error(t.captureUploadFailed);
       await upload(init.pathname, file, { access: "private", handleUploadUrl: "/api/business/provider-assets/upload", contentType: file.type, clientPayload: JSON.stringify({ uploadId: init.upload.id }), abortSignal: signal });
-      const complete = await fetch("/api/business/provider-assets/upload", { method: "POST", headers, body: JSON.stringify({ action: "complete", uploadId: init.upload.id }), signal });
+      const complete = await fetch("/api/business/provider-assets/upload", { method: "POST", headers, body: JSON.stringify({ action: "complete", uploadId: init.upload.id, originalOnly: true }), signal });
       if (!complete.ok) throw new Error(t.captureUploadFailed);
+      const saved = await complete.json();
+      if (!saved.upload?.storageReady) throw new Error(t.captureUploadFailed);
       return { uploadId: init.upload.id, src: `/api/business/provider-assets/uploads/${init.upload.id}/preview` };
     };
     return {
-      kind: "business", apiBasePath: "/api/business/workflows", backHref: "/business?tab=workflows", backLabel: t.back, billingNotice: t.billing, initialView: "canvas", showDirector: false,
+      kind: "business", apiBasePath: "/api/business/workflows", backHref: "/business?tab=workflows", backLabel: t.back, billingNotice: t.billing, initialView: "canvas",
       allowedNodeTypes: ["text", "loadImage", "image", "video", "director3d"], videoModels: models.filter(model => model.modality === "video").map(model => ({ id: model.id, name: model.displayName })),
       defaultNodeData: type => {
         if (type === "loadImage") return { items: [], businessItems: [] };
@@ -144,7 +146,7 @@ export default function BusinessWorkflowEditor({ id }: { id: string }) {
         const model = models.find(item => item.modality === type && !item.nsfw && (type !== "video" || !!item.seedance)) ?? models.find(item => item.modality === type && !item.nsfw);
         return type === "image" ? { prompt: "", model: model?.id ?? "", size: model?.sizes?.[0] ?? "" } : { prompt: "", model: model?.id ?? "", seconds: model?.defaultSeconds ?? model?.secondsOptions?.find(value => value > 0) ?? 5, resolution: model?.resolutions?.[0] ?? "", aspect_ratio: model?.aspectRatios?.includes("16:9") ? "16:9" : model?.aspectRatios?.[0] ?? "16:9", generate_audio: !!model?.nativeAudioOnly, mode: "freestyle" };
       },
-      renderNodeSettings: (node, onChange) => ["loadImage", "image", "video"].includes(node.type) ? <NodeFields node={node} models={models} onChange={onChange} /> : undefined,
+      renderNodeSettings: (node, onChange, location) => ["loadImage", "image", "video"].includes(node.type) ? <NodeFields node={node} models={models} onChange={onChange} hidePrompt={location === "director"} /> : undefined,
       runNode: createBusinessCanvasRunner({ models, copy: t, capture, onJob: rememberJob }),
       confirmRun: (graph, order) => {
         assertBusinessCanvasPreflight(graph, order, models, t);

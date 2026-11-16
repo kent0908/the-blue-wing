@@ -216,6 +216,16 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    assert.equal(providerCalls, 1);
  });
  await test('adult image output has adult namespace',async()=>{const response=await send(body(1,'image',{model:'NSFW-Dola-Seedream-5.0-pro'}));assert.match((await response.json()).generation.images[0].url,/\/adult\//)});
+ await test('Seedream 5.0 Pro sends a single-image request without legacy batch fields', async () => {
+   businessUploads = [uuid(100)];
+   for (const [i, model] of ['Dola-Seedream-5.0-pro', 'NSFW-Dola-Seedream-5.0-pro'].entries()) {
+     const response = await send(body(i + 1, 'image', { model, n: 1, size: '2560x1440', businessAssetIds: businessUploads }));
+     assert.equal((await response.json()).generation.status, 'completed');
+     assert.equal(lastPayload.size, '2560x1440');
+     assert.match(lastPayload.image, /^https:/);
+     assert.ok(!('sequential_image_generation' in lastPayload) && !('n' in lastPayload));
+   }
+ });
  await test('Z-Image Spicy submits the exact own-key payload and stores the result in adult media', async () => {
    const payload = body(1, 'image', {model:'z-image-spicy',size:'1024x1024',n:1});
    const response = await send(payload);
@@ -564,8 +574,13 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    for (const [i,model] of imageIds.entries()) {
      assert.equal((await send(body(i+1, 'image', {model}))).status, 201, model);
      assert.equal(lastPayload.model, model);
-     assert.equal(lastPayload.n, 1);
-     if (/Seedream/i.test(model)) assert.equal(lastPayload.sequential_image_generation, 'disabled');
+     if (/Seedream-5\.0-pro/i.test(model)) {
+       assert.equal(lastPayload.n, undefined);
+       assert.equal(lastPayload.sequential_image_generation, undefined);
+     } else {
+       assert.equal(lastPayload.n, 1);
+       if (/Seedream/i.test(model)) assert.equal(lastPayload.sequential_image_generation, 'disabled');
+     }
    }
    assert.equal(providerCalls, imageIds.length);
  });

@@ -22,3 +22,8 @@
 .failureIds dd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;min-width:0}
 .failureIds code{font-size:12px;overflow-wrap:anywhere;user-select:all;min-width:0;max-height:6em;overflow:auto;line-height:1.5}
 .failureIds .button{flex-shrink:0;padding:8px 10px}
+.composerStage .media { height: clamp(160px, 28vh, 330px); min-height: 160px; }
+.composerStage .empty { min-height: 100px; padding: 16px; }
+.composerStage .recent { padding: 10px 16px; }
+.recent summary { cursor: pointer; font-size: 13px; min-height: 32px; line-height: 32px; }
+.recent .recentHeader { justify-content: flex-end; }

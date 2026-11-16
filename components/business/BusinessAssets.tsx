@@ -9,7 +9,7 @@ import type { BusinessProviderAsset } from "./types";
 import styles from "./BusinessAssets.module.css";
 
 export type BusinessAssetRecord = BusinessProviderAsset & { uploadId?: string; storageReady?: boolean; providerReady?: boolean };
-interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; wanReferences?: boolean; seedanceReferences?: boolean; onChanged?: () => void }
+interface Props { onSelect?: (asset: BusinessAssetRecord) => void; selectedIds?: string[]; canSelect?: (asset: BusinessAssetRecord) => boolean; compact?: boolean; imageOnly?: boolean; wanReferences?: boolean; seedanceReferences?: boolean; onChanged?: () => void; onUploading?: (uploading: boolean) => void }
 interface UploadRecord { id: string; uploadId: string; name: string; type: "image" | "video" | "audio"; status: string; storageReady: boolean; asset?: BusinessAssetRecord; errorCode?: string }
 interface UploadConfig { directUpload: boolean; types: Record<string, { type: string; maxBytes: number; ext: string }>; uploads?: UploadRecord[] }
 type Filters = { type: string; status: string; name: string };
@@ -22,8 +22,10 @@ const typedFile=(file:File)=>{
   return mime[ext]?new File([file],file.name,{type:mime[ext]}):file;
 };
 
-export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,wanReferences=false,seedanceReferences=false,onChanged}:Props){
+export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compact=false,imageOnly=false,wanReferences=false,seedanceReferences=false,onChanged,onUploading}:Props){
   const t=businessAssetsCopy(useLocale());
+  const originalOnly = imageOnly || wanReferences;
+  const originalParameters = wanReferences ? { wanOriginal: true } : imageOnly ? { originalOnly: true } : {};
   const [config,setConfig]=useState<UploadConfig|null>(null);
   const [catalog,setCatalog]=useState<BusinessAssetRecord[]>([]);
   const [uploads,setUploads]=useState<UploadRecord[]>([]);
@@ -101,7 +103,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     if(values.length>6){setError("too_many_files");return;}
     const normalized=values.map(typedFile);
     if(normalized.some(file=>!config?.types[file.type]||file.size<=0||file.size>config.types[file.type].maxBytes)){setError("business_asset_upload_invalid");return;}
-    if(imageOnly&&normalized.some(file=>!file.type.startsWith("image/"))){setError("business_asset_upload_invalid");return;}
+    if(imageOnly&&normalized.some(file=>!["image/jpeg","image/png","image/webp"].includes(file.type))){setError("business_asset_upload_invalid");return;}
     setFiles(normalized);setConsent(false);setError("");setNotice("");
   }
   function rememberUpload(value:UploadRecord){setUploads(previous=>[value,...previous.filter(item=>item.id!==value.id)].slice(0,60));}
@@ -113,7 +115,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   }
   async function uploadFiles(){
     if(uploadLock.current||!files.length||!consent||!config?.directUpload)return;
-    uploadLock.current=true;setUploading(true);setError("");setNotice("");
+    uploadLock.current=true;setUploading(true);onUploading?.(true);setError("");setNotice("");
     let started=0;
     let interrupted=false;
     try{
@@ -136,11 +138,11 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
         const clientRequestId=fileRequests.current.get(original)??crypto.randomUUID();
         fileRequests.current.set(original,clientRequestId);
         const initialized=await apiUpload({action:"initialize",clientRequestId,name:file.name.slice(0,120),contentType:file.type,size:file.size});
-        started++;
         if(alive.current)rememberUpload(initialized.upload);
         await upload(initialized.pathname,file,{access:"private",handleUploadUrl:"/api/business/provider-assets/upload",contentType:file.type,multipart:file.size>8*1024*1024,clientPayload:JSON.stringify({uploadId:initialized.upload.id}),onUploadProgress:event=>{if(alive.current)setProgress(event.percentage);}});
+        started++;
         if(alive.current)setStage("registering");
-        const completed=await apiUpload({action:"complete",uploadId:initialized.upload.id,...(wanReferences?{wanOriginal:true}:{})});
+        const completed=await apiUpload({action:"complete",uploadId:initialized.upload.id,...originalParameters});
         if(!alive.current)break;
         rememberUpload(completed.upload);
         if(["created","unknown","registering"].includes(completed.upload.status)){setError("business_asset_upload_uncertain");interrupted=true;break;}
@@ -150,16 +152,26 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     }catch(error){if(alive.current)setError(error instanceof Error&&/^[a-z_]{1,64}$/.test(error.message)?error.message:"business_asset_upload_uncertain");}
     finally{
       uploadLock.current=false;
+      onUploading?.(false);
       if(alive.current){
         // A file with a recorded upload has its own recovery path. Leave only untouched files queued.
-        if(started){setFiles(files.slice(started));setConsent(false);void loadCatalog(1,committed.current);onChanged?.();}
+        if(started){
+          setFiles(files.slice(started));
+          setConsent(false);
+          if (!interrupted && started === files.length) {
+            const filter = { type: imageOnly ? "image" : "all", status: "all", name: "" };
+            setQuery(""); setType(filter.type); setStatus(filter.status);
+            void loadCatalog(1, filter);
+          } else void loadCatalog(1,committed.current);
+          onChanged?.();
+        }
         setUploading(false);setFileName("");
       }
     }
   }
   async function recoverUpload(item:UploadRecord){
     if(refreshingId)return;setRefreshingId(item.id);setError("");setNotice("");
-    try{const value=await apiUpload({action:"complete",uploadId:item.id,...(wanReferences?{wanOriginal:true}:{})});rememberUpload(value.upload);if(["created","unknown","registering"].includes(value.upload.status))setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");else{setNotice(t.uploadFinished);void loadCatalog(1,committed.current);}onChanged?.();}
+    try{const value=await apiUpload({action:"complete",uploadId:item.id,...originalParameters});rememberUpload(value.upload);if(["created","unknown","registering"].includes(value.upload.status))setError("business_asset_upload_uncertain");else if(value.upload.status==="failed")setError(value.upload.errorCode??"business_asset_upload_rejected");else{setNotice(t.uploadFinished);void loadCatalog(1,committed.current);}onChanged?.();}
     catch(error){setError(error instanceof Error?error.message:"business_asset_upload_uncertain");}
     finally{setRefreshingId("");}
   }
@@ -175,13 +187,17 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   }
 
   const known=new Set(catalog.map(asset=>asset.id));
-  const material:BusinessAssetRecord[]=[...catalog.map(asset=>{
+  const providerMaterials:BusinessAssetRecord[]=catalog.map(asset=>{
     const original=uploads.find(item=>item.asset?.id===asset.id);
     return {...asset,providerReady:asset.status==="active",...(original?{uploadId:original.id,storageReady:original.storageReady}:{})};
-  }),...uploads.filter(item=>item.storageReady&&(!item.asset||!known.has(item.asset.id))).map(item=>({id:`upload:${item.id}`,name:item.name,type:item.type,status:item.status,uploadId:item.id,storageReady:true,providerReady:false}))]
+  });
+  const uploadedMaterials:BusinessAssetRecord[]=uploads.filter(item=>item.storageReady&&(!item.asset||!known.has(item.asset.id))).map(item=>({
+    id:`upload:${item.id}`,name:item.name,type:item.type,status:item.status,uploadId:item.id,storageReady:true,providerReady:false,
+  }));
+  const material=(originalOnly ? [...uploadedMaterials,...providerMaterials] : [...providerMaterials,...uploadedMaterials])
     .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||(imageOnly||wanReferences)&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
   const statusText=(value:string)=>value==="active"?t.active:value==="processing"||value==="registering"?t.processing:value==="created"?t.created:value==="unknown"?t.unknown:t.failed;
-  const accept=Object.keys(config?.types??{}).filter(mime=>!imageOnly||mime.startsWith("image/")).join(",");
+  const accept=Object.keys(config?.types??{}).filter(mime=>!imageOnly||["image/jpeg","image/png","image/webp"].includes(mime)).join(",");
   const pendingUploads=uploads.filter(item=>["created","registering","unknown"].includes(item.status));
 
   return <section className={`${styles.assets} ${compact?styles.compact:""}`} aria-label={t.title}>
@@ -201,7 +217,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
         <button type="button" className={styles.primary} disabled={uploading||!consent||!config?.directUpload} onClick={()=>void uploadFiles()}>{uploading?t[stage]:interpolate(t.uploadSelected,{n:files.length})}</button>
       </>}
       {uploading&&<div className={styles.uploadProgress} role="status"><span>{fileName}</span><progress aria-label={t.progress} max={100} value={stage==="registering"?100:progress}/></div>}
-      <details className={styles.help}><summary>{t.uploadHelp}</summary><p>{imageOnly?t.imageFormats:t.formats} {t.noGeneration}</p>{!wanReferences&&<p>{t.providerNotice}</p>}</details>
+      <details className={styles.help}><summary>{t.uploadHelp}</summary><p>{imageOnly?t.originalImageFormats:t.formats} {t.noGeneration}</p>{!originalOnly&&<p>{t.providerNotice}</p>}</details>
     </div>
     {error&&<p className={styles.error} role="alert">{error==="too_many_files"?t.tooMany:businessAssetsError(t,error)}{error==="credential_required"&&<> <a href="/business?tab=key">{t.keyLink} ↗</a></>}</p>}
     {notice&&<p className={styles.success} role="status">{notice}</p>}

@@ -2,6 +2,7 @@ import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
+  addReference: "加入參考素材", uploadOrSelect: "上傳／素材庫", doneSelecting: "完成選取", selectedReferences: "已選參考素材",
   shortWorkflows: "工作流",
   shortUsage: "費用",
   modelUnavailable: "原先選取的模型目前無法使用，請重新選擇模型。",
@@ -38,6 +39,7 @@ const zh = {
 export type BusinessStudioCopy = { [K in keyof typeof zh]: string };
 
 const en: BusinessStudioCopy = {
+  addReference: "Add references", uploadOrSelect: "Upload or browse", doneSelecting: "Done", selectedReferences: "Selected references",
   shortWorkflows: "Flows",
   shortUsage: "Costs",
   modelUnavailable: "The selected model is unavailable. Please choose a model again.",
@@ -72,6 +74,7 @@ const en: BusinessStudioCopy = {
 };
 
 const ja: BusinessStudioCopy = {
+  addReference: "参考素材を追加", uploadOrSelect: "アップロード／素材庫", doneSelecting: "選択完了", selectedReferences: "選択済みの参考素材",
   shortWorkflows: "フロー",
   shortUsage: "料金",
   modelUnavailable: "選択したモデルは現在利用できません。モデルを選び直してください。",

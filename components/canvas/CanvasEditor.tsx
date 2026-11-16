@@ -442,8 +442,9 @@ export default function CanvasEditor({
   const runAll = () => execute();
 
   const addShot = () => {
+    if (graphRef.current.nodes.length >= 200) return;
     const id = newId("shot");
-    mutate(g => ({...g,nodes:[...g.nodes,{id,type:"video",x:orderedShots(g).length*300,y:360,data:{...defaultNodeData("video"),shotTitle:tr("分鏡 {n}", {n:orderedShots(g).length+1}),shotOrder:orderedShots(g).length},status:"idle"}]}));
+    mutate(g => ({...g,nodes:[...g.nodes,{id,type:"video",x:orderedShots(g).length*300,y:360,data:{...(runtime?.defaultNodeData("video") ?? defaultNodeData("video")),shotTitle:tr("分鏡 {n}", {n:orderedShots(g).length+1}),shotOrder:orderedShots(g).length},status:"idle"}]}));
     setSelectedNode(id);
   };
   const connectSource = (id:string, source:string) => mutate(g => ({...g,edges:[...g.edges.filter(e=>!(e.toNode===id&&e.toPort==="image")),...(source?[{id:newId("edge"),fromNode:source,fromPort:"out",toNode:id,toPort:"image"}]:[])]}));
@@ -635,7 +636,21 @@ export default function CanvasEditor({
       {runError && <p role="alert" className="shrink-0 bg-[#301919] px-4 py-2 text-sm text-red-200">{runError}</p>}
       {runtime?.showDirector !== false && view === "director" && <DirectorBoard graph={graph} selectedId={selectedNode} onSelect={setSelectedNode} onChange={updateNodeData} onAdd={addShot}
         onStoryChange={text=>mutate(g=>{const story=g.nodes.find(n=>n.type==='text'&&n.data.directorStory===true);if(story)return {...g,nodes:g.nodes.map(n=>n.id===story.id?{...n,data:{...n.data,text}}:n)};if(g.nodes.length>=200)return g;return {...g,nodes:[...g.nodes,{id:newId('story'),type:'text',x:0,y:-300,data:{text,directorStory:true}}]};})}
-        onStorySplit={()=>{const g=graphRef.current;const parts=storyParagraphs(String(g.nodes.find(n=>n.data.directorStory===true)?.data.text??''));if(!parts.length||g.nodes.length+parts.length>200)return;if(!confirm(tr("將新增 {n} 個分鏡，各段文字會成為分鏡敘事。只建立草稿，不扣點。是否繼續？", {n:parts.length})))return;const offset=orderedShots(g).length;const added:CanvasNode[]=parts.map((prompt,i)=>({id:newId('shot'),type:'video',x:(i+offset)*300,y:360,data:{...defaultNodeData('video'),prompt,shotTitle:tr("分鏡 {n}", {n:offset+i+1}),shotOrder:offset+i},status:'idle'}));mutate(current=>({...current,nodes:[...current.nodes,...added]}));setSelectedNode(added[0].id);}}
+        onStorySplit={() => {
+          const current = graphRef.current;
+          const parts = storyParagraphs(String(current.nodes.find(node => node.data.directorStory === true)?.data.text ?? ""));
+          if (!parts.length || current.nodes.length + parts.length > 200) return;
+          if (!runtime && !confirm(tr("將新增 {n} 個分鏡，各段文字會成為分鏡敘事。只建立草稿，不扣點。是否繼續？", { n: parts.length }))) return;
+          const offset = orderedShots(current).length;
+          const defaults = runtime?.defaultNodeData("video") ?? defaultNodeData("video");
+          const added: CanvasNode[] = parts.map((prompt, index) => ({
+            id: newId("shot"), type: "video", x: (index + offset) * 300, y: 360, status: "idle",
+            data: { ...defaults, prompt, shotTitle: tr("分鏡 {n}", { n: offset + index + 1 }), shotOrder: offset + index },
+          }));
+          mutate(graph => ({ ...graph, nodes: [...graph.nodes, ...added] }));
+          setSelectedNode(added[0].id);
+        }}
+        businessSettings={runtime?.renderNodeSettings} billingNotice={runtime?.billingNotice}
         busy={runningAll || saving} models={videoModels} onSource={connectSource} onStage={openShotStage} onRun={id=>void execute(id,true)}
         quote={id=>{try{return canvasRunCredits(graph,rates,plannedShotRun(graph,id));}catch{return null;}}}
         onDuplicate={id=>{const original=graphRef.current.nodes.find(n=>n.id===id);if(!original)return;const copyId=newId("shot");mutate(g=>({...g,nodes:[...g.nodes,{...structuredClone(original),id:copyId,x:original.x+280,data:{...structuredClone(original.data),shotTitle:tr("{name} 副本", {name:String(original.data.shotTitle||tr("分鏡"))}),shotOrder:orderedShots(g).length},status:"idle",output:null,error:null}],edges:[...g.edges,...g.edges.filter(e=>e.toNode===id).map(e=>({...e,id:newId("edge"),toNode:copyId}))]}));setSelectedNode(copyId);}}

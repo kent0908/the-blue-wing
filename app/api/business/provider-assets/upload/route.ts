@@ -32,9 +32,10 @@ export async function POST(req: NextRequest) {
       return businessJson(result);
     }
     if (body.action === "initialize") return businessJson(await initializeBusinessUpload(auth.user.id, auth.account.id, body), 201);
-    if (body.action === "complete" && Object.keys(body).every(key => ["action", "uploadId", "wanOriginal"].includes(key)) &&
-        typeof body.uploadId === "string" && (body.wanOriginal === undefined || body.wanOriginal === true)) {
-      return businessJson(await completeBusinessUpload(auth.user.id, auth.account.id, body.uploadId, body.wanOriginal === true));
+    if (body.action === "complete" && Object.keys(body).every(key => ["action", "uploadId", "wanOriginal", "originalOnly"].includes(key)) &&
+        typeof body.uploadId === "string" && (body.wanOriginal === undefined || body.wanOriginal === true) &&
+        (body.originalOnly === undefined || body.originalOnly === true)) {
+      return businessJson(await completeBusinessUpload(auth.user.id, auth.account.id, body.uploadId, body.wanOriginal === true || body.originalOnly === true));
     }
     throw new BusinessError("business_asset_upload_invalid");
   } catch (error) { return businessErrorResponse(req, error); }

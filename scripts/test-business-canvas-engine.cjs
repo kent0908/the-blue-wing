@@ -112,6 +112,21 @@ const edge=(fromNode,toNode,toPort='image',id=`${fromNode}-${toNode}-${toPort}`)
 const chainGraph=()=>({nodes:[node('text',{text:'A paper gallery'},'prompt'),node('image',{model:image.id},'still'),node('video',{model:video.id,prompt:'A continuous dolly',mode:'image-to-video'},'shot')],edges:[edge('prompt','still','prompt'),edge('still','shot')]});
 const preflight=(graph,order=graph.nodes.map(node=>node.id),models=[image,video],locale='zh-Hant')=>assertBusinessCanvasPreflight(graph,order,models,businessWorkflowsCopy(locale));
 const originalGraph=(count,target=video,mode='subject-reference')=>({nodes:[node('loadImage',{businessItems:Array.from({length:count},(_,i)=>({uploadId:uuid(70+i),src:'display-only',name:`source ${i}`}))},'sources'),node(target.modality,{model:target.id,prompt:'A gallery',mode},'result')],edges:[edge('sources','result')]});
+await test('director shot reuses a finished reference and sends the edited framing in one video request', async () => {
+  const graph = originalGraph(1, video, 'image-to-video');
+  const [original, shot] = graph.nodes;
+  original.status = 'done';
+  original.output = { kind: 'image', items: [{ url: '/private-preview', businessAssetId: uuid(80) }] };
+  shot.data.shotNotes = { camera: 'Eye-level 85mm close-up', continuity: 'Cut on the hand movement' };
+  assert.equal(preflight(graph, [shot.id]), undefined);
+  const f = fixture({jobs:[completedVideo(19)]});
+  await f.run(shot, {image:original});
+  assert.equal(f.calls.length, 1);
+  assert.match(JSON.stringify(f.calls), /Eye-level 85mm close-up/);
+  assert.match(JSON.stringify(f.calls), /Cut on the hand movement/);
+  original.status = 'idle';
+  assert.throws(() => preflight(graph, [shot.id]), {message: f.t.invalidReference});
+});
 await test('whole-run preflight accepts the future text/image/video flow without requests or stale outputs',async()=>{
  const graph=chainGraph();graph.nodes[1].output={kind:'image',items:[]};assert.equal(preflight(graph),undefined);
  const standalone={nodes:[node('video',{model:video.id,prompt:'A paper sea',mode:'text-to-video'},'shot')],edges:[]};assert.equal(preflight(standalone),undefined);

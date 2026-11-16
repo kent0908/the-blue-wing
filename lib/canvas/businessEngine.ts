@@ -1,6 +1,7 @@
 import type { BusinessModel, BusinessGeneration } from "@/components/business/types";
 import type { BusinessWorkflowsCopy } from "@/lib/i18n/businessWorkflows";
 import type { BusinessCanvasImageItem, CanvasNode, NodeOutput } from "./types";
+import { shotPrompt } from "./storyboard";
 
 type Fetcher = typeof fetch;
 interface RunnerOptions {
@@ -42,7 +43,8 @@ export function createBusinessCanvasRunner(options: RunnerOptions) {
     const model = options.models.find(model => model.id === node.data.model && model.modality === node.type);
     if (!model) throw new Error(t.unavailableModel);
     const upstreamText = inputs.prompt?.output;
-    const prompt = (upstreamText?.kind === "text" ? upstreamText.text : "") || String(node.data.prompt ?? "");
+    const basePrompt = (upstreamText?.kind === "text" ? upstreamText.text : "") || String(node.data.prompt ?? "");
+    const prompt = node.type === "video" ? shotPrompt(basePrompt, node.data.shotNotes) : basePrompt;
     if (!prompt.trim()) throw new Error(t.missingPrompt);
     const upstream = inputs.image?.output;
     const sources = upstream?.kind === "image" ? upstream.items : [];

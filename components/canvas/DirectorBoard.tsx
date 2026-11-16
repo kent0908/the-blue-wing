@@ -1,14 +1,16 @@
 "use client";
 import { useState } from 'react';
-import { useTr } from '@/lib/i18n/client';
+import { useLocale, useTr } from '@/lib/i18n/client';
 import type { CanvasGraph } from '@/lib/canvas/types';
+import type { CanvasEditorRuntime } from '@/lib/canvas/runtime';
+import { dramaPlanningCopy } from '@/lib/i18n/dramaPlanning';
 import { orderedShots, shotPrompt, storyParagraphs, type ShotNotes } from '@/lib/canvas/storyboard';
 import { supportsSeedanceNativeAudio, videoConstraintFor, videoResolutionsForModel } from '@/lib/videoModels';
 import { modelLabel } from '@/lib/modelLabel';
 import styles from './directorBoard.module.css';
 const field = styles.field;
 const button = styles.button;
-export default function DirectorBoard({ graph, selectedId, onSelect, onChange, onAdd, onDuplicate, onMove, onDelete, onRun, onStage, onSource, onStoryChange, onStorySplit, busy, models, quote }: {
+export default function DirectorBoard({ graph, selectedId, onSelect, onChange, onAdd, onDuplicate, onMove, onDelete, onRun, onStage, onSource, onStoryChange, onStorySplit, busy, models, quote, businessSettings, billingNotice }: {
     onStoryChange: (text: string) => void;
     onStorySplit: () => void;
     graph: CanvasGraph;
@@ -28,8 +30,11 @@ export default function DirectorBoard({ graph, selectedId, onSelect, onChange, o
         name: string;
     }[];
     quote: (id: string) => number | null;
+    businessSettings?: CanvasEditorRuntime["renderNodeSettings"];
+    billingNotice?: string;
 }) {
     const tr = useTr();
+    const planning = dramaPlanningCopy(useLocale());
     const story = String(graph.nodes.find(n => n.type === 'text' && n.data.directorStory === true)?.data.text ?? '');
     const shots = orderedShots(graph);
     const shot = shots.find(n => n.id === selectedId) ?? shots[0];
@@ -53,7 +58,8 @@ export default function DirectorBoard({ graph, selectedId, onSelect, onChange, o
     <details className={styles.storyDraft} open={shots.length === 0 ? true : undefined}>
       <summary>{tr("01 故事原稿").replace(/^01\s*/, "")}<span>{tr("寫下故事，再依段落安排分鏡")}</span></summary>
       <label className="mt-4 block text-xs text-[#b4b4b4]">{tr("每個鏡頭之間空一行；保留你的文字，不會自動改寫劇情。")}<textarea aria-label={tr("故事原稿")} disabled={busy} className={`${field} mt-2`} rows={5} maxLength={30000} value={story} placeholder={tr("雨後街道，角色看見水面上的藍色羽毛。空一行，開始下一個鏡頭。")} onChange={e => onStoryChange(e.target.value)}/></label>
-      <div className="mt-3 flex flex-wrap items-center gap-3"><button className={button} disabled={busy || !story.trim() || graph.nodes.length + storyParagraphs(story).length > 200} onClick={onStorySplit}>{tr('依段落建立 {n} 個分鏡', { n: storyParagraphs(story).length })}</button><span className="text-xs leading-5 text-[#aaaaaa]">{tr("只建立分鏡，不生成影片、不扣點；既有分鏡會保留。")}</span></div>
+      {!story.trim() && <button type="button" className={`${button} mt-3`} disabled={busy || graph.nodes.length >= 200} onClick={() => onStoryChange(planning.story)}>{planning.starter}</button>}
+      <div className="mt-3 flex flex-wrap items-center gap-3"><button className={button} disabled={busy || !story.trim() || graph.nodes.length + storyParagraphs(story).length > 200} onClick={onStorySplit}>{tr('依段落建立 {n} 個分鏡', { n: storyParagraphs(story).length })}</button><span className="text-xs leading-5 text-[#aaaaaa]">{planning.draftOnly}</span></div>
     </details>
     {!shot ? <div className="m-auto max-w-lg p-10 text-center"><h3 className="text-2xl">{tr("從第一個畫面開始")}</h3><p className="my-5 text-sm leading-7 text-[#b4b4b4]">{tr("每個分鏡與流程畫布的影片節點同步。加入場景、調整鏡頭、沿用素材，再逐鏡生成。")}</p><button className={button} disabled={busy} onClick={onAdd}>{tr("建立第一鏡")}</button></div> : <>
     <div className={styles.workspace}>
@@ -85,15 +91,39 @@ export default function DirectorBoard({ graph, selectedId, onSelect, onChange, o
           <label className="block text-xs text-[#b4b4b4]">{tr("參考素材來源")}<select aria-label={tr("參考素材來源")} className={`${field} mt-2`} value={sourceId} onChange={e => onSource(shot.id, e.target.value)}><option value="">{tr("不使用參考素材")}</option>{sources.map(n => <option key={n.id} value={n.id}>{n.type === 'director3d' ? tr('3D 構圖') : n.type === 'image' ? tr('生成圖片') : tr('素材庫')} · {String(n.data.shotTitle ?? n.id)}</option>)}</select></label>
           <p className="text-xs leading-5 text-[#aaaaaa]">{tr("可在流程畫布新增素材節點，再讓多個分鏡共用。參考圖不等於精準首尾幀控制。")}</p>
         </div>}
-        {tab === 'camera' && <div className="space-y-4"><div className="flex flex-wrap gap-2">{[tr('固定中景'), tr('緩慢推近'), tr('側向跟拍'), tr('環繞半圈'), tr('由遠景拉近特寫')].map(p => <button key={p} className={button} onClick={() => changeNotes({ camera: p })}>{tr(p)}</button>)}</div><label className="block text-xs text-[#b4b4b4]">{tr("構圖與運鏡")}<textarea aria-label={tr("構圖與運鏡")} rows={4} className={`${field} mt-2`} value={notes.camera ?? ''} onChange={e => changeNotes({ camera: e.target.value })}/></label><label className="block text-xs text-[#b4b4b4]">{tr("前後鏡銜接")}<textarea aria-label={tr("前後鏡銜接")} rows={3} className={`${field} mt-2`} value={notes.continuity ?? ''} onChange={e => changeNotes({ continuity: e.target.value })} placeholder={tr("承接前鏡的視線、動作或物件；下一鏡如何開始？")}/></label></div>}
+        {tab === 'camera' && <div className="space-y-4">
+          <fieldset className="min-w-0">
+            <legend className="mb-2 text-xs text-[#b4b4b4]">{planning.shotAdvice}</legend>
+            <div className="flex flex-wrap gap-2">
+              {([
+                [planning.world, planning.worldCamera], [planning.reaction, planning.reactionCamera],
+                [planning.dialogue, planning.dialogueCamera], [planning.reveal, planning.revealCamera],
+                [planning.follow, planning.followCamera],
+              ] as const).map(([label, camera]) => <button type="button" key={label} className={button}
+                aria-pressed={notes.camera === camera} onClick={() => changeNotes({ camera })}>{label}</button>)}
+            </div>
+          </fieldset>
+          <details>
+            <summary className="cursor-pointer text-sm">{tr("構圖與運鏡")}</summary>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[tr("固定中景"), tr("緩慢推近"), tr("側向跟拍"), tr("環繞半圈"), tr("由遠景拉近特寫")].map(camera => (
+                <button type="button" key={camera} className={button} onClick={() => changeNotes({ camera })}>{camera}</button>
+              ))}
+            </div>
+          </details>
+          <label className="block text-xs text-[#b4b4b4]">{tr("構圖與運鏡")}<textarea aria-label={tr("構圖與運鏡")} rows={4} className={`${field} mt-2`} value={notes.camera ?? ''} onChange={e => changeNotes({ camera: e.target.value })}/></label><label className="block text-xs text-[#b4b4b4]">{tr("前後鏡銜接")}<textarea aria-label={tr("前後鏡銜接")} rows={3} className={`${field} mt-2`} value={notes.continuity ?? ''} onChange={e => changeNotes({ continuity: e.target.value })} placeholder={tr("承接前鏡的視線、動作或物件；下一鏡如何開始？")}/></label></div>}
         {tab === 'sound' && <label className="block text-xs text-[#b4b4b4]">{tr("音樂、環境聲與對白")}<textarea aria-label={tr("聲音與節奏")} rows={6} className={`${field} mt-2`} value={notes.sound ?? ''} onChange={e => changeNotes({ sound: e.target.value })} placeholder={tr("例如：先聽見腳步；碰撞時配合鼓點；最後讓風聲留下。")}/><span className="mt-3 block leading-5">{tr("聲音描述將加入提示詞，是否生成音訊依模型能力而定。")}</span></label>}
-        <div className="mt-5 space-y-3 border-t border-[#333333] pt-4"><label className="block text-xs text-[#b4b4b4]">{tr("生成模型")}<select aria-label={tr("生成模型")} className={`${field} mt-2`} value={String(shot.data.model)} onChange={e => { const c = videoConstraintFor(e.target.value); onChange(shot.id, { model: e.target.value, resolution: c.resolutions[0], seconds: Math.max(c.minSeconds, Math.min(Number(shot.data.seconds || 5), c.maxSeconds)) }); }}>{!models.some(m => m.id === shot.data.model) && <option value={String(shot.data.model)}>{modelLabel(String(shot.data.model))}</option>}{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+        {businessSettings ? <div className="mt-5 space-y-3 border-t border-[#333333] pt-4">
+          {businessSettings(shot, patch => onChange(shot.id, patch), "director")}
+          <button type="button" disabled={busy || !shot.data.model || !shotPrompt(prompt, notes).trim()} className={styles.primary} onClick={() => onRun(shot.id)}>{planning.reviewShot}</button>
+          <p className="text-xs leading-5 text-[#aaaaaa]">{billingNotice}</p>
+        </div> : <div className="mt-5 space-y-3 border-t border-[#333333] pt-4"><label className="block text-xs text-[#b4b4b4]">{tr("生成模型")}<select aria-label={tr("生成模型")} className={`${field} mt-2`} value={String(shot.data.model)} onChange={e => { const c = videoConstraintFor(e.target.value); onChange(shot.id, { model: e.target.value, resolution: c.resolutions[0], seconds: Math.max(c.minSeconds, Math.min(Number(shot.data.seconds || 5), c.maxSeconds)) }); }}>{!models.some(m => m.id === shot.data.model) && <option value={String(shot.data.model)}>{modelLabel(String(shot.data.model))}</option>}{models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
           <div className="grid grid-cols-2 gap-3"><label className="text-xs text-[#b4b4b4]">{tr("秒數")}<input aria-label={tr("分鏡秒數")} type="number" min={constraint.minSeconds} max={constraint.maxSeconds} className={`${field} mt-2`} value={Number(shot.data.seconds || 5)} onChange={e => onChange(shot.id, { seconds: Math.max(constraint.minSeconds, Math.min(constraint.maxSeconds, Number(e.target.value) || constraint.minSeconds)) })}/></label><label className="text-xs text-[#b4b4b4]">{tr("解析度")}<select aria-label={tr("分鏡解析度")} className={`${field} mt-2`} value={String(shot.data.resolution || '480p')} onChange={e => onChange(shot.id, { resolution: e.target.value })}>{resolutions.map(r => <option key={r}>{r}</option>)}</select></label></div>
           <label className="block text-xs text-[#b4b4b4]">{tr("畫幅")}<select aria-label={tr("分鏡畫幅")} className={`${field} mt-2`} value={String(shot.data.aspect_ratio || '16:9')} onChange={e => onChange(shot.id, { aspect_ratio: e.target.value })}>{['16:9', '9:16', '1:1'].map(r => <option key={r}>{r}</option>)}</select></label>
           {supportsSeedanceNativeAudio(String(shot.data.model)) && <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-[#c9c9c9]"><input type="checkbox" checked={shot.data.generate_audio !== false} onChange={event => onChange(shot.id, { generate_audio: event.target.checked })}/>{tr("生成聲音")}</label>}
           <button disabled={busy || price === null || !shotPrompt(prompt, notes).trim()} className={styles.primary} onClick={() => onRun(shot.id)}>{shot.status === 'running' ? tr('生成中…') : tr('生成這一鏡 · {cost}', { cost: price === null ? tr('費率待確認') : tr('約 {n} 點', { n: price }) })}</button>
           <p className="text-xs leading-5 text-[#aaaaaa]">{tr("含尚未完成的上游素材費用；已完成的素材沿用。送出前再確認，本次只執行所需節點。")}</p>
-        </div>
+        </div>}
       </fieldset>
     </div>
     <div aria-label={tr("分鏡時間軸")} className={styles.timeline}><div>{shots.map((n, i) => { const start = shots.slice(0, i).reduce((sum, s) => sum + Number(s.data.seconds || 5), 0); return <button key={n.id} onClick={() => onSelect(n.id)} aria-pressed={n.id === shot.id} style={{ width: Math.max(120, Number(n.data.seconds || 5) * 15) }}><span>{start}s — {start + Number(n.data.seconds || 5)}s</span><span>{i + 1}. {String(n.data.shotTitle || tr('未命名分鏡'))}</span></button>; })}</div></div>

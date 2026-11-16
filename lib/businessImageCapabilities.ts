@@ -14,6 +14,7 @@ export interface BusinessImageCapability {
   maxReferenceImages: number;
   controls: BusinessImageControl[];
   qualityOptions: string[];
+  supportsSequentialImageGeneration?: boolean;
 }
 const seedream1k = ["1024x1024", "864x1152", "1152x864", "1312x736", "736x1312", "832x1248", "1248x832", "1568x672"];
 const seedream2k = ["2048x2048", "1728x2304", "2304x1728", "2848x1600", "1600x2848", "2496x1664", "1664x2496", "3136x1344"];
@@ -49,7 +50,7 @@ export function getBusinessImageCapability(id: string): BusinessImageCapability 
     // Native sequential generation needs a separate output-count adapter.
     // Do not advertise n>1 and silently let the model return one image.
     const sizes = pro ? ["2048x2048", "2560x1440", "1440x2560", "2304x1728", "2K"] : [...(/4\.0/.test(model) ? seedream1k : []), ...seedream2k, ...seedream4k, ...(/4\.0/.test(model) ? ["1K"] : []), "2K", ...(/5\.0-lite/.test(model) ? ["3K"] : []), "4K"];
-    return { family: "seedream", sizes, maxImageCount: 1, maxReferenceImages: pro ? 10 : 14, controls: [], qualityOptions: [] };
+    return { family: "seedream", sizes, maxImageCount: 1, maxReferenceImages: pro ? 10 : 14, controls: [], qualityOptions: [], supportsSequentialImageGeneration: !pro };
   }
   return undefined;
 }

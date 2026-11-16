@@ -233,21 +233,21 @@ async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSou
 }
 
 /** A completed Blob upload is verified before any provider registration POST. */
-export async function completeBusinessUpload(userId: number | string, accountId: string, id: string, wanOriginal = false) {
+export async function completeBusinessUpload(userId: number | string, accountId: string, id: string, originalOnly = false) {
   userId = safeUserId(userId);
   const row = await ownedUpload(userId, accountId, id);
   const credential = await currentCredential(userId, accountId);
   if (row.credential_id !== credential.id) fail("credential_changed", 409);
   if (row.status !== "created") return { upload: publicBusinessUpload(row) };
-  if (wanOriginal && row.content_type === "image/gif") fail();
-  const wanMedia = wanOriginal && row.media_type !== "image";
+  if (originalOnly && row.content_type === "image/gif") fail();
+  const wanMedia = originalOnly && row.media_type !== "image";
   if (new Date(row.expires_at).getTime() <= Date.now()) fail("business_asset_upload_expired", 409);
   let etag: string;
   try { etag = await verifyStoredUpload(row, undefined, wanMedia ? {} : undefined); } catch (error) {
     if (error instanceof BusinessError) throw error;
     fail(wanMedia ? `wan_${row.media_type}_invalid` : "business_asset_upload_invalid");
   }
-  if (wanOriginal) {
+  if (originalOnly) {
     const saved = await sql.query<UploadRow>(`update business_asset_uploads t set status='active',blob_etag=$4,updated_at=now()
       where t.id=$1 and t.user_id=$2 and t.account_id=$3 and t.status='created' and t.expires_at>now()
       and exists(select 1 from business_accounts a join business_credentials c on c.account_id=a.id and c.user_id=a.user_id
