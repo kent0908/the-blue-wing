@@ -42,23 +42,24 @@ function firstFrame(event: SyntheticEvent<HTMLVideoElement>): string | null {
   }
 }
 
-export default function BusinessAssetPreview({ asset, copy }: { asset: BusinessAssetRecord; copy: BusinessAssetsCopy }) {
+export default function BusinessAssetPreview({ asset, copy, compact = false }: { asset: BusinessAssetRecord; copy: BusinessAssetsCopy; compact?: boolean }) {
   const sources = previewSources(asset);
-  return <AssetPreview key={sources.join("|")} asset={asset} sources={sources} copy={copy}/>;
+  return <AssetPreview key={sources.join("|")} asset={asset} sources={sources} copy={copy} compact={compact}/>;
 }
 
-function AssetPreview({ asset, sources, copy }: { asset: BusinessAssetRecord; sources: string[]; copy: BusinessAssetsCopy }) {
+function AssetPreview({ asset, sources, copy, compact }: { asset: BusinessAssetRecord; sources: string[]; copy: BusinessAssetsCopy; compact: boolean }) {
   const card = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   const [sourceIndex, setSourceIndex] = useState(0);
   const [poster, setPoster] = useState<string | null>(null);
-  const [playSource, setPlaySource] = useState<number | null>(null);
+  const [viewerSource, setViewerSource] = useState<number | null>(null);
   const src = sources[sourceIndex];
+  const viewerSrc = viewerSource === null ? undefined : sources[viewerSource];
   const video = asset.type === "video";
 
   useEffect(() => {
     const target = card.current;
-    if (!target || !video || !sources.length) return;
+    if (!target || (!video && !compact) || !sources.length) return;
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) {
         setNear(true);
@@ -67,34 +68,37 @@ function AssetPreview({ asset, sources, copy }: { asset: BusinessAssetRecord; so
     }, { rootMargin: "120px" });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [sources.length, video]);
+  }, [sources.length, video, compact]);
 
   const nextSource = () => setSourceIndex(index => Math.min(index + 1, sources.length));
-  const playLabel = copy.playPreview.replace("{name}", asset.name);
-  return <div ref={card} className={styles.thumbnail}>
+  const nextViewerSource = () => setViewerSource(index => index === null ? null : index + 1);
+  const previewLabel = (video ? copy.playPreview : copy.viewImage).replace("{name}", asset.name);
+  return <div ref={card} className={compact ? `${styles.thumbnail} ${styles.inlineThumbnail}` : styles.thumbnail}>
     <AssetIcon type={asset.type}/>
-    {src && !video && <Image key={src} src={src} alt="" width={640} height={420} loading="lazy" unoptimized onError={nextSource}/>}
+    {src && !video && (!compact || near) && <Image key={src} src={src} alt="" width={640} height={420} loading="lazy" unoptimized onError={nextSource}/>}
     {video && near && src && !poster && <video
       key={src} className={styles.videoDecoder} src={src} preload="auto" muted playsInline aria-hidden="true"
       onLoadedData={event => { const frame = firstFrame(event); if (frame) setPoster(frame); else nextSource(); }}
       onError={nextSource}
     />}
     {poster && <Image src={poster} alt="" width={480} height={300} unoptimized/>}
-    <span className={styles.mediaType}>{copy[asset.type]}</span>
-    {video && sources.length > 0 && <button
-      type="button" className={styles.playPreview} aria-label={playLabel} title={playLabel}
-      onClick={() => setPlaySource(src ? sourceIndex : 0)}
+    {!compact && <span className={styles.mediaType}>{copy[asset.type]}</span>}
+    {(video || compact) && sources.length > 0 && <button
+      type="button" className={styles.playPreview} aria-label={previewLabel} title={previewLabel}
+      onClick={() => setViewerSource(src ? sourceIndex : 0)}
     >
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 4.5v15l12-7.5z"/></svg>
+      {video ? <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 4.5v15l12-7.5z"/></svg>
+        : <svg className={styles.expandPreviewIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M14 4h6v6M20 4l-6 6M10 20H4v-6m0 6 6-6"/></svg>}
     </button>}
-    {sources.length > 0 && !src && !video && <span className={styles.previewUnavailable}>{copy.previewUnavailable}</span>}
-    {playSource !== null && <BusinessDialog title={asset.name} className={styles.previewDialog} onClose={() => setPlaySource(null)}>
-      {sources[playSource] ? <video
-        key={sources[playSource]} className={styles.previewPlayer} src={sources[playSource]}
-        poster={poster ?? undefined} controls autoPlay playsInline preload="metadata" aria-label={playLabel}
-        onError={() => setPlaySource(playSource + 1)}
-      /> : <p role="alert">{copy.previewUnavailable}</p>}
-      <button type="button" className={styles.small} onClick={() => setPlaySource(null)}>{copy.closePreview}</button>
+    {!compact && sources.length > 0 && !src && !video && <span className={styles.previewUnavailable}>{copy.previewUnavailable}</span>}
+    {viewerSource !== null && <BusinessDialog title={asset.name} className={styles.previewDialog} onClose={() => setViewerSource(null)}>
+      {!viewerSrc ? <p role="alert">{copy.previewUnavailable}</p> : video ? <video
+        key={viewerSrc} className={styles.previewPlayer} src={viewerSrc}
+        poster={poster ?? undefined} controls autoPlay playsInline preload="metadata" aria-label={previewLabel}
+        onError={nextViewerSource}
+      /> : <Image key={viewerSrc} className={styles.previewImage} src={viewerSrc} alt={asset.name}
+        width={920} height={640} unoptimized onError={nextViewerSource}/>}
+      <button type="button" className={styles.small} onClick={() => setViewerSource(null)}>{copy.closePreview}</button>
     </BusinessDialog>}
   </div>;
 }

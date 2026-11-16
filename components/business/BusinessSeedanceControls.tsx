@@ -4,7 +4,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import Image from "next/image";
 import { seedanceReferenceLimits, type BusinessSeedanceCapability, type BusinessSeedanceMode, type SeedanceReferenceType } from "@/lib/businessSeedance";
 import { useLocale } from "@/lib/i18n/client";
+import { businessAssetsCopy } from "@/lib/i18n/businessAssets";
 import { businessSeedanceCopy, seedanceReferenceMessage, type BusinessSeedanceCopy } from "@/lib/i18n/businessSeedance";
+import BusinessAssetPreview from "./BusinessAssetPreview";
 import type { BusinessAsset, BusinessProviderAsset } from "./types";
 import styles from "./BusinessSeedance.module.css";
 
@@ -40,7 +42,9 @@ function MediaIcon({ type }: { type: SeedanceReferenceType }) {
 
 export default function BusinessSeedanceControls(props: Props) {
   const { capability, mode, onMode, assets, assetIds, onLocalSelection, providerAssets, onProviderSelection, referenceOrder, outputFormat, onOutputFormat, seed, onSeed } = props;
-  const t = businessSeedanceCopy(useLocale());
+  const locale = useLocale();
+  const t = businessSeedanceCopy(locale);
+  const previewCopy = businessAssetsCopy(locale);
   const id = useId();
   const [source, setSource] = useState<"local" | "provider">("local");
   const [catalog, setCatalog] = useState<BusinessProviderAsset[]>([]);
@@ -166,9 +170,16 @@ export default function BusinessSeedanceControls(props: Props) {
           {loaded && !catalog.length && <p className={styles.empty}>{t.noProviderAssets}</p>}
           {!!catalog.length && <div className={styles.providerList}>{catalog.map(asset => {
             const chosen = providerAssets.some(selected => selected.id === asset.id), disabled = !chosen && (asset.status !== "active" || blocked(asset.type));
-            return <button type="button" className={styles.providerAsset} key={asset.id} aria-pressed={chosen} disabled={disabled} title={disabled ? asset.status !== "active" ? t.notActive : blockedReason(asset.type) : asset.name} onClick={() => onProviderSelection(asset)}>
-              <span className={styles.providerIcon}><MediaIcon type={asset.type} /></span><span className={styles.providerName}>{asset.name}<small>{t[asset.type]} · {t.active}</small></span><span className={styles.selectionMark} aria-hidden="true">{chosen ? "✓" : "+"}</span>
-            </button>;
+            return <div className={styles.providerAsset} key={asset.id} data-selected={chosen}>
+              <BusinessAssetPreview asset={{ ...asset, providerReady: asset.status === "active" }} copy={previewCopy} compact />
+              <button type="button" className={styles.providerSelect} aria-pressed={chosen} disabled={disabled}
+                aria-label={`${chosen ? t.remove : t.select} ${asset.name}`}
+                title={disabled ? asset.status !== "active" ? t.notActive : blockedReason(asset.type) : asset.name}
+                onClick={() => onProviderSelection(asset)}>
+                <span className={styles.providerName}>{asset.name}<small>{t[asset.type]} · {t.active}</small></span>
+                <span className={styles.selectionMark} aria-hidden="true">{chosen ? "✓" : "+"}</span>
+              </button>
+            </div>;
           })}</div>}
           {loaded && <p className={styles.quiet} role="status">{interpolate(t.resultCount, { count: catalog.length, total })}</p>}
           {loaded && page < totalPages && <button type="button" disabled={loading} className={styles.loadButton} onClick={() => { void loadProvider(page + 1, committedQuery.current); }}>{loading ? t.loading : t.more}</button>}

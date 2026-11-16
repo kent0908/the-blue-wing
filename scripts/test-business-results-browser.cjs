@@ -50,6 +50,7 @@ async function assertImageFits(img, [width, height]) {
       const priceCopy = load(path.join(repo, 'lib/i18n/businessPricePreview.ts')).businessPricePreviewCopy(locale);
       const { work } = load(path.join(repo, 'lib/i18n/businessOperations.ts')).businessOperationsCopy(locale);
       const assetCopy = load(path.join(repo, 'lib/i18n/businessAssets.ts')).businessAssetsCopy(locale);
+      const seedanceCopy = load(path.join(repo, 'lib/i18n/businessSeedance.ts')).businessSeedanceCopy(locale);
       const context = await browser.newContext({ viewport: { width: 1600, height: 1100 }, permissions: ['clipboard-read', 'clipboard-write'] });
       await context.addCookies([{ name: 'bw_lang', value: locale, url: base }]);
       const page = await context.newPage(); page.setDefaultNavigationTimeout(120000); const errors = [];
@@ -58,6 +59,7 @@ async function assertImageFits(img, [width, height]) {
       let quotes = 0;
       const originalId = '00000000-0000-4000-8000-000000000021', pendingId = '00000000-0000-4000-8000-000000000022';
       const providerId = 'asset-qa-neutral';
+      const videoAsset = {id:'asset-qa-video',name:'motion.mp4',type:'video',status:'active'};
       let uploads = [
         {id:originalId,name:'fixture-portrait.png',type:'image',status:'active',storageReady:true},
         {id:pendingId,name:'pending-upload.png',type:'image',status:'created',storageReady:false},
@@ -84,10 +86,16 @@ async function assertImageFits(img, [width, height]) {
           }
           return json({directUpload:true,types:{'image/png':{ext:'png',maxBytes:30000000,type:'image'}},uploads});
         }
-        if (p === '/api/business/provider-assets') return json({assets:providerAssets,pagination:{page:1,totalPages:1}});
+        if (p === '/api/business/provider-assets') {
+          const assets = url.searchParams.get('status') === 'active' ? [providerAssets[0], videoAsset] : providerAssets;
+          return json({assets,pagination:{page:1,totalPages:1,total:assets.length}});
+        }
         if (p === `/api/business/provider-assets/${providerId}` && route.request().method()==='DELETE') {
           deletions.push(providerId);providerAssets=[];
           return json({deleted:true});
+        }
+        if (p === `/api/business/provider-assets/${videoAsset.id}/preview`) {
+          return route.fulfill({status:307,headers:{Location:'/home-films/worlds.mp4'}});
         }
         if (p.endsWith('/preview')&&p.startsWith('/api/business/provider-assets/')) return route.fulfill({contentType:'image/png',body:previewImages.get('/home-films/art.jpg')});
         if (p === '/api/business/price-preview') {
@@ -229,6 +237,42 @@ async function assertImageFits(img, [width, height]) {
       assert.ok(exactReads>0,'Reload must recover the original request even if it was absent from the initial history');
       await textarea.fill('A distinct draft after failure');
       assert.equal(await submit.isEnabled(),true);
+
+      await page.goto(`${base}/business?kind=video&model=SIRAYA-Seedance-2.5`);
+      const controls = page.getByRole('region', { name: 'Seedance 2.5', exact: true });
+      await controls.locator('summary').filter({hasText:seedanceCopy.references}).first().click();
+      await controls.getByRole('tab', {name:seedanceCopy.providerLibrary,exact:true}).click();
+      await controls.getByRole('button',{name:seedanceCopy.loadAssets,exact:true}).click();
+      const imageName = providerAssets[0].name;
+      const previewButton = controls.getByRole('button',{name:assetCopy.viewImage.replace('{name}',imageName),exact:true});
+      const selectButton = controls.getByRole('button',{name:`${seedanceCopy.select} ${imageName}`,exact:true});
+      const photoRow = previewButton.locator('xpath=../..');
+      await previewButton.scrollIntoViewIfNeeded();
+      await photoRow.locator('img').first().evaluate(image=>image.decode());
+      await previewButton.click();
+      const previewImage = dialog.getByRole('img',{name:imageName,exact:true});
+      await previewImage.evaluate(image=>image.decode());
+      assert.deepEqual(await previewImage.evaluate(image=>[image.naturalWidth, image.naturalHeight, getComputedStyle(image).objectFit]),[750,2400,'contain']);
+      assert.equal(await dialog.evaluate(node=>node.getBoundingClientRect().width <= innerWidth),true);
+      await dialog.getByRole('button',{name:assetCopy.closePreview,exact:true}).click();
+      assert.equal(await selectButton.getAttribute('aria-pressed'),'false');
+      await selectButton.click();
+      assert.equal(await photoRow.locator('button[aria-pressed]').getAttribute('aria-pressed'),'true');
+      const playButton = controls.getByRole('button',{name:assetCopy.playPreview.replace('{name}',videoAsset.name),exact:true});
+      const videoSelect = controls.getByRole('button',{name:`${seedanceCopy.select} ${videoAsset.name}`,exact:true});
+      await playButton.scrollIntoViewIfNeeded();
+      const poster = playButton.locator('xpath=..').locator('img[src^="data:image/jpeg"]');
+      await poster.waitFor({state:'visible'});
+      await page.setViewportSize({width:1600,height:1100});
+      await playButton.click();
+      const player = dialog.locator('video[controls]');
+      await player.waitFor();
+      await page.waitForFunction(() => (document.querySelector('dialog[open] video')?.currentTime ?? 0) > 0.15);
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({state:'detached'});
+      assert.equal(await videoSelect.getAttribute('aria-pressed'),'false');
+      assert.equal(posts,2,'Reference previews must not send a generation');
+
       await page.goto(`${base}/business?tab=assets`);
       await page.setViewportSize({width:320,height:680});
       await page.getByText(assetCopy.pendingTitle,{exact:false}).click();
@@ -250,7 +294,7 @@ async function assertImageFits(img, [width, height]) {
         assert.equal(deletions.at(-1),id);
       }
       assert.deepEqual(errors,[]);
-      console.log(`PASS ${locale}: uncropped media across three sizes, gallery, async recovery, and mobile asset deletion`);
+      console.log(`PASS ${locale}: uncropped media, gallery, async recovery, Seedance asset previews and selection, and mobile asset deletion`);
       await context.close();
     }
   } finally { await browser.close(); }

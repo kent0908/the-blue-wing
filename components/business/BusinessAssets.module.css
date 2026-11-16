@@ -129,10 +129,24 @@
 }
 .playPreview svg { width: 44px; height: 44px; padding: 11px; border: 1px solid #ffffff90; border-radius: 50%; background: #101312d9; color: #fff; }
 .playPreview:hover svg, .playPreview:focus-visible svg { background: #212a25; border-color: #fff; }
+.inlineThumbnail {
+  --asset-field: #0b130e;
+  --asset-muted: #9fbea8;
+  width: 64px;
+  height: 48px;
+  border: 1px solid #37533e;
+  border-radius: 4px;
+}
+.inlineThumbnail > svg { width: 24px; height: 24px; }
+.inlineThumbnail .playPreview { align-items: end; justify-items: end; padding: 2px; }
+.inlineThumbnail .playPreview svg { width: 20px; height: 20px; padding: 3px; }
+.inlineThumbnail .playPreview .expandPreviewIcon { border-radius: 3px; }
+.inlineThumbnail .playPreview:focus-visible { outline: 2px solid #cee6d1; outline-offset: -2px; }
 .previewUnavailable { position: absolute; right: 8px; bottom: 8px; max-width: 68%; color: var(--asset-muted); font-size: 12px; text-align: end; }
 dialog.previewDialog { width: min(920px, calc(100vw - 24px)); max-height: 88dvh; margin: auto; }
 dialog.previewDialog h2 { overflow-wrap: anywhere; }
 .previewPlayer { display: block; width: 100%; max-height: 65dvh; margin: 12px 0; background: #0b0f0d; }
+.previewImage { display: block; width: 100%; height: auto; max-height: 65dvh; margin: 12px 0; object-fit: contain; background: #0b0f0d; }
 .mediaType { position: absolute; bottom: 8px; left: 8px; padding: 2px 7px; background: #101312; color: var(--asset-ink); font-size: 12px; pointer-events: none; }
 .cardBody { padding: 12px; min-width: 0; flex: 1; }
 .cardBody h3 { font-size: 14px; font-weight: 600; line-height: 1.4; margin: 0 0 6px; overflow-wrap: anywhere; }

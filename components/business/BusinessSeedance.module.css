@@ -39,7 +39,7 @@
 .localAsset img{display:block;object-fit:contain;width:100%;height:75px;background:#080f0b}
 .localAsset>span{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;min-width:0}
 .localAsset small{font-size:12px;line-height:1.5;color:#88a590}.localAsset[aria-pressed=true]{border-color:#cadfc8;background:#20372a}
-.localAsset:disabled,.providerAsset:disabled{opacity:.4;cursor:not-allowed}
+.localAsset:disabled,.providerSelect:disabled{opacity:.4;cursor:not-allowed}
 .empty{font-size:12px;line-height:1.9;color:#96ad9b;margin:20px 0}
 .link{font-size:12px;color:#b9d3c2;text-decoration:underline;text-underline-offset:4px;overflow-wrap:anywhere;line-height:1.9;display:inline-block;margin:8px 0}
 .readOnly{font-size:12px;line-height:1.9;color:#769781;border-top:1px solid #293f30;padding-top:12px;margin:15px 0 0}
@@ -50,13 +50,38 @@
 .smallButton,.loadButton{font:inherit;font-size:12px;color:#b9d4c2;border:1px solid #49664f;background:transparent;border-radius:2px;min-height:44px;padding:9px 13px;cursor:pointer;line-height:1.7;text-align:center;max-width:100%;text-wrap:balance;overflow-wrap:anywhere}
 .smallButton{flex-shrink:0}.loadButton{margin:0 0 12px}.smallButton:disabled,.loadButton:disabled{opacity:.5;cursor:wait}
 .providerList{display:grid;gap:7px;max-height:320px;overflow:auto;padding:2px;margin:0 -2px 13px;scrollbar-color:#4a6350 #0c1610}
-.providerAsset{display:flex;gap:11px;align-items:center;min-width:0;width:100%;border:1px solid #304637;background:#111e16;color:#c1d3c4;padding:11px;text-align:left;cursor:pointer;font:inherit;font-size:12px}
-.providerAsset[aria-pressed=true]{border-color:#bbd4bf;background:#20372a}.providerIcon{display:grid;place-items:center;width:32px;height:38px;flex-shrink:0;color:#9fbea8;border-right:1px solid #37533e;padding-right:8px}
-.providerIcon svg{width:22px;height:22px}.providerName{min-width:0;flex:1;overflow-wrap:anywhere;line-height:1.7}.providerName small{display:block;color:#7fa08a;font-size:12px;line-height:1.7}
+.providerAsset {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  padding: 6px 0 6px 7px;
+  border: 1px solid #304637;
+  background: #111e16;
+}
+.providerAsset[data-selected=true] { border-color: #bbd4bf; background: #20372a; }
+.providerSelect {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 9px;
+  border: 0;
+  background: transparent;
+  color: #c1d3c4;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.providerSelect:hover:not(:disabled) { color: #e0efe3; }
+.controls .providerSelect:focus-visible { outline-offset: -2px; }
+.providerName{min-width:0;flex:1;overflow-wrap:anywhere;line-height:1.7}.providerName small{display:block;color:#7fa08a;font-size:12px;line-height:1.7}
 .selectionMark{flex-shrink:0;font-size:19px;color:#b7d1bd;padding:4px;line-height:1}
 .outputSettings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:8px}
 .field{display:grid;gap:8px;font-size:12px;color:#b3cab9;min-width:0}
 .controls button:focus-visible,.picker summary:focus-visible,.controls a:focus-visible{outline:2px solid #cee6d1;outline-offset:3px}
 .field input:focus,.field select:focus,.searchRow input:focus{border-color:#b6d5be;box-shadow:0 0 0 2px #8bb99a22}
-@media(max-width:500px){.modeGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.counts{gap:13px}.referenceHeader{gap:14px}.pickerBody{padding:0 11px 13px}.picker summary{padding:12px}.localGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.outputSettings{grid-template-columns:1fr}.chipNumber{max-width:66px}.chipIcon{display:none}.chips li{gap:8px}.total strong{font-size:36px}.counts dd{font-size:16px}.searchRow input,.field input,.field select{font-size:16px}.providerAsset{padding:9px}.providerIcon{width:26px;padding-right:5px}.tabs{gap:17px}}
+@media(max-width:500px){.modeGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.counts{gap:13px}.referenceHeader{gap:14px}.pickerBody{padding:0 11px 13px}.picker summary{padding:12px}.localGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.outputSettings{grid-template-columns:1fr}.chipNumber{max-width:66px}.chipIcon{display:none}.chips li{gap:8px}.total strong{font-size:36px}.counts dd{font-size:16px}.searchRow input,.field input,.field select{font-size:16px}.tabs{gap:17px}}
 @media(prefers-reduced-motion:no-preference){.modeButton,.localAsset,.providerAsset{transition:background .16s,border-color .16s}}
