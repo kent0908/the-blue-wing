@@ -49,6 +49,7 @@ export interface BusinessModel {
   zImage?: BusinessZImageCapability;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const validProviderTaskId = (value: unknown): value is string => typeof value === "string" && /^[a-zA-Z0-9_-]{1,2000}$/.test(value) && !/^(?:sk|csk)-/i.test(value);
 const pending = ["submitting", "processing"];
 const SUBMISSION_EXPIRY_SECONDS = 6 * 60;
 const submissionExpiry = `coalesce(submitted_at,created_at)<now()-interval '${SUBMISSION_EXPIRY_SECONDS} seconds'`;
@@ -79,6 +80,7 @@ export function publicBusinessGeneration(row: BusinessGenerationRow) {
   return { id: row.id, clientRequestId: row.client_request_id, kind: row.kind, model: row.model, prompt: row.prompt,
     nsfw: row.nsfw, status: row.status, createdAt: row.created_at,
     providerRequestId: row.provider_request_id ?? null, providerHttpStatus: row.provider_http_status ?? null,
+    ...(row.status === "failed" && validProviderTaskId(row.provider_task_id) ? { providerTaskId: row.provider_task_id } : {}),
     submittedAt: row.submitted_at ?? null, completedAt: row.completed_at ?? null,
     durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
     providerCost: row.provider_cost ?? null, providerCurrency: row.provider_currency ?? null,
@@ -447,11 +449,37 @@ function isProviderContentPolicy(error: unknown) {
   return record(error) && [error.code, error.type].some(value => typeof value === "string" && providerPolicyIdentifiers.has(value));
 }
 
+// Only classify documented structured identifiers. Provider prose may contain
+// prompts, signed material URLs, and other private request details.
+function structuredProviderError(error: unknown): string | undefined {
+  if (!record(error)) return;
+  if (isProviderContentPolicy(error)) return "provider_content_policy";
+  const ids = new Set([error.code, error.type].map(value => typeof value === "string" ? value : ""));
+  if (ids.has("model_not_found")) return "provider_model_not_found";
+  if (ids.has("InvalidParameter.TaskTypeMismatch")) return "provider_mode_mismatch";
+  if (ids.has("authentication_error") || ids.has("permission_denied_error") || ids.has("permission_error") || ids.has("pool_access_denied")) return "provider_unauthorized";
+  if (ids.has("rate_limit_error")) return "provider_rate_limit";
+  if (ids.has("timeout_error")) return "provider_timeout";
+  if (ids.has("invalid_request_error") || ids.has("context_length_exceeded") || ids.has("unsupported_params_error") || ids.has("unprocessable_entity_error")) return "provider_invalid_input";
+}
+
+function terminalVideoError(result: Record<string, unknown>): string | undefined {
+  const status = typeof result.status === "string" ? result.status.toLowerCase() : "";
+  if (isProviderContentPolicy(result.error)) return "provider_content_policy";
+  if (status === "cancelled" || status === "canceled") return "provider_cancelled";
+  if (status === "failed" || status === "error") return structuredProviderError(result.error) ?? "provider_failed";
+}
+
 function providerErrorCode(error: unknown) {
   if (error instanceof SirayaApiError) {
     if (isProviderContentPolicy(error)) return "provider_content_policy";
     if ([401, 403].includes(error.status)) return "provider_unauthorized";
-    if ([402, 429].includes(error.status)) return "provider_quota";
+    if (error.status === 402) return "provider_quota";
+    if (error.status === 429) return "provider_rate_limit";
+    // A timeout during the paid POST does not establish whether a job started.
+    if (error.status === 408) return "outcome_unknown";
+    const reason = structuredProviderError(error);
+    if (reason && error.status >= 400 && error.status < 500) return reason;
     if (error.status >= 400 && error.status < 500) return "provider_rejected";
   }
   return "outcome_unknown";
@@ -527,7 +555,7 @@ async function submitReservedGeneration(user: UserRow, account: BusinessAccount,
     return updateGeneration(row, code === "outcome_unknown" ? "unknown" : "failed", null, code);
   }
   if (!record(result)) return updateGeneration(row, "unknown", null, "outcome_unknown");
-  if (isProviderContentPolicy(result.error)) {
+  if (row.kind !== "video" && isProviderContentPolicy(result.error)) {
     return updateGeneration(row, "failed", null, "provider_content_policy");
   }
   if (row.kind === "text") {
@@ -546,9 +574,11 @@ async function submitReservedGeneration(user: UserRow, account: BusinessAccount,
     return getBusinessGeneration(user, account, row.id);
   } else {
     const url = videoUrl(result, row.model);
-    const id = typeof result.id === "string" && /^[a-zA-Z0-9_-]{1,2000}$/.test(result.id) ? result.id : null;
+    const id = validProviderTaskId(result.id) ? result.id : null;
+    const failure = terminalVideoError(result);
+    if (failure) return updateGeneration(row, "failed", null, failure, null, id);
     if (url) {
-      await updateGeneration(row, "processing", null, null, { videoUrl: url });
+      await updateGeneration(row, "processing", null, null, { videoUrl: url }, id);
       return getBusinessGeneration(user, account, row.id);
     }
     else if (id) row = await updateGeneration(row, "processing", null, null, null, id);
@@ -689,8 +719,8 @@ export async function getBusinessGeneration(user: UserRow, account: BusinessAcco
     const status = typeof result.status === "string" ? result.status.toLowerCase() : "";
     const completed = ["completed", "succeeded", "success"].includes(status);
     const url = videoUrl(result, row.model) ?? (completed && row.model === "veo-3.1-generate-001" ? veoContentUrl(row.provider_task_id) : null);
-    if (isProviderContentPolicy(result.error)) row = await updateGeneration(row, "failed", null, "provider_content_policy");
-    else if (["failed", "cancelled", "canceled", "error"].includes(status)) row = await updateGeneration(row, "failed", null, "provider_failed");
+    const failure = terminalVideoError(result);
+    if (failure) row = await updateGeneration(row, "failed", null, failure);
     else if (url && (completed || !recovering)) {
       // Recover the same provider result if storing the video is interrupted.
       row = await updateGeneration(row, "processing", null, null, { videoUrl: url });

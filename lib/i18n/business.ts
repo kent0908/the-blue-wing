@@ -6,8 +6,14 @@ const zh = {
   providerContentPolicy: "SIRAYA 因內容政策拒絕這筆請求或成品。",
   providerUnauthorized: "SIRAYA 拒絕這組金鑰的請求。請核對金鑰與模型權限。",
   providerQuota: "SIRAYA 回報額度不足或已達請求頻率上限。",
-  providerRejected: "SIRAYA 拒絕提交。請核對模型設定、素材規格與作品詳情中的請求編號。",
-  providerFailed: "SIRAYA 接受請求後回報生成失敗。可在作品詳情查看請求編號。",
+  providerRejected: "SIRAYA 拒絕這次請求，詳細原因未能確認。請帶請求編號聯絡客服。",
+  providerFailed: "SIRAYA 回報生成失敗，詳細原因未能確認。",
+  providerInvalidInput: "SIRAYA 回報輸入或參數無效。請核對所選模式、解析度、秒數和素材規格。",
+  providerModeMismatch: "SIRAYA 判定的影片任務類型與所選模式不符。請核對提示詞和參照素材是否符合所選模式。",
+  providerModelNotFound: "SIRAYA 找不到這個模型。請更新模型清單，再選用目前可用的模型。",
+  providerRateLimit: "已達 SIRAYA 的請求頻率上限。請稍後再送出。",
+  providerTimeout: "SIRAYA 回報這個任務處理逾時。請先查詢原任務與用量，再決定是否重試。",
+  providerCancelled: "SIRAYA 回報這個任務已取消。",
   resultMissing: "藍翼未取得可播放的成品。請先查原有請求。",
   submissionInterrupted: "任務在送達供應商前中斷，可以重新送出。",
   assetServiceUnavailable: "目前金鑰無法讀取 SIRAYA 素材。請使用已開通 Asset API 的 Root Account Key。",
@@ -21,8 +27,14 @@ const en: BusinessCopy = {
   providerContentPolicy: "SIRAYA blocked the request or output under its content policy.",
   providerUnauthorized: "SIRAYA rejected this key. Check the key and model permissions.",
   providerQuota: "SIRAYA reported insufficient balance or a request rate limit.",
-  providerRejected: "SIRAYA rejected the submission. Check the model settings, references, and request ID in the creation details.",
-  providerFailed: "SIRAYA accepted the request but reported a generation failure. See the creation details for the request ID.",
+  providerRejected: "SIRAYA rejected this request. The exact cause is unconfirmed. Share the request ID with support.",
+  providerFailed: "SIRAYA reported a generation failure without a confirmed cause.",
+  providerInvalidInput: "SIRAYA reported invalid input or settings. Check the mode, resolution, duration, and reference requirements.",
+  providerModeMismatch: "The video task type identified by SIRAYA differs from the selected mode. Check that your prompt and references match the mode.",
+  providerModelNotFound: "SIRAYA could not find this model. Refresh the model list and choose an available model.",
+  providerRateLimit: "SIRAYA’s request rate limit was reached. Wait before submitting again.",
+  providerTimeout: "SIRAYA reported that this job timed out. Check the original job and usage before deciding whether to retry.",
+  providerCancelled: "SIRAYA reported that this job was cancelled.",
   resultMissing: "The Blue Wing did not receive a playable result. Check the original request first.",
   submissionInterrupted: "The job stopped before it reached the provider. You can submit it again.",
   assetServiceUnavailable: "This key cannot access SIRAYA assets. Use a Root Account key with the Asset API enabled.",
@@ -35,8 +47,14 @@ const ja: BusinessCopy = {
   providerContentPolicy: "SIRAYA のコンテンツポリシーにより、リクエストまたは生成結果が拒否されました。",
   providerUnauthorized: "SIRAYA がキーを拒否しました。キーとモデルの利用権限を確認してください。",
   providerQuota: "SIRAYA から残高不足またはリクエスト頻度の上限が報告されました。",
-  providerRejected: "SIRAYA が送信を拒否しました。モデル設定、参照素材、作品詳細のリクエスト ID を確認してください。",
-  providerFailed: "SIRAYA はリクエストを受理しましたが、生成に失敗しました。作品詳細でリクエスト ID を確認できます。",
+  providerRejected: "SIRAYA がリクエストを拒否しました。詳しい原因は確認できていません。リクエスト ID を添えてサポートにお問い合わせください。",
+  providerFailed: "SIRAYA から生成失敗の通知がありましたが、原因は確認できていません。",
+  providerInvalidInput: "入力または設定が無効と SIRAYA から報告されました。モード、解像度、秒数、参照素材の要件を確認してください。",
+  providerModeMismatch: "SIRAYA が判定した映像タスクの種類が、選択したモードと一致しません。プロンプトと参照素材を確認してください。",
+  providerModelNotFound: "SIRAYA でこのモデルが見つかりませんでした。一覧を更新して利用可能なモデルを選んでください。",
+  providerRateLimit: "SIRAYA のリクエスト頻度の上限に達しました。時間をおいてから送信してください。",
+  providerTimeout: "このジョブはタイムアウトしたと SIRAYA から報告されました。再実行の前に元のジョブと使用量を確認してください。",
+  providerCancelled: "このジョブはキャンセルされたと SIRAYA から報告されました。",
   resultMissing: "藍翼が再生可能な結果を取得できませんでした。まず元のリクエストを確認してください。",
   submissionInterrupted: "提供元に届く前にジョブが中断されました。再送信できます。",
   assetServiceUnavailable: "このキーで SIRAYA 素材を取得できません。Asset API を有効にした Root Account キーを使用してください。",
@@ -62,6 +80,12 @@ export function businessError(copy: BusinessCopy, code?: string): string {
   if (code === "provider_quota") return copy.providerQuota;
   if (code === "provider_rejected") return copy.providerRejected;
   if (code === "provider_failed") return copy.providerFailed;
+  if (code === "provider_invalid_input") return copy.providerInvalidInput;
+  if (code === "provider_mode_mismatch") return copy.providerModeMismatch;
+  if (code === "provider_model_not_found") return copy.providerModelNotFound;
+  if (code === "provider_rate_limit") return copy.providerRateLimit;
+  if (code === "provider_timeout") return copy.providerTimeout;
+  if (code === "provider_cancelled") return copy.providerCancelled;
   if (code === "result_missing") return copy.resultMissing;
   if (code === "submission_interrupted") return copy.submissionInterrupted;
   if (code === "outcome_unknown") return copy.uncertain;

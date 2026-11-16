@@ -62,6 +62,10 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
   const title = job ? modelLabel(job.model) : model?.displayName ?? business[kind];
   const open = () => { video.current?.pause(); setExpanded(true); };
   const copyPrompt = async () => { try { await navigator.clipboard.writeText(job?.prompt ?? ""); setFeedback(c.copied); } catch { setFeedback(c.copyFailed); } };
+  const copyIdentifier = async (label: string, value: string) => {
+    try { await navigator.clipboard.writeText(value); setFeedback(c.identifierCopied.replace("{label}", label)); }
+    catch { setFeedback(c.identifierCopyFailed); }
+  };
   const recheckResult = async () => {
     if (!canRecheck || !job || recovery.current) return;
     const controller = new AbortController();
@@ -88,12 +92,27 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
     {job?.videoUrl ? <video ref={large ? undefined : video} src={job.videoUrl} controls preload="metadata" playsInline aria-label={title} /> : image ? large || inDialog ? <Image src={image.url} alt={`${title} · ${imageIndex + 1}`} width={1600} height={1600} unoptimized /> : <button type="button" className={styles.imageButton} onClick={open} aria-label={c.expand}><Image src={image.url} alt={`${title} · ${imageIndex + 1}`} width={1200} height={1200} unoptimized /></button> : <div className={styles.text}>{job?.text}</div>}
   </div>;
   const thumbnails = job?.images && job.images.length > 1 ? <><div className={styles.thumbs} aria-label={c.results}>{job.images.map((item, index) => <button className={styles.thumb} type="button" key={`${item.url}-${index}`} aria-label={`${c.result} ${index + 1}`} aria-pressed={imageIndex === index} onClick={() => setImageIndex(index)}><Image src={item.url} alt="" width={100} height={100} unoptimized loading="lazy" /></button>)}</div><div className={styles.counter}>{imageIndex + 1} / {job.images.length}</div></> : null;
+  const failure = job?.status === "failed" ? job : undefined;
+  const failureIds = failure?.providerTaskId || failure?.providerRequestId
+    ? [[c.providerTask, failure.providerTaskId], [c.providerRequest, failure.providerRequestId]] as const
+    : [[c.studioRecord, failure?.id]] as const;
+  const failureReason = failure?.errorCode === "provider_failed" ? c.failureUnspecified
+    : failure?.errorCode ? businessError(business, failure.errorCode) : c.failureNotRecorded;
   return <section className={styles.stage} aria-label={c.results}>
     <header className={styles.header}><h2>{c.results}</h2><span>{title}</span></header>
     {hasOutput ? media() : <div className={styles.empty} role={pending ? "status" : undefined}>
       {pending && <span className={styles.spinner} aria-hidden="true" />}
       <h3>{job ? business[job.status] : copy.previewEmpty}</h3>
-      <p>{job?.status === "failed" ? businessError(business, job.errorCode ?? "generation_failed") : job?.status === "unknown" ? unknownMessage : pending ? job.errorCode ? businessError(business, job.errorCode) : c.pending : job ? c.emptyOutput : copy.previewEmptyText}</p>
+      {failure ? <div className={styles.failure}>
+        <div className={styles.failureReason}><strong>{c.failureReason}</strong><p>{failureReason}</p>
+          {failure.providerHttpStatus && <small>{c.submitHttp} · HTTP {failure.providerHttpStatus}</small>}
+        </div>
+        <dl className={styles.failureIds}>
+          {failureIds.map(([label, value]) => value && <div key={label}>
+            <dt>{label}</dt><dd><code>{value}</code><button type="button" className={styles.button} aria-label={c.copyIdentifierLabel.replace("{label}", label)} onClick={() => void copyIdentifier(label, value)}>{c.copyIdentifier}</button></dd>
+          </div>)}
+        </dl>
+      </div> : <p>{job?.status === "unknown" ? unknownMessage : pending ? job.errorCode ? businessError(business, job.errorCode) : c.pending : job ? c.emptyOutput : copy.previewEmptyText}</p>}
     </div>}
     {thumbnails}
     {job && <div className={styles.info}><span className={styles.badge} data-status={job.status}>{business[job.status]}</span>{job.nsfw && <span className={styles.badge}>{business.nsfw}</span>}<time dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString(locale)}</time></div>}
@@ -106,7 +125,7 @@ export default function BusinessStage({ copy, business, kind, model, job, onHist
     </div>}
     {feedback && <p className={styles.notice} role="status">{feedback}</p>}
     {job?.videoUrl && /\.mov(?:\?|$)/i.test(job.videoUrl) && movNotice && <p className={styles.notice}>{movNotice}</p>}
-    {job && <details className={styles.details}><summary>{c.details}</summary><p>{job.prompt}</p>{job.errorCode && <p className={styles.error}>{businessError(business, job.errorCode)}</p>}<BusinessGenerationReceipt job={job} onUpdated={onJobUpdated} /><p>{business.requestId}: {job.id}</p></details>}
+    {job && <details className={styles.details}><summary>{c.details}</summary><p>{job.prompt}</p>{job.errorCode && !failure && <p className={styles.error}>{businessError(business, job.errorCode)}</p>}<BusinessGenerationReceipt job={job} onUpdated={onJobUpdated} />{(!failure || failure.providerTaskId || failure.providerRequestId) && <p>{c.studioRecord} · {job.id}</p>}</details>}
     {!inDialog && recentJobs.length > 0 && <div className={styles.recent}><div className={styles.recentHeader}><h3>{c.recent}</h3><button type="button" className={styles.button} onClick={onHistory}>{copy.viewHistory} ↗</button></div>{onSelect && <div className={styles.rail}>{recentJobs.slice(0, 12).map(item => <ResultCard key={item.id} job={item} business={business} onClick={() => onSelect(item)} selected={item.id === job?.id} compact />)}</div>}</div>}
     {expanded && <ResultDialog title={title} closeLabel={c.close} onClose={() => setExpanded(false)}>{media(true)}{thumbnails}<div className={styles.actions}>{job?.images && job.images.length > 1 && <><button className={styles.button} type="button" disabled={imageIndex === 0} onClick={() => setImageIndex(index => index - 1)}>{c.previous}</button><button className={styles.button} type="button" disabled={imageIndex >= job.images.length - 1} onClick={() => setImageIndex(index => index + 1)}>{c.next}</button></>}{url && <a href={downloadUrl} target="_blank" rel="noreferrer" download>{business.download} ↓</a>}</div></ResultDialog>}
   </section>;

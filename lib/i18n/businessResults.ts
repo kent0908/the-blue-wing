@@ -2,6 +2,10 @@ import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
+  failureReason: "失敗原因", providerTask: "SIRAYA 任務編號", providerRequest: "SIRAYA 請求編號", studioRecord: "藍翼紀錄編號", submitHttp: "提交回應",
+  copyIdentifier: "複製", copyIdentifierLabel: "複製{label}", identifierCopied: "已複製{label}", identifierCopyFailed: "無法複製，請手動選取編號。",
+  failureUnspecified: "SIRAYA 回報生成失敗，但沒有提供可辨識的原因。請帶下方編號聯絡客服查詢。",
+  failureNotRecorded: "這筆紀錄沒有可確認的失敗原因。請帶下方編號聯絡客服查詢。",
   recoverVideo: "重新取得成品", videoRecovered: "已取回原本的影片。", videoNotRecovered: "目前還無法取回原影片。這次沒有重新生成。",
   results: "預覽", recent: "最近作品", expand: "放大查看", close: "關閉預覽", previous: "上一張", next: "下一張",
   reuse: "沿用創作設定", copy: "複製提示詞", copied: "已複製提示詞", copyFailed: "無法複製，請從作品詳情選取提示詞。",
@@ -18,6 +22,10 @@ const zh = {
 };
 type Copy = { [K in keyof typeof zh]: string };
 const en: Copy = {
+  failureReason: "Failure reason", providerTask: "SIRAYA task ID", providerRequest: "SIRAYA request ID", studioRecord: "Blue Wing record ID", submitHttp: "Submission response",
+  copyIdentifier: "Copy", copyIdentifierLabel: "Copy {label}", identifierCopied: "Copied {label}", identifierCopyFailed: "Couldn’t copy. Select the ID to copy it manually.",
+  failureUnspecified: "SIRAYA reported a generation failure without a recognizable cause. Share the IDs below with support.",
+  failureNotRecorded: "This record has no confirmed failure reason. Share the IDs below with support.",
   recoverVideo: "Retrieve the video", videoRecovered: "The original video is ready.", videoNotRecovered: "The original video is still unavailable. No new generation was started.",
   results: "Preview", recent: "Recent work", expand: "Expand preview", close: "Close preview", previous: "Previous image", next: "Next image",
   reuse: "Reuse setup", copy: "Copy prompt", copied: "Prompt copied", copyFailed: "Unable to copy. Select the prompt in creation details.",
@@ -33,6 +41,10 @@ const en: Copy = {
   result: "Creation", emptyOutput: "No preview is available yet. Refresh to check the result.", more: "Show more", count: "{n} creations", latest: "Newest first", oldest: "Oldest first", sort: "Sort", original: "Open original",
 };
 const ja: Copy = {
+  failureReason: "失敗の理由", providerTask: "SIRAYA タスク ID", providerRequest: "SIRAYA リクエスト ID", studioRecord: "藍翼の記録 ID", submitHttp: "送信時の応答",
+  copyIdentifier: "コピー", copyIdentifierLabel: "{label} をコピー", identifierCopied: "{label} をコピーしました", identifierCopyFailed: "コピーできませんでした。ID を選択して手動でコピーしてください。",
+  failureUnspecified: "SIRAYA から生成失敗の通知がありましたが、原因は特定できませんでした。以下の ID を添えてサポートにお問い合わせください。",
+  failureNotRecorded: "この記録には確認できる失敗理由がありません。以下の ID を添えてサポートにお問い合わせください。",
   recoverVideo: "完成映像を再取得", videoRecovered: "元の映像を取得しました。", videoNotRecovered: "元の映像をまだ取得できません。再生成は行っていません。",
   results: "プレビュー", recent: "最近の作品", expand: "プレビューを拡大", close: "プレビューを閉じる", previous: "前の画像", next: "次の画像",
   reuse: "制作設定を再利用", copy: "プロンプトをコピー", copied: "コピーしました", copyFailed: "コピーできません。作品の詳細からプロンプトを選択してください。",

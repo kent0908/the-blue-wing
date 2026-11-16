@@ -77,6 +77,7 @@ function assetFixture({ completeStatus = "unknown", failInitialize = false } = {
     "@vercel/blob/client": { upload: async (url, file) => { blobs.push(file.name); assert.ok(url.startsWith("business/")); } },
     "@/lib/i18n/client": { useLocale: () => "en" },
     "@/lib/i18n/businessAssets": { businessAssetsCopy, businessAssetsError },
+    "./BusinessAssetPreview": { __esModule: true, default: function FixturePreview() {} },
   }, {
     crypto: { randomUUID: () => `client-${++uuid}` },
     fetch: async (url, init) => {
@@ -234,6 +235,7 @@ async function run() {
 
     const stage = hooks();
     const requests = [];
+    const clipboard = [];
     const previous = { id: "failed-wan-job", kind: "video", nsfw: true, model: "wan3.0-video-prime-pro-spicy",
       status: "failed", errorCode: "result_missing", prompt: "A blue feather in the wind.", createdAt: "2026-11-10T03:00:00Z" };
     const videoUrl = "/api/business/media/fixture-account/adult/previous-video.mp4";
@@ -248,6 +250,7 @@ async function run() {
       "@/lib/businessWan3": wan,
       "./BusinessGenerationReceipt": { __esModule: true, default: ReceiptMarker },
     }, {
+      navigator: { clipboard: { writeText: async value => { clipboard.push(value); } } },
       fetch: async (url, options) => {
         requests.push({ url, method: options.method ?? "GET", body: options.body });
         return response({ generation: recovered });
@@ -271,7 +274,32 @@ async function run() {
     assert.ok(!text(render()).includes(copy.recoverVideo));
     job = { ...previous, model: "wan3.0-video-prime-pro" };
     assert.ok(!text(render()).includes(copy.recoverVideo));
+    const task = "video_" + "X".repeat(360);
+    job = { ...previous, errorCode: "provider_failed", providerTaskId: task, providerRequestId: "siraya-request-abc", providerHttpStatus: 200 };
+    assert.ok(text(render()).includes(copy.failureUnspecified));
+    assert.ok(text(render()).includes(copy.submitHttp + " · HTTP 200"));
+    const copyByLabel = label => {
+      const match = elements(render()).find(node => node.type === "button" && node.props["aria-label"] === copy.copyIdentifierLabel.replace("{label}", label));
+      assert.ok(match);
+      return match.props.onClick();
+    };
+    copyByLabel(copy.providerTask);
+    copyByLabel(copy.providerRequest);
+    await flush();
+    assert.deepEqual(clipboard, [task, "siraya-request-abc"]);
+    assert.ok(text(render()).includes(copy.identifierCopied.replace("{label}", copy.providerRequest)));
+    job = { ...previous, errorCode: "submission_interrupted" };
+    copyByLabel(copy.studioRecord);
+    await flush();
+    assert.equal(clipboard.at(-1), previous.id);
+    assert.ok(!text(render()).includes(copy.providerTask));
+    for (const code of ["provider_invalid_input", "provider_mode_mismatch", "provider_model_not_found", "provider_rate_limit", "provider_timeout", "provider_cancelled"]) {
+      job = { ...previous, errorCode: code };
+      const explanation = businessStrings.businessError(business, code);
+      assert.notEqual(explanation, business.error);
+      assert.ok(text(render()).includes(explanation));
+    }
   }
-  console.log("PASS results: local and SIRAYA policy messages differ in all four locales; old Wan Spicy results recover by one GET and replace the failed preview");
+  console.log("PASS results: failure reasons, exact copyable IDs with record fallback, and prior GET-only result recovery in all four locales");
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
