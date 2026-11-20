@@ -43,12 +43,13 @@ export default async function ModelsIndex() {
      {MODEL_PAGES.filter(m=>m.kind===g.kind).map(m=>{const s=modelSpecs(m),p=modelPricing(m,rates);const facts=m.kind==='video'?[s.resolutions.join(' / '),tr('最長 {n} 秒', { n: s.maxSeconds ?? 0 })]:[tr('{n} 種尺寸', { n: s.sizes.length }),s.refImages?tr("可使用參考圖"):tr("文字創作")];return <li key={m.slug} className="border-t border-[#2d312b]">
       <Link href={`/models/${m.slug}`} className="group block h-full py-7 outline-offset-4 transition-colors hover:bg-[#ffffff03] focus-visible:outline focus-visible:outline-[#b6c7bc] sm:py-8">
        <div className="flex items-center gap-3"><ModelLogo id={m.id} size={30}/><h3 className="min-w-0 flex-1 break-words text-[17px] font-medium tracking-wide">{modelPageName(m)}</h3><span aria-hidden="true" className="text-[#8b9d8e] transition-transform group-hover:translate-x-1">↗</span></div>
+       {m.workspace && <p className="mt-3 text-xs text-[#b6c7bc]">{tr("商務工作室 · 自備 SIRAYA 金鑰")}</p>}
        <p className="mt-5 max-w-[38ch] text-[14px] leading-7 text-[#c0c2b7]">{tr(m.tagline)}</p>
        <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-[#21251f] pt-4 text-[11px] leading-5 text-[#8d968a]"><span>{facts.join(' · ')}</span>{p&&<span className="whitespace-nowrap">{p.perUnit} {tr("點／")}{tr(p.unit)} {tr("起")}</span>}</div>
       </Link></li>})}
     </ul>
    </section>)}
-   <footer className="mt-12 flex flex-wrap items-center justify-between gap-5 border-t border-[#343630] pt-7 text-xs leading-6 text-[#92998d]"><p>{tr("規格與可選功能見各模型內頁。實際點數依生成設定計算。")}</p><Link className="text-[#c2d2c5]" href="/studio">{tr("帶著想法，開始創作 ↗")}</Link></footer>
+   <footer className="mt-12 flex flex-wrap items-center justify-between gap-5 border-t border-[#343630] pt-7 text-xs leading-6 text-[#92998d]"><p>{tr("規格與可選功能見各模型內頁。一般創作使用點數；商務工作室由你的 SIRAYA 帳號計費。")}</p><Link className="text-[#c2d2c5]" href="/studio">{tr("帶著想法，開始創作 ↗")}</Link></footer>
   </main>
  </div>;
 }

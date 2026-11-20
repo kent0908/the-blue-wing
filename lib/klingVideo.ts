@@ -6,10 +6,10 @@
 export interface KlingVideoModel {
   id: string;
   resolutions: readonly ("720p" | "1080p" | "4k")[];
-  minSeconds: 5; maxSeconds: 10; secondsOptions: readonly number[];
+  minSeconds: number; maxSeconds: number; secondsOptions: readonly number[];
   supportsAudio: boolean; nativeAudioOnly: boolean; nativeAudioResolutions: readonly string[];
   supportsReferences: true; maxReferenceImages: number; omni: boolean; motion: boolean;
-  aspectRatios: readonly ["16:9", "9:16", "1:1"];
+  aspectRatios: readonly string[];
 }
 const definitions = [
   { id: "kling-2.5-turbo", resolutions: ["720p", "1080p"], supportsAudio: false, nativeAudioOnly: false, nativeAudioResolutions: [], omni: false, motion: false },
@@ -19,7 +19,12 @@ const definitions = [
   { id: "kling-3.0-omni", resolutions: ["720p", "1080p", "4k"], supportsAudio: true, nativeAudioOnly: false, nativeAudioResolutions: ["720p", "1080p", "4k"], omni: true, motion: false },
   { id: "kling-o1", resolutions: ["720p", "1080p"], supportsAudio: false, nativeAudioOnly: false, nativeAudioResolutions: [], omni: true, motion: false },
 ] as const;
-export const KLING_VIDEO_MODELS: readonly KlingVideoModel[] = definitions.map(model => ({ ...model, minSeconds: 5, maxSeconds: 10, secondsOptions: [5, 10], supportsReferences: true, maxReferenceImages: model.omni ? 4 : 1, aspectRatios: ["16:9", "9:16", "1:1"] }));
+export const KLING_VIDEO_MODELS: readonly KlingVideoModel[] = [
+  ...definitions.map(model => ({ ...model, minSeconds: 5, maxSeconds: 10, secondsOptions: [5, 10], supportsReferences: true as const, maxReferenceImages: model.omni ? 4 : 1, aspectRatios: ["16:9", "9:16", "1:1"] })),
+  // SIRAYA contract checked 2026-11-21. Image references only in our UI;
+  // input-video billing and voice IDs require separate end-to-end verification.
+  ...[false, true].map(flash => ({ id: flash ? "kling-4.0-flash" : "kling-4.0", resolutions: flash ? ["720p" as const] : ["720p" as const, "1080p" as const], minSeconds: 3, maxSeconds: flash ? 20 : 30, secondsOptions: Array.from({ length: flash ? 18 : 28 }, (_, i) => i + 3), supportsAudio: true, nativeAudioOnly: true, nativeAudioResolutions: flash ? ["720p"] : ["720p", "1080p"], supportsReferences: true as const, maxReferenceImages: 10, omni: true, motion: false, aspectRatios: ["16:9", "9:16", "1:1", "21:9"] })),
+];
 export function getKlingVideoModel(id: string | null | undefined): KlingVideoModel | undefined {
   return KLING_VIDEO_MODELS.find(model => model.id === id?.toLowerCase());
 }
@@ -57,7 +62,7 @@ export function klingVideoPayload<T extends { model: string }>(body: T): T {
   if (source.seed !== undefined && (typeof source.seed !== "number" || !Number.isSafeInteger(source.seed))) bad();
   if (source.async !== undefined && typeof source.async !== "boolean") bad();
   if (source.extra_body !== undefined && (!object(source.extra_body) || Object.keys(source.extra_body).some(key => key !== "watermark") || (source.extra_body.watermark !== undefined && typeof source.extra_body.watermark !== "boolean"))) bad();
-  const contents: { type: "first_frame" | "last_frame" | "refer_image"; url: string }[] = [];
+  const contents: { type: "first_frame" | "last_frame" | "refer_image"; url: string; id?: string }[] = [];
   const materialGroups = [source.image_url !== undefined, source.frame_images !== undefined, source.input_references !== undefined].filter(Boolean).length;
   if (materialGroups > 1) bad();
   if (source.image_url !== undefined) {
@@ -65,7 +70,7 @@ export function klingVideoPayload<T extends { model: string }>(body: T): T {
     contents.push({ type: "first_frame", url: source.image_url });
   }
   if (source.frame_images !== undefined) {
-    if (!Array.isArray(source.frame_images) || source.frame_images.length < 1 || source.frame_images.length > 2) bad();
+    if (!Array.isArray(source.frame_images) || source.frame_images.length < 1 || source.frame_images.length > (caps.id === "kling-4.0-flash" ? 1 : 2)) bad();
     for (const [index, frame] of source.frame_images.entries()) {
       if (!object(frame) || Object.keys(frame).some(key => !["frame_type", "image_url"].includes(key)) || frame.frame_type !== (index === 0 ? "first_frame" : "last_frame") || typeof frame.image_url !== "string" || !frame.image_url.trim()) bad();
       contents.push({ type: frame.frame_type as "first_frame" | "last_frame", url: frame.image_url });
@@ -75,7 +80,7 @@ export function klingVideoPayload<T extends { model: string }>(body: T): T {
     if (!Array.isArray(source.input_references) || source.input_references.length > caps.maxReferenceImages) bad();
     for (const ref of source.input_references) {
       if (!object(ref) || ref.type !== "image" || typeof ref.url !== "string" || !ref.url.trim() || Object.keys(ref).some(key => !["type", "url", "role"].includes(key))) bad();
-      contents.push({ type: caps.omni ? "refer_image" : "first_frame", url: ref.url });
+      contents.push({ type: caps.omni ? "refer_image" : "first_frame", url: ref.url, ...(caps.id.startsWith("kling-4.0") ? { id: `image_${contents.length + 1}` } : {}) });
     }
   }
   const native = caps.nativeAudioOnly || source.generate_audio === true;

@@ -38,7 +38,12 @@ test('new grants distinguish Nano Banana image generation from unconfirmed video
   assert.throws(() => assertBusinessImageParameters({ ...request, n: 2 }, 1));
   assert.equal(isGenerationPickerModel(id), false);
   for (const model of text) assert.equal(catalog.models.find(row => row.id === model)?.modality, 'text');
-  for (const model of videos) assert.equal(catalog.unavailableModels.find(row => row.id === model)?.reason, 'adapter_pending');
+  for (const model of videos.filter(id=>id.startsWith('kling-4.0'))) {
+    const entry=catalog.models.find(row=>row.id===model);
+    assert.equal(entry.modality,'video'); assert.equal(entry.nativeAudioOnly,true);
+    assert.equal(entry.maxSeconds,model.endsWith('flash')?20:30);
+  }
+  assert.equal(catalog.unavailableModels.find(row=>row.id==='gemini-omni-1.1-flash-preview')?.reason,'adapter_pending');
 });
 test('specialized tools and retired Happyhorse cannot become chat models',()=>{for(const id of ['kling-avatar','kling-lip-sync','kling-face-recognition','kling-tts','qwen3-asr-flash','gemini-embedding-2'])assert.ok(result.unavailableModels.some(m=>m.id===id&&m.reason==='dedicated_tool'));for(const id of fixture.ids.filter(id=>id.startsWith('happyhorse-1.0-')))assert.ok(result.unavailableModels.some(m=>m.id===id&&m.reason==='retired'));assert.ok(!result.models.some(m=>m.modality==='text'&&/avatar|lip-sync|tts|asr|embedding/i.test(m.id)));});
 test('catalog does not infer modality from misleading provider owner labels or unknown family IDs',()=>{const catalog=buildBusinessModelCatalog({data:[{id:'novel-unknown',owned_by:'openai'},{id:'gpt-6.1',owned_by:'something-else'},{id:'gpt-6.1'},{id:'sk-do-not-expose'},{id:'contains spaces'}]});assert.equal(catalog.upstreamTotal,2);assert.equal(catalog.models[0].id,'gpt-6.1');assert.equal(catalog.unavailableModels[0].reason,'unsupported_model');assert.throws(()=>buildBusinessModelCatalog(null));assert.throws(()=>buildBusinessModelCatalog({data:{}}));});

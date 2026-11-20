@@ -16,5 +16,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 建議用 `node scripts/push-synced-main.cjs` 發布；它以共用 Git 目錄鎖防止兩邊同時推送，並執行相同 pre-push 檢查。不要在另一個發布程序持鎖時移除鎖。
 - 管理員一次性設定 `git config core.hooksPath .githooks` 以啟用共用 pre-push 守門。發布後確認 GitHub 提交、Vercel 自動部署和實際網頁。
 
+## 新模型發布必備項目
+- 每次新增或調整模型，必須在同一變更中同步更新實際參數驗證、模型選單、公開模型頁的介紹／限制／使用方法，以及繁中、英文、日文文案。
+- GEO／AEO 的 metadata、可見 FAQ、JSON-LD、模型索引與 sitemap 必須引用同一份目錄；不得宣傳未接入的能力、虛構價格，或把一般創作點數套用到商務 BYOK。
+- 公開頁須標明資料更新日期與功能來源，區分原廠能力、SIRAYA 開放範圍與本站實測結果。
+- 發布前執行 scripts/test-model-pages.cjs 與受影響的模型契約測試；有付費實測時記錄模型、請求編號、結果與費用，不得自動重送結果不明的付費請求。
+
 ## 三語介面驗收
 - 每次修改使用者可見文案，繁體中文、日文、英文須同步更新，包含標題、說明、按鈕、錯誤提示及無障礙標籤；以三種語言檢查版面及互動後再發布。

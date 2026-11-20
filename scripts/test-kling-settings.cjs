@@ -10,15 +10,15 @@ const normalize = settings.exports.normalizeKlingSettings;
 const stale = { resolution: '480p', seconds: 4, aspectRatio: 'auto', generateAudio: true, imageCount: 1, size: '1024x1024', maxTokens: 1024 };
 for (const model of caps.exports.KLING_VIDEO_MODELS) {
   const actual = normalize(model.id, stale);
-  assert.equal(actual.seconds, 5);
+  assert.equal(actual.seconds, model.id.startsWith("kling-4.0") ? 4 : 5);
   assert.equal(actual.aspectRatio, '16:9');
   assert.equal(actual.resolution, '720p');
   assert.equal(actual.generateAudio, model.nativeAudioOnly || model.supportsAudio && model.nativeAudioResolutions.includes('720p'));
-  for (const seconds of [6, 7, 8, 9]) assert.equal(normalize(model.id, { ...stale, seconds }).seconds, 5);
+  for (const seconds of [6, 7, 8, 9]) assert.equal(normalize(model.id, { ...stale, seconds }).seconds, model.id.startsWith("kling-4.0") ? seconds : 5);
   assert.equal(normalize(model.id, { ...stale, seconds: 10 }).seconds, 10);
 }
 assert.equal(normalize('kling-2.6', { ...stale, resolution: '1080p' }).generateAudio, true);
 assert.equal(normalize('kling-3.0-turbo', { ...stale, generateAudio: false }).generateAudio, true);
 assert.equal(normalize('kling-o1', stale).generateAudio, false);
 assert.equal(normalize('SIRAYA-Seedance-2.5', stale), stale, 'Unrelated models are untouched');
-console.log('PASS Kling editor settings: six model contracts; stale duration/aspect/resolution; exact5/10; audio capability and native-only rules.');
+console.log('PASS Kling editor settings: eight model contracts; stale duration/aspect/resolution; per-version durations; audio capability and native-only rules.');

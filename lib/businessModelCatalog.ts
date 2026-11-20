@@ -57,7 +57,7 @@ export function buildBusinessModelCatalog(raw: unknown) {
     if (image) {
       models.push({ ...common, modality: "image", supportsReferences: true, sizes: image.sizes, maxReferenceImages: image.maxReferenceImages, maxImageCount: image.maxImageCount, imageControls: image.controls, ...(image.promptMaxChars ? { promptMaxChars: image.promptMaxChars } : {}) }); continue;
     }
-    if (!dedicatedVideo && (additional || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id))) { unavailable("adapter_pending"); continue; }
+    if (!dedicatedVideo && ((additional && !getKlingVideoModel(id)) || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id))) { unavailable("adapter_pending"); continue; }
     if (isRetiredGenerationModel(id)) { unavailable("retired"); continue; }
     if (["audio", "embedding", "avatar", "tool"].includes(kind)) { unavailable("dedicated_tool"); continue; }
     const seedance = getSeedanceCapability(id);

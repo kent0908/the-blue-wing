@@ -9,7 +9,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const page = modelPageBySlug(slug);
   const name = page ? modelPageName(page) : "模型";
   const specs = page ? modelSpecs(page) : null;
-  const facts = page && specs ? (page.kind === "video" ? [`${specs.resolutions.join(" / ")}`, `最長 ${specs.maxSeconds} 秒`, specs.maxRefs ? `${specs.maxRefs} 個參考素材` : "文字生影片"] : [`${specs.sizes.length} 種尺寸`, specs.refImages ? "支援參考圖" : "純文字生圖", specs.transparentBg ? "透明背景" : "負向提示詞"]) : [];
+  const facts = page && specs ? (page.kind === "video" ? [`${specs.resolutions.join(" / ")}`, `最長 ${specs.maxSeconds} 秒`, specs.maxRefs ? `${specs.maxRefs} 個參考素材` : "文字生影片"] : [`${specs.sizes.length} 種尺寸`, specs.refImages ? "支援參考圖" : "純文字生圖", ...(specs.transparentBg ? ["透明背景"] : specs.negativePrompt ? ["負向提示詞"] : [])]) : [];
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 72, background: "linear-gradient(135deg, #06100d 0%, #0b1a16 55%, #0f2a23 100%)", color: "#e8f5f0", fontFamily: "sans-serif" }}>

@@ -5,6 +5,8 @@ import { creditCostFromRate } from "../creditFormula";
 import { modelLabel } from "../modelLabel";
 import type { ModelRate } from "../rateCard";
 import { k } from "../i18n/k";
+import { BUSINESS_MODEL_PAGES } from "./businessModels";
+import { buildBusinessModelCatalog } from "../businessModelCatalog";
 
 /**
  * The public /models/[slug] catalogue. Facts (sizes, resolutions, durations,
@@ -24,11 +26,16 @@ export interface ModelPage {
   bestFor: string[];
   notFor: string[];
   updatedAt: string;
+  workspace?: "business";
+  sourceUrl?: string;
+  faqs?: { question: string; answer: string }[];
+  businessSlug?: string;
 }
 
 const D = "2026-09-15";
 
 export const MODEL_PAGES: ModelPage[] = [
+  ...BUSINESS_MODEL_PAGES,
   { slug: "wan-3-0", id: "wan3.0-video", kind: "video", vendor: "Alibaba", updatedAt: "2026-10-07",
     tagline: k("讓一張畫、一段文字，長成有聲的風景。"),
     blurb: k("以文字、單張首幀、首尾幀或多張圖片參考創作短片。最長 30 秒，可選擇原生聲音與提示詞潤飾，適合角色短篇、場景氣氛與鏡頭試稿。"),
@@ -40,11 +47,11 @@ export const MODEL_PAGES: ModelPage[] = [
     bestFor: [k("文字與圖片生成有聲短片"), k("首尾畫面之間的過渡"), k("多張圖片參考，站內最多 9 張")],
     notFor: [k("影片、音訊、文件參考與自動時長仍待站內驗證；目前不開放。"), k("4K 輸出")] },
   // ---- video ----
-  { slug: "seedance-2-5", id: "SIRAYA-Seedance-2.5", kind: "video", vendor: "ByteDance", updatedAt: D,
+  { slug: "seedance-2-5", id: "SIRAYA-Seedance-2.5", kind: "video", vendor: "ByteDance", updatedAt: "2026-11-21", businessSlug: "seedance-2-5-business",
     tagline: k("讓角色、場景與鏡頭，共同說一段故事。"),
     blurb: k("從角色參考開始，安排場景、動作與鏡頭之間的關係。適合需要延續人物設定，或串起多個畫面想法的短片。"),
     bestFor: [k("多主體一致性（多張角色／場景參考圖）"), k("指定運鏡（用 3D 導演台錄製的參考影片）"), k("10 秒以上的長鏡頭"), k("首尾幀之間的過場")],
-    notFor: [k("需要 4K 輸出（可考慮 Seedance 2.0）"), k("只想快速出短片預覽（Seedance 2.0 mini 更便宜更快）")] },
+    notFor: [k("4K 輸出")] },
   { slug: "seedance-2-0", id: "SIRAYA-Seedance-2.0", kind: "video", vendor: "ByteDance", updatedAt: D,
     tagline: k("為光影、動作與細節，留出表現的空間。"),
     blurb: k("從文字或圖片出發，製作角色短片、產品展示與場景片段。需要較高解析度的作品，可以在這裡繼續細修。"),
@@ -191,6 +198,17 @@ export interface ModelSpecs {
 
 /** Everything the studio would let a user set for this model, read from the real helpers. */
 export function modelSpecs(page: ModelPage): ModelSpecs {
+  if (page.workspace === "business") {
+    const model = buildBusinessModelCatalog({ data: [{ id: page.id }] }).models[0];
+    if (!model) throw new Error(`Public model has no business adapter: ${page.id}`);
+    const modes = page.kind === "image" ? [k("文字創作"), ...(model.supportsReferences ? [k("可使用參考圖")] : [])]
+      : model.seedance ? [k("文字生影片"), k("圖片生影片"), k("首尾幀編輯"), k("主體參考"), k("影片編輯"), k("影片續寫")]
+      : [k("文字生影片"), k("主體參考")];
+    return { modes, resolutions: model.resolutions ?? [], sizes: model.sizes ?? [], minSeconds: model.minSeconds,
+      maxSeconds: model.maxSeconds ?? null, maxRefs: model.seedance?.references.total ?? model.maxReferenceImages ?? 0,
+      videoRef: !!model.seedance, refImages: model.supportsReferences,
+      negativePrompt: !!model.imageControls?.some(c => c.key === "negative_prompt"), transparentBg: false, quality: !!model.imageControls?.some(c => c.key === "quality") };
+  }
   if (page.kind === "video") {
     const c = videoConstraintFor(page.id);
     const modes = getGenerationModes(page.id, "video").filter((m) => m.enabled).map((m) => m.label);
@@ -209,6 +227,7 @@ export interface ModelPricing {
 }
 
 export function modelPricing(page: ModelPage, rates: ModelRate[]): ModelPricing | null {
+  if (page.workspace === "business") return null;
   const rate = rates.find((r) => r.modelId.toLowerCase() === page.id.toLowerCase() && r.active);
   if (!rate) return null;
   if (page.kind === "image") {
@@ -220,4 +239,4 @@ export function modelPricing(page: ModelPage, rates: ModelRate[]): ModelPricing 
 }
 
 /** Sanity: every curated image entry should exist in the studio catalogue. */
-export const UNCATALOGUED = MODEL_PAGES.filter((p) => p.kind === "image" && !IMAGE_MODELS.some((m) => m.id === p.id)).map((p) => p.id);
+export const UNCATALOGUED = MODEL_PAGES.filter((p) => !p.workspace && p.kind === "image" && !IMAGE_MODELS.some((m) => m.id === p.id)).map((p) => p.id);

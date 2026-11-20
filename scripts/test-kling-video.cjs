@@ -5,7 +5,7 @@ function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(
 const api=load('lib/klingVideo.ts'),validation=load('lib/generationValidation.ts'),video=load('lib/videoModels.ts'),modes=load('lib/generationModes.ts'),picker=load('lib/generationPickerModels.ts'),pricing=load('lib/pricing.ts');
 let checks=0;function check(name,fn){fn();checks++;console.log('PASS '+name)}
 const base=model=>({model,prompt:'A blue feather crosses a paper city',seconds:5,resolution:'720p',aspect_ratio:'16:9',async:true});
-for(const model of api.KLING_VIDEO_MODELS){
+for(const model of api.KLING_VIDEO_MODELS.filter(m=>!m.id.startsWith('kling-4.0'))){
  check(model.id+' strict known ID and video metadata',()=>{assert.equal(picker.isGenerationPickerModel(model.id),true);assert.equal(pricing.modalityOf(model.id),'video');assert.deepEqual(video.videoResolutionsForModel(model.id),model.resolutions);assert.deepEqual(video.videoConstraintFor(model.id),{resolutions:[...model.resolutions],minSeconds:5,maxSeconds:10});});
  for(const resolution of ['480p','720p','1080p','4k'])check(model.id+' resolution '+resolution,()=>{const input={...base(model.id),resolution};if(model.resolutions.includes(resolution))validation.validateGeneration(input,'video');else assert.throws(()=>validation.validateGeneration(input,'video'),error=>error.status===400)});
  check(model.id+' duration exact 5/10 only',()=>{for(const seconds of [5,10])validation.validateGeneration({...base(model.id),seconds},'video');for(const seconds of [3,4,6,7,8,9,11,15,0,-1])assert.throws(()=>validation.validateGeneration({...base(model.id),seconds},'video'),error=>error.status===400)});
@@ -15,7 +15,34 @@ for(const model of api.KLING_VIDEO_MODELS){
  check(model.id+' unrelated extra parameters and unpriced source video are rejected',()=>{for(const extra of [{video:'https://owned.invalid/a.mp4'},{contents:[{type:'base_video',url:'https://owned.invalid/a.mp4'}]},{extra_body:{unpriced:true}},{input_references:[{type:'video',url:'https://owned.invalid/a.mp4'}]},{frame_images:[{frame_type:'last_frame',image_url:'last-only'}]},{image_url:'a',input_references:[{type:'image',url:'b'}]}])assert.throws(()=>api.klingVideoPayload({...base(model.id),...extra}));});
  if(model.omni)check(model.id+' Omni reference images and explicit ratio',()=>{const wire=api.klingVideoPayload({...base(model.id),aspect_ratio:undefined,input_references:[{type:'image',url:'owned-a'},{type:'image',url:'owned-b'}]});assert.equal(wire.aspect_ratio,'16:9');assert.deepEqual(wire.contents.map(entry=>entry.type),['refer_image','refer_image']);assert.throws(()=>api.klingVideoPayload({...base(model.id),input_references:Array(5).fill({type:'image',url:'a'})}));});
 }
-check('unreviewed Kling services stay outside all general creation controls',()=>{for(const id of ['kling-avatar-v2','kling-face-recognition','kling-lip-sync','kling-tts','kling-4.0','NSFW-kling-3.0']){assert.equal(picker.isGenerationPickerModel(id),false);assert.deepEqual(modes.getGenerationModes(id,'video'),[]);assert.throws(()=>validation.validateGeneration(base(id),'video'));}});
+for(const id of ['kling-4.0','kling-4.0-flash']) {
+ const caps=api.getKlingVideoModel(id), flash=id.endsWith('flash');
+ check(id+' documented duration, resolution and audio boundaries',()=>{
+  for(const seconds of [3,10,caps.maxSeconds])validation.validateGeneration({...base(id),seconds},'video');
+  for(const seconds of [2,caps.maxSeconds+1,3.5])assert.throws(()=>validation.validateGeneration({...base(id),seconds},'video'));
+  assert.throws(()=>api.klingVideoPayload({...base(id),generate_audio:false}));
+  assert.throws(()=>api.klingVideoPayload({...base(id),resolution:'4k'}));
+  if(flash)assert.throws(()=>api.klingVideoPayload({...base(id),resolution:'1080p'}));
+  assert.equal(api.klingVideoPayload({...base(id),aspect_ratio:'21:9'}).audio,'native');
+ });
+ check(id+' ten references have unique prompt IDs and unsupported materials fail',()=>{
+  const refs=Array.from({length:10},(_,i)=>({type:'image',url:'owned-'+i}));
+  const wire=api.klingVideoPayload({...base(id),input_references:refs});
+  assert.equal(wire.contents.length,10);
+  assert.equal(new Set(wire.contents.map(r=>r.id)).size,10);
+  assert.equal(wire.contents[0].id,'image_1');
+  assert.throws(()=>api.klingVideoPayload({...base(id),input_references:[...refs,refs[0]]}));
+  assert.throws(()=>api.klingVideoPayload({...base(id),input_references:[{type:'audio',url:'owned'}]}));
+  assert.equal(modes.buildVideoModePayload({model:id,mode:'subject-reference',prompt:'A landscape',references:refs,seconds:3}).input_references.length,10);
+ });
+ check(id+' Flash forbids last frame in both UI modes and payload',()=>{
+  assert.equal(modes.getGenerationModes(id,'video').some(m=>m.id==='first-last-frame'&&m.enabled),!flash);
+  const frames=[{frame_type:'first_frame',image_url:'a'},{frame_type:'last_frame',image_url:'b'}];
+  if(flash)assert.throws(()=>api.klingVideoPayload({...base(id),frame_images:frames}));
+  else assert.equal(api.klingVideoPayload({...base(id),frame_images:frames}).contents.length,2);
+ });
+}
+check('unreviewed Kling services stay outside all general creation controls',()=>{for(const id of ['kling-avatar-v2','kling-face-recognition','kling-lip-sync','kling-tts','kling-4.1','NSFW-kling-3.0']){assert.equal(picker.isGenerationPickerModel(id),false);assert.deepEqual(modes.getGenerationModes(id,'video'),[]);assert.throws(()=>validation.validateGeneration(base(id),'video'));}});
 check('Happyhorse1.0 variants centrally retired;1.1kept',()=>{for(const suffix of ['t2v','i2v','r2v','video-edit'])for(const prefix of ['','NSFW-','SIRAYA-']){const id=prefix+'happyhorse-1.0-'+suffix;assert.equal(picker.isGenerationPickerModel(id),false);assert.deepEqual(modes.getGenerationModes(id,'video'),[]);assert.throws(()=>validation.validateGeneration(base(id),'video'));}for(const suffix of ['t2v','i2v','r2v'])assert.equal(picker.isGenerationPickerModel('happyhorse-1.1-'+suffix),true)});
 check('Kling payloads cannot be submitted as image or chat',()=>{for(const kind of ['image','text'])assert.throws(()=>validation.validateGeneration({model:'kling-3.0',prompt:'A scene',messages:[{role:'user',content:'A scene'}]},kind));});
 check('Kling adapter leaves every unrelated existing video request unchanged',()=>{for(const model of ['SIRAYA-Seedance-2.5','wan3.0-video','veo-3.1-generate-001']){const request=base(model);assert.equal(api.klingVideoPayload(request),request)}});

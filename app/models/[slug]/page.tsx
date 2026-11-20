@@ -24,8 +24,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const name = modelPageName(page);
   const tr = await getTr();
   const kind = page.kind === "video" ? tr("AI 影片生成") : tr("AI 圖片生成");
-  const title = tr("{name} {kind}：能力、限制與點數", { name, kind });
-  const description = tr("{name}（{vendor}）在 The Blue Wing 上的完整說明：{tagline} 支援模式、解析度或尺寸、參考素材上限、每次生成的點數，以及適合與不適合的用途。", { name, vendor: page.vendor, tagline: tr(page.tagline) });
+  const title = tr(page.workspace ? "{name} {kind}：商務功能、規格與使用說明" : "{name} {kind}：能力、限制與點數", { name, kind });
+  const description = page.workspace ? tr(page.blurb) : tr("{name}（{vendor}）在 The Blue Wing 上的完整說明：{tagline} 支援模式、解析度或尺寸、參考素材上限、每次生成的點數，以及適合與不適合的用途。", { name, vendor: page.vendor, tagline: tr(page.tagline) });
   return { title, description, alternates: { canonical: `/models/${page.slug}` }, openGraph: { title: `${name} · ${SITE_NAME}`, description, url: `/models/${page.slug}`, type: "article" }, twitter: { card: "summary_large_image", title: `${name} · ${SITE_NAME}`, description } };
 }
 
@@ -39,7 +39,7 @@ async function safeRates(): Promise<ModelRate[]> {
 
 function faqFor(t: Dict, tr: Tr, page: ModelPage, name: string, specs: ReturnType<typeof modelSpecs>, pricing: ReturnType<typeof modelPricing>) {
   const M = t.models;
-  const faq: { question: string; answer: string }[] = [];
+  const faq: { question: string; answer: string }[] = (page.faqs ?? []).map(f => ({ question: tr(f.question), answer: tr(f.answer) }));
   if (page.kind === "video") {
     faq.push({ question: fmt(M.faqMaxSec.q, { name }), answer: fmt(M.faqMaxSec.a, { name, n: specs.maxSeconds ?? 0, min: specs.minSeconds ?? 2 }) });
     faq.push({ question: fmt(M.faqRes.q, { name }), answer: fmt(M.faqRes.a, { list: specs.resolutions.join(M.listSep) }) });
@@ -53,7 +53,11 @@ function faqFor(t: Dict, tr: Tr, page: ModelPage, name: string, specs: ReturnTyp
     const unit = pricing.unit === "秒" ? M.sec : M.img;
     faq.push({ question: fmt(M.faqCost.q, { name }), answer: fmt(M.faqCost.a, { unit, per: pricing.perUnit, examples: pricing.examples.map((e) => `${tr(e.label, e.vars)} ${e.credits}${M.creditUnit}`).join(M.exampleSep) }) });
   }
-  faq.push({ question: fmt(M.faqHow.q, { name }), answer: fmt(M.faqHow.a, { name, section: page.kind === "video" ? t.nav.video : t.nav.image, refs: specs.refImages ? M.faqHow.refs : "" }) });
+  if (!page.workspace) faq.push({ question: fmt(M.faqHow.q, { name }), answer: fmt(M.faqHow.a, { name, section: page.kind === "video" ? t.nav.video : t.nav.image, refs: specs.refImages ? M.faqHow.refs : "" }) });
+  if (page.workspace) faq.push(
+    { question: tr("商務模型的費用如何計算？"), answer: tr("依 SIRAYA 帳號的即時費率與實際用量計費。送出前請查看預估費用；功能與額度依金鑰授權而定。") },
+    { question: tr("如何使用這個商務模型？"), answer: tr("進入商務工作室，完成帳號申請並連接自己的 SIRAYA 金鑰。選擇模型、輸入描述、設定規格並確認費用後送出。成人模型另須完成年齡驗證。") },
+    { question: tr("原廠能力與站內功能有何不同？"), answer: tr("規格表列出本站已接入的功能。原廠或供應商新功能須完成參數、計費與成品驗證後才會開放；文件支援不代表已通過本站實測。") });
   return faq;
 }
 
@@ -65,25 +69,26 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const page = modelPageBySlug(slug);
   if (!page) notFound();
-  const { t } = await getDict();
+  const { t, locale } = await getDict();
   const tr = await getTr();
   const M = t.models;
   const name = modelPageName(page);
   const specs = modelSpecs(page);
-  const pricing = modelPricing(page, await safeRates());
+  const pricing = page.workspace ? null : modelPricing(page, await safeRates());
   const faq = faqFor(t, tr, page, name, specs, pricing);
   const unitWord = pricing ? (pricing.unit === "秒" ? M.sec : M.img) : "";
   const siblings = MODEL_PAGES.filter((m) => m.kind === page.kind && m.slug !== page.slug);
-  const studioHref = `/studio?mode=${page.kind}&model=${encodeURIComponent(page.id)}`;
+  const studioHref = page.workspace ? `/business?kind=${page.kind}&model=${encodeURIComponent(page.id)}` : `/studio?mode=${page.kind}&model=${encodeURIComponent(page.id)}`;
   const appLd = jsonLd({
     "@type": "SoftwareApplication",
     name: `${name} on ${SITE_NAME}`,
     applicationCategory: "MultimediaApplication",
     operatingSystem: "Web",
     url: absoluteUrl(`/models/${page.slug}`),
-    description: page.tagline,
+    description: tr(page.blurb),
+    inLanguage: locale,
     provider: { "@id": `${SITE_URL}/#organization` },
-    ...(pricing ? { offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: `每${pricing.unit} ${pricing.perUnit} 點；免費方案每日 10 點` } } : {}),
+    // Do not label a metered generation service as a free Offer.
     dateModified: page.updatedAt,
   });
 
@@ -103,9 +108,11 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
         </header>
         <p className="mt-5 text-[16px] leading-7 text-[#dcdcdc]">{tr(page.tagline)}</p>
         <p className="mt-3 text-[14.5px] leading-7 text-[#b8b8b8]">{tr(page.blurb)}</p>
+        {page.workspace && <aside className="mt-5 rounded-xl border border-[#315747] p-4 text-sm leading-7 text-[#b8d9cc]"><strong>{tr("商務工作室 · 自備 SIRAYA 金鑰")}</strong><p>{tr("此頁說明商務工作室目前開放的功能。模型須由你的 SIRAYA 金鑰授權；費用由 SIRAYA 收取，不使用一般創作點數。")}</p></aside>}
+        {page.businessSlug && <p className="mt-4"><Link className="text-[#7ff0cd] underline" href={`/models/${page.businessSlug}`}>{tr("商務版本與規格")} ↗</Link></p>}
         <div className="mt-6 flex flex-wrap gap-3">
           <Link href={studioHref} className="rounded-full bg-[#7ff0cd] px-5 py-2.5 text-[13.5px] font-semibold text-[#0a1a16] hover:brightness-110">{fmt(M.startWith, { name })}</Link>
-          <Link href="/pricing" className="rounded-full border border-[#2a2a2a] px-5 py-2.5 text-[13.5px] text-[#dcdcdc] hover:border-[#444]">{M.seePricing}</Link>
+          <Link href={page.workspace ? "/business?tab=usage" : "/pricing"} className="rounded-full border border-[#2a2a2a] px-5 py-2.5 text-[13.5px] text-[#dcdcdc] hover:border-[#444]">{page.workspace ? tr("商務模型的費用如何計算？") : M.seePricing}</Link>
         </div>
 
         <section className="mt-10">
@@ -121,13 +128,13 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
             ) : (
               <>
                 <Row k={M.outputSize} v={specs.sizes.join(" / ")} />
-                <Row k={M.refImages} v={specs.refImages ? M.refImagesV : M.unsupported} />
+                <Row k={M.refImages} v={specs.refImages ? (page.workspace ? fmt(M.upTo, { n: specs.maxRefs }) : M.refImagesV) : M.unsupported} />
                 <Row k={M.transparentBg} v={specs.transparentBg ? M.supported : M.unsupported} />
                 <Row k={M.negativePrompt} v={specs.negativePrompt ? M.supported : M.unsupported} />
                 <Row k={M.quality} v={specs.quality ? M.qualityV : M.fixed} />
               </>
             )}
-            <Row k={M.credits} v={pricing ? `${M.per}${unitWord} ${pricing.perUnit}${M.creditUnit} — ${pricing.examples.map((e) => `${tr(e.label, e.vars)} ${e.credits}${M.creditUnit}`).join(M.exampleSep)}` : M.byRateCard} />
+            <Row k={page.workspace ? tr("商務模型的費用如何計算？") : M.credits} v={page.workspace ? tr("依 SIRAYA 帳號的即時費率與實際用量計費。送出前請查看預估費用；功能與額度依金鑰授權而定。") : pricing ? `${M.per}${unitWord} ${pricing.perUnit}${M.creditUnit} — ${pricing.examples.map((e) => `${tr(e.label, e.vars)} ${e.credits}${M.creditUnit}`).join(M.exampleSep)}` : M.byRateCard} />
           </dl>
         </section>
 
@@ -165,7 +172,8 @@ export default async function ModelPageView({ params }: { params: Promise<{ slug
 
         <footer className="mt-12 border-t border-[#1e1e1e] pt-6 text-[12.5px] leading-6 text-[#7a7a7a]">
           <p>{tr(SITE_DEFINITION)}</p>
-          <p className="mt-2">{M.footNote}</p>
+          {page.sourceUrl && <p><a className="underline" href={page.sourceUrl} target="_blank" rel="noopener noreferrer">{tr("供應商文件")} ↗</a></p>}
+          <p className="mt-2">{page.workspace ? tr("商務工作室 · 自備 SIRAYA 金鑰") : M.footNote}</p>
         </footer>
       </article>
     </div>

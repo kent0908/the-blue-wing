@@ -33,7 +33,7 @@ export function getGenerationModes(model: string, kind: GenerationKind): Generat
   if (kling) return [
     { id: kling.omni ? "freestyle" : "text-to-video", label: kling.omni ? k("自由創作") : k("文字生影片"), enabled: true },
     { id: "image-to-video", label: k("圖片生影片"), enabled: true },
-    { id: "first-last-frame", label: k("首尾幀編輯"), enabled: true },
+    ...(kling.id === "kling-4.0-flash" ? [] : [{ id: "first-last-frame" as const, label: k("首尾幀編輯"), enabled: true }]),
     ...(kling.omni ? [{ id: "subject-reference" as const, label: k("主體參考"), enabled: true }, { id: "video-edit" as const, label: k("影片編輯"), enabled: false, reason: durationReason }] : []),
     ...(kling.motion ? [{ id: "motion-control" as const, label: k("動作控制"), enabled: false, reason: durationReason }] : []),
   ];
@@ -106,7 +106,7 @@ export function buildVideoModePayload(input: VideoModeInput): VideoModePayload {
     if (refs.length) {
       const counts = { image: 0, video: 0, audio: 0 };
       for (const ref of refs) counts[ref.type]++;
-      if (refs.length > (minimax ? minimax.includedImageReferences : kling ? kling.maxReferenceImages : wan ? 9 : latest ? 50 : 15) || counts.image > (latest ? 30 : 9) || counts.video > (latest ? 10 : 3) || counts.audio > (latest ? 10 : 3)) throw new Error(k("參考素材數量超過模型上限"));
+      if (refs.length > (minimax ? minimax.includedImageReferences : kling ? kling.maxReferenceImages : wan ? 9 : latest ? 50 : 15) || counts.image > (kling ? kling.maxReferenceImages : latest ? 30 : 9) || counts.video > (latest ? 10 : 3) || counts.audio > (latest ? 10 : 3)) throw new Error(k("參考素材數量超過模型上限"));
       if ((kling || minimax) && refs.some(ref => ref.type !== "image")) throw new Error(durationReason);
       if (!latest && !counts.image && !counts.video) throw new Error(k("此模型不支援僅使用音訊參考"));
       // Provider requires seconds:-1 whenever a video is present. Do not
