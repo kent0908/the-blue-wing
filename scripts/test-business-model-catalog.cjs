@@ -7,6 +7,18 @@ const {isGenerationPickerModel}=load('lib/generationPickerModels.ts');
 const fixture=JSON.parse(fs.readFileSync('scripts/fixtures/business-model-catalog-20261020.json','utf8'));
 let count=0;function test(name,fn){fn();count++;console.log('PASS '+name);}
 const result=buildBusinessModelCatalog({data:fixture.ids.map(id=>({id,object:'model',owned_by:'openai'}))});
+test('new Seedream and Flash adapters only expose exact upstream grants',()=>{
+  const ids=['Dola-Seedream-5.5','NSFW-Dola-Seedream-5.5','SIRAYA-Seedance-2.5-flash','NSFW-Seedance-2.5-flash'];
+  const models=buildBusinessModelCatalog({data:ids.map(id=>({id}))}).models;
+  assert.deepEqual(new Set(models.map(m=>m.id)),new Set(ids));
+  assert.deepEqual(buildBusinessModelCatalog({data:[]}).models,[]);
+  for(const m of models){assert.equal(m.nsfw,m.id.startsWith('NSFW-'));if(m.modality==='image'){
+    assert.equal(m.maxReferenceImages,10);assert.equal(m.promptMaxChars,4000);
+    assert.doesNotThrow(()=>assertBusinessImageParameters({model:m.id,prompt:'Paper lighthouse',size:'4K'},10));
+    assert.throws(()=>assertBusinessImageParameters({model:m.id,prompt:'a'.repeat(4001)},0));
+    assert.throws(()=>assertBusinessImageParameters({model:m.id,prompt:'Paper lighthouse'},11));
+  }else assert.deepEqual(m.resolutions,['480p','720p']);}
+});
 test('all 142 granted IDs appear exactly once in executable or explicitly unavailable catalog',()=>{assert.equal(result.upstreamTotal,142);const ids=[...result.models,...result.unavailableModels].map(m=>m.id);assert.equal(ids.length,142);assert.equal(new Set(ids).size,142);assert.deepEqual(new Set(ids),new Set(fixture.ids));});
 test('all 14 current image aliases are executable with correct metadata',()=>{const images=result.models.filter(m=>m.modality==='image');assert.equal(images.length,14);for(const image of images){const capability=getBusinessImageCapability(image.id);assert.ok(capability,image.id);assert.equal(image.maxReferenceImages,capability.maxReferenceImages);assert.equal(image.maxImageCount,capability.maxImageCount);assert.deepEqual(image.imageControls,capability.controls);}assert.ok(images.find(m=>m.id==='gpt-image-2.5-flare'));assert.ok(images.find(m=>m.id==='NSFW-Seedream-5.0-lite'));});
 test('image counts and references follow their provider family instead of C retail batch limits',()=>{for(const id of ['gpt-image-2','gpt-image-2.5-sunburst','gpt-image-2.5-flare']){const caps=getBusinessImageCapability(id);assert.equal(caps.maxImageCount,10);assert.equal(caps.maxReferenceImages,16);}for(const id of ['gemini-3.1-flash-image','gemini-3.1-flash-lite-image','gemini-3-pro-image']){assert.equal(getBusinessImageCapability(id).maxImageCount,1);assert.equal(getBusinessImageCapability(id).maxReferenceImages,14);}assert.equal(getBusinessImageCapability('Dola-Seedream-5.0-pro').maxReferenceImages,10);assert.equal(getBusinessImageCapability('NSFW-Seedream-4.5').maxReferenceImages,14);});

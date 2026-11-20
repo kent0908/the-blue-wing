@@ -14,6 +14,7 @@ export interface BusinessImageCapability {
   maxReferenceImages: number;
   controls: BusinessImageControl[];
   qualityOptions: string[];
+  promptMaxChars?: number;
   supportsSequentialImageGeneration?: boolean;
 }
 const seedream1k = ["1024x1024", "864x1152", "1152x864", "1312x736", "736x1312", "832x1248", "1248x832", "1568x672"];
@@ -22,6 +23,11 @@ const seedream4k = ["4096x4096", "3520x4704", "4704x3520", "5504x3040", "3040x55
 function normalized(id: string): string { return id.toLowerCase().replace(/^(?:(?:nsfw|siraya|bytedance|dola)-)+/, ""); }
 export function getBusinessImageCapability(id: string): BusinessImageCapability | undefined {
   const model = normalized(id);
+  // Live SIRAYA grants observed 2026-11-21; keep the single-image contract.
+  if (model === "seedream-5.5") {
+    return { family: "seedream", sizes: [...seedream2k, ...seedream4k, "2K", "4K"],
+      maxImageCount: 1, maxReferenceImages: 10, promptMaxChars: 4000, controls: [], qualityOptions: [] };
+  }
   if (/^gpt-image-(?:2|2\.5-(?:flare|sunburst))$/.test(model)) {
     const qualityOptions = ["auto", "low", "medium", "high", ...(/2\.5/.test(model) ? ["xhigh", "max"] : [])];
     return { family: "gpt-image", sizes: ["1024x1024", "1536x1024", "1024x1536", "2048x1152", "1152x2048", "3840x2160", "2160x3840", "auto"], maxImageCount: 10, maxReferenceImages: 16, controls: [{ key: "quality", kind: "select", options: qualityOptions }], qualityOptions };
@@ -59,7 +65,7 @@ export function assertBusinessImageParameters(parameters: Record<string, unknown
   const bad = (): never => { throw new Error("invalid_image_parameters"); };
   if (!caps) return bad();
   if (Object.keys(parameters).some(key => !["model", "prompt", "size", "n", "quality", "seed", "assetIds", "businessAssetIds", "background", "output_format", "output_compression", "moderation"].includes(key))) bad();
-  if (typeof parameters.prompt !== "string" || !parameters.prompt.trim() || parameters.prompt.length > 12000) bad();
+  if (typeof parameters.prompt !== "string" || !parameters.prompt.trim() || parameters.prompt.length > (caps.promptMaxChars ?? 12000)) bad();
   const n = parameters.n ?? 1;
   if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 1 || n > caps.maxImageCount || !Number.isSafeInteger(referenceCount) || referenceCount < 0 || referenceCount > caps.maxReferenceImages) bad();
   const size = parameters.size ?? caps.sizes[0];

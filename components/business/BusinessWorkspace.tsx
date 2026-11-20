@@ -630,7 +630,7 @@ export default function BusinessWorkspace() {
       if (providerAssets.length) parameters.providerAssets = providerAssets.map(({ id, type }) => ({ id, type }));
       if (imageBusinessAssets.length) parameters.businessAssetIds = imageBusinessAssets.map(asset => asset.uploadId!);
       if (references.length) parameters.referenceOrder = references.map(reference => reference.key);
-      if (selected.seedance.version === "2.5") parameters.output_format = outputFormat;
+      if (selected.seedance.outputFormats.length) parameters.output_format = selected.seedance.outputFormats.includes(outputFormat) ? outputFormat : selected.seedance.outputFormats[0];
       if (seed.trim()) { const value = Number(seed); if (!Number.isSafeInteger(value) || value < -1 || value > 2147483647) { setError(t.invalidRequest); return; } parameters.seed = value; }
       try {
         // Validate the same scalar/mode contract as the server before opening

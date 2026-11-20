@@ -25,15 +25,19 @@ export const SEEDANCE_25_REFERENCE_LIMITS = { total: 50, image: 30, video: 10, a
 /** Exact recognized aliases only: a guessed model ID never inherits a paid capability. */
 export function getSeedanceCapability(modelId: string | null | undefined): BusinessSeedanceCapability | undefined {
   const id = (modelId ?? "").toLowerCase().replace(/^(?:(?:nsfw|siraya)-)+/, "").replace(/^seedance-(2)-(0|5)/, "seedance-$1.$2");
-  if (!/^seedance-2\.(?:5|0(?:-fast|-mini)?)$/.test(id)) return undefined;
-  const latest = id === "seedance-2.5";
+  if (!/^seedance-2\.(?:5(?:-flash)?|0(?:-fast|-mini)?)$/.test(id)) return undefined;
+  const latest = id.startsWith("seedance-2.5");
+  const flash = id === "seedance-2.5-flash";
   return {
     id, version: latest ? "2.5" : "2.0",
-    resolutions: latest ? ["480p", "720p", "1080p"] : /-(?:fast|mini)$/.test(id) ? ["480p", "720p"] : ["480p", "720p", "1080p", "4k"],
+    // 2.5 4K enabled per the operator's live rollout confirmation (2026-11-21).
+    // Flash stays at 480p/720p; the catalogue still requires an actual upstream grant.
+    resolutions: flash || /-(?:fast|mini)$/.test(id) ? ["480p", "720p"] : ["480p", "720p", "1080p", "4k"],
     minSeconds: 4, maxSeconds: latest ? 30 : 15, defaultSeconds: 5, autoDuration: true,
     aspectRatios: ASPECT_RATIOS,
-    references: latest ? SEEDANCE_25_REFERENCE_LIMITS : { total: 15, image: 9, video: 3, audio: 3 },
-    modes: MODES, outputFormats: latest ? ["mp4", "mov"] : [],
+    // Conservative Flash reference budget until SIRAYA publishes its own limits.
+    references: latest && !flash ? SEEDANCE_25_REFERENCE_LIMITS : { total: 15, image: 9, video: 3, audio: 3 },
+    modes: MODES, outputFormats: latest && !flash ? ["mp4", "mov"] : [],
   };
 }
 export class BusinessSeedanceParameterError extends Error {

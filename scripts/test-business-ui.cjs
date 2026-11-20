@@ -242,6 +242,15 @@ function reviewWan3(context) {
     c.outputFormat='mov'; c.assetIds=Array.from({length:9},(_,i)=>i+1); c.referenceOrder=c.assetIds.map(id=>`local:${id}`); c.requestConfirmation(event);
     assert.ok(c.confirmation); assert.equal(c.confirmation.parameters.assetIds.length,9); assert.equal(c.confirmation.parameters.output_format,undefined,'2.0 does not inherit the 2.5-only output format');
   }
+  {
+    const {context:c}=seedanceContext('SIRAYA-Seedance-2.5-flash');
+    c.outputFormat='mov';c.resolution='720p';c.requestConfirmation(event);
+    assert.ok(c.confirmation);assert.equal(c.confirmation.parameters.model,'SIRAYA-Seedance-2.5-flash');
+    assert.equal(c.confirmation.parameters.output_format,undefined,'Flash cannot inherit a previous model MOV setting');
+    const {context:standard}=seedanceContext('SIRAYA-Seedance-2.5');
+    standard.resolution='4k';standard.requestConfirmation(event);
+    assert.equal(standard.confirmation.parameters.resolution,'4k');
+  }
   for(const [name,message,configure]of [
     ['thirty-one image references','imageLimit:50/30',c=>{c.assetIds=Array.from({length:31},(_,i)=>i+1);}],
     ['fifty-one total references','totalLimit:50/30',c=>{c.providerAssets=[...Array.from({length:30},(_,i)=>({id:`image-${i}`,type:'image'})),...Array.from({length:10},(_,i)=>({id:`video-${i}`,type:'video'})),...Array.from({length:11},(_,i)=>({id:`audio-${i}`,type:'audio'}))];}],

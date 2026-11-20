@@ -15,7 +15,10 @@ const zh = {
   providerRateLimit: "已達 SIRAYA 的請求頻率上限。請稍後再送出。",
   providerTimeout: "SIRAYA 回報這個任務處理逾時。請先查詢原任務與用量，再決定是否重試。",
   providerCancelled: "SIRAYA 回報這個任務已取消。",
-  resultMissing: "藍翼未取得可播放的成品。請先查原有請求。",
+  resultMissing: "藍翼未取得可用的成品。請先查原有請求。",
+  imageResultMissing: "SIRAYA 已回應，但沒有回傳圖片。請以請求編號查詢供應商紀錄；HTTP 200 不代表圖片已生成。",
+  imageResponseInvalid: "SIRAYA 的回應不含可辨識的圖片資料。請提供請求編號給客服，確認原請求結果。",
+  imageSourceRejected: "SIRAYA 已回傳圖片來源，但藍翼無法安全讀取。請提供請求編號給客服確認圖片來源。",
   submissionInterrupted: "任務在送達供應商前中斷，可以重新送出。",
   assetServiceUnavailable: "目前金鑰無法讀取 SIRAYA 素材。請使用已開通 Asset API 的 Root Account Key。",
   minimaxH3References: "參考圖額外費用：H3 原廠前 5 張不加收，第 6 張起每張 USD 0.04。這是原廠參考規則，SIRAYA 的實際費用與折扣仍以你的帳單為準。", minimaxH3MaxReferences: "參考圖額外費用：H3 Max 原廠前 2 張不加收，第 3 張起每張 USD 0.074。這是原廠參考規則，SIRAYA 的實際費用與折扣仍以你的帳單為準。",
@@ -37,7 +40,10 @@ const en: BusinessCopy = {
   providerRateLimit: "SIRAYA’s request rate limit was reached. Wait before submitting again.",
   providerTimeout: "SIRAYA reported that this job timed out. Check the original job and usage before deciding whether to retry.",
   providerCancelled: "SIRAYA reported that this job was cancelled.",
-  resultMissing: "The Blue Wing did not receive a playable result. Check the original request first.",
+  resultMissing: "The Blue Wing did not receive a usable result. Check the original request first.",
+  imageResultMissing: "SIRAYA responded without an image. Check the provider record using the request ID; HTTP 200 does not confirm image generation.",
+  imageResponseInvalid: "SIRAYA's response did not contain recognizable image data. Share the request ID with support to check the original result.",
+  imageSourceRejected: "SIRAYA returned an image source that The Blue Wing cannot safely read. Share the request ID with support to verify the source.",
   submissionInterrupted: "The job stopped before it reached the provider. You can submit it again.",
   assetServiceUnavailable: "This key cannot access SIRAYA assets. Use a Root Account key with the Asset API enabled.",
   minimaxH3References: "Extra reference-image costs: MiniMax lists the first 5 H3 images at no extra charge, then USD 0.04 per image. These are original-provider reference rules; your SIRAYA invoice determines actual charges and discounts.", minimaxH3MaxReferences: "Extra reference-image costs: MiniMax lists the first 2 H3 Max images at no extra charge, then USD 0.074 per image. These are original-provider reference rules; your SIRAYA invoice determines actual charges and discounts.",
@@ -58,7 +64,10 @@ const ja: BusinessCopy = {
   providerRateLimit: "SIRAYA のリクエスト頻度の上限に達しました。時間をおいてから送信してください。",
   providerTimeout: "このジョブはタイムアウトしたと SIRAYA から報告されました。再実行の前に元のジョブと使用量を確認してください。",
   providerCancelled: "このジョブはキャンセルされたと SIRAYA から報告されました。",
-  resultMissing: "藍翼が再生可能な結果を取得できませんでした。まず元のリクエストを確認してください。",
+  resultMissing: "藍翼が利用可能な結果を取得できませんでした。まず元のリクエストを確認してください。",
+  imageResultMissing: "SIRAYA は応答しましたが、画像が返されませんでした。リクエスト番号で提供元の記録を確認してください。HTTP 200 は画像生成の完了を意味しません。",
+  imageResponseInvalid: "SIRAYA の応答に認識可能な画像データがありません。リクエスト番号をサポートに伝え、元の結果をご確認ください。",
+  imageSourceRejected: "SIRAYA は画像の取得元を返しましたが、藍翼では安全に読み込めません。リクエスト番号をサポートに伝え、取得元をご確認ください。",
   submissionInterrupted: "提供元に届く前にジョブが中断されました。再送信できます。",
   assetServiceUnavailable: "このキーで SIRAYA 素材を取得できません。Asset API を有効にした Root Account キーを使用してください。",
   minimaxH3References: "参考画像の追加料金：MiniMax の公表条件では H3 は最初の5枚が追加料金なし、6枚目から1枚 USD 0.04。これは原提供元の参考条件です。SIRAYA の実際の料金と割引は請求書で確認してください。", minimaxH3MaxReferences: "参考画像の追加料金：MiniMax の公表条件では H3 Max は最初の2枚が追加料金なし、3枚目から1枚 USD 0.074。これは原提供元の参考条件です。SIRAYA の実際の料金と割引は請求書で確認してください。",
@@ -91,6 +100,9 @@ export function businessError(copy: BusinessCopy, code?: string): string {
   if (code === "provider_timeout") return copy.providerTimeout;
   if (code === "provider_cancelled") return copy.providerCancelled;
   if (code === "result_missing") return copy.resultMissing;
+  if (code === "image_result_missing") return copy.imageResultMissing;
+  if (code === "image_response_invalid") return copy.imageResponseInvalid;
+  if (code === "image_source_rejected") return copy.imageSourceRejected;
   if (code === "submission_interrupted") return copy.submissionInterrupted;
   if (code === "outcome_unknown") return copy.uncertain;
   if (code && /conflict|stale/.test(code)) return copy.conflict;

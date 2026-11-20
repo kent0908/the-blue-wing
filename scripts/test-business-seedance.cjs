@@ -16,7 +16,7 @@ test('all reviewed standard and NSFW aliases share exact version capabilities', 
   for (const id of ['unknown-seedance-2.5', 'SIRAYA-Seedance-2.5-guessed', 'SIRAYA-Seedance-1.5-pro', 'kling-3.0']) assert.equal(caps(id), undefined);
 });
 test('resolution and duration catalogs distinguish 2.0 standard, fast, mini and 2.5', () => {
-  assert.deepEqual(caps('SIRAYA-Seedance-2.5').resolutions, ['480p', '720p', '1080p']);
+  assert.deepEqual(caps('SIRAYA-Seedance-2.5').resolutions, ['480p', '720p', '1080p', '4k']);
   assert.deepEqual(caps('SIRAYA-Seedance-2.0').resolutions, ['480p', '720p', '1080p', '4k']);
   for (const id of ['SIRAYA-Seedance-2.0-mini', 'SIRAYA-Seedance-2.0-fast']) assert.deepEqual(caps(id).resolutions, ['480p', '720p']);
   assert.equal(caps(base.model).maxSeconds, 30); assert.equal(caps('SIRAYA-Seedance-2.0').maxSeconds, 15);
@@ -80,10 +80,22 @@ test('only documented output formats are forwarded for 2.5', () => {
 });
 test('all seven aspect ratios and exact supported controls validate', () => {
   for (const aspect_ratio of caps(base.model).aspectRatios) assert.equal(build({ ...base, aspect_ratio, seed: 123 }, []).aspect_ratio, aspect_ratio);
-  for (const extra of [{ aspect_ratio: '2:1' }, { generate_audio: 'true' }, { seed: 0.5 }, { resolution: '4k' }, { prompt: '' }, { mode: 'guessed-mode' }]) assert.throws(() => build({ ...base, ...extra }, []));
+  for (const extra of [{ aspect_ratio: '2:1' }, { generate_audio: 'true' }, { seed: 0.5 }, { resolution: '8k' }, { prompt: '' }, { mode: 'guessed-mode' }]) assert.throws(() => build({ ...base, ...extra }, []));
 });
 test('unreviewed passthrough, URLs, callbacks and controls never enter a provider payload', () => {
   for (const extra of [{ callback_url: 'https://evil.invalid' }, { extra_body: { draft: true } }, { image_url: 'https://evil.invalid' }, { video_url: 'https://evil.invalid' }, { input_references: [] }, { negative_prompt: 'Unreviewed' }, { camera_fixed: true }, { return_last_frame: true }, { draft: true }]) assert.throws(() => build({ ...base, ...extra }, []));
   assert.throws(() => validateRefs(caps(base.model), 'subject-reference', []));
+});
+test('2.5 4K and Flash preserve the exact model and do not share resolution or MOV capabilities', () => {
+  assert.equal(build({...base,resolution:'4k'},[]).resolution,'4k');
+  for (const model of ['SIRAYA-Seedance-2.5-flash','NSFW-Seedance-2.5-flash']) {
+    assert.equal(caps(model).version,'2.5');
+    assert.deepEqual(caps(model).resolutions,['480p','720p']);
+    const wire=build({...base,model,resolution:'720p',seconds:30},[]);
+    assert.equal(wire.model,model); assert.equal(wire.seconds,30); assert.equal(wire.async,true);
+    assert.equal(wire.output_format,undefined);
+    for(const extra of [{resolution:'4k'},{resolution:'1080p'},{output_format:'mov'},{seconds:31}])
+      assert.throws(()=>build({...base,model,resolution:'720p',...extra},[]));
+  }
 });
 console.log(`Business Seedance: ${count} pure contract cases passed; no paid or remote calls.`);

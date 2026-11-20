@@ -371,8 +371,11 @@ function validSource(source: string, kind: "image" | "video", model?: string) {
     const wanSpicy = kind === "video" && isBusinessWan3SpicyModel(model) && url.hostname === "usercontent1.carrothub.ai";
     const wanPrime = kind === "video" && (model === "wan3.0-video-prime" || model === "wan3.0-video-prime-spicy") &&
       url.hostname === "mule-router-assets.muleusercontent.com";
+    // Reuse only the exact SIRAYA CDN hosts already trusted above, scoped to Z Image.
+    const zImage = kind === "image" && (model === "z-image-spicy" || model === "z-image-spicy-pro") &&
+      ["usercontent1.carrothub.ai", "mule-router-assets.muleusercontent.com"].includes(url.hostname);
     const vendor = ["volces.com", "amazonaws.com", "googleusercontent.com", "googleapis.com", "siraya.ai", "openaiusercontent.com", "blob.core.windows.net", "aliyuncs.com", "klingai.com"].some(host => url.hostname === host || url.hostname.endsWith(`.${host}`));
-    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor || wanSpicy || wanPrime);
+    return url.protocol === "https:" && !url.username && !url.password && !url.port && (exact || vendor || wanSpicy || wanPrime || zImage);
   } catch { return false; }
 }
 
@@ -566,12 +569,32 @@ async function submitReservedGeneration(user: UserRow, account: BusinessAccount,
     const text = record(choice) && record(choice.message) && typeof choice.message.content === "string" ? choice.message.content.trim() : "";
     row = await updateGeneration(row, text ? "completed" : "failed", text ? { text } : null, text ? null : "result_missing");
   } else if (row.kind === "image") {
+    // A successful HTTP receipt can still contain a structured provider error.
+    const hasProviderError = record(result.error) ? Object.keys(result.error).length > 0
+      : typeof result.error === "string" && result.error.trim().length > 0;
+    if (hasProviderError) return updateGeneration(row, "failed", null,
+      structuredProviderError(result.error) ?? "provider_failed");
+    let rejectedSource = false;
+    let malformedItem = false;
     const images = (Array.isArray(result.data) ? result.data : []).flatMap(image => {
-      if (!record(image)) return [];
-      const url = typeof image.url === "string" ? image.url : typeof image.b64_json === "string" ? `data:${sniffImageMimeFromBase64(image.b64_json)};base64,${image.b64_json}` : "";
-      return url && validSource(url, "image") ? [{ url }] : [];
+      if (!record(image)) { malformedItem = true; return []; }
+      const source = typeof image.url === "string" ? image.url.trim() : "";
+      const base64 = typeof image.b64_json === "string" ? image.b64_json.replace(/\s/g, "") : "";
+      // Do not let an empty or rejected URL hide a valid inline image.
+      const candidates = [source, base64 ? `data:${sniffImageMimeFromBase64(base64)};base64,${base64}` : ""].filter(Boolean);
+      const url = candidates.find(candidate => validSource(candidate, "image", row.model));
+      if (!url && candidates.length) rejectedSource = true;
+      if (!candidates.length) malformedItem = true;
+      return url ? [{ url }] : [];
     }).slice(0, Number(payload.n ?? 1));
-    if (!images.length) return updateGeneration(row, "failed", null, "result_missing");
+    if (!images.length) {
+      const code = rejectedSource ? "image_source_rejected" : !Array.isArray(result.data) || malformedItem
+        ? "image_response_invalid" : "image_result_missing";
+      // Log classification and receipt only: never provider bodies, signed URLs, prompts or keys.
+      console.warn("business_image_result_unavailable", { generationId: row.id, model: row.model,
+        providerRequestId: row.provider_request_id, httpStatus: row.provider_http_status, code });
+      return updateGeneration(row, "failed", null, code);
+    }
     // Store the provider result before Blob I/O, then use the same lease as status lookups.
     await updateGeneration(row, "processing", null, null, { images });
     return getBusinessGeneration(user, account, row.id);

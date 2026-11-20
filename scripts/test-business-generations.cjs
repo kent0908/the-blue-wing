@@ -18,6 +18,7 @@ const wanSpicyModels = ['wan3.0-video-spicy', 'wan3.0-video-pro-spicy', 'wan3.0-
 models.push(['wan3.0-video-prime','video'],['wan3.0-video-pro','video'], ...wanSpicyModels.map(id => [id,'video']));
 models.push(['wan2.2-i2v-spicy','video'],['wan2.7-i2v-spicy','video']);
 models.push(['z-image-spicy','image'],['z-image-spicy-pro','image']);
+models.push(['Dola-Seedream-5.5','image'],['NSFW-Dola-Seedream-5.5','image'],['SIRAYA-Seedance-2.5-flash','video']);
 models.push(['gemini-nano-banana-2.1', 'image']);
 const rates=models.map(([modelId,modality])=>({modelId,modality,active:modelId!=='retired-image',credits:999}));
 class BusinessError extends Error{constructor(code,status=400){super(code);this.code=code;this.status=status;}}
@@ -267,6 +268,80 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    assert.equal(lastPayload.prompt_extend, false);
    assert.equal(exactImageCalls, 3);
  });
+ await test('Seedream 5.5 and new Seedance modes keep exact provider IDs and settings', async () => {
+   for(const model of ['Dola-Seedream-5.5','NSFW-Dola-Seedream-5.5']) {
+     reset(); const {generation}=await (await send(body(1,'image',{model,size:'4K'}))).json();
+     assert.equal(generation.status,'completed');assert.equal(lastPayload.model,model);
+     assert.equal(lastPayload.size,'4K');assert.equal(lastPayload.n,undefined);
+     assert.equal(lastPayload.sequential_image_generation,undefined);assert.equal(providerCalls,1);
+   }
+   reset(); await send(body(1,'video',{model:'SIRAYA-Seedance-2.5',resolution:'4k'}));
+   assert.equal(lastPayload.resolution,'4k');assert.equal(providerCalls,1);
+   reset(); await send(body(1,'video',{model:'SIRAYA-Seedance-2.5-flash',resolution:'720p',seconds:30}));
+   assert.equal(lastPayload.model,'SIRAYA-Seedance-2.5-flash');assert.equal(lastPayload.seconds,30);
+   assert.equal(providerCalls,1);
+ });
+ await test('Z Image persists exact SIRAYA CDN image URLs for both tiers with one paid submission', async () => {
+   for (const model of ['z-image-spicy','z-image-spicy-pro']) {
+     for (const host of ['usercontent1.carrothub.ai','mule-router-assets.muleusercontent.com']) {
+       reset(); downloadMime='image/png';
+       const url=`https://${host}/result.png?signature=fixture`;
+       kindResult={data:[{url:` ${url} `}],error:{}};
+       const request=body(1,'image',{model});
+       const {generation}=await (await send(request)).json();
+       assert.equal(generation.status,'completed');
+       assert.match(generation.images[0].url,/^\/api\/business\/media\//);
+       assert.deepEqual(sourceFetches,[url]);
+       assert.equal((await (await send(request)).json()).generation.status,'completed');
+       assert.equal(providerCalls,1); assert.equal(uploads,1);
+     }
+   }
+ });
+ await test('empty or rejected image URL cannot mask valid inline bytes', async () => {
+   for (const url of ['', '   ', 'http://127.0.0.1/private']) {
+     reset(); kindResult={data:[{url,b64_json:' iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB\n'}]};
+     const {generation}=await (await send(body(1,'image',{model:'z-image-spicy'}))).json();
+     assert.equal(generation.status,'completed'); assert.equal(uploads,1);
+     assert.deepEqual(sourceFetches,[]); assert.equal(providerCalls,1);
+   }
+ });
+ await test('HTTP 200 image failures retain specific reasons and never replay a paid request', async () => {
+   for (const [result,code] of [
+     [{data:[]},'image_result_missing'],
+     [{data:{url:'https://assets.siraya.ai/a.png'}},'image_response_invalid'],
+     [{data:[{}]},'image_response_invalid'],
+     [{data:[{url:'https://unknown.invalid/result.png'}]},'image_source_rejected'],
+     [{error:{code:'unknown',message:'private provider detail'}},'provider_failed'],
+   ]) {
+     reset(); kindResult=result;
+     const request=body(1,'image',{model:'z-image-spicy'});
+     const {generation}=await (await send(request)).json();
+     assert.equal(generation.status,'failed'); assert.equal(generation.errorCode,code);
+     assert.equal(generation.providerHttpStatus,200);
+     assert.equal(generation.providerRequestId,'fixture-provider-request');
+     assert.equal(JSON.stringify(generation).includes('private provider detail'),false);
+     await get(generation.id); await send(request);
+     assert.equal(providerCalls,1); assert.equal(uploads,0); assert.deepEqual(sourceFetches,[]);
+   }
+ });
+ await test('Z Image CDN allowance stays exact and redirects remain blocked', async () => {
+   for (const url of ['http://usercontent1.carrothub.ai/a.png',
+     'https://usercontent1.carrothub.ai.evil.invalid/a.png',
+     'https://other.carrothub.ai/a.png','https://muleusercontent.com/a.png',
+     'https://usercontent1.carrothub.ai:8443/a.png',
+     'https://user:secret@usercontent1.carrothub.ai/a.png','https://127.0.0.1/a.png']) {
+     reset(); kindResult={data:[{url}]};
+     assert.equal((await (await send(body(1,'image',{model:'z-image-spicy'}))).json()).generation.errorCode,'image_source_rejected');
+     assert.deepEqual(sourceFetches,[]);
+   }
+   reset(); kindResult={data:[{url:'https://usercontent1.carrothub.ai/a.png'}]};
+   assert.equal((await (await send(body(1,'image'))).json()).generation.errorCode,'image_source_rejected');
+   assert.deepEqual(sourceFetches,[]);
+   reset(); downloadRedirect=true; kindResult={data:[{url:'https://usercontent1.carrothub.ai/a.png'}]};
+   const {generation}=await (await send(body(1,'image',{model:'z-image-spicy'}))).json();
+   assert.equal(generation.errorCode,'storage_unavailable'); assert.equal(uploads,0);
+   assert.equal(providerCalls,1); assert.equal(sourceFetches.length,1);
+ });
  await test('Z-Image Spicy exact grants and adult checks fail before reservation or provider generation', async () => {
    const regular = body(1, 'image', {model:'z-image-spicy'});
    const pro = body(2, 'image', {model:'z-image-spicy-pro'});
@@ -440,7 +515,7 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
        assert.equal(generation.status, 'processing');
        pollVideo = { status: 'completed', output_url: source };
        assert.equal((await (await get(generation.id)).json()).generation.errorCode, 'result_missing');
-     } else assert.equal(generation.errorCode, 'result_missing');
+     } else assert.equal(generation.errorCode, 'image_source_rejected');
      assert.equal(sourceFetches.length, 0, `${model} ${source}`);
    }
    assert.equal(uploads, 0);
@@ -561,7 +636,7 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    assert.equal(providerCalls, 4);
  });
  await test('parallel poll reconciles at most once and never duplicates media upload',async()=>{await send();pollVideo={status:'completed',output_url:'https://example.volces.com/own.mp4'};await Promise.all([get(jobs[0].id),get(jobs[0].id),get(jobs[0].id)]);assert.equal(lookupCalls,2);assert.equal(uploads,1)});
- await test('malicious private-network or arbitrary provider output URL never fetched',async()=>{kindResult={data:[{url:'http://127.0.0.1/secrets'}]};const response=await send(body(1,'image'));assert.equal((await response.json()).generation.errorCode,'result_missing');assert.equal(uploads,0)});
+ await test('malicious private-network or arbitrary provider output URL never fetched',async()=>{kindResult={data:[{url:'http://127.0.0.1/secrets'}]};const response=await send(body(1,'image'));assert.equal((await response.json()).generation.errorCode,'image_source_rejected');assert.equal(uploads,0)});
  await test('documented Kling and MiniMax media origins are privately persisted',async()=>{for(const [index,url] of ['https://v16-kling.klingai.com/fixture.mp4','https://cdn.hailuoai.com/fixture.mp4','https://filecdn.minimax.chat/fixture.mp4'].entries()){kindResult={data:[{url}]};const response=await send(body(index+1));assert.equal((await response.json()).generation.status,'completed');assert.equal(sourceFetches[index],url);}assert.equal(uploads,3)});
  await test('new vendor host rules reject spoofed hosts, IPs, credentials, HTTP and custom ports',async()=>{for(const url of ['http://cdn.hailuoai.com/fixture.mp4','https://127.0.0.1/private','https://[::1]/private','https://cdn.hailuoai.com.evil.invalid/fixture.mp4','https://unknown.cdn.hailuoai.com/fixture.mp4','https://klingai.com.evil.invalid/fixture.mp4','https://cdn.hailuoai.com:8443/fixture.mp4','https://user:secret@v1.klingai.com/fixture.mp4','https://untrusted.invalid/fixture.mp4']){reset();kindResult={data:[{url}]};await send();assert.equal(sourceFetches.length,0,url);assert.equal(uploads,0)}});
  await test('approved media origin cannot redirect a download to a private address',async()=>{downloadRedirect=true;kindResult={data:[{url:'https://cdn.hailuoai.com/redirect.mp4'}]};const response=await send();const job=(await response.json()).generation;assert.equal(job.status,'processing');assert.equal(job.errorCode,'storage_unavailable');assert.deepEqual(sourceFetches,['https://cdn.hailuoai.com/redirect.mp4']);assert.equal(uploads,0);assert.equal(providerCalls,1)});
@@ -574,7 +649,7 @@ let count=0;async function test(name,fn){reset();exactImageCalls=0;await fn();co
    for (const [i,model] of imageIds.entries()) {
      assert.equal((await send(body(i+1, 'image', {model}))).status, 201, model);
      assert.equal(lastPayload.model, model);
-     if (/Seedream-5\.0-pro/i.test(model)) {
+     if (/Seedream-(?:5\.0-pro|5\.5)$/i.test(model)) {
        assert.equal(lastPayload.n, undefined);
        assert.equal(lastPayload.sequential_image_generation, undefined);
      } else {

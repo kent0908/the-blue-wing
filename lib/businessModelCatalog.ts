@@ -55,7 +55,7 @@ export function buildBusinessModelCatalog(raw: unknown) {
     const dedicatedVideo: BusinessDedicatedVideoCapability | undefined = wan3 ?? getBusinessDedicatedVideoCapability(id);
     const image = getBusinessImageCapability(id);
     if (image) {
-      models.push({ ...common, modality: "image", supportsReferences: true, sizes: image.sizes, maxReferenceImages: image.maxReferenceImages, maxImageCount: image.maxImageCount, imageControls: image.controls }); continue;
+      models.push({ ...common, modality: "image", supportsReferences: true, sizes: image.sizes, maxReferenceImages: image.maxReferenceImages, maxImageCount: image.maxImageCount, imageControls: image.controls, ...(image.promptMaxChars ? { promptMaxChars: image.promptMaxChars } : {}) }); continue;
     }
     if (!dedicatedVideo && (additional || /(?:^|-)spicy(?:-|$)|^gemini-omni(?:-|$)/i.test(id))) { unavailable("adapter_pending"); continue; }
     if (isRetiredGenerationModel(id)) { unavailable("retired"); continue; }
