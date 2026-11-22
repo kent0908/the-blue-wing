@@ -65,11 +65,11 @@ function hooks() {
   };
 }
 
-function assetFixture({ completeStatus = "unknown", failInitialize = false, locale = "en", uploads = [], readFailure } = {}) {
+function assetFixture({ completeStatus = "unknown", failInitialize = false, locale = "en", uploads = [], readFailure, recoverOnRetry = false } = {}) {
   const h = hooks(), requests = [], catalog = [], blobs = [];
   let uuid = 0, configReads = 0, catalogReads = 0;
   const firstReadFailure = count => {
-    if (!readFailure || count > 1) return null;
+    if (!readFailure || count > (recoverOnRetry || readFailure === "rate" ? 1 : 2)) return null;
     if (readFailure === "network") throw new TypeError("connection lost");
     if (readFailure === "html") return { ok: false, status: 502, json: async () => { throw new SyntaxError("HTML gateway response"); } };
     return { ...response({ error: { code: "rate_limited" } }, false), status: 429 };
@@ -135,11 +135,16 @@ async function run() {
       assert.equal(button(broken.render(), t.choose).disabled, true);
       await button(broken.render(), t.refresh).onClick();
       await flush();
-      assert.deepEqual(broken.readCounts(), { config: 2, catalog: 2 });
+      assert.deepEqual(broken.readCounts(), { config: readFailure === "rate" ? 2 : 3, catalog: readFailure === "rate" ? 2 : 3 });
       assert.equal(button(broken.render(), t.choose).disabled, false);
       assert.ok(text(broken.render()).includes("Copper bowl"));
       assert.ok(!text(broken.render()).includes(copy));
     }
+    const recoveredRead = assetFixture({ locale, readFailure: "network", recoverOnRetry: true });
+    await flush(); await flush();
+    assert.equal(button(recoveredRead.render(), t.choose).disabled, false);
+    assert.deepEqual(recoveredRead.readCounts(), { config: 2, catalog: 2 });
+    assert.ok(text(recoveredRead.render()).includes("Copper bowl"));
     const expired = assetFixture({ locale, uploads: [{ id: "expired", name: "library.png", type: "image", status: "expired", storageReady: false }] });
     await flush();
     assert.ok(text(expired.render()).includes(t.expiredStatus));

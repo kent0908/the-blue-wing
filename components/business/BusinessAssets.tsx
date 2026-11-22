@@ -16,6 +16,25 @@ interface UploadRecord { id: string; uploadId: string; name: string; type: "imag
 interface UploadConfig { directUpload: boolean; types: Record<string, { type: string; maxBytes: number; ext: string }>; uploads?: UploadRecord[] }
 type Filters = { type: string; status: string; name: string };
 const HEADERS={"Content-Type":"application/json"};
+/** Read-only initialization may retry once; uploads and generation POSTs never use this path. */
+async function readAssets(url:string,signal:AbortSignal){
+  for(let attempt=0;attempt<2;attempt++){
+    if(signal.aborted)throw new DOMException("Aborted","AbortError");
+    const controller=new AbortController();
+    const abort=()=>controller.abort();
+    signal.addEventListener("abort",abort,{once:true});
+    const timeout=setTimeout(abort,15_000);
+    try{
+      const response=await fetch(url,{cache:"no-store",signal:controller.signal});
+      const body=await response.json().catch(()=>null);
+      if(signal.aborted)throw new DOMException("Aborted","AbortError");
+      if(attempt===0&&([502,503,504].includes(response.status)||response.ok&&!body))continue;
+      return {response,body};
+    }catch(error){if(signal.aborted||attempt===1)throw error;}
+    finally{clearTimeout(timeout);signal.removeEventListener("abort",abort);}
+  }
+  throw new Error("asset_read_failed");
+}
 const readError=(body:{error?:{code?:string}}|null,status:number)=>body?.error?.code??(status===401?"unauthorized":status===429?"rate_limited":"business_asset_load_failed");
 const interpolate=(text:string,values:Record<string,string|number>)=>text.replace(/\{(\w+)\}/g,(match,key:string)=>String(values[key]??match));
 const typedFile=(file:File)=>{
@@ -68,8 +87,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     const controller=new AbortController();
     configRequest.current=controller;
     try{
-      const response=await fetch("/api/business/provider-assets/upload",{cache:"no-store",signal:controller.signal});
-      const body=await response.json().catch(()=>null);
+      const {response,body}=await readAssets("/api/business/provider-assets/upload",controller.signal);
       if(!alive.current||controller.signal.aborted)return;
       if(!response.ok||!body?.types){setConfig(null);setConfigError(readError(body,response.status));return;}
       setConfigError("");
@@ -84,8 +102,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     if(filters.type!=="all")params.set("assetType",filters.type);
     if(filters.name.trim())params.set("name",filters.name.trim());
     try{
-      const response=await fetch(`/api/business/provider-assets?${params}`,{cache:"no-store",signal:controller.signal});
-      const body=await response.json().catch(()=>null);
+      const {response,body}=await readAssets(`/api/business/provider-assets?${params}`,controller.signal);
       if(controller.signal.aborted||!alive.current)return;
       if(!response.ok||body?.needsKey){setCatalogError(body?.needsKey?"credential_required":readError(body,response.status));return;}
       if(!Array.isArray(body?.assets)||!body.pagination)throw new Error("invalid_asset_list");
