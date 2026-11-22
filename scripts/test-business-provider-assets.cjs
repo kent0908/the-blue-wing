@@ -97,7 +97,7 @@ const rejects = (fn, code = 'invalid_reference') => assert.rejects(fn, error => 
   });
   await test('feature inactive and permission errors are sanitized optional asset failures', async () => {
     reply = async () => json({ isSuccess: false, error: { code: 'FEATURE_INACTIVE', message: OWN_KEY + ' private details' } }, 403);
-    const response = await get(); const body = await response.json(); assert.equal(response.status, 503); assert.equal(body.error.code, 'business_asset_unavailable'); assert.ok(!JSON.stringify(body).includes(OWN_KEY)); assert.equal(calls.length, 1);
+    const response = await get(); const body = await response.json(); assert.equal(response.status, 403); assert.equal(body.error.code, 'business_asset_feature_inactive'); assert.ok(!JSON.stringify(body).includes(OWN_KEY)); assert.equal(calls.length, 1);
   });
   await test('timeouts, redirects and provider errors never follow external media or retry another key', async () => {
     for (const fixture of [async () => { throw new TypeError(OWN_KEY); }, async () => new Response(null, { status: 302, headers: { location: 'https://evil.invalid' } }), async () => json({ error: OWN_KEY }, 500)]) {

@@ -65,10 +65,10 @@ function hooks() {
   };
 }
 
-function assetFixture({ completeStatus = "unknown", failInitialize = false } = {}) {
+function assetFixture({ completeStatus = "unknown", failInitialize = false, locale = "en", uploads = [] } = {}) {
   const h = hooks(), requests = [], catalog = [], blobs = [];
   let uuid = 0;
-  const configs = { directUpload: true, types: { "image/png": { maxBytes: 500, type: "image", ext: "png" } }, uploads: [] };
+  const configs = { directUpload: true, types: { "image/png": { maxBytes: 500, type: "image", ext: "png" } }, uploads };
   const asset = (id, name) => ({ id, name, type: "image", status: "active" });
   const assets = [asset("one", "Copper bowl"), asset("two", "Blue vase")];
   let calls = 0;
@@ -76,7 +76,7 @@ function assetFixture({ completeStatus = "unknown", failInitialize = false } = {
     react: h.react,
     "next/image": function FixtureImage() {},
     "@vercel/blob/client": { upload: async (url, file) => { blobs.push(file.name); assert.ok(url.startsWith("business/")); } },
-    "@/lib/i18n/client": { useLocale: () => "en" },
+    "@/lib/i18n/client": { useLocale: () => locale },
     "@/lib/i18n/businessAssets": { businessAssetsCopy, businessAssetsError },
     "./BusinessAssetPreview": { __esModule: true, default: function FixturePreview() {} },
     "./BusinessDialog": { __esModule: true, default: function FixtureDialog() {} },
@@ -115,6 +115,21 @@ function assetFixture({ completeStatus = "unknown", failInitialize = false } = {
 }
 
 async function run() {
+  for (const locale of ["zh-Hant", "en", "ja"]) {
+    const t = businessAssetsCopy(locale);
+    const expired = assetFixture({ locale, uploads: [{ id: "expired", name: "library.png", type: "image", status: "expired", storageReady: false }] });
+    await flush();
+    assert.ok(text(expired.render()).includes(t.expiredStatus));
+    assert.ok(!elements(expired.render()).some(node => node.type === "button" && text(node) === t.recover));
+    assert.equal(button(expired.render(), t.deleteUpload).disabled, false);
+    for (const [code, key] of Object.entries({
+      business_asset_feature_inactive: "featureInactive", business_asset_key_rejected: "keyRejected",
+      business_asset_permission_denied: "permissionDenied", business_asset_provider_invalid: "providerInvalid",
+      business_asset_rate_limit: "rateLimited", business_asset_provider_auth: "providerAuth",
+    })) assert.equal(businessAssetsError(t, code), t[key]);
+  }
+  console.log("PASS assets: expired records have no ineffective recovery action; actionable provider errors in three locales");
+
   const partial = assetFixture();
   await flush();
   assert.equal(button(partial.render(), assetsCopy.choose).disabled, false);

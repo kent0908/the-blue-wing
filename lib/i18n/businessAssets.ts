@@ -2,6 +2,13 @@ import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
+  expiredStatus: "已過期，請重新選擇檔案",
+  featureInactive: "此 SIRAYA 帳號尚未開通素材 API，請聯絡 SIRAYA 開通。",
+  keyRejected: "SIRAYA 不接受目前的 API 金鑰，請確認金鑰有效且屬於已開通素材功能的帳號。",
+  permissionDenied: "目前金鑰沒有素材登錄權限。請確認使用已開通素材功能的 Root Account 金鑰。",
+  providerInvalid: "SIRAYA 判定登錄資料或檔案不符合要求，原檔仍保留。",
+  rateLimited: "SIRAYA 暫時限制素材請求頻率，請稍後再試，避免連續上傳。",
+  providerAuth: "SIRAYA 的上游素材服務授權失敗，請聯絡 SIRAYA 查詢。",
   originalImageFormats: "支援 JPEG、PNG 與 WebP。",
   viewImage: "預覽 {name}", playPreview: "播放 {name}", closePreview: "關閉預覽", previewUnavailable: "暫時無法預覽",
   wanAudioInvalid: "參照音訊須為 MP3／WAV，每段 1–15 秒。",
@@ -38,6 +45,13 @@ const zh = {
 };
 export type BusinessAssetsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessAssetsCopy = {
+  expiredStatus: "Expired — select the file again",
+  featureInactive: "The asset API is not enabled for this SIRAYA account. Contact SIRAYA to enable it.",
+  keyRejected: "SIRAYA rejected the API key. Check that it is valid and belongs to an account with asset access.",
+  permissionDenied: "This key has no asset registration permission. Use a Root Account key with asset access enabled.",
+  providerInvalid: "SIRAYA rejected the registration data or file format. Your original is still saved.",
+  rateLimited: "SIRAYA is rate limiting asset requests. Wait before trying again.",
+  providerAuth: "SIRAYA's upstream asset service failed authentication. Contact SIRAYA for assistance.",
   originalImageFormats: "JPEG, PNG, and WebP are supported.",
   viewImage: "Preview {name}", playPreview: "Play {name}", closePreview: "Close preview", previewUnavailable: "Preview unavailable",
   wanAudioInvalid: "Use an MP3 or WAV audio reference of 1–15 seconds.",
@@ -73,6 +87,13 @@ const en: BusinessAssetsCopy = {
   deleteBusy: "The upload is still processing. Refresh its status and try again.", deleteMissing: "Asset not found. Refresh the library.", deleteFailed: "Could not confirm deletion. Refresh the library and try again.",
 };
 const ja: BusinessAssetsCopy = {
+  expiredStatus: "有効期限切れです。ファイルを選び直してください",
+  featureInactive: "この SIRAYA アカウントでは素材 API が未開通です。SIRAYA に開通をご依頼ください。",
+  keyRejected: "SIRAYA が API キーを拒否しました。キーの有効性と素材機能の権限をご確認ください。",
+  permissionDenied: "このキーには素材登録権限がありません。素材機能が有効な Root Account のキーをご確認ください。",
+  providerInvalid: "SIRAYA が登録データまたはファイル形式を受け付けませんでした。元ファイルは保存されています。",
+  rateLimited: "SIRAYA が素材リクエストを制限しています。しばらく待ってからお試しください。",
+  providerAuth: "SIRAYA の上流素材サービスで認証エラーが発生しました。SIRAYA にお問い合わせください。",
   originalImageFormats: "JPEG、PNG、WebP に対応しています。",
   viewImage: "{name} をプレビュー", playPreview: "{name} を再生", closePreview: "プレビューを閉じる", previewUnavailable: "プレビューできません",
   wanAudioInvalid: "音声参照は1〜15秒の MP3／WAV を使用してください。",
@@ -110,6 +131,12 @@ const ja: BusinessAssetsCopy = {
 const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessAssetsCopy(locale: Locale): BusinessAssetsCopy { return COPY[locale]; }
 export function businessAssetsError(t: BusinessAssetsCopy, code?: string): string {
+  if (code === "business_asset_feature_inactive") return t.featureInactive;
+  if (code === "business_asset_key_rejected") return t.keyRejected;
+  if (code === "business_asset_permission_denied") return t.permissionDenied;
+  if (code === "business_asset_provider_invalid") return t.providerInvalid;
+  if (code === "business_asset_rate_limit") return t.rateLimited;
+  if (code === "business_asset_provider_auth") return t.providerAuth;
   if (code === "business_asset_delete_busy") return t.deleteBusy;
   if (code === "business_asset_delete_missing" || code === "not_found") return t.deleteMissing;
   if (code === "business_asset_delete_failed") return t.deleteFailed;

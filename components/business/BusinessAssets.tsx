@@ -228,9 +228,9 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
   }));
   const material=(originalOnly ? [...uploadedMaterials,...providerMaterials] : [...providerMaterials,...uploadedMaterials])
     .filter(asset=>(type==="all"||asset.type===type)&&(!imageOnly||asset.type==="image")&&(status==="all"||asset.status===status||(imageOnly||wanReferences)&&asset.storageReady&&status==="active")&&(!appliedQuery||asset.name.toLowerCase().includes(appliedQuery.toLowerCase())));
-  const statusText=(value:string)=>value==="active"?t.active:value==="processing"||value==="registering"?t.processing:value==="created"?t.created:value==="unknown"?t.unknown:t.failed;
+  const statusText=(value:string)=>value==="active"?t.active:value==="processing"||value==="registering"?t.processing:value==="created"?t.created:value==="expired"?t.expiredStatus:value==="unknown"?t.unknown:t.failed;
   const accept=Object.keys(config?.types??{}).filter(mime=>!imageOnly||["image/jpeg","image/png","image/webp"].includes(mime)).join(",");
-  const pendingUploads=uploads.filter(item=>["created","registering","unknown"].includes(item.status)||item.status==="failed"&&!item.storageReady);
+  const pendingUploads=uploads.filter(item=>["created","registering","unknown","expired"].includes(item.status)||item.status==="failed"&&!item.storageReady);
   const canDelete=!refreshingId&&!uploading&&!deleting;
 
   return <section className={`${styles.assets} ${compact?styles.compact:""}`} aria-label={t.title}>
@@ -257,7 +257,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
     {!!pendingUploads.length&&<details className={styles.recent}><summary>{t.pendingTitle} · {pendingUploads.length}</summary><ul>{pendingUploads.map(item=><li key={item.id}>
       <span>{item.name}<small>{statusText(item.status)}</small></span>
       <div className={styles.assetActions}>
-        {item.status!=="failed"&&<button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>void recoverUpload(item)}>{refreshingId===item.id?t.loading:t.recover}</button>}
+        {item.status!=="failed"&&item.status!=="expired"&&<button type="button" className={styles.small} disabled={!!refreshingId||uploading} onClick={()=>void recoverUpload(item)}>{refreshingId===item.id?t.loading:t.recover}</button>}
         {item.status!=="registering"&&<button type="button" className={styles.deleteAsset} disabled={!canDelete} onClick={()=>askDelete({scope:"upload",id:item.id,name:item.name,pending:true})}>{t.deleteUpload}</button>}
       </div>
     </li>)}</ul></details>}

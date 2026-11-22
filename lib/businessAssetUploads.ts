@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { sql } from "./db";
 import { BusinessError, getBusinessCredential } from "./business";
 import { SITE_URL } from "./seo/site";
-import { BusinessProviderAssetSubmitError, deleteBusinessProviderAsset, getBusinessProviderAsset, registerBusinessProviderAsset, type BusinessProviderAsset, type BusinessProviderAssetType } from "./businessProviderAssets";
+import { BusinessProviderAssetSubmitError, deleteBusinessProviderAsset, getBusinessProviderAsset, registerBusinessProviderFile, type BusinessProviderAsset, type BusinessProviderAssetType } from "./businessProviderAssets";
 import { isAdultVerified, type AdultGateUser } from "./adultGate";
 import { SEEDANCE_25_REFERENCE_LIMITS } from "./businessSeedance";
 import { WAN3_MAX_REFERENCE_AUDIO, WAN3_MAX_REFERENCE_VIDEOS } from "./businessWan3";
@@ -47,9 +47,10 @@ const filename = (value: unknown): string => {
 
 export function businessDirectUploadReady(): boolean { return !!process.env.BLOB_READ_WRITE_TOKEN; }
 export function publicBusinessUpload(row: UploadRow) {
-  return { id: row.id, uploadId: row.id, name: row.filename, type: row.media_type, status: row.status, storageReady: !!row.blob_etag,
+  const expired = row.status === "created" && new Date(row.expires_at).getTime() <= Date.now();
+  return { id: row.id, uploadId: row.id, name: row.filename, type: row.media_type, status: expired ? "expired" : row.status, storageReady: !!row.blob_etag,
     ...(row.provider_asset_id ? { asset: { id: row.provider_asset_id, uploadId: row.id, storageReady: !!row.blob_etag, name: row.filename, type: row.media_type, status: row.status } } : {}),
-    ...(row.error_code ? { errorCode: row.error_code } : {}), createdAt: new Date(row.created_at).toISOString() };
+    ...(expired ? { errorCode: "business_asset_upload_expired" } : row.error_code ? { errorCode: row.error_code } : {}), createdAt: new Date(row.created_at).toISOString() };
 }
 export async function listBusinessUploads(userId: number | string, accountId: string) {
   userId = safeUserId(userId);
@@ -213,7 +214,7 @@ function sniffMedia(bytes: Buffer, mime: string): boolean {
 }
 
 export interface BusinessImageSourceConstraints { minSide: number; maxBytes: number; mimeTypes: readonly string[]; minAspectRatio?: number; maxAspectRatio?: number; opaquePng?: boolean }
-async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSourceConstraints, media?: { duration?: number }): Promise<string> {
+async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSourceConstraints, media?: { duration?: number }, capture?: { file?: Blob }): Promise<string> {
   if (!validStoredPath(row)) fail();
   if(constraints&&(!constraints.mimeTypes.includes(row.content_type)||Number(row.expected_bytes)>constraints.maxBytes))fail("invalid_reference");
   let metadata: Awaited<ReturnType<typeof head>>;
@@ -234,7 +235,7 @@ async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSou
       chunks.push(next.value);
       // For video/audio, type and Blob size are checked here. The provider
       // processes the full codec/duration before returning an active asset.
-      if (row.media_type !== "image" && !media && bytes >= 64) break;
+      if (row.media_type !== "image" && !media && !capture && bytes >= 64) break;
     }
     const prefix = Buffer.concat(chunks);
     if (!media && !sniffMedia(prefix, row.content_type)) fail();
@@ -252,6 +253,10 @@ async function verifyStoredUpload(row: UploadRow, constraints?: BusinessImageSou
       // Metadata can succeed for a truncated raster. Decode the first frame
       // before registering or granting the private source to a paid model.
       await sharp(prefix, { animated: false, limitInputPixels: 36_000_000 }).stats();
+    }
+    if (capture) {
+      if (bytes !== Number(row.expected_bytes)) fail();
+      capture.file = new Blob([new Uint8Array(prefix)], { type: row.content_type });
     }
     if (media) {
       if (bytes !== Number(row.expected_bytes)) fail(`wan_${row.media_type}_invalid`);
@@ -274,7 +279,8 @@ export async function completeBusinessUpload(userId: number | string, accountId:
   const wanMedia = originalOnly && row.media_type !== "image";
   if (new Date(row.expires_at).getTime() <= Date.now()) fail("business_asset_upload_expired", 409);
   let etag: string;
-  try { etag = await verifyStoredUpload(row, undefined, wanMedia ? {} : undefined); } catch (error) {
+  const captured: { file?: Blob } = {};
+  try { etag = await verifyStoredUpload(row, undefined, wanMedia ? {} : undefined, originalOnly ? undefined : captured); } catch (error) {
     if (error instanceof BusinessError) throw error;
     fail(wanMedia ? `wan_${row.media_type}_invalid` : "business_asset_upload_invalid");
   }
@@ -285,20 +291,20 @@ export async function completeBusinessUpload(userId: number | string, accountId:
         where a.id=t.account_id and a.user_id=t.user_id and a.status='approved' and c.id=t.credential_id and c.is_active and c.revoked_at is null) returning t.*`, [id,userId,accountId,etag]);
     return { upload: publicBusinessUpload(saved.rows[0] ?? await ownedUpload(userId, accountId, id)) };
   }
-  const grant = sourceUrl(row); // Check encryption before claiming the one provider submission.
+  if (!captured.file) fail("business_asset_upload_missing", 404);
   const claimed = await sql.query<UploadRow>(`update business_asset_uploads t set status='registering',blob_etag=$4,updated_at=now()
     where t.id=$1 and t.user_id=$2 and t.account_id=$3 and t.status='created' and t.expires_at>now()
     and exists(select 1 from business_accounts a join business_credentials c on c.account_id=a.id and c.user_id=a.user_id
       where a.id=t.account_id and a.user_id=t.user_id and a.status='approved' and c.id=t.credential_id and c.is_active and c.revoked_at is null) returning t.*`, [id,userId,accountId,etag]);
   if (!claimed.rows[0]) return { upload: publicBusinessUpload(await ownedUpload(userId,accountId,id)) };
   try {
-    const asset = await registerBusinessProviderAsset({ url: grant, name: row.filename, type: row.media_type }, { apiKey: credential.apiKey });
+    const asset = await registerBusinessProviderFile({ file: captured.file, name: row.filename, type: row.media_type }, { apiKey: credential.apiKey });
     const saved = await sql.query<UploadRow>("update business_asset_uploads set status=$2,provider_asset_id=$3,error_code=null,updated_at=now() where id=$1 returning *", [id,asset.status,asset.id]);
     if (!saved.rows[0]) fail("business_asset_upload_uncertain", 502);
     return { upload: publicBusinessUpload(saved.rows[0]) };
   } catch (error) {
     const uncertain = !(error instanceof BusinessProviderAssetSubmitError) || error.uncertain;
-    const code = uncertain ? "business_asset_upload_uncertain" : "business_asset_upload_rejected";
+    const code = error instanceof BusinessProviderAssetSubmitError ? error.code : "business_asset_upload_uncertain";
     const saved = await sql.query<UploadRow>("update business_asset_uploads set status=$2,error_code=$3,updated_at=now() where id=$1 returning *", [id,uncertain?"unknown":"failed",code]);
     if (!saved.rows[0]) fail(code, 502);
     return { upload: publicBusinessUpload(saved.rows[0]) };

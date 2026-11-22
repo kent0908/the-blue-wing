@@ -76,18 +76,18 @@ export function parseBusinessProviderAssetQuery(query: URLSearchParams): Busines
 }
 
 export class BusinessProviderAssetSubmitError extends BusinessError {
-  constructor(readonly uncertain: boolean) { super(uncertain ? "business_asset_upload_uncertain" : "business_asset_upload_rejected", uncertain ? 502 : 400); }
+  constructor(readonly uncertain: boolean, code?: string) { super(code ?? (uncertain ? "business_asset_upload_uncertain" : "business_asset_upload_rejected"), uncertain ? 502 : 400); }
 }
 
-async function assetRequest(path: string, credentials: Credentials, registration?: Record<string, string>, remove = false): Promise<Record<string, unknown>> {
+async function assetRequest(path: string, credentials: Credentials, registration?: Record<string, string> | FormData, remove = false): Promise<Record<string, unknown>> {
   if (!credentials || typeof credentials.apiKey !== "string" || !/^sk-[A-Za-z0-9_-]{16,200}$/.test(credentials.apiKey)) {
     throw new BusinessError("credential_unavailable", 503);
   }
   let response: Response;
   try {
     response = await fetch(ASSET_API + path, {
-      method: remove ? "DELETE" : registration ? "POST" : "GET", headers: { Authorization: `Bearer ${credentials.apiKey}`, Accept: "application/json", ...(registration ? { "Content-Type": "application/json" } : {}) },
-      ...(registration ? { body: JSON.stringify(registration) } : {}),
+      method: remove ? "DELETE" : registration ? "POST" : "GET", headers: { Authorization: `Bearer ${credentials.apiKey}`, Accept: "application/json", ...(registration && !(registration instanceof FormData) ? { "Content-Type": "application/json" } : {}) },
+      ...(registration ? { body: registration instanceof FormData ? registration : JSON.stringify(registration) } : {}),
       cache: "no-store", redirect: "error", signal: AbortSignal.timeout(registration ? 60_000 : 15_000),
     });
   } catch {
@@ -101,37 +101,52 @@ async function assetRequest(path: string, credentials: Credentials, registration
     if (response.status === 401) throw new BusinessError("credential_unavailable", 503);
     throw new BusinessError("business_asset_delete_failed", 502);
   }
-  // Never return upstream prose, response bodies, request IDs, signed URLs or keys.
-  if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined);
-    if (registration) throw new BusinessProviderAssetSubmitError(response.status >= 500 || response.status >= 300 && response.status < 400);
-    if (response.status === 404) throw new BusinessError("invalid_reference", 400);
-    if (response.status === 401) throw new BusinessError("credential_unavailable", 503);
-    throw unavailable(); // Includes FEATURE_INACTIVE and account permission errors.
-  }
+  // Read a bounded envelope; only allowlisted identifiers may leave this boundary.
+  let body: unknown;
   const reader = response.body?.getReader();
-  if (!reader) throw registration ? new BusinessProviderAssetSubmitError(true) : unavailable();
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  try {
-    while (true) {
-      const result = await reader.read();
-      if (result.done) break;
-      bytes += result.value.byteLength;
-      if (bytes > MAX_RESPONSE_BYTES) {
-        await reader.cancel();
-        throw unavailable();
+  if (reader) {
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      while (true) {
+        const next = await reader.read();
+        if (next.done) break;
+        bytes += next.value.byteLength;
+        if (bytes > MAX_RESPONSE_BYTES) { await reader.cancel(); throw unavailable(); }
+        chunks.push(next.value);
       }
-      chunks.push(result.value);
-    }
-    const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    if (!record(body) || body.isSuccess !== true || !record(body.data)) throw unavailable();
-    return body;
-  } catch {
-    throw registration ? new BusinessProviderAssetSubmitError(true) : unavailable();
-  } finally {
-    reader.releaseLock();
+      body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    } catch {
+      body = undefined;
+    } finally { reader.releaseLock(); }
   }
+  if (!response.ok || record(body) && body.isSuccess === false) {
+    const upstreamCode = record(body) && record(body.error) && typeof body.error.code === "string" ? body.error.code : "";
+    const known: Record<string, string> = {
+      UNAUTHORIZED: "business_asset_key_rejected",
+      FEATURE_INACTIVE: "business_asset_feature_inactive",
+      TIER_FORBIDDEN: "business_asset_permission_denied",
+      INVALID_INPUT: "business_asset_provider_invalid",
+      UPSTREAM_RATE_LIMIT: "business_asset_rate_limit",
+      UPSTREAM_TIMEOUT: "business_asset_upload_uncertain",
+      UPSTREAM_UNAUTHORIZED: "business_asset_provider_auth",
+      UPSTREAM_UNAVAILABLE: "business_asset_upload_uncertain",
+    };
+    const code = (Object.hasOwn(known, upstreamCode) ? known[upstreamCode] : undefined) ?? (response.status === 401 ? "business_asset_key_rejected"
+      : response.status === 403 ? "business_asset_permission_denied"
+      : response.status === 429 ? "business_asset_rate_limit" : undefined);
+    if (registration) {
+      const uncertain = response.status >= 500 || response.status === 408 || response.status >= 300 && response.status < 400 || response.ok;
+      console.warn("business_asset_registration_failed", { status: response.status, code: code ?? "unclassified" });
+      throw new BusinessProviderAssetSubmitError(uncertain, code);
+    }
+    if (response.status === 404) throw new BusinessError("invalid_reference", 400);
+    throw code ? new BusinessError(code, response.status >= 400 ? response.status : 502) : unavailable();
+  }
+  if (!record(body) || body.isSuccess !== true || !record(body.data)) {
+    throw registration ? new BusinessProviderAssetSubmitError(true) : unavailable();
+  }
+  return body;
 }
 
 export async function getBusinessProviderAsset(id: string, credentials: Credentials): Promise<BusinessProviderAsset> {
@@ -192,6 +207,22 @@ export async function registerBusinessProviderAsset(source: { url: string; type:
   if (!validId(data.assetId) || !STATUSES.includes(data.status as BusinessProviderAssetStatus)) throw new BusinessProviderAssetSubmitError(true);
   return { id: data.assetId, type: source.type, name: source.name, status: data.status as BusinessProviderAssetStatus };
 }
+
+/** Bytes come only from an owned, immutable Blob verified by the upload service. */
+export async function registerBusinessProviderFile(source: { file: Blob; type: BusinessProviderAssetType; name: string }, credentials: Credentials): Promise<BusinessProviderAsset> {
+  const maxBytes = (source.type === "image" ? 30 : source.type === "video" ? 50 : 15) * 1024 * 1024;
+  if (!TYPES.includes(source.type) || !(source.file instanceof Blob) || !source.file.size || source.file.size > maxBytes ||
+      typeof source.name !== "string" || !source.name.trim() || source.name.length > 120 || /[\x00-\x1F\x7F]/.test(source.name)) throw new BusinessError("invalid_reference");
+  const form = new FormData();
+  form.set("assetType", source.type);
+  form.set("name", source.name);
+  form.set("file", source.file, source.name);
+  const body = await assetRequest("", credentials, form);
+  const data = body.data as Record<string, unknown>;
+  if (!validId(data.assetId) || !STATUSES.includes(data.status as BusinessProviderAssetStatus)) throw new BusinessProviderAssetSubmitError(true);
+  return { id: data.assetId, type: source.type, name: source.name, status: data.status as BusinessProviderAssetStatus };
+}
+
 
 function publicAsset(value: unknown): BusinessProviderAsset {
   if (!record(value) || !validId(value.assetId) ||
