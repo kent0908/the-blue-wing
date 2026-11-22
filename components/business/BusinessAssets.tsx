@@ -16,6 +16,7 @@ interface UploadRecord { id: string; uploadId: string; name: string; type: "imag
 interface UploadConfig { directUpload: boolean; types: Record<string, { type: string; maxBytes: number; ext: string }>; uploads?: UploadRecord[] }
 type Filters = { type: string; status: string; name: string };
 const HEADERS={"Content-Type":"application/json"};
+const readError=(body:{error?:{code?:string}}|null,status:number)=>body?.error?.code??(status===401?"unauthorized":status===429?"rate_limited":"business_asset_load_failed");
 const interpolate=(text:string,values:Record<string,string|number>)=>text.replace(/\{(\w+)\}/g,(match,key:string)=>String(values[key]??match));
 const typedFile=(file:File)=>{
   if(file.type&&file.type!=="application/octet-stream"&&file.type!=="audio/mp3"&&file.type!=="audio/vnd.wave")return file;
@@ -70,10 +71,10 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
       const response=await fetch("/api/business/provider-assets/upload",{cache:"no-store",signal:controller.signal});
       const body=await response.json().catch(()=>null);
       if(!alive.current||controller.signal.aborted)return;
-      if(!response.ok||!body?.types){setConfig(null);setConfigError(body?.error?.code??"business_asset_storage_unavailable");return;}
+      if(!response.ok||!body?.types){setConfig(null);setConfigError(readError(body,response.status));return;}
       setConfigError("");
       setConfig(body);setUploads(body.uploads??[]);
-    }catch{if(alive.current&&!controller.signal.aborted){setConfig(null);setConfigError("business_asset_storage_unavailable");}}
+    }catch{if(alive.current&&!controller.signal.aborted){setConfig(null);setConfigError("business_asset_load_failed");}}
   },[]);
   const loadCatalog=useCallback(async(nextPage=1,filters=committed.current)=>{
     activeRequest.current?.abort();const controller=new AbortController();activeRequest.current=controller;
@@ -86,12 +87,12 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
       const response=await fetch(`/api/business/provider-assets?${params}`,{cache:"no-store",signal:controller.signal});
       const body=await response.json().catch(()=>null);
       if(controller.signal.aborted||!alive.current)return;
-      if(!response.ok||body?.needsKey){setCatalogError(body?.needsKey?"credential_required":body?.error?.code??"business_asset_unavailable");return;}
+      if(!response.ok||body?.needsKey){setCatalogError(body?.needsKey?"credential_required":readError(body,response.status));return;}
       if(!Array.isArray(body?.assets)||!body.pagination)throw new Error("invalid_asset_list");
       const values=body.assets as BusinessAssetRecord[];
       setCatalog(previous=>Array.from(new Map((nextPage===1?values:[...previous,...values]).map(asset=>[asset.id,asset])).values()));
       setPage(nextPage);setTotalPages(body.pagination.totalPages);
-    }catch{if(!controller.signal.aborted&&alive.current)setCatalogError("business_asset_unavailable");}
+    }catch{if(!controller.signal.aborted&&alive.current)setCatalogError("business_asset_load_failed");}
     finally{if(!controller.signal.aborted&&alive.current)setLoading(false);}
   },[]);
   useEffect(()=>{
@@ -240,7 +241,7 @@ export default function BusinessAssets({onSelect,selectedIds=[],canSelect,compac
         <input ref={input} type="file" hidden multiple accept={accept} disabled={uploading||!config?.directUpload} onChange={event=>{queueFiles(Array.from(event.target.files??[]));event.target.value="";}}/>
         <button type="button" className={files.length?styles.small:styles.primary} disabled={uploading||!config?.directUpload} onClick={()=>input.current?.click()}>{!config&&!configError?t.loading:files.length?t.replaceFiles:t.choose}</button>
       </div>
-      {(configError||config&&!config.directUpload)&&<p className={styles.warning} role="alert">{configError?businessAssetsError(t,configError):t.storageUnavailable} <button type="button" className={styles.textButton} onClick={()=>void loadConfig()}>{t.refresh}</button></p>}
+      {(configError||config&&!config.directUpload)&&<p className={styles.warning} role="alert">{configError?businessAssetsError(t,configError):t.storageUnavailable} <button type="button" className={styles.textButton} onClick={()=>void Promise.all([loadConfig(),loadCatalog()])}>{t.refresh}</button></p>}
       {!!files.length&&<>
         <ul className={styles.queue} aria-label={t.queued}>{files.map((file,index)=><li key={`${file.name}-${index}`}>
           <span>{file.name}<small>{(file.size/1024/1024).toFixed(2)} MB</small></span>

@@ -65,9 +65,15 @@ function hooks() {
   };
 }
 
-function assetFixture({ completeStatus = "unknown", failInitialize = false, locale = "en", uploads = [] } = {}) {
+function assetFixture({ completeStatus = "unknown", failInitialize = false, locale = "en", uploads = [], readFailure } = {}) {
   const h = hooks(), requests = [], catalog = [], blobs = [];
-  let uuid = 0;
+  let uuid = 0, configReads = 0, catalogReads = 0;
+  const firstReadFailure = count => {
+    if (!readFailure || count > 1) return null;
+    if (readFailure === "network") throw new TypeError("connection lost");
+    if (readFailure === "html") return { ok: false, status: 502, json: async () => { throw new SyntaxError("HTML gateway response"); } };
+    return { ...response({ error: { code: "rate_limited" } }, false), status: 429 };
+  };
   const configs = { directUpload: true, types: { "image/png": { maxBytes: 500, type: "image", ext: "png" } }, uploads };
   const asset = (id, name) => ({ id, name, type: "image", status: "active" });
   const assets = [asset("one", "Copper bowl"), asset("two", "Blue vase")];
@@ -84,7 +90,7 @@ function assetFixture({ completeStatus = "unknown", failInitialize = false, loca
     crypto: { randomUUID: () => `client-${++uuid}` },
     fetch: async (url, init) => {
       if (url === "/api/business/provider-assets/upload") {
-        if (init.method !== "POST") return response(configs);
+        if (init.method !== "POST") return firstReadFailure(++configReads) ?? response(configs);
         const body = JSON.parse(init.body);
         requests.push(body);
         if (body.action === "initialize") {
@@ -95,6 +101,8 @@ function assetFixture({ completeStatus = "unknown", failInitialize = false, loca
         return response({ upload: { id: body.uploadId, name: requests.find(call => call.clientRequestId === body.uploadId).name, type: "image", status: completeStatus, storageReady: true } });
       }
       assert.ok(url.startsWith("/api/business/provider-assets?"), "Only business asset APIs");
+      const failure = firstReadFailure(++catalogReads);
+      if (failure) return failure;
       const query = new URL(url, "https://fixture.invalid").searchParams;
       catalog.push(query);
       const name = query.get("name")?.toLowerCase() ?? "";
@@ -111,12 +119,27 @@ function assetFixture({ completeStatus = "unknown", failInitialize = false, loca
     assert.equal(target.value, "", "The same file can be selected again after error");
     elements(render()).find(node => node.type === "input" && node.props.type === "checkbox").props.onChange({ target: { checked: true } });
   };
-  return { render, select, requests, catalog, blobs };
+  return { render, select, requests, catalog, blobs, readCounts: () => ({ config: configReads, catalog: catalogReads }) };
 }
 
 async function run() {
   for (const locale of ["zh-Hant", "en", "ja"]) {
     const t = businessAssetsCopy(locale);
+    for (const readFailure of ["network", "html", "rate"]) {
+      const broken = assetFixture({ locale, readFailure });
+      await flush();
+      const copy = readFailure === "rate" ? t.requestLimited : t.loadFailed;
+      assert.ok(text(broken.render()).includes(copy));
+      assert.ok(!text(broken.render()).includes(t.storageUnavailable));
+      assert.ok(!text(broken.render()).includes(t.serviceUnavailable));
+      assert.equal(button(broken.render(), t.choose).disabled, true);
+      await button(broken.render(), t.refresh).onClick();
+      await flush();
+      assert.deepEqual(broken.readCounts(), { config: 2, catalog: 2 });
+      assert.equal(button(broken.render(), t.choose).disabled, false);
+      assert.ok(text(broken.render()).includes("Copper bowl"));
+      assert.ok(!text(broken.render()).includes(copy));
+    }
     const expired = assetFixture({ locale, uploads: [{ id: "expired", name: "library.png", type: "image", status: "expired", storageReady: false }] });
     await flush();
     assert.ok(text(expired.render()).includes(t.expiredStatus));
@@ -126,6 +149,8 @@ async function run() {
       business_asset_feature_inactive: "featureInactive", business_asset_key_rejected: "keyRejected",
       business_asset_permission_denied: "permissionDenied", business_asset_provider_invalid: "providerInvalid",
       business_asset_rate_limit: "rateLimited", business_asset_provider_auth: "providerAuth",
+      business_asset_load_failed: "loadFailed", unauthorized: "sessionExpired", rate_limited: "requestLimited",
+      db_unavailable: "temporarilyUnavailable", unavailable: "temporarilyUnavailable",
     })) assert.equal(businessAssetsError(t, code), t[key]);
   }
   console.log("PASS assets: expired records have no ineffective recovery action; actionable provider errors in three locales");

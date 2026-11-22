@@ -2,6 +2,10 @@ import type { Locale } from "./locale";
 import { simplifyChinese } from "./simplifyChinese";
 
 const zh = {
+  loadFailed: "素材服務讀取失敗，請重新整理後再試。",
+  requestLimited: "操作太頻繁，請稍候再重新整理素材。",
+  sessionExpired: "登入已過期，請重新登入後再試。",
+  temporarilyUnavailable: "素材服務暫時無法使用，請稍後重新整理。",
   expiredStatus: "已過期，請重新選擇檔案",
   featureInactive: "此 SIRAYA 帳號尚未開通素材 API，請聯絡 SIRAYA 開通。",
   keyRejected: "SIRAYA 不接受目前的 API 金鑰，請確認金鑰有效且屬於已開通素材功能的帳號。",
@@ -29,8 +33,8 @@ const zh = {
   uncertain: "上傳結果待確認。請先查詢下方紀錄。", privateReady: "原檔已保存",
   storageOnly: "原檔可用於支援此格式的模型。Seedance 影片參照需另行登錄。",
   providerNotice: "素材登錄須使用已開通素材功能的 SIRAYA Root Account 金鑰。影片參照以 SIRAYA 審核結果為準。",
-  keyNeeded: "請先連接 SIRAYA 金鑰。", keyLink: "連接金鑰", storageUnavailable: "上傳服務尚未開通，請聯絡管理員。",
-  serviceUnavailable: "無法讀取 SIRAYA 素材。請確認帳號已開通素材功能。",
+  keyNeeded: "請先連接 SIRAYA 金鑰。", keyLink: "連接金鑰", storageUnavailable: "原檔儲存服務目前無法使用，請聯絡管理員。",
+  serviceUnavailable: "暫時無法讀取 SIRAYA 素材，請稍後重新整理。",
   invalidFile: "檔案不符合格式或大小限制。", tooLarge: "檔案超過大小上限。", tooMany: "一次最多上傳 6 個檔案。",
   changed: "金鑰或權限已變更，請重新整理。", error: "操作未完成，請重試。", limit: "待處理上傳已達上限，請先查詢既有紀錄。",
   expired: "上傳授權已過期，請重新選擇檔案。", missing: "找不到完整原檔，請確認上傳是否完成。", rejected: "SIRAYA 未接受登錄，請確認權限與檔案規格。",
@@ -45,6 +49,10 @@ const zh = {
 };
 export type BusinessAssetsCopy = { [K in keyof typeof zh]: string };
 const en: BusinessAssetsCopy = {
+  loadFailed: "Could not load the asset service. Refresh and try again.",
+  requestLimited: "Too many requests. Wait before refreshing the assets.",
+  sessionExpired: "Your session expired. Sign in again.",
+  temporarilyUnavailable: "The asset service is temporarily unavailable. Refresh later.",
   expiredStatus: "Expired — select the file again",
   featureInactive: "The asset API is not enabled for this SIRAYA account. Contact SIRAYA to enable it.",
   keyRejected: "SIRAYA rejected the API key. Check that it is valid and belongs to an account with asset access.",
@@ -72,8 +80,8 @@ const en: BusinessAssetsCopy = {
   uncertain: "Upload unconfirmed. Check its record below first.", privateReady: "Original saved",
   storageOnly: "The original is ready for compatible models. Seedance video references require registration.",
   providerNotice: "Registration requires a SIRAYA Root Account key with asset access. SIRAYA reviews assets for video references.",
-  keyNeeded: "Connect your SIRAYA key first.", keyLink: "Connect key", storageUnavailable: "Uploads are not configured. Contact an administrator.",
-  serviceUnavailable: "Could not load SIRAYA assets. Check that your account has asset access.",
+  keyNeeded: "Connect your SIRAYA key first.", keyLink: "Connect key", storageUnavailable: "Original file storage is unavailable. Contact an administrator.",
+  serviceUnavailable: "Could not load SIRAYA assets. Refresh and try again later.",
   invalidFile: "The file does not meet format or size limits.", tooLarge: "The file exceeds its size limit.", tooMany: "Upload up to 6 files at once.",
   changed: "Your key or access changed. Refresh the studio.", error: "Could not complete this action. Try again.", limit: "Upload limit reached. Check pending records first.",
   expired: "Upload authorization expired. Select the file again.", missing: "Original file not found. Check that uploading has finished.", rejected: "SIRAYA declined registration. Check your access and file specs.",
@@ -87,6 +95,10 @@ const en: BusinessAssetsCopy = {
   deleteBusy: "The upload is still processing. Refresh its status and try again.", deleteMissing: "Asset not found. Refresh the library.", deleteFailed: "Could not confirm deletion. Refresh the library and try again.",
 };
 const ja: BusinessAssetsCopy = {
+  loadFailed: "素材サービスを読み込めません。更新して再試行してください。",
+  requestLimited: "リクエストが多すぎます。しばらく待ってから更新してください。",
+  sessionExpired: "ログインの有効期限が切れました。再度ログインしてください。",
+  temporarilyUnavailable: "素材サービスを一時的に利用できません。しばらくしてから更新してください。",
   expiredStatus: "有効期限切れです。ファイルを選び直してください",
   featureInactive: "この SIRAYA アカウントでは素材 API が未開通です。SIRAYA に開通をご依頼ください。",
   keyRejected: "SIRAYA が API キーを拒否しました。キーの有効性と素材機能の権限をご確認ください。",
@@ -114,8 +126,8 @@ const ja: BusinessAssetsCopy = {
   uncertain: "結果を確認できません。下の記録を先に確認してください。", privateReady: "原本を保存済み",
   storageOnly: "対応モデルで元ファイルを使用できます。Seedance の映像参照には登録が必要です。",
   providerNotice: "登録には素材機能が有効な SIRAYA Root Account のキーが必要です。映像参照用の素材は SIRAYA が審査します。",
-  keyNeeded: "先に SIRAYA キーを接続してください。", keyLink: "キーを接続", storageUnavailable: "アップロードが未設定です。管理者にお問い合わせください。",
-  serviceUnavailable: "SIRAYA 素材を読み込めません。素材機能が有効かご確認ください。",
+  keyNeeded: "先に SIRAYA キーを接続してください。", keyLink: "キーを接続", storageUnavailable: "元ファイルの保存サービスを利用できません。管理者にお問い合わせください。",
+  serviceUnavailable: "SIRAYA 素材を一時的に読み込めません。しばらくしてから更新してください。",
   invalidFile: "ファイル形式か容量が対応条件を満たしていません。", tooLarge: "ファイルが容量上限を超えています。", tooMany: "一度に最大6件までアップロードできます。",
   changed: "キーまたは権限が変わりました。画面を更新してください。", error: "操作を完了できませんでした。再試行してください。", limit: "処理待ちの上限に達しました。既存の記録を確認してください。",
   expired: "アップロード権限が失効しました。ファイルを再選択してください。", missing: "原本が見つかりません。アップロードが完了したかご確認ください。", rejected: "SIRAYA が登録を受け付けませんでした。権限とファイル仕様をご確認ください。",
@@ -131,6 +143,10 @@ const ja: BusinessAssetsCopy = {
 const COPY: Record<Locale, BusinessAssetsCopy> = { "zh-Hant": zh, "zh-Hans": simplifyChinese(zh), en, ja };
 export function businessAssetsCopy(locale: Locale): BusinessAssetsCopy { return COPY[locale]; }
 export function businessAssetsError(t: BusinessAssetsCopy, code?: string): string {
+  if (code === "business_asset_load_failed") return t.loadFailed;
+  if (code === "rate_limited") return t.requestLimited;
+  if (code === "unauthorized") return t.sessionExpired;
+  if (code === "db_unavailable" || code === "unavailable") return t.temporarilyUnavailable;
   if (code === "business_asset_feature_inactive") return t.featureInactive;
   if (code === "business_asset_key_rejected") return t.keyRejected;
   if (code === "business_asset_permission_denied") return t.permissionDenied;
