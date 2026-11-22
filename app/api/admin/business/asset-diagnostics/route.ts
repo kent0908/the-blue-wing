@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
   try {
     const params = req.nextUrl.searchParams;
     const raw = params.get("userId") ?? "";
-    if (params.size !== 1 || !/^[1-9]\d{0,15}$/.test(raw) || !Number.isSafeInteger(Number(raw))) throw new BusinessError("invalid_body");
+    if (params.getAll("userId").length !== 1 || Array.from(params.keys()).some(key => key !== "userId" && key !== "view") ||
+      params.has("view") && (params.getAll("view").length !== 1 || params.get("view") !== "html") ||
+      !/^[1-9]\d{0,15}$/.test(raw) || !Number.isSafeInteger(Number(raw))) throw new BusinessError("invalid_body");
     const userId = Number(raw);
     const account = await getBusinessAccount(userId);
     if (!account) throw new BusinessError("account_not_found", 404);
@@ -35,12 +37,20 @@ export async function GET(req: NextRequest) {
         const metadata = await getBusinessCredentialMetadata(userId, account.id);
         const credential = await getBusinessCredential(userId, account.id);
         if (!credential) throw new BusinessError("credential_required", 409);
-        await listBusinessProviderAssets({ page: 1, pageSize: 1 }, { apiKey: credential.apiKey });
+        await listBusinessProviderAssets({ page: 1, pageSize: 30 }, { apiKey: credential.apiKey });
         return { available: true, credentialId: credential.id, keyLast4: metadata?.id === credential.id ? metadata.last4 : undefined };
       } catch (error) { return failure(error); }
     };
     const [originals, provider] = await Promise.all([originalCheck(), providerCheck()]);
-    return businessJson({ checkedAt: new Date().toISOString(), userId, accountStatus: account.status,
-      storage: { configured: businessDirectUploadReady() }, originals, provider });
+    const report = { checkedAt: new Date().toISOString(), userId, accountStatus: account.status,
+      storage: { configured: businessDirectUploadReady() }, originals, provider };
+    if (params.get("view") === "html") {
+      const text = JSON.stringify(report, null, 2).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return businessNoStore(new Response(`<!doctype html><meta charset="utf-8"><pre>${text}</pre>`, { headers: {
+        "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+        "X-Content-Type-Options": "nosniff",
+      } }));
+    }
+    return businessJson(report);
   } catch (error) { return businessErrorResponse(req, error); }
 }
