@@ -5,7 +5,7 @@
   --desk-rule: #36393d;
   --desk-ink: #f1f1ed;
   --desk-muted: #b2b7bc;
-  --desk-accent: #bbddd2;
+  --desk-accent: #8ab8ed;
   display: grid;
   grid-template-columns: 228px minmax(0, 1fr);
   height: 100%;
@@ -170,7 +170,8 @@
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .nav { padding: 0 12px 6px; }
-  .navBrand, .returnLink, .desktopModels { display: none; }
+  .navBrand, .desktopModels { display: none; }
+  .returnLink { display: flex; min-height: 40px; margin: 0; font-size: 12px; }
   .navSections, .utilityNav { gap: 0 2px; padding: 0; border: 0; }
   .navSections { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .utilityNav { grid-template-columns: repeat(6,minmax(0,1fr)); }

@@ -19,7 +19,9 @@ import { mainViewerJob, runningJobCount } from "@/lib/jobVisibility";
 import { DIRECTOR3D_HANDOFF_KEY } from "@/lib/canvas/director3d";
 import type { GenSettings, Mode, PendingJob, ResultItem } from "@/lib/types";
 import { generationTimeLabel } from "@/lib/formatTime";
-import { useTr } from "@/lib/i18n/client";
+import { useTr, useLocale } from "@/lib/i18n/client";
+import { studioDesignCopy } from "@/lib/i18n/studioDesign";
+import styles from "./Studio.module.css";
 import { industryHandoffSnapshot, type IndustryBriefHandoff } from "@/lib/industryHandoff";
 
 const noBriefSubscription = () => () => {};
@@ -36,6 +38,7 @@ const MODE_FOR_KIND: Record<ResultItem["kind"], Mode> = { image: "image", video:
 
 function StudioInner() {
   const tr = useTr();
+  const design = studioDesignCopy(useLocale());
   const router = useRouter();
   const params = useSearchParams();
   const mode = (params.get("mode") as Mode) || "video";
@@ -120,7 +123,7 @@ function StudioInner() {
     };
   }, [preset, urlModel, urlPrompt, tr, briefToken]);
 
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<"inspiration" | "history" | null>(null);
   // Which history item the main viewer shows. null = "the newest one" (the
   // BUG this fixes: clicking a 生成紀錄 thumbnail previously did nothing —
   // there was no way to bring an older result back into the main viewer).
@@ -169,39 +172,30 @@ function StudioInner() {
   const activeJob = mainViewerJob(jobs, mode, minimizedJobIds, resultsForMode[0]?.createdAt, Boolean(selectedId));
 
   return (
-    <div className="relative flex h-full min-h-0">
-      <div className="relative flex min-w-0 flex-1 flex-col">
-        <div className="absolute right-6 top-4 z-20 flex items-center gap-1 rounded-full bg-[#141414]/90 p-1 backdrop-blur">
+    <div className={styles.shell}>
+      <div className={styles.workspace}>
+        <header className={styles.header}>
+          <div><h1>{mode === "video" ? design.videoTitle : mode === "image" ? design.imageTitle : design.textTitle}</h1><p>{design.intro}</p></div>
+        <div className={styles.actions}>
           <button
-            onClick={() => setPanelOpen(true)}
+            onClick={() => setPanelTab("inspiration")}
             className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] text-[#c9c9c9] transition-colors hover:bg-[#222] hover:text-white"
           >
             <IconCompass className="h-4 w-4" />
             {tr("靈感廣場")}
           </button>
           <button
-            onClick={() => setPanelOpen(true)}
+            onClick={() => setPanelTab("history")}
             className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] text-[#c9c9c9] transition-colors hover:bg-[#222] hover:text-white"
           >
             <IconHistory className="h-4 w-4" />
             {tr("生成紀錄")}
           </button>
         </div>
-
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-3 pt-16 lg:px-5">
-          {activeJob ? (
-            <ActiveJobCard job={activeJob} onMinimize={() => minimizeJob(activeJob.id)} onDismiss={() => dismissJob(activeJob.id)} />
-          ) : latest ? (
-            // Keyed by id so switching to a different result remounts fresh —
-            // resets this item's own "did its media fail to load" state
-            // without needing a parent effect to sync it back to false.
-            <MainViewerItem key={latest.id} item={latest} />
-          ) : jobs.length === 0 ? (
-            <h2 className="text-center text-xl sm:text-[34px] font-normal text-[#5c5c5c]">{tr("用 The Blue Wing 點亮你的創作")}</h2>
-          ) : null}
-        </div>
-
-        <div className="px-3 pb-4 lg:px-5 sm:pb-8">
+        </header>
+        <div className={styles.grid}>
+        <section className={styles.creator} aria-label={design.create}>
+          <h2 className={styles.sectionTitle}>{design.create}</h2>
           <div className="w-full">
             <JobQueue jobs={jobs} onDismiss={dismissJob} />
             {atCapacity && (
@@ -210,8 +204,9 @@ function StudioInner() {
               </p>
             )}
             {briefMissing && <p role="alert" className="mb-3 rounded-lg bg-[#242424] p-3 text-sm text-[#e6c6af]">{briefMissingMessage} <Link href="/" className="underline">{tr("返回首頁")}</Link></p>}
-            {!briefToken && official ? <OfficialTemplateComposer key={official.id} template={official} composerProps={{initialModel:urlModel,mode,onModeChange:setMode,onSubmit:handleSubmit,busy:atCapacity}} /> : (briefToken || presetReady) && briefReady ? (
+            {!briefToken && official ? <OfficialTemplateComposer key={official.id} template={official} composerProps={{workbench:true,initialModel:urlModel,mode,onModeChange:setMode,onSubmit:handleSubmit,busy:atCapacity}} /> : (briefToken || presetReady) && briefReady ? (
               <Composer
+                workbench
                 key={briefToken ? `industry-${briefToken}` : "regular-studio"}
                 mode={mode}
                 onModeChange={setMode}
@@ -227,11 +222,22 @@ function StudioInner() {
               <div className="h-[168px] rounded-2xl border border-[#2a2a2a] bg-[#161616] bw-shimmer" />
             )}
           </div>
+        </section>
+        <section className={styles.viewer} aria-label={design.preview}>
+          <h2 className={styles.sectionTitle}>{design.preview}</h2>
+          <div className={styles.stage}>
+            {activeJob ? <ActiveJobCard job={activeJob} onMinimize={() => minimizeJob(activeJob.id)} onDismiss={() => dismissJob(activeJob.id)} />
+              : latest ? <MainViewerItem key={latest.id} item={latest} />
+              : <div className={styles.empty}><div className={styles.frame} aria-hidden="true">{mode === "video" ? "▷" : "＋"}</div><h3>{design.empty}</h3><p>{design.emptyHint}</p></div>}
+          </div>
+        </section>
         </div>
       </div>
 
-      {panelOpen && (
+      {panelTab && (
         <InspirationPanel
+          key={panelTab}
+          initialTab={panelTab}
           history={results}
           selectedId={latest?.id ?? null}
           onSelect={(item) => {
@@ -241,8 +247,9 @@ function StudioInner() {
             const wantMode = MODE_FOR_KIND[item.kind];
             if (wantMode !== mode) router.push(`/studio?mode=${wantMode}`);
             setSelectedId(item.id);
+            setPanelTab(null);
           }}
-          onClose={() => setPanelOpen(false)}
+          onClose={() => setPanelTab(null)}
         />
       )}
     </div>

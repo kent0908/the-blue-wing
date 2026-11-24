@@ -51,20 +51,20 @@ type Item = {
 const GROUP_A: Item[] = [
   { href: "/", label: "home", icon: IconHome },
   { href: "/studio?mode=image", label: "image", icon: IconImage, modelModality: "image" },
-  { href: "/studio?mode=video", label: "video", icon: IconVideo, badge: { text: "HOT", tone: "hot" }, modelModality: "video" },
+  { href: "/studio?mode=video", label: "video", icon: IconVideo, modelModality: "video" },
   { href: "/studio?mode=audio", label: "text", icon: IconAudio },
   { href: "/avatar", label: "avatar", icon: IconAvatar },
 ];
 
 const GROUP_B: Item[] = [
-  { href: "/canvas", label: "canvas", icon: IconCanvas, badge: { text: "NEW", tone: "new" } },
-  { href: "/canvas/director3d", label: "director3d", icon: IconAvatar, badge: { text: "NEW", tone: "new" } },
-  { href: "/editor", label: "editor", icon: IconImage, badge: { text: "NEW", tone: "new" } },
+  { href: "/canvas", label: "canvas", icon: IconCanvas },
+  { href: "/canvas/director3d", label: "director3d", icon: IconAvatar },
+  { href: "/editor", label: "editor", icon: IconImage },
 ];
 
 const GROUP_C: Item[] = [
   { href: "/assets", label: "assets", icon: IconAssets },
-  { href: "/companions", label: "companions", icon: IconChat, badge: { text: "NEW", tone: "new" } },
+  { href: "/companions", label: "companions", icon: IconChat },
 ];
 
 function BadgeTag({ badge }: { badge: Badge }) {

@@ -1,4 +1,6 @@
 "use client";
+import BusinessSetupProgress from "./BusinessSetupProgress";
+import { studioDesignCopy } from "@/lib/i18n/studioDesign";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
@@ -846,7 +848,8 @@ export default function BusinessWorkspace() {
     </div></header>}
     <div className={studio.workspaceBody} ref={workspaceScroll}>
     <div className={approved ? studio.activeContent : studio.entry}>
-    {!approved && <><h1>{t.workspace}</h1><p>{t.description}</p></>}
+    {!approved && <><h1>{studioDesignCopy(locale).setup}</h1><p>{studioDesignCopy(locale).setupHint}</p></>}
+    {auth !== "loading" && (!approved || !access?.keyConfigured) && <BusinessSetupProgress step={auth !== "signedIn" ? 0 : !approved ? access?.account?.status === "pending" ? 2 : 1 : 3} />}
     {error ? <p role="alert" className={styles.feedback}>{error}</p> : null}{notice || reuseLoading || submitting ? <p role="status" className={styles.success}>{submitting ? resultsCopy.registering : reuseLoading ? resultsCopy.reuseLoading : notice}</p> : null}
     {auth === "loading" ? <p className={styles.description} role="status">{t.loading}</p> : auth === "signedOut" ? <section className={styles.panel}><div className={styles.row}><Link href={`/login?next=${encodeURIComponent(businessStudioHref({ kind, modelId, tab }))}`} className={styles.button}>{t.login}</Link></div></section> : auth === "unverified" ? <p className={styles.warning}>{t.verifyEmail}</p> : !access ? <section className={styles.panel}><button className={styles.secondary} onClick={refresh} disabled={loading}>{loading ? t.checking : t.refresh}</button></section> : !approved ? <section className={styles.panel}>
       <div className={styles.panelHead}><div><h2 className={styles.heading}>{t.applyTitle}</h2><p className={styles.description}>{t.applyText}</p></div><button type="button" className={styles.small} onClick={refresh} disabled={loading}>{loading ? t.checking : t.refresh}</button></div>

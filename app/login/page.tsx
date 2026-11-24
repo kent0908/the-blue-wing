@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthShell, Field, SubmitButton } from "@/components/AuthUI";
 import { useT } from "@/lib/i18n/client";
+import { authDestination } from "@/lib/authDestination";
 
 function LoginInner() {
   const t = useT();
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/studio?mode=image";
+  const next = authDestination(params.get("next"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,7 +49,7 @@ function LoginInner() {
   return (
     <AuthShell
       title={t.auth.loginTitle}
-      foot={<>{t.auth.noAccount}<Link href="/register" className="text-[#7ff0cd] hover:underline">{t.auth.register}</Link></>}
+      foot={<>{t.auth.noAccount}<Link href={`/register?next=${encodeURIComponent(next)}`} className="text-[#8ab8ed] hover:underline">{t.auth.register}</Link></>}
     >
       <form onSubmit={submit} className="space-y-3">
         <Field label="Email" type="email" value={email} onChange={setEmail} autoFocus />

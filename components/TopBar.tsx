@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CREDITS_UPDATED_EVENT } from "@/lib/creditEvents";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import AccountDialog from "./AccountDialog";
 import LanguageMenu from "./LanguageMenu";
 import { IconHelp, IconSparkle } from "./Icons";
 import { useT } from "@/lib/i18n/client";
+import { authDestination } from "@/lib/authDestination";
 
 interface Me {
   user: { email: string; role: string; nickname: string | null } | null;
@@ -19,6 +20,8 @@ export default function TopBar({ business = false }: { business?: boolean }) {
   const router = useRouter();
   const t = useT();
   const search=useSearchParams();
+  const pathname = usePathname();
+  const loginDestination = authDestination(["/login", "/register", "/verify"].includes(pathname) ? search.get("next") : pathname + (search.size ? `?${search}` : ""));
   const requestedAccount=search.get("account")==="1";
   const [accountOpen,setAccountOpen]=useState(false);
   const [me, setMe] = useState<Me | null>(null);
@@ -109,8 +112,8 @@ export default function TopBar({ business = false }: { business?: boolean }) {
             {t.top.pricing}
           </Link> : null}
           <Link
-            href="/login"
-            className="ml-2 rounded-full bg-gradient-to-r from-[#22d3ee] to-[#3b82f6] px-3 sm:px-6 py-2 text-[13.5px] font-medium text-white transition-opacity hover:opacity-90"
+            href={`/login?next=${encodeURIComponent(loginDestination)}`}
+            className="ml-2 rounded-lg bg-[#c8daf0] px-3 sm:px-6 py-2 text-[13.5px] font-medium text-[#17212d] transition-opacity hover:opacity-90"
           >
             {t.top.login}
           </Link>

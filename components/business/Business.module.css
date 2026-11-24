@@ -49,8 +49,8 @@
   font-weight: 550;
   line-height: 1.35;
 }
-[data-business-workspace] .button { color: #14221e; border-color: #bbddd2; background: #bbddd2; }
-[data-business-workspace] .button:hover:not(:disabled) { background: #d6ebe4; }
+[data-business-workspace] .button { color: #15191e; border-color: #edf0f3; background: #edf0f3; }
+[data-business-workspace] .button:hover:not(:disabled) { background: #fff; }
 [data-business-workspace] :is(.small, .secondary) { border-color: #51575c; color: #f1f1ed; }
 [data-business-workspace] :is(.small, .secondary):hover:not(:disabled) { background: #2a2e32; }
 [data-business-workspace] .form { gap: 14px; }

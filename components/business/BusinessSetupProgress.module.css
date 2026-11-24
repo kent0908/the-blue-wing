@@ -1,0 +1,11 @@
+.setup { margin: 24px 0; }
+.steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 0; margin: 0 0 24px; list-style: none; gap: 12px; }
+.steps li { min-width: 0; border-top: 2px solid #3a414a; padding-top: 12px; color: #a3adb9; }
+.steps span { display: block; margin-bottom: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.steps strong { font-weight: 500; font-size: 12px; line-height: 1.7; }
+.steps [aria-current=step] { border-color: #8ab8ed; color: #edf0f3; }
+.steps [data-complete=true] { color: #b2c8e2; border-color: #667d99; }
+.billing { padding: 16px 20px; border: 1px solid #343a42; border-radius: 8px; background: #191c20; }
+.billing h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
+.billing p { font-size: 12px; line-height: 1.9; color: #adb4be; margin: 0; }
+@media(max-width: 520px) { .steps { gap: 8px; } .steps strong { font-size: 11px; } .billing { padding: 16px; } }

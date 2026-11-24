@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import styles from "./Composer.module.css";
+import { studioDesignCopy } from "@/lib/i18n/studioDesign";
 import { uploadAsset } from "@/lib/uploadAsset";
 import { useRouter, useSearchParams } from "next/navigation";
 import GenerationModePanel from "./GenerationModePanel";
@@ -24,7 +26,6 @@ import {
   IconExpand,
   IconCheck,
   IconPlus,
-  IconSparkle,
 } from "./Icons";
 import { DEFAULT_SETTINGS, MODE_LABELS, type GenSettings, type Mode, type ModelInfo } from "@/lib/types";
 import { estimateCost, formatUSD, creditsFromRateCard, type RateCardEntry } from "@/lib/pricing";
@@ -102,6 +103,7 @@ export default function Composer({
   initialSettings,
   initialRefs,
   initialVideoRef,
+  workbench = false,
 }: {
   mode: Mode;
   onModeChange: (m: Mode) => void;
@@ -134,8 +136,10 @@ export default function Composer({
   initialRefs?: RefAsset[];
   /** a recorded 3D導演台 運鏡 clip handed off from /canvas/director3d — video mode only */
   initialVideoRef?: { url: string; name?: string };
+  workbench?: boolean;
 }) {
   const tr = useTr();
+  const design = studioDesignCopy(useLocale());
   const t = useT();
   const modeRouter = useRouter();
   const modeParams = useSearchParams();
@@ -152,6 +156,7 @@ export default function Composer({
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(true);
   const [rates, setRates] = useState<RateCardEntry[]>([]);
+  const [loadingRates, setLoadingRates] = useState(true);
   const selectionSource = `${mode}:${initialModel ?? ""}`;
   const [selection, setSelection] = useState<{id:string;source:string}|null>(null);
   const model = selection?.source === selectionSource ? selection.id : "";
@@ -334,7 +339,8 @@ export default function Composer({
     fetch("/api/rates")
       .then((r) => (r.ok ? r.json() : { rates: [] }))
       .then((j) => alive && setRates(j.rates ?? []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => alive && setLoadingRates(false));
     return () => {
       alive = false;
       window.removeEventListener("focus", refreshRole);
@@ -542,8 +548,10 @@ export default function Composer({
     <div
       className={[
         "flex max-h-[calc(100dvh-152px)] flex-col rounded-2xl border border-[#2a2a2a] bg-[#161616] transition-all",
+        workbench ? styles.workbench : "",
       ].join(" ")}
     >
+      {workbench && <h3 className={styles.heading}>{mode === "video" || mode === "image" ? design.prompt : design.textTitle}</h3>}
       {mode === "video" && resolvedModel === "SIRAYA-Seedance-2.5" && <SeedanceDraftPreview draftEnabled={draftEnabled} onDraftChange={setDraftChoice} draftCredits={previewDraftCredits} finalCredits={finalDraftCredits} />}
       <dialog ref={draftConfirm} aria-labelledby="draft-cost-title" className="fixed inset-0 m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-[#4a6159] bg-[#111b18] p-6 text-[#e1e9e5] shadow-2xl backdrop:bg-black/80" onClick={event => { if (event.target === event.currentTarget) draftConfirm.current?.close(); }}>
         <p className="text-[10px] tracking-[.22em] text-[#96b9ac]">SEEDANCE 2.5 · DRAFT</p>
@@ -556,11 +564,11 @@ export default function Composer({
       {operation==="layer-separation" && <div className="shrink-0 px-4 py-3 text-xs text-[#b2c8c0]"><p>{tr("限一張 PNG／JPEG。提示詞可留空，自動分離底圖與最多 16 個透明圖層。")}</p><label className="mt-2 block">{tr("輸出解析度")} <select aria-label={tr("圖層解析度")} value={layerSize} onChange={e=>setLayerSize(e.target.value)} className="ml-2 rounded bg-[#252525] p-2">{["auto","1K","1.5K","2K"].map(v=><option key={v} value={v}>{v}</option>)}</select></label><Link href="/layers" className="mt-2 inline-block underline">{tr("查看圖層紀錄")}</Link></div>}
       {layerConfirm && operation==="layer-separation" && <div role="dialog" aria-label={tr("確認圖層分離費用")} className="mx-4 my-3 shrink-0 rounded-xl border border-[#5ea994] bg-[#122c24] p-4"><p>{tr("最高預扣")} {credits} {tr("點（底圖與最多 16 個圖層）。每張")} {credits === null ? "—" : credits / 17} {tr("點，完成後按實際輸出張數結算，多退少不補；生成失敗退回。")}</p><div className="mt-3 flex gap-4"><button type="button" disabled={!canSubmit} onClick={()=>submit(true)}>{tr("確認預扣並分離")}</button><button type="button" onClick={()=>setLayerConfirm(false)}>{tr("取消")}</button></div></div>}
       {isFramePair && <div className="shrink-0"><FrameUploadCards key={frameScope} disabled={busy} onChange={data => setFrameSelection({ session: frameSession, data })} /></div>}
-      <div className="relative flex min-h-0 flex-auto flex-col gap-3 px-4 pt-4">
+      <div data-composer-body className="relative flex min-h-0 flex-auto flex-col gap-3 px-4 pt-4">
         {canUseRefs && !isFramePair && (
           <div className="relative flex w-full min-w-0 shrink-0 flex-wrap items-start gap-3 pb-1">
             {refs.map((r) => (
-              <div key={r.id} className="relative h-[82px] w-[82px] -rotate-2 overflow-hidden rounded-xl border border-[#454545] shadow-md transition-transform hover:rotate-0 focus-within:rotate-0 motion-reduce:transition-none">
+              <div key={r.id} className="relative h-[82px] w-[82px] overflow-hidden rounded-lg border border-[#454545]">
                 {/* eslint-disable-next-line @next/next/no-img-element -- authenticated proxy stream */}
                 <img src={r.src} alt={tr(r.name)} className="h-full w-full object-cover" />
                 <button
@@ -578,7 +586,7 @@ export default function Composer({
               <button
                 type="button"
                 onClick={() => (refPicker ? setRefPicker(false) : openPicker())}
-                className="group grid h-[82px] w-[106px] shrink-0 -rotate-2 place-items-center rounded-xl border border-dashed border-[#505050] bg-gradient-to-br from-[#2b2b2b] to-[#1c1c1c] px-2 py-2 text-[#d2d2d2] shadow-md transition-transform hover:rotate-0 hover:border-[#858585] focus-visible:rotate-0 focus-visible:outline-[#7ff0cd] motion-reduce:transition-none"
+                className="group grid h-[82px] w-[106px] shrink-0 place-items-center rounded-lg border border-dashed border-[#505967] bg-[#22262b] px-2 py-2 text-[#d2d2d2] hover:border-[#8ab8ed] focus-visible:outline-[#8ab8ed]"
               >
                 <IconPlus className="h-4 w-4" />
                 <span className="text-[11px]">{tr("加入參考素材")}</span>
@@ -587,7 +595,7 @@ export default function Composer({
             )}
 
             {refPicker && (
-              <div className="bw-menu absolute bottom-[calc(100%+8px)] left-0 z-40 w-[320px] max-w-[calc(100vw-64px)] p-3">
+              <div className={workbench ? "bw-menu relative z-40 w-full basis-full p-3" : "bw-menu absolute bottom-[calc(100%+8px)] left-0 z-40 w-[320px] max-w-[calc(100vw-64px)] p-3"}>
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] font-medium text-white">{tr("參考素材（最多")} {refCap} {tr("個）")}</span>
                   <button type="button" onClick={() => setRefPicker(false)} className="text-[11px] text-[#8a8a8a] hover:text-white">{tr("關閉")}</button>
@@ -665,6 +673,7 @@ export default function Composer({
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <textarea
+            aria-label={mode === "video" || mode === "image" ? design.prompt : design.textTitle}
             ref={taRef}
             value={prompt}
             maxLength={klingModel ? 2500 : undefined}
@@ -722,7 +731,7 @@ export default function Composer({
             // this bottom-docked composer (see 素材 picker / Popover.tsx below) —
             // opening downward here used to get clipped by the viewport's bottom
             // edge, which made items near the edge hard to actually click.
-            <div className="bw-menu absolute bottom-full left-0 z-40 mb-1.5 w-[290px] max-h-[280px] overflow-y-auto p-1.5">
+            <div className={`bw-menu z-40 max-h-[280px] overflow-y-auto p-1.5 ${workbench ? "relative mt-2 w-full" : "absolute bottom-full left-0 mb-1.5 w-[290px]"}`}>
               <div className="sticky top-0 z-10 -m-1.5 mb-1 flex items-center justify-between bg-[#1a1a1a] px-2.5 py-1.5">
                 <span className="text-[11px] text-[#8a8a8a]">{tr("標記已加入的素材")}</span>
                 <div className="flex items-center gap-2">
@@ -780,7 +789,7 @@ export default function Composer({
         </button>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 pb-3 pt-3">
+      <div data-composer-controls className="flex shrink-0 flex-wrap items-center gap-2 px-3 pb-3 pt-3">
         {/* mode */}
         <Popover
           widthClass="w-[164px]"
@@ -852,7 +861,7 @@ export default function Composer({
           watermarkSupported={watermarkSupported}
         />
 
-        <div className="ml-auto mr-14 flex items-center gap-3">
+        <div data-composer-submit className="ml-auto flex items-center gap-3">
           {isAdmin && <span data-testid="admin-provider-estimate" className="hidden text-[11.5px] text-[#6d6d6d] sm:inline" title={tr("服務商成本預估，僅管理員可見；站內扣點依既定費率")}>
             {tr("預估")} {formatUSD(cost)}
           </span>}
@@ -863,12 +872,11 @@ export default function Composer({
             className={[
               "flex h-9 items-center gap-1.5 rounded-full px-4 text-[13.5px] font-medium transition-all",
               canSubmit
-                ? "bg-gradient-to-r from-[#7ff0cd] to-[#4fd1c5] text-[#0a1a16] hover:brightness-105"
+                ? "bg-[#edf0f3] text-[#15191e] hover:brightness-105"
                 : "cursor-not-allowed bg-[#2a2a2a] text-[#6d6d6d]",
             ].join(" ")}
           >
-            <IconSparkle className="h-4 w-4" />
-            {busy ? tr("生成中…") : credits === null ? tr("費率未設定") : tr("{prefix}{n} 點", { prefix: operation==="layer-separation"?tr("最高 "):"", n: credits })}
+            {busy ? tr("生成中…") : loadingRates || loadingModels ? design.loadingPrice : credits === null ? tr("費率未設定") : `${mode === "video" ? design.generateVideo : mode === "image" ? design.generateImage : design.generateText} · ${tr("{prefix}{n} 點", { prefix: operation==="layer-separation"?tr("最高 "):"", n: credits })}`}
           </button>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { generateUid } from "@/lib/uid";
 import { readSignupSource } from "@/lib/signupSource";
 import { hashPassword, newToken } from "@/lib/auth";
 import { sendVerifyEmail } from "@/lib/mail";
+import { authDestination } from "@/lib/authDestination";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ const VERIFY_TTL_MS = 60 * 60 * 1000; // 1h
 export async function POST(req: NextRequest) {
   const limited = await authLimit(req); if(limited) return limited;
   try {
-    const { email, password } = await req.json();
+    const { email, password, next } = await req.json();
     const mail = String(email || "").trim().toLowerCase();
 
     if (!EMAIL_RE.test(mail)) {
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, user: toPublicUser(user), needVerify: false });
     }
 
-    const verifyUrl = `${new URL(req.url).origin}/verify?token=${token}`;
+    const verifyUrl = `${new URL(req.url).origin}/verify?token=${token}&next=${encodeURIComponent(authDestination(next, "/account"))}`;
     let sent = false;
     try {
       ({ sent } = await sendVerifyEmail(mail, verifyUrl));

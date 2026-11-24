@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { authDestination } from "@/lib/authDestination";
 import Link from "next/link";
 import { AuthShell, Field, SubmitButton } from "@/components/AuthUI";
 import { useT } from "@/lib/i18n/client";
 
-export default function RegisterPage() {
+function RegisterInner() {
   const t = useT();
+  const next = authDestination(useSearchParams().get("next"));
+  const loginHref = `/login?next=${encodeURIComponent(next)}`;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -21,7 +25,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, next }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -40,7 +44,7 @@ export default function RegisterPage() {
     return (
       <AuthShell
         title={t.auth.registered}
-        foot={<Link href="/login" className="text-[#7ff0cd] hover:underline">{t.auth.toLogin}</Link>}
+        foot={<Link href={loginHref} className="text-[#8ab8ed] hover:underline">{t.auth.toLogin}</Link>}
       >
         {done.needVerify ? (
           <div className="space-y-3 text-[13px] leading-relaxed text-[#c9c9c9]">
@@ -62,14 +66,18 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title={t.auth.registerTitle}
-      foot={<>{t.auth.haveAccount}<Link href="/login" className="text-[#7ff0cd] hover:underline">{t.auth.login}</Link></>}
+      foot={<>{t.auth.haveAccount}<Link href={loginHref} className="text-[#8ab8ed] hover:underline">{t.auth.login}</Link></>}
     >
       <form onSubmit={submit} className="space-y-3">
         <Field label="Email" type="email" value={email} onChange={setEmail} autoFocus />
-        <Field label={t.auth.password} type="password" value={password} onChange={setPassword} hint={t.auth.pwHint} />
+        <Field label={t.auth.password} type="password" autoComplete="new-password" value={password} onChange={setPassword} hint={t.auth.pwHint} />
         {error && <p className="text-[12.5px] leading-relaxed text-[#ff9b9b]">{error}</p>}
         <SubmitButton busy={busy} disabled={!email || password.length < 8}>{t.auth.create}</SubmitButton>
       </form>
     </AuthShell>
   );
+}
+
+export default function RegisterPage() {
+  return <Suspense fallback={<AuthShell title="">{null}</AuthShell>}><RegisterInner /></Suspense>;
 }

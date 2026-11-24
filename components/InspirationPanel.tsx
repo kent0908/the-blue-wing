@@ -6,7 +6,9 @@ import { downloadResult } from "@/lib/download";
 import ExpiringMedia from "./ExpiringMedia";
 import type { ResultItem } from "@/lib/types";
 import { formatDateTime, formatDuration, generationTimeLabel } from "@/lib/formatTime";
-import { useTr } from "@/lib/i18n/client";
+import { useTr, useLocale } from "@/lib/i18n/client";
+import { studioDesignCopy } from "@/lib/i18n/studioDesign";
+import Link from "next/link";
 import { k } from "@/lib/i18n/tr";
 
 type KindFilter = "all" | "image" | "video" | "text";
@@ -87,6 +89,7 @@ export default function InspirationPanel({
   selectedId,
   onSelect,
   onClose,
+  initialTab = "history",
 }: {
   history: ResultItem[];
   /** id of the item currently shown in the main viewer, for highlighting */
@@ -94,9 +97,11 @@ export default function InspirationPanel({
   /** bring a past result back into the main viewer */
   onSelect?: (item: ResultItem) => void;
   onClose: () => void;
+  initialTab?: "inspiration" | "history";
 }) {
   const tr = useTr();
-  const [tab, setTab] = useState<"inspiration" | "history">("history");
+  const design = studioDesignCopy(useLocale());
+  const [tab, setTab] = useState<"inspiration" | "history">(initialTab);
   const [q, setQ] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
@@ -193,14 +198,9 @@ export default function InspirationPanel({
         )}
 
         {tab === "inspiration" && (
-          <div className="grid grid-cols-2 gap-2">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div
-                key={i}
-                className="bw-shimmer rounded-lg"
-                style={{ height: i % 3 === 0 ? 190 : 130 }}
-              />
-            ))}
+          <div className="py-10 text-sm leading-7 text-[#adb4be]">
+            <p>{design.inspirationHint}</p>
+            <Link href="/" className="mt-5 inline-flex min-h-11 items-center rounded-lg border border-[#434b56] px-4 text-[#edf0f3] hover:bg-[#22262b]">{design.browseTemplates} →</Link>
           </div>
         )}
 

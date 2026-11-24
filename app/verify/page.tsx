@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthShell } from "@/components/AuthUI";
 import { useT } from "@/lib/i18n/client";
+import { authDestination } from "@/lib/authDestination";
 
 function VerifyInner() {
   const t = useT();
   const router = useRouter();
-  const token = useSearchParams().get("token");
+  const params = useSearchParams();
+  const token = params.get("token");
+  const next = authDestination(params.get("next"), "/account");
   const [state, setState] = useState<"working" | "ok" | "error">(token ? "working" : "error");
   const [message, setMessage] = useState(token ? t.auth.verifying : t.auth.missingVerify);
   const ran = useRef(false);
@@ -34,7 +37,7 @@ function VerifyInner() {
         setState("ok");
         setMessage(t.auth.verified);
         setTimeout(() => {
-          router.push("/account");
+          router.push(next);
           router.refresh();
         }, 900);
       } catch {
@@ -42,12 +45,12 @@ function VerifyInner() {
         setMessage(t.auth.networkDot);
       }
     })();
-  }, [token, router, t]);
+  }, [token, router, t, next]);
 
   return (
     <AuthShell
       title={t.auth.verifyTitle}
-      foot={state === "error" ? <Link href="/login" className="text-[#7ff0cd] hover:underline">{t.auth.backLogin}</Link> : null}
+      foot={state === "error" ? <Link href={`/login?next=${encodeURIComponent(next)}`} className="text-[#8ab8ed] hover:underline">{t.auth.backLogin}</Link> : null}
     >
       <p
         className={[

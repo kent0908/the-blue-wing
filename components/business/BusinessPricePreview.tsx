@@ -7,7 +7,7 @@ import type { BusinessPricePreview as Preview, BusinessPriceSettings } from "@/l
 import styles from "./Business.module.css";
 
 export default function BusinessPricePreview({ requestId, settings, locale, onSettled }: {
-  requestId: string; settings: BusinessPriceSettings; locale: Locale; onSettled: (requestId: string) => void;
+  requestId: string; settings: BusinessPriceSettings; locale: Locale; onSettled: (requestId: string, hasTotal: boolean) => void;
 }) {
   const [preview, setPreview] = useState<Preview | null | undefined>(undefined);
   const request = JSON.stringify(settings);
@@ -26,7 +26,7 @@ export default function BusinessPricePreview({ requestId, settings, locale, onSe
       } catch { /* A failed read leaves the price unknown. */ }
       if (!controller.signal.aborted) {
         setPreview(value);
-        onSettled(requestId);
+        onSettled(requestId, !!value?.total);
       }
     });
     return () => controller.abort();

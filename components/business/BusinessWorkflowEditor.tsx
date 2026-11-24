@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { upload } from "@vercel/blob/client";
-import { useLocale } from "@/lib/i18n/client";
-import { businessWorkflowsCopy, workflowText } from "@/lib/i18n/businessWorkflows";
+import { useLocale, useTr } from "@/lib/i18n/client";
+import { businessWorkflowsCopy } from "@/lib/i18n/businessWorkflows";
+import BusinessWorkflowReview, { type WorkflowReviewNode } from "./BusinessWorkflowReview";
 import { defaultNodeData, type BusinessCanvasImageItem, type CanvasGraph, type CanvasNode } from "@/lib/canvas/types";
 import type { CanvasEditorRuntime } from "@/lib/canvas/runtime";
 import { createBusinessCanvasRunner } from "@/lib/canvas/businessEngine";
@@ -88,11 +89,12 @@ function NodeFields({ node, models, onChange, hidePrompt = false }: { node: Canv
 }
 
 export default function BusinessWorkflowEditor({ id }: { id: string }) {
+  const tr = useTr();
   const locale = useLocale(), t = businessWorkflowsCopy(locale);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [error, setError] = useState("");
   const [jobs, setJobs] = useState<BusinessGeneration[]>([]);
-  const [runPlan, setRunPlan] = useState<{ message: string; resolve: (value: boolean) => void } | null>(null);
+  const [runPlan, setRunPlan] = useState<{ nodes: WorkflowReviewNode[]; resolve: (value: boolean) => void } | null>(null);
   const finishReview = useCallback((approved: boolean) => {
     runPlan?.resolve(approved); setRunPlan(null);
   }, [runPlan]);
@@ -156,14 +158,29 @@ export default function BusinessWorkflowEditor({ id }: { id: string }) {
         if (paid.length && !workspace.access.keyConfigured) throw new Error(t.keyRequired);
         if (paid.some(node => !models.some(model => model.id === node.data.model && model.modality === node.type))) throw new Error(t.unavailableModel);
         if (!paid.length) return true;
-        const message = workflowText(t.confirm, { n: order.length, paid: paid.length, models: paid.map(node => `${models.find(model => model.id === node.data.model)?.displayName} · ${node.type === "video" ? `${node.data.seconds}s · ${node.data.resolution}` : node.data.size}`).join("\n") });
-        return new Promise<boolean>(resolve => { setRunPlan({ message, resolve }); });
+        const nodes: WorkflowReviewNode[] = order.map(id => {
+          const node = graph.nodes.find(item => item.id === id)!;
+          const model = models.find(item => item.id === node.data.model && item.modality === node.type);
+          const row: WorkflowReviewNode = { node, label: model?.displayName ?? (node.type === "text" ? t.prompt : node.type === "loadImage" ? t.references : tr("3D 導演台")) };
+          // Input-dependent prices remain unknown until upstream output exists.
+          // Only quote fully specified, reference-free nodes; never infer a zero fee.
+          if (model && (node.type === "image" || node.type === "video") && !graph.edges.some(edge => edge.toNode === id && edge.toPort === "image")) {
+            const video = node.type === "video";
+            const size = model.sizes?.includes(String(node.data.size)) ? String(node.data.size) : model.sizes?.[0];
+            const seconds = Number(node.data.seconds);
+            if (!video || Number.isSafeInteger(seconds) && seconds > 0 && model.resolutions?.includes(String(node.data.resolution)) && model.aspectRatios?.includes(String(node.data.aspect_ratio))) {
+              row.settings = { model: model.id, kind: node.type, count: 1, size, seconds: video ? seconds : undefined, resolution: video ? String(node.data.resolution) : undefined, aspect: video ? String(node.data.aspect_ratio) : undefined, audio: model.supportsAudio ? !!model.nativeAudioOnly || node.data.generate_audio === true : false, referenceCount: 0, videoInput: false, rewrite: false };
+            }
+          }
+          return row;
+        });
+        return new Promise<boolean>(resolve => { setRunPlan({ nodes, resolve }); });
       },
     };
-  }, [workspace, t, rememberJob]);
+  }, [workspace, t, tr, rememberJob]);
   if (!workspace || workspace.workflow.id !== id || !runtime) return <section className={styles.status}><p role={error ? "alert" : "status"}>{error || t.loading}</p>{error && <button className={styles.button} onClick={() => void load()}>{t.retry}</button>}<Link href="/business?tab=workflows">{t.goStudio}</Link></section>;
   return <div className={styles.editor}>
-    {runPlan && <BusinessDialog title={t.reviewTitle} onClose={() => finishReview(false)}><p className={styles.plan}>{runPlan.message}</p><div className={styles.actions}><button type="button" autoFocus className={styles.button} onClick={() => finishReview(false)}>{t.cancel}</button><button type="button" className={styles.button} onClick={() => finishReview(true)}>{t.start}</button></div></BusinessDialog>}
+    {runPlan && <BusinessWorkflowReview nodes={runPlan.nodes} onFinish={finishReview} />}
     <div className={styles.stage}><CanvasEditor key={workspace.workflow.id} workflowId={id} initialName={workspace.workflow.name} initialGraph={workspace.workflow.graph} initialVersion={workspace.workflow.version} runtime={runtime} /></div>
     <aside className={styles.ledger} aria-label={t.nodeRun}><details><summary>{t.nodeRun}{jobs.length ? ` · ${jobs.length}` : ""}</summary><p>{t.draftOnly}</p><nav><Link href="/business?tab=history">{t.history} ↗</Link><Link href="/business?tab=usage">{t.costs} ↗</Link></nav>{jobs.map(job => <div className={styles.receipt} key={job.id}><p>{job.model} · {job.id}</p><BusinessGenerationReceipt job={job} onUpdated={rememberJob} /></div>)}</details></aside>
   </div>;

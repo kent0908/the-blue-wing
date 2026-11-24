@@ -1,0 +1,13 @@
+.workbench { max-height: none; border-radius: 10px; border-color: #343a42; background: #191c20; transition: none; }
+.heading { margin: 0; padding: 20px 20px 0; color: #dce1e7; font-size: 13px; font-weight: 500; }
+.workbench [data-composer-body] { padding: 20px; }
+.workbench textarea { min-height: 144px; border: 1px solid #343a42; border-radius: 7px; padding: 12px 32px 12px 12px; background: #121518; }
+.workbench textarea:focus-visible { outline: 2px solid #8ab8ed; outline-offset: 2px; }
+.workbench textarea::placeholder { color: #939da9; }
+.workbench [data-composer-controls] { padding: 0 20px 20px; gap: 10px; }
+.workbench [data-composer-submit] { width: 100%; margin: 8px 0 0; padding-top: 16px; border-top: 1px solid #343a42; justify-content: flex-end; }
+.workbench [data-composer-submit] button { min-height: 46px; justify-content: center; border-radius: 7px; padding-inline: 20px; }
+.workbench [data-composer-submit] button:enabled { background: #edf0f3; color: #15191e; }
+.workbench [data-composer-submit] button:disabled { background: #2c3239; color: #a5aeb9; }
+.workbench [data-composer-controls] > div > button { min-height: 40px; }
+@media (max-width: 640px) { .workbench [data-composer-body] { padding: 16px; } .heading { padding: 16px 16px 0; } .workbench [data-composer-controls] { padding: 0 16px 16px; } .workbench [data-composer-submit] button { width: 100%; } }
